@@ -30,6 +30,8 @@ The first version is **not** a productivity product. It is an engineering protot
 
 ---
 
+
+
 ## 2. Stack
 
 - **Chrome Extension:** Plasmo
@@ -41,11 +43,13 @@ The first version is **not** a productivity product. It is an engineering protot
 - **Local event store:** RxDB
 - **UI:** React
 - **Styling:** Tailwind CSS
-- **Charts:** Keep optional for V1
+- **Charts:** Tanstack Charts
 - **Backend:** None
 - **Database:** None
 
 ---
+
+
 
 ## 3. Monorepo Structure
 
@@ -85,6 +89,8 @@ The exact Plasmo-generated structure can differ. Do not fight the framework unne
 
 ---
 
+
+
 ## 4. V1 Event Model
 
 Collect real browser activity events from the user's Chrome session.
@@ -123,6 +129,8 @@ The shared-memory representation should use fixed-size numeric fields. URL/title
 
 ---
 
+
+
 ## 5. SharedArrayBuffer Design
 
 Use a fixed-size ring buffer.
@@ -158,7 +166,11 @@ The event region should use typed arrays rather than allocating JavaScript objec
 
 ---
 
+
+
 ## 6. Producer / Consumer
+
+
 
 ### Producer
 
@@ -190,6 +202,8 @@ Do not perform aggregation in the background context.
 
 ---
 
+
+
 ### Consumer
 
 The Web Worker owns event processing.
@@ -218,6 +232,8 @@ The worker should absorb bursts of events without blocking the extension UI.
 
 ---
 
+
+
 ## 7. V1 Event Storage and Aggregation
 
 Raw events must be persisted locally in V1.
@@ -241,6 +257,8 @@ RxDB
     ↓
 local event history
 ```
+
+
 
 ### RxDB event document
 
@@ -320,6 +338,8 @@ This is enough for V1.
 
 ---
 
+
+
 ## 8. Extension UI
 
 The popup should be intentionally minimal.
@@ -361,6 +381,8 @@ Generate:
 
 ---
 
+
+
 ## 9. TanStack Start Dashboard
 
 The web app is the visual surface for the processed data.
@@ -400,6 +422,8 @@ TAB_REMOVED         387
 Do not build authentication, database persistence, user accounts, or a complicated dashboard in V1.
 
 ---
+
+
 
 ## 10. Communication Between Extension and Web
 
@@ -473,6 +497,8 @@ No browser activity data needs to be uploaded to Tabot's infrastructure.
 
 ---
 
+
+
 ## 11. Local Development
 
 Install dependencies:
@@ -503,6 +529,8 @@ The exact commands can be adjusted to match the generated Plasmo and TanStack St
 
 ---
 
+
+
 ## 12. Chrome Extension Development
 
 Build the Plasmo extension:
@@ -525,6 +553,8 @@ Then:
 
 ---
 
+
+
 ## 13. V1 Definition of Done
 
 V1 is complete when all of these work:
@@ -545,6 +575,8 @@ V1 is complete when all of these work:
 - [ ] A burst of 10,000+ events can be processed successfully.
 
 ---
+
+
 
 ## 14. Explicitly Out of Scope for V1
 
@@ -570,6 +602,8 @@ Do **not** add:
 The goal is to make the **browser → shared memory → worker → aggregation → UI** pipeline solid first.
 
 ---
+
+
 
 ## 15. Storage Architecture
 

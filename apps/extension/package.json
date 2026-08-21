@@ -1,0 +1,23 @@
+{
+	"name": "extension",
+	"displayName": "Tabot",
+	"description": "Browser activity event pipeline",
+	"version": "0.0.1",
+	"private": true,
+	"scripts": {
+		"dev": "plasmo dev",
+		"build": "plasmo build",
+		"package": "plasmo package"
+	},
+	"dependencies": {
+		"@tabot/shared": "workspace:*",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	},
+	"devDependencies": {
+		"@types/chrome": "^0.0.268",
+		"@types/react": "^19.0.0",
+		"@types/react-dom": "^19.0.0",
+		"typescript": "^5.7.0"
+	}
+}

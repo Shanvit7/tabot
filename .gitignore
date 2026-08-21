@@ -1,2 +1,61 @@
+# Dependencies
 node_modules
+.pnpm-store
+
+# Build outputs
+.output
+.build
+dist
+build
+/build
+/api
+/server/build
+/public/build
+
+# TanStack
+.tanstack
+
+# Plasmo
+.plasmo
+
+# Turbo
+.turbo
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Cache
+.cache
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Misc
 .pi
+.agents
+.vercel
+.sentry-build-plugin
+package-lock.json
+yarn.lock
