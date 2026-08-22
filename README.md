@@ -9,7 +9,7 @@ Chrome Extension (Plasmo)
   → Browser activity events
   → SharedArrayBuffer + Atomics
   → Web Worker (aggregation)
-  → RxDB (local persistence)
+  → Dexie / IndexedDB (local persistence)
   → TanStack Start dashboard
 ```
 
@@ -56,6 +56,6 @@ tabot/
 - **Web:** TanStack Start + React + Tailwind CSS
 - **UI Components:** BoldKit (Neubrutalism design system)
 - **Concurrency:** SharedArrayBuffer + Atomics
-- **Storage:** RxDB
+- **Storage:** Dexie (IndexedDB)
 - **Language:** TypeScript
 - **Package Manager:** pnpm

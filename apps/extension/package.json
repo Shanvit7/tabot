@@ -11,6 +11,7 @@
 	},
 	"dependencies": {
 		"@tabot/shared": "workspace:*",
+		"@tanstack/pacer": "^0.22.0",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0"
 	},
@@ -19,5 +20,20 @@
 		"@types/react": "^19.0.0",
 		"@types/react-dom": "^19.0.0",
 		"typescript": "^5.7.0"
+	},
+	"manifest": {
+		"permissions": [
+			"tabs",
+			"webNavigation"
+		],
+		"host_permissions": [
+			"<all_urls>"
+		],
+		"externally_connectable": {
+			"matches": [
+				"http://localhost:3000/*",
+				"https://tabot.example/*"
+			]
+		}
 	}
 }

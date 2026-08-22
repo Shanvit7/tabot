@@ -1,32 +1,60 @@
+import type { StatsSnapshot } from "@tabot/shared";
+import { createEmptyStats } from "@tabot/shared";
 import { useEffect, useState } from "react";
 
-// ponytail: single source of truth for brand tokens — matches PRODUCTS.md
 const theme = {
 	lime: "#BFFF00",
 	black: "#000000",
 	white: "#ffffff",
 	border: "2px solid #000000",
 	shadow: "4px 4px 0px #000000",
-	shadowSm: "2px 2px 0px #000000",
 	font: "'IBM Plex Sans', sans-serif",
 	mono: "'IBM Plex Mono', monospace",
 } as const;
 
+const ROWS: Array<{ key: keyof StatsSnapshot; label: string }> = [
+	{ key: "tabCreated", label: "TAB_CREATED" },
+	{ key: "tabActivated", label: "TAB_ACTIVATED" },
+	{ key: "tabUpdated", label: "TAB_UPDATED" },
+	{ key: "tabRemoved", label: "TAB_REMOVED" },
+	{ key: "navigation", label: "NAVIGATION" },
+	{ key: "pageVisible", label: "PAGE_VISIBLE" },
+	{ key: "pageHidden", label: "PAGE_HIDDEN" },
+	{ key: "scroll", label: "SCROLL" },
+	{ key: "click", label: "CLICK" },
+	{ key: "keyActivity", label: "KEY_ACTIVITY" },
+];
+
+const fetchStatsHelper = (
+	setStats: React.Dispatch<React.SetStateAction<StatsSnapshot>>,
+	setDexieCount: React.Dispatch<React.SetStateAction<number | null>>,
+) => {
+	chrome.runtime.sendMessage(
+		{ type: "GET_STATS" },
+		(response: StatsSnapshot | undefined) => {
+			if (response) setStats(response);
+		},
+	);
+	chrome.runtime.sendMessage(
+		{ type: "GET_COUNTS" },
+		(res: { dexieCount?: number; rxdbCount?: number } | undefined) => {
+			const n = res?.dexieCount ?? res?.rxdbCount;
+			if (typeof n === "number") setDexieCount(n);
+		},
+	);
+};
+
 const IndexPopup = () => {
-	const [stats, setStats] = useState({
-		totalEvents: 0,
-		tabCreated: 0,
-		tabActivated: 0,
-		tabUpdated: 0,
-		tabRemoved: 0,
-		eventsProcessed: 0,
-		lastProcessedAt: 0,
-	});
+	const [stats, setStats] = useState<StatsSnapshot>(() =>
+		createEmptyStats(10_000),
+	);
+	const [dexieCount, setDexieCount] = useState<number | null>(null);
 
 	useEffect(() => {
-		chrome.runtime.sendMessage({ type: "GET_STATS" }, (response) => {
-			if (response) setStats(response);
-		});
+		const run = () => fetchStatsHelper(setStats, setDexieCount);
+		run();
+		const id = setInterval(run, 1000);
+		return () => clearInterval(id);
 	}, []);
 
 	const formatTime = (ts: number) => {
@@ -56,7 +84,7 @@ const IndexPopup = () => {
 	return (
 		<div
 			style={{
-				width: 320,
+				width: 360,
 				padding: 16,
 				fontFamily: theme.font,
 				background: theme.lime,
@@ -125,13 +153,88 @@ const IndexPopup = () => {
 				</div>
 			</div>
 
+			<div style={{ ...card, padding: 10 }}>
+				<div style={label}>Breakdown</div>
+				<div
+					style={{
+						display: "grid",
+						gridTemplateColumns: "1fr 1fr",
+						gap: "4px 12px",
+						marginTop: 8,
+						fontFamily: theme.mono,
+						fontSize: 11,
+					}}
+				>
+					{ROWS.map((r) => (
+						<div
+							key={r.key}
+							style={{
+								display: "flex",
+								justifyContent: "space-between",
+								gap: 8,
+							}}
+						>
+							<span style={{ color: "#333" }}>{r.label}</span>
+							<span style={{ fontWeight: 700 }}>
+								{(stats[r.key] as number).toLocaleString()}
+							</span>
+						</div>
+					))}
+				</div>
+			</div>
+
+			<div
+				style={{
+					...card,
+					display: "grid",
+					gridTemplateColumns: "1fr 1fr 1fr",
+					gap: 8,
+					textAlign: "center",
+				}}
+			>
+				<div>
+					<div style={label}>Dropped</div>
+					<div style={{ fontWeight: 700, fontSize: 16 }}>
+						{stats.droppedEvents.toLocaleString()}
+					</div>
+				</div>
+				<div>
+					<div style={label}>Occupancy</div>
+					<div style={{ fontWeight: 700, fontSize: 16 }}>
+						{stats.bufferOccupancy}/{stats.bufferCapacity}
+					</div>
+				</div>
+				<div>
+					<div style={label}>Peak</div>
+					<div style={{ fontWeight: 700, fontSize: 16 }}>
+						{stats.peakBufferOccupancy.toLocaleString()}
+					</div>
+				</div>
+				{dexieCount !== null && (
+					<div
+						style={{
+							gridColumn: "1 / -1",
+							marginTop: 4,
+							fontFamily: theme.mono,
+							fontSize: 11,
+							color: "#333",
+						}}
+					>
+						Dexie (IndexedDB) persisted:{" "}
+						<span style={{ fontWeight: 700 }}>
+							{dexieCount.toLocaleString()}
+						</span>
+					</div>
+				)}
+			</div>
+
 			<button
 				type="button"
 				onClick={() => {
-					chrome.runtime.sendMessage({
-						type: "GENERATE_TEST_EVENTS",
-						count: 10000,
-					});
+					chrome.runtime.sendMessage(
+						{ type: "GENERATE_TEST_EVENTS", count: 10000 },
+						() => fetchStatsHelper(setStats, setDexieCount),
+					);
 				}}
 				style={{
 					width: "100%",

@@ -2,7 +2,7 @@
 
 This file documents the conventions and domain context for **Tabot** — a Chrome extension + web dashboard for collecting and processing browser activity events at high volume.
 
-**The product is an engineering prototype.** V1 proves the event pipeline works: Chrome Extension → SharedArrayBuffer + Atomics → Web Worker → RxDB → TanStack Start dashboard. No AI, no auth, no cloud backend.
+**The product is an engineering prototype.** V1 proves the event pipeline works: Chrome Extension → SharedArrayBuffer + Atomics → Web Worker → Dexie (IndexedDB) → TanStack Start dashboard. No AI, no auth, no cloud backend.
 
 ---
 
@@ -27,7 +27,7 @@ Chrome Extension (Plasmo)
   → Browser activity events (TAB_CREATED, TAB_ACTIVATED, TAB_UPDATED, TAB_REMOVED)
   → SharedArrayBuffer + Atomics (ring buffer)
   → Web Worker (aggregation + batching)
-  → RxDB (local persistence)
+  → Dexie (IndexedDB) (local persistence)
   → TanStack Start dashboard (visualization)
 ```
 
@@ -43,8 +43,8 @@ Chrome Extension (Plasmo)
 - **Events**: Tab lifecycle events from Chrome (created, activated, updated, removed)
 - **SharedArrayBuffer**: Fixed-size ring buffer for high-speed event transport between producer (extension) and consumer (worker)
 - **Atomics**: Coordinates read/write indexes in the shared buffer
-- **Worker**: Processes events off main thread, maintains aggregates, batches to RxDB
-- **RxDB**: Local event store for persistence (not uploaded anywhere)
+- **Worker**: Processes events off main thread, maintains aggregates, batches to Dexie (IndexedDB)
+- **Dexie (IndexedDB)**: Local event store for persistence (not uploaded anywhere)
 - **Dashboard**: Displays aggregated stats only — never consumes raw event stream
 
 ---
