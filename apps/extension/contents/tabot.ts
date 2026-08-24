@@ -21,15 +21,34 @@ const scrollThrottler = new Throttler(
 );
 const keyThrottler = new Throttler(() => send("KEY_ACTIVITY"), { wait: 150 });
 
-document.addEventListener(
-	"scroll",
-	() => scrollThrottler.maybeExecute(window.scrollY),
-	{ passive: true },
-);
+// standard read of the document's scroll offset (window.scrollY is not a real property)
+const scrollY = () =>
+	document.documentElement?.scrollTop ?? document.body?.scrollTop ?? 0;
+
 document.addEventListener("click", (e: MouseEvent) =>
 	send("CLICK", { x: e.clientX, y: e.clientY }),
 );
 document.addEventListener("keydown", () => keyThrottler.maybeExecute());
+
+// scroll events do NOT bubble: they fire on the scrolling node only.
+// The viewport scrolls against `<html>`/`<body>` → listen on window. Nested
+// overflow containers scroll independently → attach to each scrollable node.
+window.addEventListener(
+	"scroll",
+	() => scrollThrottler.maybeExecute(scrollY()),
+	{ passive: true },
+);
+for (const el of document.querySelectorAll("*")) {
+	if (el.scrollHeight <= el.clientHeight) continue;
+	const overflow = getComputedStyle(el).overflowY;
+	if (overflow !== "auto" && overflow !== "scroll") continue;
+	el.addEventListener(
+		"scroll",
+		() => scrollThrottler.maybeExecute(el.scrollTop),
+		{ passive: true },
+	);
+}
+
 document.addEventListener("visibilitychange", () => {
-	send(document.visibilityState === "visible" ? "PAGE_VISIBLE" : "PAGE_HIDDEN");
+	send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");
 });

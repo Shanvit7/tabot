@@ -259,25 +259,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		return true;
 	}
 
-	if (message?.type === "GENERATE_TEST_EVENTS") {
-		// dev-only replay path — not part of normal V1 data (spec §20)
-		const count = Math.min(message?.count ?? 1000, capacity);
-		const types: TabEventType[] = [
-			"TAB_CREATED",
-			"TAB_ACTIVATED",
-			"TAB_UPDATED",
-			"TAB_REMOVED",
-		];
-		for (let i = 0; i < count; i++) {
-			const t = types[i % types.length];
-			if (t) push(t, 1000 + i, 1);
-		}
-		try {
-			sendResponse({ ok: true, generated: count });
-		} catch {}
-		return false;
-	}
-
 	return false;
 });
 
@@ -305,23 +286,6 @@ if (chrome.runtime.onMessageExternal) {
 						} catch {}
 					});
 				return true;
-			}
-			if (message?.type === "GENERATE_TEST_EVENTS") {
-				const count = Math.min(message?.count ?? 1000, capacity);
-				const types: TabEventType[] = [
-					"TAB_CREATED",
-					"TAB_ACTIVATED",
-					"TAB_UPDATED",
-					"TAB_REMOVED",
-				];
-				for (let i = 0; i < count; i++) {
-					const t = types[i % types.length];
-					if (t) push(t, 1000 + i, 1);
-				}
-				try {
-					sendResponse({ ok: true, generated: count });
-				} catch {}
-				return false;
 			}
 			return false;
 		},

@@ -7,11 +7,35 @@
 			"skillPath": "skills/chrome-extensions/SKILL.md",
 			"computedHash": "1e8525bb49647008dcd3a6b7e5d3c3207345f086e7a64d7e6d5bcc67dbba7a71"
 		},
+		"impeccable": {
+			"source": "pbakaus/impeccable",
+			"sourceType": "github",
+			"skillPath": ".agents/skills/impeccable/SKILL.md",
+			"computedHash": "655e90deaf8ba3028ad6bbc417d021c27bd3d34377bde750b6181d754914f101"
+		},
 		"plasmo": {
 			"source": "terminalskills/skills",
 			"sourceType": "github",
 			"skillPath": "skills/plasmo/SKILL.md",
 			"computedHash": "a8389a8b7266ce11634ce47cd5b8ee1806b00a82d5eac9623975324959a91ceb"
+		},
+		"remotion-best-practices": {
+			"source": "remotion-dev/skills",
+			"sourceType": "github",
+			"skillPath": "skills/remotion-best-practices/SKILL.md",
+			"computedHash": "924610fe53892e8223d5471fd2cdb54da1b2a876b940a7ca665d95de8a915bd0"
+		},
+		"remotion-create": {
+			"source": "remotion-dev/skills",
+			"sourceType": "github",
+			"skillPath": "skills/remotion-create/SKILL.md",
+			"computedHash": "0ea612d82a8aa3cbe2cb2cdf87c5ec0a386a26aa1254c32266aa6604c3f5d10d"
+		},
+		"remotion-render": {
+			"source": "remotion-dev/skills",
+			"sourceType": "github",
+			"skillPath": "skills/remotion-render/SKILL.md",
+			"computedHash": "21aa72294b9675d7831d837d90223429a236b5315dd812cb8a4259c3dcc73ef0"
 		},
 		"tanstack-start": {
 			"source": "tanstack-skills/tanstack-skills",

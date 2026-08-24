@@ -227,31 +227,6 @@ const IndexPopup = () => {
 					</div>
 				)}
 			</div>
-
-			<button
-				type="button"
-				onClick={() => {
-					chrome.runtime.sendMessage(
-						{ type: "GENERATE_TEST_EVENTS", count: 10000 },
-						() => fetchStatsHelper(setStats, setDexieCount),
-					);
-				}}
-				style={{
-					width: "100%",
-					padding: "10px 16px",
-					background: theme.black,
-					color: theme.lime,
-					border: theme.border,
-					fontFamily: theme.font,
-					fontWeight: 700,
-					fontSize: 13,
-					textTransform: "uppercase",
-					letterSpacing: "0.05em",
-					cursor: "pointer",
-				}}
-			>
-				Generate Test Events
-			</button>
 		</div>
 	);
 };

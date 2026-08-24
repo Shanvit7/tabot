@@ -73,7 +73,7 @@ Plasmo structure may vary — keep the separation, don't fight the framework.
 
 ## 4. Event Model
 
-Collect **real browser activity only**. Synthetic events are not in the product path; `GENERATE_TEST_EVENTS` is dev-only (bounded by `Math.min(count, capacity)`).
+Collect **real browser activity only**. No synthetic events in the product path.
 
 ### Sources
 
@@ -365,11 +365,10 @@ if (message?.type === "GET_COUNTS") {
   getDb().then(db => countEvents(db)).then(dexieCount => sendResponse({ dexieCount, rxdbCount: dexieCount }));
   return true; // async
 }
-if (message?.type === "GENERATE_TEST_EVENTS") { /* bounded by capacity, 4 types cycling */ sendResponse({ok:true, generated:count}); return false; }
 if (message?.kind === "TABOT_PAGE_EVENT") { push(t, tabId, windowId, metadata); return false; }
 ```
 
-- Sync handlers (`GET_STATS`, `TABOT_PAGE_EVENT`, `GENERATE_TEST_EVENTS`) return `false`; only async `GET_COUNTS` returns `true`. Guard every `sendResponse` in `try{}`; `message?.type` / `message?.count` null-safe.
+- Sync handlers (`GET_STATS`, `TABOT_PAGE_EVENT`) return `false`; only async `GET_COUNTS` returns `true`. Guard every `sendResponse` in `try{}`; `message?.type` null-safe.
 - Popup (`chrome.runtime.sendMessage`) and dashboard (`chrome.runtime.sendMessage(extensionId, ...)`) share the contract. Dashboard reads `extensionId` from `localStorage["tabot_extension_id"]` if needed and degrades gracefully when not installed.
 - `externally_connectable` in manifest: `["http://localhost:3000/*", "https://tabot.example/*"]` (update when origin is known). Requires `permissions: [tabs, webNavigation]` + `host_permissions: ["<all_urls>"]`.
 
@@ -377,7 +376,7 @@ if (message?.kind === "TABOT_PAGE_EVENT") { push(t, tabId, windowId, metadata); 
 
 ## 11. Extension Wiring
 
-**Background (`background.ts`):** single SAB producer. Subscribes `chrome.tabs.onCreated/onActivated/onUpdated/onRemoved` + `chrome.webNavigation.onCommitted` (frameId 0), maintains `tabMeta`, pushes to SAB, drains via polling, enriches + `bulkPut` to Dexie, serves `GET_STATS`/`GET_COUNTS`/`GENERATE_TEST_EVENTS` on both `onMessage` and `onMessageExternal`.
+**Background (`background.ts`):** single SAB producer. Subscribes `chrome.tabs.onCreated/onActivated/onUpdated/onRemoved` + `chrome.webNavigation.onCommitted` (frameId 0), maintains `tabMeta`, pushes to SAB, drains via polling, enriches + `bulkPut` to Dexie, serves `GET_STATS`/`GET_COUNTS` on both `onMessage` and `onMessageExternal`.
 
 **Content script (`contents/tabot.ts`):** collects `scroll`/`click`/`keydown`/`visibilitychange`, Pacer-throttles high-freq, sends `{kind:"TABOT_PAGE_EVENT", type, metadata}` — never writes SAB.
 
@@ -391,7 +390,7 @@ if (message?.kind === "TABOT_PAGE_EVENT") { push(t, tabId, windowId, metadata); 
 
 Minimal + full `StatsSnapshot`:
 
-- `Events captured` (`totalEvents`), `Events processed` (`eventsProcessed`), `Worker status: Running`, `Last event` (ago), `[Generate Test Events]` (10k)
+- `Events captured` (`totalEvents`), `Events processed` (`eventsProcessed`), `Worker status: Running`, `Last event` (ago)
 - Breakdown: 10 types in 2-col grid
 - Metrics: `Dropped / Occupancy N/Capacity / Peak` + `Dexie (IndexedDB) persisted: dexieCount`
 - Polls `GET_STATS` + `GET_COUNTS` every 1s via `fetchStatsHelper(setStats, setDexieCount)` (extracted helper; handles `dexieCount ?? rxdbCount` compat). BoldKit-like inline theme.
@@ -404,7 +403,7 @@ Scope: `setup.md` §9 + full breakdown.
 - Breakdown: 10 types (5-col grid), `Occupancy / Peak / Last event`
 - Header: `Connected / No extension` dot (lime vs zinc)
 - Fallback when `chrome.runtime.sendMessage` absent: placeholder + hint + extension-ID input (`localStorage["tabot_extension_id"]` → Save)
-- Actions: `Refresh` + `Generate 10k test events` (via `chrome.runtime.sendMessage(extensionId?, {type:"GENERATE_TEST_EVENTS", count:10000})`)
+- Actions: `Refresh`
 - Reads `GET_STATS` + `GET_COUNTS` (compat `dexieCount ?? rxdbCount`) on 1s poll.
 
 No auth, no backend API, no cloud DB. Dashboard polls; no push needed for V1.
@@ -451,7 +450,7 @@ pnpm --filter extension build      # chrome-mv3 prod → apps/extension/build/ch
 pnpm --filter extension exec tsc --noEmit
 ```
 
-Chrome: `chrome://extensions` → Developer mode → Load unpacked `build/chrome-mv3-prod` → popup + service-worker console → Generate 10k → Application → IndexedDB → `tabot_events` → `events` count increments → `http://localhost:3000` shows Dexie count.
+Chrome: `chrome://extensions` → Developer mode → Load unpacked `build/chrome-mv3-prod` → popup + service-worker console → `http://localhost:3000` shows Dexie count.
 
 ---
 
@@ -464,7 +463,7 @@ Chrome: `chrome://extensions` → Developer mode → Load unpacked `build/chrome
 5. Pacer only at content-script boundary for high-freq shaping.
 6. Dexie (IndexedDB) is downstream, batched (`bulkPut`) — never on hot SAB path.
 7. UI never consumes raw stream — only `StatsSnapshot` (+ optional `dexieCount`).
-8. No synthetic events in product path — dev-only `GENERATE_TEST_EVENTS`.
+8. No synthetic events in product path — real browser activity only.
 9. `chrome.runtime.onMessage` async contract: sync → `return false`, async `GET_COUNTS` → `return true`.
 10. Service workers cannot `Atomics.wait` — polling (microtask + 50ms burst + 200ms fallback) is the wakeup.
 11. No backend / auth / cloud ingestion.
@@ -485,7 +484,6 @@ Chrome: `chrome://extensions` → Developer mode → Load unpacked `build/chrome
 - [ ] `GET_STATS` returns `StatsSnapshot` consistent with `GET_COUNTS` (`dexieCount`) and in-memory aggregation.
 - [ ] Popup shows full breakdown + `dropped/occupancy/peak` + Dexie count; polls `GET_STATS`/`GET_COUNTS` (1s).
 - [ ] Dashboard shows overview cards + breakdown + dropped/occupancy + Dexie count via `externally_connectable` (graceful fallback).
-- [ ] `GENERATE_TEST_EVENTS` burst of 10,000 processes through `SAB → Dexie → aggregation → both UIs`.
 - [ ] No raw events through messaging or to hosted server.
 - [ ] `pnpm lint` + `pnpm --filter extension exec tsc --noEmit` + `pnpm --filter extension build` pass; manual load shows live browsing events in both surfaces.
 
