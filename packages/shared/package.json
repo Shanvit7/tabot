@@ -8,6 +8,13 @@
 	"exports": {
 		".": "./src/index.ts"
 	},
+	"scripts": {
+		"check:sessions": "node src/sessions.check.ts",
+		"check:contexts": "node --import ./resolve-hook.mjs src/contexts.check.ts",
+		"check:memories": "node --import ./resolve-hook.mjs src/memories.check.ts",
+		"check:retrieval": "node --import ./resolve-hook.mjs src/retrieval.check.ts",
+		"check:liveContext": "node --import ./resolve-hook.mjs src/liveContext.check.ts"
+	},
 	"dependencies": {
 		"dexie": "^4.4.5"
 	}

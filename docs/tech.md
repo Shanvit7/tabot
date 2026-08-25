@@ -1,293 +1,135 @@
-# Tabot — Tech Spec (V1)
+# Tabot - Technical Specification
 
-> **Single source of truth.** Consolidates `setup.md` + `event-model-sab-spec.md` + `persistence-dashboard-spec.md`. Those three are deprecated — delete after review. All persistence references are Dexie (IndexedDB); legacy `tabot_rxdb` IndexedDB is deleted on first open.
+> **Single source of truth for Tabot's technical architecture and deterministic browser-context layer.** This document supersedes `metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, and `liveContext-spec.md`.
+>
+> `plan-phase-2.md` remains the high-level roadmap and Phase 7 decision gate. When it conflicts with this document on implemented behavior, this document wins.
 
 ---
 
-## 1. Goal
+## 1. Product Boundary
 
-Engineering-first Chrome extension + web dashboard for high-volume browser activity collection. Long-term direction is digital-workflow representation → workflow intelligence → automation. **V1 proves the pipeline only** — no AI, auth, cloud, or productivity scoring.
-
-### V1 pipeline
+Tabot is an engineering prototype: a Chrome extension and local web dashboard that collect browser activity at volume, retain it locally, and deterministically derive browser context.
 
 ```text
-Chrome Extension (Plasmo)
-  ↓ Browser activity events
-SharedArrayBuffer + Atomics (10k ring buffer, 32-byte slots)
-  ↓ batch / normalize
-Dexie (IndexedDB) — local event history (bulkPut)
-  ↓ aggregation
-StatsSnapshot
-  ↓ chrome.runtime messaging (GET_STATS / GET_COUNTS)
-Popup + TanStack Start dashboard (externally_connectable)
+Chrome extension
+  -> normalized browser events
+  -> SharedArrayBuffer ring buffer + Atomics
+  -> background drain, bounded batching, Dexie / IndexedDB
+  -> Sessions -> Contexts -> Memories -> Retrieval
+  -> Live browser-context snapshot
 ```
 
-Data path stays local. No browser activity is uploaded. Dashboard never consumes the raw stream — only aggregated snapshots.
+All data remains local. There is no backend, authentication, cloud storage, remote ingestion, LLM, embeddings, vector database, productivity scoring, or semantic task inference.
+
+### Architectural principles
+
+1. **Raw events are immutable source data.** Every derived object is disposable and rebuildable.
+2. **No semantic claims from sparse telemetry.** The system may report domains, timestamps, counts, overlaps, recurrences, and similarity scores; it must not assert what a user was doing.
+3. **No new telemetry for the derived layer.** Use the existing event stream until Phase 7 evaluates whether it is sufficient.
+4. **Deterministic and bounded.** Same input produces the same output, and all derived/retrieval reads have practical caps.
+5. **Evidence first.** Derived values retain IDs, domains, timestamps, counts, similarity, staleness, and recurrence data that support them.
+
+### Privacy boundary
+
+`KEY_ACTIVITY` records only that a key activity occurrence happened. Tabot never records typed text, key values, characters, input values, passwords, DOM snapshots, page content, or browsing data outside local IndexedDB.
 
 ---
 
-## 2. Stack
+## 2. Stack and Repository
 
-- **Extension:** Plasmo (MV3, `chrome-mv3` target, service worker `static/background/index.js`)
-- **Web:** TanStack Start + React 19 + Tailwind CSS + Tanstack Charts
-- **UI:** BoldKit (Neubrutalism)
-- **Lang / pkg:** TypeScript (ESNext, `bundler`), pnpm workspaces
-- **Concurrency:** `SharedArrayBuffer`, `Atomics` (Int32Array)
-- **Shaping:** TanStack Pacer (content-script boundary only)
-- **Persistence:** Dexie 4.x → IndexedDB (`tabot_events`, table `events`). DB name `tabot_events`; legacy `tabot_rxdb` deleted via `indexedDB.deleteDatabase("tabot_rxdb")` on first `createEventsDb()`.
-- **Backend:** None. **DB (server):** None.
-
----
-
-## 3. Monorepo Structure
+- **Extension:** Plasmo, Manifest V3, Chrome target, background service worker.
+- **Dashboard:** TanStack Start, React 19, Tailwind, TanStack Charts, BoldKit UI.
+- **Language/package manager:** TypeScript (ESNext, bundler resolution), pnpm workspaces.
+- **Concurrency:** `SharedArrayBuffer` and `Atomics` using `Int32Array`.
+- **Rate shaping:** TanStack Pacer at the content-script boundary.
+- **Persistence:** Dexie 4.x over IndexedDB database `tabot_events`, `events` table.
+- **Backend:** none.
 
 ```text
 tabot/
 ├── apps/
 │   ├── extension/
-│   │   ├── background.ts              # single SAB producer + drain + Dexie batch + messaging
-│   │   ├── contents/tabot.ts          # content script — page activity (Pacer-throttled)
-│   │   ├── popup.tsx                  # full StatsSnapshot + Dexie count (1s poll)
-│   │   └── package.json               # manifest: permissions [tabs, webNavigation], host_permissions [<all_urls>], externally_connectable
+│   │   ├── background.ts                # event producer, SAB drain, Dexie, messaging
+│   │   ├── contents/tabot.ts            # page-level telemetry collection
+│   │   └── popup.tsx                    # aggregate pipeline statistics
 │   └── web/
-│       ├── src/routes/index.tsx       # dashboard overview + breakdown + Dexie count
-│       ├── src/components/ui/         # BoldKit components
-│       └── src/styles/globals.css
-├── packages/shared/
-│   ├── src/
-│   │   ├── events.ts                  # EVENT_TYPES registry + TabEvent
-│   │   ├── buffer.ts                  # SAB layout + pushEvent/encode/decode
-│   │   ├── protocol.ts                # MSG + StatsSnapshot + createEmptyStats
-│   │   ├── metadata.ts                # tabMeta sidecar (tabId → url/title)
-│   │   ├── db.ts                      # TabotDatabase (Dexie) + bulkInsertEvents/countEvents
-│   │   ├── logger.ts                  # shared logger (warn/info/debug/error)
-│   │   └── index.ts                   # barrel
-│   └── package.json                   # dexie ^4.4.5
-├── docs/tech.md                       # ← this file
-└── README.md
+│       └── src/routes/                  # dashboard
+├── packages/shared/src/
+│   ├── events.ts, buffer.ts, protocol.ts, metadata.ts, db.ts, logger.ts
+│   ├── sessions.ts, contexts.ts, memories.ts, retrieval.ts, live-context.ts
+│   └── *.check.ts                       # runnable derivation checks
+├── docs/tech.md                         # this document
+└── docs/plan-phase-2.md                 # roadmap and evaluation gate
 ```
-
-Plasmo structure may vary — keep the separation, don't fight the framework.
 
 ---
 
-## 4. Event Model
+## 3. Raw Browser Telemetry
 
-Collect **real browser activity only**. No synthetic events in the product path.
+### Event registry
 
-### Sources
-
-| Source | Types | Freq |
-|---|---|---|
-| `chrome.tabs` | `TAB_CREATED`, `TAB_ACTIVATED`, `TAB_UPDATED`, `TAB_REMOVED` | low/med |
-| `chrome.webNavigation.onCommitted` (frameId 0) | `NAVIGATION` | med |
-| Content script | `PAGE_VISIBLE`, `PAGE_HIDDEN` | low |
-| Content script (throttled) | `SCROLL`, `CLICK`, `KEY_ACTIVITY` | high/med |
-
-`KEY_ACTIVITY` = occurrence only. **Never store key, text, input, password, DOM snapshot.**
-
-### Registry (additive — never renumber)
+The event registry is additive; event numbers are never renumbered.
 
 ```ts
-// packages/shared/src/events.ts
 export const EVENT_TYPES = {
-  TAB_CREATED: 0, TAB_ACTIVATED: 1, TAB_UPDATED: 2, TAB_REMOVED: 3,
+  TAB_CREATED: 0,
+  TAB_ACTIVATED: 1,
+  TAB_UPDATED: 2,
+  TAB_REMOVED: 3,
   NAVIGATION: 4,
-  PAGE_VISIBLE: 5, PAGE_HIDDEN: 6,
-  SCROLL: 7, CLICK: 8, KEY_ACTIVITY: 9,
+  PAGE_VISIBLE: 5,
+  PAGE_HIDDEN: 6,
+  SCROLL: 7,
+  CLICK: 8,
+  KEY_ACTIVITY: 9,
 } as const;
-export type TabEventType = keyof typeof EVENT_TYPES;
 ```
 
-### Normalized model
+### Captured events and data
 
-```ts
-interface TabEvent {
-  type: TabEventType;
-  tabId: number;
-  windowId: number;
-  timestamp: number;          // Date.now()
-  metadata?: { x?: number; y?: number; scrollY?: number };
-}
-```
+| Event | Source / trigger | Per-event metadata |
+|---|---|---|
+| `TAB_CREATED` | `chrome.tabs.onCreated` | none |
+| `TAB_ACTIVATED` | `chrome.tabs.onActivated` | none |
+| `TAB_UPDATED` | `chrome.tabs.onUpdated` | none |
+| `TAB_REMOVED` | `chrome.tabs.onRemoved` | none; `windowId` uses `0` sentinel |
+| `NAVIGATION` | `chrome.webNavigation.onCommitted`, main frame only | none |
+| `PAGE_VISIBLE` | content-script `visibilitychange` to visible | none |
+| `PAGE_HIDDEN` | content-script `visibilitychange` to hidden | none |
+| `SCROLL` | window and qualifying nested scroll containers | `scrollY` |
+| `CLICK` | document `click` listener | client `x`, `y` |
+| `KEY_ACTIVITY` | document `keydown` listener | none |
 
-Variable-length strings (`url`, `title`) never enter the SAB — see §6 sidecar. `metadata` is bare numbers only (`scrollY` for SCROLL, `x/y` for CLICK).
+Every persisted event has this representation:
 
 ```ts
 interface StoredTabEvent {
-  id: string;                 // `${timestamp}-${tabId}-${logical}` — never slot-based (slot is reused)
+  id: string;       // `${timestamp}-${tabId}-${logicalIndex}`
   type: TabEventType;
   tabId: number;
   windowId: number;
-  timestamp: number;
-  url?: string;               // resolved from tabMeta at drain time
+  timestamp: number; // Date.now() at capture
+  url?: string;      // in-memory tab metadata enrichment at drain time
   metadata?: { x?: number; y?: number; scrollY?: number };
 }
 ```
 
-No eviction in V1 — retain raw normalized events for future sessions/domain timelines/sequences.
+`id` uses a monotonic logical ring-buffer index, never a physical slot. This prevents collisions when ring-buffer slots are reused or the service worker restarts.
 
----
+### Collection details
 
-## 5. Rate Shaping (Pacer)
+- `SCROLL` and `KEY_ACTIVITY` are Pacer-throttled at the content-script boundary (currently 150ms).
+- `SCROLL` observes `window` plus nested elements with `overflow-y: auto|scroll` and `scrollHeight > clientHeight`. Viewport offset is `documentElement.scrollTop` with the document body as fallback.
+- `CLICK`, `PAGE_VISIBLE`, and `PAGE_HIDDEN` are emitted directly.
+- Chrome tab lifecycle and navigation events are not throttled.
+- `TAB_REMOVED` cleans its `tabMeta` entry. `TAB_CREATED` and `TAB_UPDATED`, plus navigation handling, update sidecar URL/title metadata.
 
-At the **content-script boundary**, not inside SAB:
+### Metrics and UI boundary
 
-```text
-SCROLL       → throttle 100–250ms
-KEY_ACTIVITY → throttle 100–250ms
-CLICK / PAGE_VISIBLE / PAGE_HIDDEN → emit directly
-chrome.tabs / webNavigation → no throttling
-```
-
-Pacer owns shaping only — not sync, buffering, persistence, or ordering.
-
----
-
-## 6. Metadata Sidecar
+The popup and dashboard consume only aggregate `StatsSnapshot` values, not raw events:
 
 ```ts
-// packages/shared/src/metadata.ts
-export interface TabMeta { url?: string; title?: string; lastSeen: number; }
-export const tabMeta = new Map<number, TabMeta>();
-// updateMeta(id, {url/title}), getMeta(id), removeMeta(id)
-```
-
-- Updated from `chrome.tabs.onCreated/onUpdated` + `webNavigation.onCommitted`.
-- Not part of the sync protocol; in-memory for V1.
-- Resolved at persist time: `enriched = docs.map(d => meta?.url ? {...d, url: meta.url} : d)`.
-- `TAB_REMOVED` uses `windowId 0` sentinel; sidecar entry removed.
-
----
-
-## 7. SharedArrayBuffer Design
-
-Fixed-size ring buffer. No variable-length fields. No per-event allocation on the hot path.
-
-### Event slot — 8 × Int32 = 32 bytes
-
-```text
-┌────────┬────────┬──────────┬───────┬────────┬───────┬────────┬────────┐
-│ type   │ tabId  │ windowId │ flags │ tsHigh │ tsLow │ value0 │ value1 │
-└────────┴────────┴──────────┴───────┴────────┴───────┴────────┴────────┘
-```
-
-| slot | field | meaning |
-|---:|---|---|
-| 0 | `type` | `EventTypeToValue[type]` |
-| 1 | `tabId` | chrome tab id |
-| 2 | `windowId` | chrome window id |
-| 3 | `flags` | reserved (0) |
-| 4 | `tsHigh` | `Math.floor(ts / 2**32)` |
-| 5 | `tsLow` | `ts | 0` |
-| 6 | `value0` | `scrollY` or `x` or 0 |
-| 7 | `value1` | `y` or 0 |
-
-`SCROLL → value0=scrollY`, `CLICK → value0=x, value1=y`, others 0. Decode timestamp: `tsHigh * 2**32 + (tsLow >>> 0)`.
-
-```ts
-export const EVENT_SLOT_SIZE = 8;
-export const CONTROL_SLOTS = 4;
-```
-
-### Control region — 4 × Int32
-
-```ts
-export const WRITE_INDEX = 0;     // monotonic logical write
-export const READ_INDEX = 1;      // monotonic logical read
-export const CAPACITY = 2;        // 10_000
-export const PUBLISHED_INDEX = 3; // published (fully written) — consumer reads this
-export const DEFAULT_CAPACITY = 10_000;
-export const BUFFER_BYTE_SIZE = (CONTROL_SLOTS + DEFAULT_CAPACITY * EVENT_SLOT_SIZE) * 4; // 320,016
-```
-
-```text
-SharedArrayBuffer
-┌───────────────────────────────────────┐
-│ CONTROL  [writeIndex, readIndex, capacity, publishedIndex]
-├───────────────────────────────────────┤
-│ EVENT REGION  slot 0 … slot N (mod capacity)
-└───────────────────────────────────────┘
-```
-
-### Indexing
-
-- Logical indexes monotonic — never reset. Physical slot = `logical % capacity`.
-- Occupancy = `writeIndex - readIndex`. Full when `>= capacity`. Real ring buffer — never increment-then-undo.
-- `PUBLISHED_INDEX` is the consumer's truth. `WRITE_INDEX` alone does not prove the event is fully written.
-
-### Producer (single — `background.ts`)
-
-Background is the **only producer**. Content scripts never touch the SAB.
-
-```text
-Chrome event / TABOT_PAGE_EVENT → push(type, tabId, windowId, metadata)
-  → pushEvent(control, events, capacity, {type, tabId, windowId, timestamp, metadata})
-  → check write-read < capacity else droppedEvents++
-  → encode numeric fields
-  → Atomics.store(WRITE_INDEX, idx+1); Atomics.store(PUBLISHED_INDEX, idx+1); scheduleDrain()
-```
-
-Ordering: `check capacity → write fields → publish → notify/drain`. No multi-producer reservation.
-
-```ts
-// background.ts drain scheduling — service workers cannot Atomics.wait
-scheduleDrain() // queueMicrotask(run) + sync continue if more remains
-// fallback: 50ms burst poll after batch, 200ms interval poll
-```
-
-> Spec ideal was `Atomics.wait/notify`; reality is polling because MV3 service workers lack `Atomics.wait`. Tech stays allocation-free; revisit Blob Worker if needed.
-
-### Consumer (inline drain in `background.ts`)
-
-Ponytail: no Blob Worker (`URL.createObjectURL` unavailable in service workers) — inline drain keeps SAB semantics.
-
-```ts
-const read = Atomics.load(control, READ_INDEX);
-const published = Atomics.load(control, PUBLISHED_INDEX);
-const available = published - read;
-if (available <= 0) return 0;
-const count = Math.min(available, MAX_BATCH_SIZE); // 512
-for (let i=0;i<count;i++) { logical=read+i; slot=logical%capacity; decode type/tabId/windowId/tsHigh/tsLow/value0/value1; increment per-type counters; build StoredTabEvent id=`${ts}-${tabId}-${logical}` }
-Atomics.store(control, READ_INDEX, read+count);
-update occupancy/peak/lastProcessedAt/droppedEvents;
-enrich with tabMeta url; getDb().then(db => bulkInsertEvents(db, enriched)).catch(e => logger.warn("bulkInsert failed", {error:e}))
-```
-
-- Advance `READ_INDEX` only after the batch is read.
-- Persist async — do not block drain on `bulkPut`.
-
-### Encode / Decode
-
-```ts
-export function encodeEvent(events: Int32Array, slot: number, event: TabEvent) {
-  const base = slot * EVENT_SLOT_SIZE;
-  Atomics.store(events, base+0, EventTypeToValue[event.type]);
-  Atomics.store(events, base+1, event.tabId);
-  Atomics.store(events, base+2, event.windowId);
-  Atomics.store(events, base+3, 0);
-  Atomics.store(events, base+4, Math.floor(event.timestamp / 2**32));
-  Atomics.store(events, base+5, event.timestamp | 0);
-  Atomics.store(events, base+6, event.metadata?.scrollY ?? event.metadata?.x ?? 0);
-  Atomics.store(events, base+7, event.metadata?.y ?? 0);
-}
-export function decodeEvent(events: Int32Array, slot: number): TabEvent {
-  const base = slot * EVENT_SLOT_SIZE;
-  const typeVal = Atomics.load(events, base+0);
-  const tsHigh = Atomics.load(events, base+4), tsLow = Atomics.load(events, base+5);
-  return { type: ValueToEventType[typeVal], tabId: Atomics.load(events, base+1), windowId: Atomics.load(events, base+2), timestamp: tsHigh * 2**32 + (tsLow>>>0) };
-}
-```
-
----
-
-## 8. Drop Accounting & Stats
-
-Dropped events are first-class. `pushEvent` returning `false` increments `droppedEvents`.
-
-```ts
-// packages/shared/src/protocol.ts
-export interface StatsSnapshot {
+interface StatsSnapshot {
   totalEvents: number;
   tabCreated: number; tabActivated: number; tabUpdated: number; tabRemoved: number;
   navigation: number;
@@ -297,218 +139,407 @@ export interface StatsSnapshot {
   bufferCapacity: number; bufferOccupancy: number; peakBufferOccupancy: number;
   lastProcessedAt: number;
 }
-export const createEmptyStats = (capacity: number): StatsSnapshot => ({ ... });
 ```
 
-- Producer owns `droppedEvents`; consumer owns per-type counts + `eventsProcessed` + occupancy/peak.
-- `getMergedStats()` merges live occupancy (`Atomics.load(control,0)-Atomics.load(control,1)`) with `latestStats`.
-- Dashboard must surface `Dropped / Occupancy / Peak`.
-- `100k processed / 0 dropped` ≠ `100k processed / 18k dropped`.
+The UI also obtains the authoritative persisted count through `db.events.count()`. It must show dropped events and buffer occupancy/peak, not only processed totals.
 
 ---
 
-## 9. Dexie (IndexedDB) Persistence
+## 4. Event Transport and Persistence
 
-**Boundary:** downstream of SAB, not on the hot path. Batch only.
+### Metadata sidecar
+
+Variable-length values never enter shared memory. `tabMeta: Map<tabId, { url?, title?, lastSeen }>` is maintained in the background worker and URL metadata is added to decoded events at persistence time.
+
+### SharedArrayBuffer ring buffer
+
+The background service worker is the only producer. Content scripts send page events through `chrome.runtime` and never write to the SAB directly.
+
+- Capacity: `10,000` slots.
+- Event slot: `8 * Int32` = `32` bytes (`type`, `tabId`, `windowId`, flags, timestamp high/low, `value0`, `value1`).
+- Control slots: `WRITE_INDEX`, `READ_INDEX`, `CAPACITY`, `PUBLISHED_INDEX`.
+- Logical indexes are monotonic. Physical slot is `logicalIndex % capacity`.
+- `PUBLISHED_INDEX` is the consumer's source of truth: fields are written before publication.
+- `SCROLL` stores `scrollY` in `value0`; `CLICK` stores `x` and `y` in `value0`/`value1`.
+- An attempt to write when `writeIndex - readIndex >= capacity` fails and increments `droppedEvents`.
+
+MV3 service workers cannot use `Atomics.wait`, so draining uses queued microtasks with short burst polling and a 200ms fallback poll. This keeps the implementation allocation-light without an unavailable Blob Worker.
+
+### Drain and IndexedDB
+
+The background consumer decodes at most `512` events per drain, advances `READ_INDEX` after reading the batch, updates aggregate counters, enriches events with `tabMeta`, then asynchronously calls Dexie's `bulkPut`.
 
 ```text
-SAB → drain (bounded 512) → StoredTabEvent[] → bulkPut → IndexedDB
+SAB -> bounded drain (512) -> StoredTabEvent[] -> Dexie bulkPut -> IndexedDB
 ```
 
-### Schema
+Persistence is downstream from the hot path. A failed `bulkPut` is logged; it does not block the drain. The Dexie schema is:
 
 ```ts
-// packages/shared/src/db.ts
-export interface StoredTabEvent { id: string; type: TabEventType; tabId: number; windowId: number; timestamp: number; url?: string; metadata?: {x?:number; y?:number; scrollY?:number}; }
-// ponytail: kept for compat — Dexie uses stores() string, not JSON schema
-export const storedTabEventSchema = { version:0, primaryKey:"id", required:["id","type","tabId","windowId","timestamp"], indexes:["timestamp","type","tabId"], ... } as const;
+events: 'id, timestamp, type, tabId'
+```
 
-export class TabotDatabase extends Dexie {
-  events!: Table<StoredTabEvent, string>;
-  constructor(name="tabot_events") { super(name); this.version(1).stores({ events: "id, timestamp, type, tabId" }); }
+`windowId`, `url`, and numeric metadata are stored but not indexed. The database is `tabot_events`; the legacy `tabot_rxdb` database is deleted at first open.
+
+### Messages
+
+`GET_STATS` is synchronous. `GET_COUNTS` is asynchronous and returns `{ dexieCount }` (with legacy `rxdbCount` compatibility while consumers retain it). `TABOT_PAGE_EVENT` accepts content-script events. Existing derived-query functions remain shared-package APIs; dashboard/popup messaging for them is intentionally deferred until Phase 7 validates their value.
+
+---
+
+## 5. Derived Browser Intelligence
+
+The deterministic derived layer is:
+
+```text
+StoredTabEvent[]
+  -> Session[]
+  -> BrowserContext[]
+  -> Memory[]
+  -> retrieval results and LiveBrowserContext
+```
+
+All layers use **Option A: lazy derivation**. No sessions, contexts, memories, retrieval, or live-context tables exist in IndexedDB. Persisted events remain the only durable source of truth.
+
+### Shared constraints
+
+- No LLM, semantic search, embeddings, vector database, user-intent inference, cross-device correlation, content semantics, or application identity beyond domains.
+- New algorithms must remain pure at their core and expose a minimal Dexie adapter around that core.
+- The current 500-context / 50-memory bounds are deliberate. Add persistence caches only after measurement proves lazy derivation insufficient.
+
+---
+
+## 6. Events to Sessions
+
+A `Session` is a coherent continuous period of browser activity. It describes what occurred, not the user's task.
+
+```ts
+interface Session {
+  id: string; // `${startTimestamp}-${endTimestamp}-${activeTabId}`
+  startTimestamp: number;
+  endTimestamp: number;
+  duration: number;
+  eventCount: number;
+  tabs: TabParticipation[];
+  domains: DomainParticipation[];
+  interactionCount: number; // CLICK + KEY_ACTIVITY + SCROLL
+  navigationCount: number;
+  tabSwitchCount: number;
+  eventSequence: StoredTabEvent[]; // cleared when > 1000 events
+  activeTabId: number;
+  activeWindowId: number;
 }
-const DB_NAME = "tabot_events";
-export const createEventsDb = (): Promise<TabotDatabase> // singleton, deletes legacy tabot_rxdb, open()
-export const bulkInsertEvents = (db: TabotDatabase, docs: StoredTabEvent[]) => db.events.bulkPut(docs) // BulkError partial → logger.warn, successes committed
-export const countEvents = (db: TabotDatabase) => db.events.count()
-export const getAllEvents = (db: TabotDatabase) => db.events.toArray()
-```
 
-### Policy
-
-- `bulkPut` per batch (not per event). `MAX_BATCH_SIZE=512` / `BATCH_PERSIST_SIZE` single constant.
-- Advance `READ_INDEX` before `await bulkPut` — never stall drain. Errors via `logger.warn`.
-- `url` resolved from `tabMeta` at drain time; `metadata` optional numbers only.
-- Legacy cleanup: `indexedDB.deleteDatabase("tabot_rxdb")` on first open.
-- Dexie requires `indexedDB` in global scope — background service worker satisfies it. If a future Blob worker lacks it, isolate Dexie init to the context that has it.
-
----
-
-## 10. Protocol & Messaging
-
-### Internal protocol
-
-```ts
-export const MSG = { BUFFER_READY: "BUFFER_READY", STATS_UPDATE: "STATS_UPDATE", STOP: "STOP" } as const;
-// PROCESS_BATCH not needed — wakeup is via control state (polling in MV3)
-interface BufferReadyMessage { type: typeof MSG.BUFFER_READY; buffer: SharedArrayBuffer; capacity: number; }
-```
-
-### Extension ↔ UI
-
-Single channel, no new transport. Never push raw events — only `StatsSnapshot` / counts.
-
-```ts
-// background.ts — both chrome.runtime.onMessage and onMessageExternal
-if (message?.type === "GET_STATS") { sendResponse(getMergedStats()); return false; }
-if (message?.type === "GET_COUNTS") {
-  getDb().then(db => countEvents(db)).then(dexieCount => sendResponse({ dexieCount, rxdbCount: dexieCount }));
-  return true; // async
+interface TabParticipation {
+  tabId: number; eventCount: number; firstSeen: number; lastSeen: number; isActive: boolean;
 }
-if (message?.kind === "TABOT_PAGE_EVENT") { push(t, tabId, windowId, metadata); return false; }
+
+interface DomainParticipation {
+  domain: string; eventCount: number; tabIds: number[]; firstSeen: number; lastSeen: number;
+}
 ```
 
-- Sync handlers (`GET_STATS`, `TABOT_PAGE_EVENT`) return `false`; only async `GET_COUNTS` returns `true`. Guard every `sendResponse` in `try{}`; `message?.type` null-safe.
-- Popup (`chrome.runtime.sendMessage`) and dashboard (`chrome.runtime.sendMessage(extensionId, ...)`) share the contract. Dashboard reads `extensionId` from `localStorage["tabot_extension_id"]` if needed and degrades gracefully when not installed.
-- `externally_connectable` in manifest: `["http://localhost:3000/*", "https://tabot.example/*"]` (update when origin is known). Requires `permissions: [tabs, webNavigation]` + `host_permissions: ["<all_urls>"]`.
+### Boundaries and thresholds
+
+A time-ordered event starts a new session when the first applicable condition succeeds:
+
+| Priority | Condition | Threshold |
+|---:|---|---:|
+| 1 | Gap from previous event | `>= 5 minutes` |
+| 2 | `PAGE_HIDDEN` immediately followed by `PAGE_VISIBLE` | `>= 2 minutes` |
+| 3 | A previously observed tab becomes active after silence | `>= 10 minutes` |
+| 4 | Event switches windows after the previous window has been silent | `>= 30 seconds` |
+
+Events are sorted by timestamp first. Domain participation is only recorded for events with a URL; malformed URLs become domain `unknown`. Tab/window last-event maps survive session boundaries to detect a return after absence. `activeTabId` is the most active tab that received `TAB_ACTIVATED`; `activeWindowId` is the window with most events.
+
+### APIs and bounds
+
+```ts
+sessionize(events): Session[]
+getSessions(db, start?, end?): Promise<Session[]>
+getSessionById(db, id): Promise<Session | undefined>
+getRecentSessions(db, limit = 10): Promise<Session[]>
+```
+
+`getSessions` uses indexed timestamp boundaries where supplied. `getRecentSessions` derives then slices. `sessionize([])` returns `[]`; a one-event input returns one valid zero-duration session.
 
 ---
 
-## 11. Extension Wiring
+## 7. Sessions to Contexts
 
-**Background (`background.ts`):** single SAB producer. Subscribes `chrome.tabs.onCreated/onActivated/onUpdated/onRemoved` + `chrome.webNavigation.onCommitted` (frameId 0), maintains `tabMeta`, pushes to SAB, drains via polling, enriches + `bulkPut` to Dexie, serves `GET_STATS`/`GET_COUNTS` on both `onMessage` and `onMessageExternal`.
+A `BrowserContext` is a non-overlapping cluster of related sessions. It is evidence of related browser activity, never a task label.
 
-**Content script (`contents/tabot.ts`):** collects `scroll`/`click`/`keydown`/`visibilitychange`, Pacer-throttles high-freq, sends `{kind:"TABOT_PAGE_EVENT", type, metadata}` — never writes SAB.
+```ts
+interface BrowserContext {
+  id: string; // `${firstSessionId}-${lastSessionId}`
+  startTimestamp: number; endTimestamp: number; duration: number;
+  sessionIds: string[]; sessionCount: number;
+  domains: ContextDomain[];
+  totalEventCount: number; totalInteractionCount: number;
+  totalNavigationCount: number; totalTabSwitchCount: number;
+  recurrenceCount: number; // supporting sessions for the top domain
+  primaryDomain: string;   // display label only
+}
 
-**Logger:** `packages/shared/src/logger.ts` — `logger.warn/info/debug/error` with `[Tabot]` prefix; used in `db.ts` (`createEventsDb failed`, `bulkPut partial/failed`, `countEvents failed`) and `background.ts` (`bulkInsert failed`).
+interface ContextDomain {
+  domain: string; eventCount: number; sessionCount: number;
+  sessionIds: string[]; firstSeen: number; lastSeen: number;
+}
+```
+
+### Construction rule
+
+Sessions are sorted by start time and processed as a chain. A session joins the immediately previous session's context only when both conditions hold:
+
+- the gap from prior session end is `<= 30 minutes`; and
+- the two adjacent sessions share at least one domain.
+
+Otherwise it begins a new context. A session belongs to exactly one context. There is no overlapping, hierarchical, or transitive bridging: `GitHub -> YouTube -> GitHub` forms three contexts because the middle session has no adjacent domain overlap.
+
+Context domains aggregate event counts and session IDs; they sort by event count descending, then first seen ascending. `primaryDomain` is the first item in that evidence ordering and has no semantic meaning.
+
+### APIs
+
+```ts
+buildContexts(sessions): BrowserContext[]
+getContexts(db, start?, end?): Promise<BrowserContext[]>
+getContextById(db, id): Promise<BrowserContext | undefined>
+getRecentContexts(db, limit = 10): Promise<BrowserContext[]>
+```
+
+The recent-context API reads at most 500 recent sessions before building and slicing contexts.
 
 ---
 
-## 12. UI Surfaces
+## 8. Contexts to Memories
 
-### Popup (`apps/extension/popup.tsx`)
+A `Memory` is a compact, evidence-backed representation of recurring or sufficiently dense browser-context history. It does not summarize user intent.
 
-Minimal + full `StatsSnapshot`:
+```ts
+interface Memory {
+  id: string; // a context id, or `${firstContextId}-${lastContextId}`
+  kind: 'single' | 'recurrent';
+  startTimestamp: number; endTimestamp: number;
+  signature: string;
+  domains: MemoryDomain[];
+  contextIds: string[]; contextCount: number;
+  firstContextId: string; lastContextId: string;
+  totalSessionCount: number; totalEventCount: number;
+  firstSeen: number; lastSeen: number; staleness: number; strength: number;
+  observation: string; // observed domain-based statement
+  inference: null;
+}
 
-- `Events captured` (`totalEvents`), `Events processed` (`eventsProcessed`), `Worker status: Running`, `Last event` (ago)
-- Breakdown: 10 types in 2-col grid
-- Metrics: `Dropped / Occupancy N/Capacity / Peak` + `Dexie (IndexedDB) persisted: dexieCount`
-- Polls `GET_STATS` + `GET_COUNTS` every 1s via `fetchStatsHelper(setStats, setDexieCount)` (extracted helper; handles `dexieCount ?? rxdbCount` compat). BoldKit-like inline theme.
+interface MemoryDomain {
+  domain: string; eventCount: number; contextCount: number;
+  contextIds: string[]; firstSeen: number; lastSeen: number;
+}
+```
 
-### Dashboard (`apps/web/src/routes/index.tsx`)
+### Identity, qualification, and ranking
 
-Scope: `setup.md` §9 + full breakdown.
+A canonical signature takes a context's six highest-event-count domains, alphabetizes them, then joins with `+`.
 
-- Overview cards: `Events` / `Processed` / `Dropped` / `Dexie (IndexedDB)` count
-- Breakdown: 10 types (5-col grid), `Occupancy / Peak / Last event`
-- Header: `Connected / No extension` dot (lime vs zinc)
-- Fallback when `chrome.runtime.sendMessage` absent: placeholder + hint + extension-ID input (`localStorage["tabot_extension_id"]` → Save)
-- Actions: `Refresh`
-- Reads `GET_STATS` + `GET_COUNTS` (compat `dexieCount ?? rxdbCount`) on 1s poll.
+| Threshold | Value |
+|---|---:|
+| recurrent contexts | 2 |
+| single-context minimum event count | 500 |
+| domains in signature | 6 |
+| stale after | 7 days |
+| returned memory cap | 50 |
 
-No auth, no backend API, no cloud DB. Dashboard polls; no push needed for V1.
+Contexts with the exact same signature consolidate into one memory. Partial overlaps deliberately remain separate: `github.com+slack.com` is not `github.com+slack.com+jira.com`. A one-context group is retained only when it has at least 500 events. A multi-context group is a `recurrent` memory.
+
+`strength = contextCount * min(domainCount, 5)`. `staleness = max(0, now - lastSeen)`. Stale memories are not deleted; consumers receive their staleness and decide how to rank them. The observation is a template such as `visited github.com, slack.com across 3 activity periods`; `inference` is always `null`.
+
+### APIs
+
+```ts
+buildMemories(contexts, now?): Memory[]
+getMemories(db, limit = 50): Promise<Memory[]>
+getMemoryById(db, id): Promise<Memory | undefined>
+getMemoriesBySignature(db, signature): Promise<Memory[]>
+```
+
+Memory APIs derive from no more than 500 recent contexts and return strength-ordered results.
 
 ---
 
-## 13. Storage Architecture
+## 9. Browser-context Retrieval
+
+Retrieval makes the derived layer usable without interpreting raw events at query time. It is domain-based, evidence-first, bounded, and returns structured results rather than task claims.
+
+### Result types
+
+```ts
+interface SimilarContextResult {
+  context: BrowserContext;
+  similarity: number;
+  sharedDomains: string[];
+}
+interface SimilarMemoryResult {
+  memory: Memory;
+  similarity: number;
+  sharedDomains: string[];
+}
+interface ContextSummary {
+  context: BrowserContext;
+  observation: string;
+  domainList: string[];
+  eventDensity: number; // events per millisecond
+}
+interface RecurrenceReport {
+  isRecurrent: boolean;
+  memory?: Memory;
+  similarMemories?: SimilarMemoryResult[];
+}
+interface TimelineEntry { context: BrowserContext; isRecurrent: boolean; memoryId?: string; }
+interface DomainHistoryReport {
+  domain: string; contexts: BrowserContext[]; memories: Memory[];
+  totalEvents: number; firstSeen: number; lastSeen: number;
+}
+```
+
+### Primitives
+
+| Category | Functions | Behavior |
+|---|---|---|
+| Temporal | `getRecentActivity`, `getActivityToday`, `getActivityBetween` | Recent contexts are newest first; date/range reads return relevant derived contexts. |
+| Domain | `getDomainsInContext`, `getContextsWithDomain`, `findMemoryBySignature`, `getMemoryHistoryForDomain` | Exact domain/signature access against bounded derived reads. |
+| Similarity | `findSimilarContexts`, `findSimilarMemories` | Compares domain sets; excludes the target context itself. |
+| Current context | `getCurrentContext`, `getPreviousContext`, `isDomainNovel`, `isSignatureRecurrent` | Supplies recent state, prior context, lookback novelty, and exact-signature recurrence. |
+| Composites | `summarizeContext`, `reportRecurrence`, `getActivityTimeline`, `getDomainHistory` | Structured summaries, recurrence evidence, annotated timeline, and domain evidence history. |
+
+Similarity is Jaccard index over domain sets:
 
 ```text
-1. SharedArrayBuffer   Transient ring buffer (10k × 32B)
-        ↓
-2. Background drain    Decode / normalize / batch (512) + tabMeta enrich
-        ↓
-3. Dexie (IndexedDB)   Persistent local history — DB tabot_events, table events (id PK, indexes timestamp/type/tabId)
+jaccard(A, B) = |A intersection B| / |A union B|
 ```
 
-Roles: SAB transports, Atomics coordinates, background drains+batches, Dexie persists, dashboard reads derived state.
+Only values greater than zero are returned, results sort descending by similarity, and default query caps are five (three for recurrence's related-memory list). Jaccard returns `0` for two empty sets rather than `NaN`.
+
+### Evidence signals, not confidence claims
+
+Consumers receive similarity, memory strength, staleness, context event density, and session count. They decide what those signals mean. Thin contexts, stale memories, and weak partial overlap are never hidden or turned into an intent claim.
+
+Retrieval derives at most 500 contexts and 50 memories. Similarity is consequently `O(500 * averageDomains)`, acceptable until measurement proves otherwise.
 
 ---
 
-## 14. File Map
+## 10. Live Browser Context
 
-```text
-packages/shared/src/db.ts              Dexie TabotDatabase + createEventsDb/bulkInsertEvents/countEvents/getAllEvents
-packages/shared/src/index.ts           barrel
-apps/extension/background.ts           SAB + drain + Dexie batch + messaging (inline, no Blob worker)
-apps/extension/contents/tabot.ts       content script + Pacer
-apps/extension/popup.tsx               popup UI
-apps/extension/package.json            manifest + dexie dep + externally_connectable
-apps/web/src/routes/index.tsx          dashboard route
+`LiveBrowserContext` is an on-demand snapshot that joins live event-stream state with the derived historical layer. It answers which browser context is currently observable, not what task the user is performing.
+
+```ts
+interface LiveBrowserContext {
+  currentContext?: BrowserContext;
+  activeTabId: number;
+  activeWindowId: number;
+  currentUrl?: string;
+  interactionIntensity: number; // interactions per minute
+  recentNavigations: string[];  // newest first
+  relatedContexts: SimilarContextResult[];
+  relatedMemories: SimilarMemoryResult[];
+  evidence: { eventCount: number; sessionCount: number; staleness: number };
+  computedAt: number;
+}
 ```
+
+### Snapshot semantics
+
+- `currentContext`: most recent derived context, or `undefined` if there are no events.
+- active tab/window: last `TAB_ACTIVATED`, defaulting to `0` if absent.
+- current URL: last URL-bearing `NAVIGATION`, or `undefined` if absent.
+- interaction intensity: `totalInteractionCount / (duration / 60000)`; zero for missing or zero-duration contexts.
+- navigation sequence: URL-bearing navigations, newest first, default cap 10.
+- related contexts/memories: top three retrieval similarity results, empty without a current context.
+- evidence staleness: `now - currentContext.endTimestamp`, or zero if there is no context.
+
+### APIs
+
+```ts
+buildLiveContext({ currentContext, events, relatedContexts, relatedMemories, now?, navigationLimit? }): LiveBrowserContext
+getCurrentBrowserContext(db, navigationLimit = 10): Promise<LiveBrowserContext>
+getLiveInteractionIntensity(db): Promise<number>
+getLiveNavigationSequence(db, limit = 10): Promise<string[]>
+```
+
+`buildLiveContext` is the pure core. The database adapter gets the current context, all persisted events, and top-three related contexts/memories, then passes them into that pure core. No live-context table, real-time stream, or dashboard route is introduced before Phase 7 validates the snapshot's usefulness.
 
 ---
 
-## 15. Local Development
+## 11. Validation and Engineering Checks
+
+Each derivation core is deterministic and has a runnable Node assert check:
 
 ```bash
-pnpm install
-pnpm --filter extension dev        # Plasmo dev
-pnpm --filter web dev              # TanStack Start (port 3000)
-pnpm build                         # both
-pnpm lint / pnpm lint:fix          # Biome
-pnpm --filter extension build      # chrome-mv3 prod → apps/extension/build/chrome-mv3-prod
+pnpm --filter shared check:sessions
+pnpm --filter shared check:contexts
+pnpm --filter shared check:memories
+pnpm --filter shared check:retrieval
+pnpm --filter shared check:live-context
+pnpm lint
 pnpm --filter extension exec tsc --noEmit
+pnpm --filter web exec tsc --noEmit
 ```
 
-Chrome: `chrome://extensions` → Developer mode → Load unpacked `build/chrome-mv3-prod` → popup + service-worker console → `http://localhost:3000` shows Dexie count.
+The check scripts exercise the respective pure functions and rebuild consistency: the same events/sessions/contexts/memories and fixed clock must produce deep-equal output.
+
+### Required behavioral coverage
+
+- **Sessions:** continuous activity stays whole; inactivity, visibility, tab-return, and window boundaries split sensibly; empty/single-event streams work; rapid switching does not fragment; long reading remains low intensity.
+- **Contexts:** adjacent overlapping domains within 30 minutes group; disjoint domains or longer gaps split; no transitive bridging; empty and one-session inputs work.
+- **Memories:** exact signatures consolidate; partial overlap stays separate; dense singles qualify; recurrent groups qualify; signature cap, staleness, and rebuild consistency hold.
+- **Retrieval:** today/range/domain filtering, exact recurrence, Jaccard ranking, previous context, novelty, timeline, domain history, and empty inputs work.
+- **Live context:** active tab/window and current URL select latest matching events; navigation cap/order, related items, staleness, low intensity, absent data, and rebuild consistency work.
+
+### Deferred only after measurement
+
+Do not add derived IndexedDB tables, full event-cache indexes, derived dashboard routes, popup messages, semantic enrichment, or new telemetry merely for convenience. Add them only if Phase 7 demonstrates a concrete need.
 
 ---
 
-## 16. Constraints
+## 12. Phase 7 Decision Gate
 
-1. Single producer — content scripts never write SAB.
-2. No variable-length strings in SAB; `url` in `tabMeta`, resolved at persist time.
-3. No key contents / typed text / password / DOM snapshot — `KEY_ACTIVITY` occurrence only.
-4. `Atomics` coordinates ring buffer; `READ_INDEX` advances only after batch read.
-5. Pacer only at content-script boundary for high-freq shaping.
-6. Dexie (IndexedDB) is downstream, batched (`bulkPut`) — never on hot SAB path.
-7. UI never consumes raw stream — only `StatsSnapshot` (+ optional `dexieCount`).
-8. No synthetic events in product path — real browser activity only.
-9. `chrome.runtime.onMessage` async contract: sync → `return false`, async `GET_COUNTS` → `return true`.
-10. Service workers cannot `Atomics.wait` — polling (microtask + 50ms burst + 200ms fallback) is the wakeup.
-11. No backend / auth / cloud ingestion.
+Before adding any AI capability, evaluate representative real and constructed browsing scenarios:
 
----
+1. session quality and explainable boundaries;
+2. context coherence and separation;
+3. memory usefulness and evidence traceability;
+4. historical retrieval relevance;
+5. live-context stability as browsing changes;
+6. ambiguous behavior: rapid switching, long reading, unrelated tasks in one window, the same site used differently, task return after hours, and many dormant tabs.
 
-## 17. Definition of Done
+The required decision is:
 
-- [ ] Plasmo extension loads in Chrome.
-- [ ] `chrome.tabs` + `webNavigation` events captured; content script captures `PAGE_VISIBLE/HIDDEN/SCROLL/CLICK/KEY_ACTIVITY` (Pacer-shaped).
-- [ ] Content scripts never write SAB; background is single producer.
-- [ ] 10 event types, fixed 32-byte slots, `SharedArrayBuffer` ring buffer with monotonic logical indexes + modulo physical slots.
-- [ ] Producer publishes only after fully written; consumer reads only via `publishedIndex`.
-- [ ] Polling wakeup (not tight loop); overflow detected; `droppedEvents` counted and surfaced.
-- [ ] Bounded batches (512) decoded, per-type stats + `eventsProcessed/droppedEvents/occupancy/peak/lastProcessedAt` maintained.
-- [ ] Batch persist to Dexie via `bulkPut` (not per-event); `url` from `tabMeta`; no variable strings in SAB.
-- [ ] `packages/shared/src/db.ts` exposes `StoredTabEvent` + `TabotDatabase` + `createEventsDb`/`bulkInsertEvents`/`countEvents`.
-- [ ] `GET_STATS` returns `StatsSnapshot` consistent with `GET_COUNTS` (`dexieCount`) and in-memory aggregation.
-- [ ] Popup shows full breakdown + `dropped/occupancy/peak` + Dexie count; polls `GET_STATS`/`GET_COUNTS` (1s).
-- [ ] Dashboard shows overview cards + breakdown + dropped/occupancy + Dexie count via `externally_connectable` (graceful fallback).
-- [ ] No raw events through messaging or to hosted server.
-- [ ] `pnpm lint` + `pnpm --filter extension exec tsc --noEmit` + `pnpm --filter extension build` pass; manual load shows live browsing events in both surfaces.
+> **Does sparse browser telemetry provide enough signal to represent useful user context?**
 
-### Legacy checks (from split specs — already covered above, kept for traceability)
+If yes, identify the strongest evidence-grounded signals before preparing an agent consumer. If no, identify the minimum additional metadata required and why; do not expand collection simply because data is available.
 
-Event+SAB: all 10 types, Pacer shaping, binary slots, monotonic ring, `publishedIndex`, bounded batches, downstream batch persistence, no raw events to dashboard, sustained real-browsing stream.
+A future Tabot agent must consume:
 
-Persistence+Dashboard: `db.ts` valid, `bulkPut` batching, `GET_STATS`/`GET_COUNTS` wired, `externally_connectable`, popup + dashboard DoD, no cloud.
+```text
+Current Browser Context + Relevant Browser Memories + Supporting Evidence
+```
+
+rather than raw event history.
 
 ---
 
-## 18. Engineering Principle
+## 13. Constraints and Out of Scope
 
-> **Collect real browser telemetry, process it off the main/UI thread using shared memory and worker-based concurrency, and reduce the raw event stream into structured local state that can later support digital-workflow analysis.**
-
-Next layer (out of V1): `Dexie (IndexedDB) (local history) → sessions / sequences → digital workflow representation → workflow intelligence → automation recommendations`.
+1. Background service worker is the sole SAB producer; content scripts never write shared memory.
+2. SAB contains only fixed-size numeric fields; URLs/titles remain in the sidecar.
+3. IndexedDB persists raw normalized events in batches; derived data is lazy and rebuildable.
+4. Dashboard and popup do not receive raw events.
+5. Derived output never names a task, intent, or content meaning.
+6. There is no cloud/backend/authentication/multi-user path.
+7. No LLM, embeddings, semantic search, vector database, cross-device identity, content capture, predictive context, or automation is implemented.
+8. Optional persistence caches, derived UI routes, and derived runtime messages require Phase 7 evidence first.
 
 ---
 
-## 19. Out of Scope (V1)
+## 14. History
 
-AI, auth, cloud storage, remote ingestion, user accounts, payments, productivity scoring, ML, complex analytics, backend API for browser data, Redis/Kafka/vector DB, server-side ingestion, multi-user. Prove `browser → shared memory → local persistence → aggregation → UI` first, with real high-volume activity.
-
----
-
-## 20. History
-
-- `2026-08-22` — Consolidation. Dexie replaces RxDB (source of truth). Service-worker polling model documented (no `Atomics.wait`). `tech.md` supersedes the three docs.
+- `2026-08-22` - Consolidated initial collection, SAB, Dexie, and dashboard documentation into `tech.md`.
+- `2026-08-24` - Added the implemented deterministic derived layer: sessions, contexts, memories, retrieval, and live browser context; merged metrics into this document and retired split specification files.

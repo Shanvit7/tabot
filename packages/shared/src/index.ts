@@ -20,6 +20,15 @@ export {
 	WRITE_INDEX,
 } from "./buffer";
 export {
+	type BrowserContext,
+	buildContexts,
+	CONTEXT_THRESHOLDS,
+	type ContextDomain,
+	getContextById,
+	getContexts,
+	getRecentContexts,
+} from "./contexts";
+export {
 	bulkInsertEvents,
 	countEvents,
 	createEventsDb,
@@ -34,8 +43,23 @@ export {
 	type TabEventType,
 	ValueToEventType,
 } from "./events";
+export {
+	buildLiveContext,
+	getCurrentBrowserContext,
+	getLiveInteractionIntensity,
+	getLiveNavigationSequence,
+	type LiveBrowserContext,
+} from "./live-context";
 export { logger } from "./logger";
-
+export {
+	buildMemories,
+	getMemories,
+	getMemoriesBySignature,
+	getMemoryById,
+	MEMORY_THRESHOLDS,
+	type Memory,
+	type MemoryDomain,
+} from "./memories";
 export {
 	getMeta,
 	removeMeta,
@@ -43,7 +67,6 @@ export {
 	tabMeta,
 	updateMeta,
 } from "./metadata";
-
 export {
 	type BufferReadyMessage,
 	createEmptyStats,
@@ -52,3 +75,44 @@ export {
 	type StatsSnapshot,
 	type StatsUpdateMessage,
 } from "./protocol";
+export {
+	annotateTimelineCore,
+	type ContextSummary,
+	contextSignature,
+	type DomainHistoryReport,
+	findMemoryBySignature,
+	findSimilarContexts,
+	findSimilarContextsCore,
+	findSimilarMemories,
+	findSimilarMemoriesCore,
+	getActivityBetween,
+	getActivityTimeline,
+	getActivityToday,
+	getContextsWithDomain,
+	getCurrentContext,
+	getDomainHistory,
+	getDomainsInContext,
+	getMemoryHistoryForDomain,
+	getPreviousContext,
+	getRecentActivity,
+	isDomainNovel,
+	isSignatureRecurrent,
+	jaccardIndex,
+	type RecurrenceReport,
+	reportRecurrence,
+	type SimilarContextResult,
+	type SimilarMemoryResult,
+	summarizeContext,
+	summarizeContextCore,
+	type TimelineEntry,
+} from "./retrieval";
+export {
+	type DomainParticipation,
+	getRecentSessions,
+	getSessionById,
+	getSessions,
+	SESSION_THRESHOLDS,
+	type Session,
+	sessionize,
+	type TabParticipation,
+} from "./sessions";

@@ -1,53 +1,96 @@
+import { Player } from "@remotion/player";
+import { motion, useReducedMotion } from "framer-motion";
+import { BrowserMemoryFilm } from "~/components/landing/browser-memory-film";
 import { Button } from "~/components/ui/button";
 
-export const Hero = () => (
-	<section className="min-h-[85vh] flex flex-col justify-center px-6 bg-black text-white">
-		<div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-			<div className="space-y-6">
-				<p className="font-mono text-xs uppercase tracking-[0.2em] text-lime">
-					An open, local-first context layer for browser activity
-				</p>
-				<h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[0.95] [text-wrap:balance]">
-					Your browser,
-					<br />
-					<span className="text-lime underline decoration-4">
-						with a memory
-					</span>
-				</h1>
-				<p className="font-mono text-sm text-lime/70 max-w-xl leading-relaxed">
-					Tabot turns your browser activity into a private, structured memory of
-					what you've been doing across the web.
-				</p>
-				<div className="flex flex-wrap gap-4">
-					<Button asChild size="lg" className="bg-lime text-black shadow-hard">
-						<a href="https://github.com/">star on github</a>
-					</Button>
-					<Button asChild size="lg" variant="secondary">
-						<a href="/metrics">try tabot</a>
-					</Button>
-				</div>
-				<p className="font-mono text-xs text-lime/60">
-					Local-first. Open source. Yours to keep.
-				</p>
-			</div>
+const reveal = {
+	hidden: { opacity: 0, y: 16 },
+	visible: { opacity: 1, y: 0 },
+};
 
-			<div className="flex flex-col gap-3 items-end">
-				{["Jira", "GitHub", "Slack", "docs"].map((label) => (
-					<div
-						key={label}
-						className="border-hard bg-white px-6 py-3 font-mono text-sm font-bold shadow-hard"
+export const Hero = () => {
+	const reduceMotion = useReducedMotion();
+
+	return (
+		<section className="relative overflow-hidden bg-[#f5f6f0] px-6 pb-14 pt-18 text-[#12221d] sm:px-10 sm:pb-20 sm:pt-24 lg:px-14 lg:pt-28">
+			<div className="absolute inset-x-0 top-0 h-px bg-[#d9ddd0]" />
+			<div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[minmax(0,0.94fr)_minmax(460px,1.06fr)] lg:gap-16">
+				<motion.div
+					animate="visible"
+					className="max-w-2xl"
+					initial={reduceMotion ? "visible" : "hidden"}
+					transition={{
+						duration: 0.65,
+						ease: [0.16, 1, 0.3, 1],
+						staggerChildren: 0.1,
+					}}
+				>
+					<motion.h1
+						className="max-w-xl text-[clamp(3.3rem,7vw,6.7rem)] font-semibold leading-[0.9] tracking-[-0.055em] text-[#12221d] [text-wrap:balance]"
+						variants={reveal}
 					>
-						{label}
+						Your browser history was never built for work.
+					</motion.h1>
+					<motion.p
+						className="mt-7 max-w-lg text-lg leading-8 text-[#4a5a52] sm:text-xl"
+						variants={reveal}
+					>
+						Tabot turns the tabs you open, revisit, and move between into a
+						private timeline of the work you are already doing.
+					</motion.p>
+					<motion.div
+						className="mt-9 flex flex-wrap items-center gap-3"
+						variants={reveal}
+					>
+						<Button
+							asChild
+							className="rounded-full border-[#1d332a] bg-[#163d2d] px-6 text-[#eff5e7] shadow-none hover:bg-[#24523f]"
+							size="lg"
+						>
+							<a href="/metrics">Open the dashboard</a>
+						</Button>
+						<a
+							className="rounded-full px-5 py-3 text-sm font-semibold text-[#244d39] underline decoration-[#9bc65b] decoration-2 underline-offset-4 transition-colors hover:text-[#12221d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#4d7c0f]"
+							href="#ask-better"
+						>
+							See how it works
+						</a>
+					</motion.div>
+					<motion.div
+						className="mt-11 flex flex-wrap gap-x-6 gap-y-3 border-t border-[#d9ddd0] pt-5 text-sm font-medium text-[#52635a]"
+						variants={reveal}
+					>
+						<span>Runs locally in your browser</span>
+						<span>Open source by design</span>
+						<span>Raw activity stays yours</span>
+					</motion.div>
+				</motion.div>
+
+				<motion.div
+					animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+					className="relative"
+					initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 24 }}
+					transition={{ delay: 0.18, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+				>
+					<div className="overflow-hidden rounded-[20px] bg-[#0c151f] shadow-[0_24px_55px_rgba(18,34,29,0.2)] ring-1 ring-[#2b3c47]">
+						<Player
+							aria-label="Illustrative Tabot activity timeline"
+							autoPlay={!reduceMotion}
+							component={BrowserMemoryFilm}
+							compositionHeight={620}
+							compositionWidth={960}
+							controls={false}
+							durationInFrames={180}
+							fps={30}
+							loop
+							style={{ display: "block", width: "100%" }}
+						/>
 					</div>
-				))}
-				<div className="w-2 h-2 bg-lime" />
-				<div className="border-hard-lg bg-black text-lime px-10 py-6 text-center font-mono text-lg font-bold uppercase tracking-wider shadow-hard-xl">
-					context
-				</div>
-				<div className="border-hard-lg bg-black text-lime px-10 py-6 text-center font-mono text-lg font-bold uppercase tracking-wider shadow-hard-xl">
-					memory
-				</div>
+					<p className="mt-4 text-center text-xs font-medium text-[#64736a]">
+						Illustrative activity model - no browsing data leaves your device.
+					</p>
+				</motion.div>
 			</div>
-		</div>
-	</section>
-);
+		</section>
+	);
+};

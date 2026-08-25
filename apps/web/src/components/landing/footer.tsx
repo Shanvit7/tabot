@@ -1,16 +1,60 @@
+import SiGithub from "@icons-pack/react-simple-icons/icons/SiGithub";
+
+const links = [
+	{ href: "#remember", label: "Remember" },
+	{ href: "#ask-better", label: "Ask better" },
+	{ href: "#make-it-yours", label: "Make it yours" },
+	{ href: "https://github.com/", label: "GitHub" },
+] as const;
+
 export const Footer = () => (
-	<footer className="border-hard bg-lime px-6 py-8">
-		<div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-			<div>
-				<p className="font-bold text-lg">TABOT</p>
-				<p className="font-mono text-xs text-muted-foreground">
-					Your browser, with a memory.
+	<footer className="border-t border-[#405b4d] bg-[#07100c] px-6 pt-10 text-[#eff5e7] sm:px-10 sm:pt-14 lg:px-14">
+		<div className="mx-auto max-w-7xl">
+			<div className="border-b border-[#405b4d] pb-10 sm:pb-14">
+				<p className="text-sm font-semibold text-[#bfff00]">TABOT</p>
+				<h2 className="mt-6 max-w-5xl text-balance text-[clamp(4.5rem,12vw,12rem)] font-semibold leading-[0.72] tracking-[-0.04em]">
+					Thinking
+					<br />
+					across tabs.
+				</h2>
+				<p className="mt-10 max-w-md text-base leading-7 text-[#c2d1c7] sm:text-lg">
+					Close the tab. Keep the thought. Tabot makes it easier to pick up
+					where you left off.
 				</p>
 			</div>
-			<div className="font-mono text-xs text-muted-foreground text-center md:text-right">
-				An open, local-first context layer for browser activity.
-				<br />
-				Local-first. Open source. Yours to keep.
+
+			<div className="grid gap-10 py-8 sm:grid-cols-[1fr_auto] sm:items-end">
+				<p className="max-w-xs text-sm leading-6 text-[#8ca493]">
+					Local-first browser memory. Your activity stays on your device.
+				</p>
+				<nav
+					aria-label="Footer navigation"
+					className="grid grid-cols-2 gap-x-12 gap-y-4 text-sm font-semibold sm:text-right"
+				>
+					{links.map((link) => (
+						<a
+							className="underline decoration-[#bfff00] decoration-2 underline-offset-4 hover:text-[#bfff00]"
+							href={link.href}
+							key={link.href}
+						>
+							{link.label}
+						</a>
+					))}
+				</nav>
+			</div>
+			<div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#405b4d] py-5 text-xs font-medium text-[#8ca493]">
+				<span>Private by default. Yours to keep.</span>
+				<a
+					className="flex items-center gap-2 hover:text-[#bfff00]"
+					href="https://github.com/"
+				>
+					<SiGithub
+						aria-hidden="true"
+						className="h-4 w-4"
+						color="currentColor"
+					/>
+					Open source on GitHub
+				</a>
 			</div>
 		</div>
 	</footer>
