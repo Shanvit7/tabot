@@ -5,6 +5,7 @@
 
 import assert from "node:assert/strict";
 import type { BrowserContext, ContextDomain } from "./contexts.ts";
+import { logger } from "./logger.ts";
 import { buildMemories } from "./memories.ts";
 import {
 	annotateTimelineCore,
@@ -239,4 +240,4 @@ assert.equal(
 	);
 }
 
-console.log("retrieval.check: all assertions passed ✔");
+logger.info("retrieval.check: all assertions passed ✔");

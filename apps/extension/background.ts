@@ -6,6 +6,7 @@ import {
 	createBuffer,
 	createEmptyStats,
 	createEventsDb,
+	getAllEvents,
 	getMeta,
 	logger,
 	pushEvent,
@@ -259,6 +260,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		return true;
 	}
 
+	if (message?.type === "GET_EVENTS") {
+		getDb()
+			.then((db) => getAllEvents(db))
+			.then((events) => {
+				try {
+					sendResponse(events);
+				} catch {}
+			})
+			.catch(() => {
+				try {
+					sendResponse([]);
+				} catch {}
+			});
+		return true;
+	}
+
 	return false;
 });
 
@@ -283,6 +300,21 @@ if (chrome.runtime.onMessageExternal) {
 					.catch(() => {
 						try {
 							sendResponse({ dexieCount: 0, rxdbCount: 0 });
+						} catch {}
+					});
+				return true;
+			}
+			if (message?.type === "GET_EVENTS") {
+				getDb()
+					.then((db) => getAllEvents(db))
+					.then((events) => {
+						try {
+							sendResponse(events);
+						} catch {}
+					})
+					.catch(() => {
+						try {
+							sendResponse([]);
 						} catch {}
 					});
 				return true;

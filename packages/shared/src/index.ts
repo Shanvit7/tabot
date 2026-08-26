@@ -70,6 +70,7 @@ export {
 export {
 	type BufferReadyMessage,
 	createEmptyStats,
+	type GetEventsMessage,
 	MSG,
 	type PipelineStats,
 	type StatsSnapshot,

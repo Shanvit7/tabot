@@ -1,12 +1,13 @@
-// packages/shared/src/liveContext.check.ts
+// packages/shared/src/live-context.check.ts
 // Runnable self-check for the live context layer — covers docs/tech.md §8.1 scenarios + §8.2 rebuild consistency.
 // Tests the pure core (buildLiveContext) against constructed contexts/events.
-// Run: node --import ./resolve-hook.mjs src/liveContext.check.ts
+// Run: node --import ./resolve-hook.mjs src/live-context.check.ts
 
 import assert from "node:assert/strict";
 import type { BrowserContext, ContextDomain } from "./contexts.ts";
 import type { StoredTabEvent } from "./db.ts";
-import { buildLiveContext } from "./liveContext.ts";
+import { buildLiveContext } from "./live-context.ts";
+import { logger } from "./logger.ts";
 
 const NOW = 1_700_000_000_000; // fixed reference
 const MIN = 60_000;
@@ -221,12 +222,15 @@ const ctx = (
 	const memory = {
 		id: "mem-1",
 		kind: "recurrent" as const,
+		startTimestamp: NOW - 30 * DAY,
+		endTimestamp: NOW - 2 * DAY,
 		signature: "github.com+slack.com",
 		domains: [
 			{
 				domain: "github.com",
 				eventCount: 1000,
 				contextCount: 3,
+				contextIds: ["c1", "c2", "c3"],
 				firstSeen: NOW - 30 * DAY,
 				lastSeen: NOW - 2 * DAY,
 			},
@@ -234,12 +238,19 @@ const ctx = (
 				domain: "slack.com",
 				eventCount: 800,
 				contextCount: 3,
+				contextIds: ["c1", "c2", "c3"],
 				firstSeen: NOW - 30 * DAY,
 				lastSeen: NOW - 2 * DAY,
 			},
 		],
 		contextIds: ["c1", "c2", "c3"],
 		contextCount: 3,
+		firstContextId: "c1",
+		lastContextId: "c3",
+		totalSessionCount: 7,
+		totalEventCount: 1800,
+		firstSeen: NOW - 30 * DAY,
+		lastSeen: NOW - 2 * DAY,
 		strength: 6,
 		staleness: 2 * DAY,
 		observation: "visited github.com, slack.com across 3 activity periods",
@@ -340,4 +351,4 @@ const ctx = (
 	assert.deepEqual(a, b, "scenario 10: rebuild consistency");
 }
 
-console.log("liveContext.check: all assertions passed ✔");
+logger.info("live-context.check: all assertions passed ✔");

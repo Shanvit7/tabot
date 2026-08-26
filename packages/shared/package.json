@@ -13,9 +13,12 @@
 		"check:contexts": "node --import ./resolve-hook.mjs src/contexts.check.ts",
 		"check:memories": "node --import ./resolve-hook.mjs src/memories.check.ts",
 		"check:retrieval": "node --import ./resolve-hook.mjs src/retrieval.check.ts",
-		"check:liveContext": "node --import ./resolve-hook.mjs src/liveContext.check.ts"
+		"check:liveContext": "node --import ./resolve-hook.mjs src/live-context.check.ts"
 	},
 	"dependencies": {
 		"dexie": "^4.4.5"
+	},
+	"devDependencies": {
+		"@types/node": "^22.20.1"
 	}
 }

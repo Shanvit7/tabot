@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import { type BrowserContext, buildContexts } from "./contexts.ts";
+import { logger } from "./logger.ts";
 import type { Session } from "./sessions.ts";
 
 const MIN = 60_000;
@@ -28,6 +29,7 @@ const session = (
 		eventCount,
 		sessionCount: 1,
 		sessionIds: [id],
+		tabIds: [],
 		firstSeen: start + i,
 		lastSeen: end,
 	})),
@@ -215,4 +217,4 @@ assert.deepEqual(buildContexts([]), [], "scenario 10: empty → []");
 	);
 }
 
-console.log("contexts.check: all assertions passed ✔");
+logger.info("contexts.check: all assertions passed ✔");

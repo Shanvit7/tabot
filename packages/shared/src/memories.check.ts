@@ -3,12 +3,9 @@
 // Run: node --import ./resolve-hook.mjs src/memories.check.ts
 
 import assert from "node:assert/strict";
-import type { ContextDomain } from "./contexts";
-import {
-	type BrowserContext,
-	buildMemories,
-	MEMORY_THRESHOLDS,
-} from "./memories";
+import type { BrowserContext, ContextDomain } from "./contexts";
+import { logger } from "./logger";
+import { buildMemories, MEMORY_THRESHOLDS } from "./memories";
 
 // --- helpers ---
 
@@ -342,4 +339,4 @@ assert.deepEqual(buildMemories([], NOW), [], "S8: empty stream");
 	);
 }
 
-console.log("memories.check.ts — all scenarios pass");
+logger.info("memories.check — all scenarios pass");

@@ -1,61 +1,89 @@
 # Tabot
 
-A Chrome extension + web dashboard for collecting and processing browser activity events at high volume. Uses `SharedArrayBuffer` + Web Workers for off-main-thread event processing, with a TanStack Start dashboard for visualization.
+A Chrome extension + web dashboard for collecting and processing browser activity events at high volume.
 
 ## Architecture
 
-```
-Chrome Extension (Plasmo)
+```text
+Chrome Extension
   → Browser activity events
   → SharedArrayBuffer + Atomics
-  → Web Worker (aggregation)
-  → Dexie / IndexedDB (local persistence)
+  → Web Worker
+  → Dexie / IndexedDB
   → TanStack Start dashboard
 ```
 
-## Quick Start
+## Research & Experimentation
 
-```bash
-# Install dependencies
-pnpm install
+Tabot explores whether low-level browser interaction telemetry can be transformed into useful representations of user activity.
 
-# Run the web dashboard
-pnpm --filter web dev
+### Research Questions
 
-# Run the Chrome extension (dev mode)
-pnpm --filter extension dev
+- Can browser interaction signals help identify meaningful user activity?
+- Can browsing activity be segmented into coherent sessions and contexts?
+- Can recurring behavioral patterns be discovered from interaction logs?
+- How much useful context can be derived without collecting page contents or typed text?
 
-# Build everything
-pnpm build
+The current pipeline is:
+
+```text
+Events
+  ↓
+Sessions
+  ↓
+Contexts
+  ↓
+Memories
 ```
 
-## Extension Development
+### Relevant Research
 
-1. `pnpm --filter extension dev`
-2. Open `chrome://extensions`
-3. Enable **Developer mode**
-4. Load the generated extension build
-5. Open the Tabot popup
+**Kellar & Watters (2006) — Using Web Browser Interactions to Predict Task**
 
-## Project Structure
+Investigated whether logged browser interactions could predict high-level user tasks.
 
+DOI: `10.1145/1135777.1135906`
+
+**Ustinovskiy, Mazur & Serdyukov (2013) — Intent-Based Browse Activity Segmentation**
+
+Investigated segmentation of browsing logs into logically related activity and the limitations of simple inactivity-based sessionization.
+
+DOI: `10.1007/978-3-642-36973-5_21`
+
+**Apaolaza & Vigo (2019) — Assisted Pattern Mining for Discovering Interactive Behaviours on the Web**
+
+Investigated discovering higher-order behavioral patterns from low-level web interaction logs.
+
+DOI: `10.1016/j.ijhcs.2019.06.012`
+
+### Current Experiment
+
+The immediate goal is to make Tabot's telemetry and derived data exportable for independent analysis and human evaluation.
+
+```text
+Browser activity
+  ↓
+Telemetry
+  ↓
+Derived representations
+  ↓
+Export
+  ↓
+Evaluation
 ```
-tabot/
-├── apps/
-│   ├── extension/    # Plasmo Chrome extension
-│   └── web/          # TanStack Start dashboard
-├── packages/
-│   └── shared/       # Shared types and utilities
-└── docs/
-    └── setup.md      # Detailed architecture docs
-```
 
-## Tech Stack
+The initial experiment is intentionally non-AI: first determine whether the telemetry itself contains useful signal.
 
-- **Extension:** Plasmo
-- **Web:** TanStack Start + React + Tailwind CSS
-- **UI Components:** BoldKit (Neubrutalism design system)
-- **Concurrency:** SharedArrayBuffer + Atomics
-- **Storage:** Dexie (IndexedDB)
-- **Language:** TypeScript
-- **Package Manager:** pnpm
+## Privacy
+
+Tabot's initial telemetry does not intentionally capture:
+
+- Typed text
+- Input contents
+- Passwords
+- Page DOM contents
+- Page text
+
+## Status
+
+**Experimental / research-oriented.**

@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import type { StoredTabEvent } from "./db.ts";
+import { logger } from "./logger.ts";
 import { sessionize } from "./sessions.ts";
 
 const MIN = 60_000;
@@ -198,4 +199,4 @@ assert.deepEqual(sessionize([]), [], "scenario 10: empty → []");
 	assert.deepEqual(a, b, "scenario 12: rebuild consistency");
 }
 
-console.log("sessions.check: all assertions passed ✔");
+logger.info("sessions.check: all assertions passed ✔");

@@ -2,6 +2,7 @@ export const MSG = {
 	BUFFER_READY: "BUFFER_READY",
 	STATS_UPDATE: "STATS_UPDATE",
 	STOP: "STOP",
+	GET_EVENTS: "GET_EVENTS",
 } as const;
 
 export interface StatsSnapshot {
@@ -35,6 +36,12 @@ export interface BufferReadyMessage {
 export interface StatsUpdateMessage {
 	type: typeof MSG.STATS_UPDATE;
 	stats: StatsSnapshot;
+}
+
+export interface GetEventsMessage {
+	type: typeof MSG.GET_EVENTS;
+	limit?: number; // max events to return (default: all)
+	since?: number; // epoch ms — return events with timestamp >= since
 }
 
 export const createEmptyStats = (capacity = 0): StatsSnapshot => ({
