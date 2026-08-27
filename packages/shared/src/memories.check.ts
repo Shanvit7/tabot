@@ -339,4 +339,99 @@ assert.deepEqual(buildMemories([], NOW), [], "S8: empty stream");
 	);
 }
 
+// Fixture J (step 10) — memory preserves ordered sequence, first-occurrence, deduped
+{
+	const contexts2 = [
+		{
+			...ctx({
+				start: NOW - 2 * day,
+				domains: [
+					{ domain: "deepseek.ai", eventCount: 300 },
+					{ domain: "google.com", eventCount: 200 },
+					{ domain: "amboras.ai", eventCount: 150 },
+				],
+			}),
+			sequence: ["https://deepseek.ai/harness", "https://google.com/search"],
+		},
+		{
+			...ctx({
+				start: NOW - 1 * day,
+				domains: [
+					{ domain: "deepseek.ai", eventCount: 300 },
+					{ domain: "google.com", eventCount: 200 },
+					{ domain: "amboras.ai", eventCount: 150 },
+				],
+			}),
+			sequence: ["https://google.com/search", "https://amboras.ai"],
+		},
+	];
+	const m2 = buildMemories(contexts2, NOW);
+	assert.equal(m2.length, 1, "fixture J: one consolidated memory");
+	const seq = m2[0].sequence;
+	assert.deepEqual(
+		seq,
+		[
+			"https://deepseek.ai/harness",
+			"https://google.com/search",
+			"https://amboras.ai",
+		],
+		"fixture J: merged sequence first-occurrence, deduped",
+	);
+	assert.ok(
+		(m2[0].observation ?? "").includes("→"),
+		"fixture J: observation is sequence-aware",
+	);
+}
+
+// Fixture J2 (step 10) — no sequence evidence → field omitted, domain-set observation
+{
+	const memories = buildMemories(
+		[
+			ctx({
+				start: NOW - 2 * day,
+				domains: [{ domain: "github.com", eventCount: 300 }],
+			}),
+			ctx({
+				start: NOW - 1 * day,
+				domains: [{ domain: "github.com", eventCount: 200 }],
+			}),
+		],
+		NOW,
+	);
+	assert.equal(memories.length, 1, "fixture J2: one memory");
+	assert.equal(
+		memories[0].sequence,
+		undefined,
+		"fixture J2: sequence omitted when no evidence",
+	);
+	assert.ok(
+		(memories[0].observation ?? "").includes("visited"),
+		"fixture J2: falls back to domain-set observation",
+	);
+}
+
+// Fixture I (step 9) — inference always null, evidence never intent
+{
+	const memories = buildMemories(
+		[
+			ctx({
+				start: NOW - 2 * day,
+				domains: [{ domain: "github.com", eventCount: 300 }],
+			}),
+			ctx({
+				start: NOW - 1 * day,
+				domains: [{ domain: "github.com", eventCount: 200 }],
+			}),
+		],
+		NOW,
+	);
+	for (const m of memories) {
+		assert.equal(m.inference, null, "fixture I: inference is null");
+		assert.ok(
+			!/stalk|intent|want|think|stalked/.test(m.observation),
+			"fixture I: no intent vocabulary in observation",
+		);
+	}
+}
+
 logger.info("memories.check — all scenarios pass");

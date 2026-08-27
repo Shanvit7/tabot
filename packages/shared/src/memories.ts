@@ -33,6 +33,9 @@ export interface Memory {
 	staleness: number; // now - lastSeen (computed at build time)
 	strength: number; // Evidence strength: contextCount * min(domainCount, 5)
 
+	// Phase 3 step 10 — merged ordered activity sequence (first-occurrence, deduped)
+	sequence?: string[];
+
 	// Observed vs inferred — NEVER set to intent
 	observation: string; // Template string of observed facts, e.g. "visited github.com and slack.com across 3 activity periods"
 	inference: null; // Always null in Phase 4 (no LLM, no intent)
@@ -144,7 +147,21 @@ const finalizeMemory = (
 	const contextIds = contexts.map((c) => c.id);
 	const kind = contextIds.length > 1 ? "recurrent" : "single";
 
-	return {
+	// Phase 3 step 10 — merge ordered sequences from supporting contexts
+	// (contexts already sorted by startTimestamp); first-occurrence, deduped.
+	const sequence: string[] = [];
+	for (const c of contexts) {
+		for (const key of c.sequence ?? []) {
+			if (!sequence.includes(key)) sequence.push(key);
+		}
+	}
+
+	const observation =
+		sequence.length > 0
+			? `${sequence.map((s) => s.split("://")[1] ?? s).join(" → ")} activity sequence across ${contextIds.length} activity ${contextIds.length === 1 ? "period" : "periods"}`
+			: `visited ${sig.split("+").join(", ")} across ${contextIds.length} activity ${contextIds.length === 1 ? "period" : "periods"}`;
+
+	const memory: Memory = {
 		id: memoryId(contextIds),
 		kind,
 		startTimestamp: first.startTimestamp,
@@ -161,9 +178,11 @@ const finalizeMemory = (
 		firstSeen: first.startTimestamp,
 		staleness: Math.max(0, now - last.endTimestamp),
 		strength: contextIds.length * Math.min(domainList.length, 5),
-		observation: `visited ${sig.split("+").join(", ")} across ${contextIds.length} activity ${contextIds.length === 1 ? "period" : "periods"}`,
+		observation,
 		inference: null,
 	};
+	if (sequence.length > 0) memory.sequence = sequence;
+	return memory;
 };
 
 // --- APIs (tech.md §8.1, Option A: lazy derivation) ---

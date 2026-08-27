@@ -24,6 +24,7 @@ export {
 	buildContexts,
 	CONTEXT_THRESHOLDS,
 	type ContextDomain,
+	type Excursion,
 	getContextById,
 	getContexts,
 	getRecentContexts,
@@ -51,6 +52,14 @@ export {
 	type LiveBrowserContext,
 } from "./live-context";
 export { logger } from "./logger";
+export {
+	type ActivityRef,
+	type ActivityTransition,
+	activityRef,
+	type DerivedEvent,
+	deriveMeaningfulEvents,
+	deriveTransitions,
+} from "./meaningful-events";
 export {
 	buildMemories,
 	getMemories,

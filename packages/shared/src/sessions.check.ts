@@ -199,4 +199,58 @@ assert.deepEqual(sessionize([]), [], "scenario 10: empty → []");
 	assert.deepEqual(a, b, "scenario 12: rebuild consistency");
 }
 
+// Fixture F — ordinary tab excursion must not fragment the session.
+// Continuous activity (< 5m gaps) while tab 1 stays silent >10m, then return to it.
+{
+	const events = [
+		ev(T0, "TAB_ACTIVATED", 1, 1, "https://github.com"),
+		ev(T0 + 60_000, "SCROLL", 1, 1),
+		ev(T0 + 2 * MIN, "TAB_ACTIVATED", 2, 1, "https://google.com"),
+		ev(T0 + 4 * MIN, "SCROLL", 2, 1),
+		ev(T0 + 6 * MIN, "TAB_ACTIVATED", 3, 1, "https://linkedin.com"),
+		ev(T0 + 7 * MIN, "CLICK", 3, 1),
+		ev(T0 + 9 * MIN, "TAB_ACTIVATED", 2, 1, "https://google.com"),
+		ev(T0 + 10 * MIN, "SCROLL", 2, 1),
+		// A has been silent 11m (>10m) — returning is an excursion, not a boundary
+		ev(T0 + 12 * MIN, "TAB_ACTIVATED", 1, 1, "https://github.com"),
+		ev(T0 + 13 * MIN, "SCROLL", 1, 1),
+	];
+	const sessions = sessionize(events);
+	assert.equal(
+		sessions.length,
+		1,
+		"fixture F: excursion back to idle tab → 1 session",
+	);
+}
+
+// Fixture F (pathological rapid switching) — A→B→C→B→A within minutes, zero inactivity → 1 session
+{
+	const events = [
+		ev(T0, "TAB_ACTIVATED", 1, 1, "https://a.com"),
+		ev(T0 + 60_000, "TAB_ACTIVATED", 2, 1, "https://b.com"),
+		ev(T0 + 120_000, "TAB_ACTIVATED", 3, 1, "https://c.com"),
+		ev(T0 + 180_000, "TAB_ACTIVATED", 2, 1, "https://b.com"),
+		ev(T0 + 240_000, "TAB_ACTIVATED", 1, 1, "https://a.com"),
+	];
+	assert.equal(
+		sessionize(events).length,
+		1,
+		"fixture F: rapid A→B→C→B→A → 1 session",
+	);
+}
+
+// Fixture G — long reading page (scroll/click, gaps under inactivity threshold) → stable single session
+{
+	const events = [
+		ev(T0, "TAB_ACTIVATED", 1, 1, "https://read.com/article"),
+		ev(T0 + 4 * MIN, "SCROLL", 1, 1),
+		ev(T0 + 8 * MIN, "SCROLL", 1, 1),
+		ev(T0 + 12 * MIN, "CLICK", 1, 1),
+		ev(T0 + 16 * MIN, "SCROLL", 1, 1),
+		ev(T0 + 20 * MIN, "SCROLL", 1, 1),
+	];
+	const sessions = sessionize(events);
+	assert.equal(sessions.length, 1, "fixture G: long reading → 1 session");
+}
+
 logger.info("sessions.check: all assertions passed ✔");

@@ -375,6 +375,45 @@ const Metrics = () => {
 												.map((d) => `${d.domain} (${d.sessionCount})`)
 												.join(" · ")}
 										</div>
+										{c.episodes && c.episodes.length > 0 && (
+											<div className="mt-1 text-violet-700">
+												<span className="font-semibold">episodes:</span>{" "}
+												{c.episodes.length}
+												{" · "}
+												{c.episodes
+													.map((e) =>
+														e.domains
+															.map((d) => d.split("://")[1] ?? d)
+															.join(" → "),
+													)
+													.join(" || ")}
+											</div>
+										)}
+										{c.sequence && (
+											<div className="mt-1 text-emerald-700">
+												<span className="font-semibold">seq:</span>{" "}
+												{c.sequence
+													.map((s) => s.split("://")[1] ?? s)
+													.join(" → ")}
+											</div>
+										)}
+										{c.mergeEvidence && c.mergeEvidence.length > 0 && (
+											<div className="mt-1 text-amber-700">
+												<span className="font-semibold">evidence:</span>{" "}
+												{c.mergeEvidence.join(", ")}
+											</div>
+										)}
+										{c.excursions && c.excursions.length > 0 && (
+											<div className="mt-1 text-sky-700">
+												<span className="font-semibold">excursion:</span>{" "}
+												{c.excursions
+													.map(
+														(e) =>
+															`${e.activities.map((a) => a.origin || a.exactUrl).join(" → ")}`,
+													)
+													.join(" · ")}
+											</div>
+										)}
 									</div>
 								))}
 							</div>
@@ -407,6 +446,14 @@ const Metrics = () => {
 										<div className="mt-1 text-muted-foreground">
 											{m.observation}
 										</div>
+										{m.sequence && (
+											<div className="mt-1 text-emerald-700">
+												<span className="font-semibold">seq:</span>{" "}
+												{m.sequence
+													.map((s) => s.split("://")[1] ?? s)
+													.join(" → ")}
+											</div>
+										)}
 										<div className="mt-1 text-muted-foreground">
 											{m.contextCount} contexts · {m.totalSessionCount} sessions
 											· {m.totalEventCount} events

@@ -13,10 +13,14 @@
 		"check:contexts": "node --import ./resolve-hook.mjs src/contexts.check.ts",
 		"check:memories": "node --import ./resolve-hook.mjs src/memories.check.ts",
 		"check:retrieval": "node --import ./resolve-hook.mjs src/retrieval.check.ts",
-		"check:liveContext": "node --import ./resolve-hook.mjs src/live-context.check.ts"
+		"check:liveContext": "node --import ./resolve-hook.mjs src/live-context.check.ts",
+		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/meaningful-events.check.ts",
+		"check:pipeline": "node --import ./resolve-hook.mjs src/pipeline.check.ts",
+		"check:activityGraph": "node --import ./resolve-hook.mjs src/activity-graph.check.ts"
 	},
 	"dependencies": {
-		"dexie": "^4.4.5"
+		"dexie": "^4.4.5",
+		"graphology": "^0.26.0"
 	},
 	"devDependencies": {
 		"@types/node": "^22.20.1"

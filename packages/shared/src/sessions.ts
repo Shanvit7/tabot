@@ -114,13 +114,17 @@ export const sessionize = (events: StoredTabEvent[]): Session[] => {
 				}
 			}
 
-			// Tab absence: this tab silent for ≥ threshold, then active again
-			if (
-				!shouldStartNew &&
+			// Tab absence: this tab silent for ≥ threshold AND the event is on that
+			// same tab (not an activation of a different tab). Phase 3 (5.1): an
+			// activation — either leaving a long-idle tab or returning to one — is
+			// a tab switch (excursion), not a session boundary. Only a same-tab
+			// non-activation event after 10m of silence on that tab is genuine.
+			const sameTabInactive =
+				event.type !== "TAB_ACTIVATED" &&
 				tabLastEvent.has(event.tabId) &&
 				event.timestamp - (tabLastEvent.get(event.tabId) as number) >=
-					SESSION_THRESHOLDS.TAB_ABSENCE_THRESHOLD
-			) {
+					SESSION_THRESHOLDS.TAB_ABSENCE_THRESHOLD;
+			if (!shouldStartNew && sameTabInactive) {
 				shouldStartNew = true;
 			}
 

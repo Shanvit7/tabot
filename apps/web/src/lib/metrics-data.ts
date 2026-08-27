@@ -3,6 +3,8 @@ import {
 	buildContexts,
 	buildLiveContext,
 	buildMemories,
+	deriveMeaningfulEvents,
+	deriveTransitions,
 	findSimilarContextsCore,
 	findSimilarMemoriesCore,
 	type LiveBrowserContext,
@@ -90,7 +92,8 @@ export interface Derived {
 
 export const derive = (events: StoredTabEvent[]): Derived => {
 	const sessions = sessionize(events);
-	const contexts = buildContexts(sessions);
+	const transitions = deriveTransitions(deriveMeaningfulEvents(events));
+	const contexts = buildContexts(sessions, transitions);
 	const memories = buildMemories(contexts);
 
 	// Live context: current context = most recent, similar = pure cores (no db)
@@ -119,10 +122,18 @@ export const EXPORT_THRESHOLDS = {
 	session: {
 		inactivityThresholdMs: 300000,
 		visibilityGapThresholdMs: 120000,
+		tabAbsenceThresholdMs: 600000,
+		windowCloseThresholdMs: 30000,
 	},
 	context: {
 		gapThresholdMs: 1800000,
-		overlapThreshold: 1,
+		excursionReturnWindowMs: 300000, // T3 short-gap window + excursion bound
+		excursionActivityMin: 2,
+		consecutiveTransitionCount: 2,
+		relationshipEvidenceCutoffMs: 900000,
+		maxContextSpanMs: 5400000,
+		episodeGapMs: 1800000, // V6: max gap between anchors within one episode
+		strongWeight: 0.5, // V6: min edge weight for episode continuity
 	},
 	memory: {
 		minContexts: 2,
@@ -166,7 +177,13 @@ export const buildExportJsonl = (d: Derived): string => {
 			exportedAt: new Date().toISOString(),
 			source: "tabot-web@0.0.1",
 			telemetrySchemaVersion: 1,
-			derivationSchemaVersion: 1,
+			derivationSchemaVersion: 6,
+			graph: {
+				enabled: true,
+				nodeGranularity: "activity-anchor",
+				relationshipCutoffMs: 900000,
+				algorithm: "temporal-weighted-local-graph",
+			},
 			thresholds: EXPORT_THRESHOLDS,
 			counts: {
 				events: d.events.length,
