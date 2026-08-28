@@ -43,7 +43,7 @@ const transitions = deriveTransitions(deriveMeaningfulEvents(events));
 const contexts = buildContexts(sessions, transitions);
 const memories = buildMemories(contexts, events[events.length - 1].timestamp);
 
-console.log(
+logger.info(
 	`V5 regression: ${events.length} raw → ${sessions.length} sessions → ${contexts.length} contexts → ${memories.length} memories`,
 );
 
@@ -53,7 +53,7 @@ assert.ok(
 	ctxEventSum <= events.length,
 	`§2.1 context eventCount sum ${ctxEventSum} must be <= raw ${events.length}`,
 );
-console.log(`  §2.1 accounting: ${ctxEventSum} <= ${events.length} ok`);
+logger.info(`  §2.1 accounting: ${ctxEventSum} <= ${events.length} ok`);
 
 // §2.2 — sequence locality: no context with 0 events but a long sequence
 for (const c of contexts) {
@@ -69,7 +69,7 @@ for (const c of contexts) {
 		`§2.2 context ${c.id} sequence (${seqLen}) > 2x eventCount (${c.totalEventCount})`,
 	);
 }
-console.log(`  §2.2 sequence locality ok (${contexts.length} contexts)`);
+logger.info(`  §2.2 sequence locality ok (${contexts.length} contexts)`);
 
 // §4 — no giant episode: the largest episode must be a fraction of the stream
 const episodes = contexts.flatMap((c) => c.episodes ?? []);
@@ -80,7 +80,7 @@ assert.ok(
 	largest.totalEventCount < events.length * 0.3,
 	`§4 largest episode ${largest.totalEventCount} (${Math.round((largest.totalEventCount / events.length) * 100)}%) must be < 30% of the stream`,
 );
-console.log(
+logger.info(
 	`  §4 largest episode: ${largest.totalEventCount} events (${Math.round((largest.totalEventCount / events.length) * 100)}% of stream) ok`,
 );
 
@@ -90,7 +90,7 @@ assert.ok(
 	tiny.length / episodes.length < 0.3,
 	`§9 tiny episodes ${tiny.length}/${episodes.length} must be < 30%`,
 );
-console.log(`  §9 tiny episodes: ${tiny.length}/${episodes.length} ok`);
+logger.info(`  §9 tiny episodes: ${tiny.length}/${episodes.length} ok`);
 
 // §11/§16 — memory quality: no low-info singleton generic memories
 const GENERIC = new Set([
@@ -123,7 +123,7 @@ assert.equal(
 	0,
 	`§16 low-info singleton memories must be 0, got: ${lowInfo.map((m) => m.signature).join(", ")}`,
 );
-console.log(`  §16 low-info singleton memories: ${lowInfo.length} ok`);
+logger.info(`  §16 low-info singleton memories: ${lowInfo.length} ok`);
 
 // §15 — recurrence requires separate occurrences
 for (const m of memories) {
@@ -134,7 +134,7 @@ for (const m of memories) {
 		);
 	}
 }
-console.log("  §15 recurrence has separate occurrences ok");
+logger.info("  §15 recurrence has separate occurrences ok");
 
 // §16 — no empty-identity memories
 const empty = memories.filter(
@@ -143,7 +143,7 @@ const empty = memories.filter(
 		(m.fingerprint?.orderedOrigins?.length ?? 0) === 0,
 );
 assert.equal(empty.length, 0, "§16 empty-identity memories must be 0");
-console.log("  §16 empty-identity memories: 0 ok");
+logger.info("  §16 empty-identity memories: 0 ok");
 
 // §22 — rebuild determinism: same raw events twice → same derivation
 const sessions2 = sessionize(events);
@@ -159,6 +159,6 @@ assert.deepEqual(
 	memories2.map((m) => m.id),
 	"§22 rebuild: same memories",
 );
-console.log("  §22 rebuild determinism ok");
+logger.info("  §22 rebuild determinism ok");
 
 logger.info("v5regression.check — all assertions passed");

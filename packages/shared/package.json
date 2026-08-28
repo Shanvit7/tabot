@@ -17,6 +17,7 @@
 		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/meaningful-events.check.ts",
 		"check:pipeline": "node --import ./resolve-hook.mjs src/pipeline.check.ts",
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/activity-graph.check.ts",
+		"check:stabilization": "node --import ./resolve-hook.mjs src/stabilization.check.ts",
 		"check:v5regression": "node --import ./resolve-hook.mjs src/v5regression.check.ts"
 	},
 	"dependencies": {

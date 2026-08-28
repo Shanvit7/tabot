@@ -74,6 +74,7 @@ export const Hero = () => {
 				>
 					<div className="overflow-hidden rounded-[20px] bg-[#0c151f] shadow-[0_24px_55px_rgba(18,34,29,0.2)] ring-1 ring-[#2b3c47]">
 						<Player
+							acknowledgeRemotionLicense
 							aria-label="Illustrative Tabot activity timeline"
 							autoPlay={!reduceMotion}
 							component={BrowserMemoryFilm}

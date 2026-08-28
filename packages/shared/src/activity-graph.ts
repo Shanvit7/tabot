@@ -13,13 +13,16 @@
 
 import Graph from "graphology";
 import {
+	anchorMass,
 	BOUNDARY_CONFIG,
 	type BoundaryDiagnostic,
 	buildProfile,
 	computeBoundaryEvidence,
-	MIN_EPISODE_DURATION_MS,
-	MIN_EPISODE_EVENTS,
+	EPISODE_BOUNDARY_PENALTY,
+	isLowSemanticDensity,
+	MIN_EPISODE_MASS,
 	mergeTinyEpisodes,
+	rightSidePersistence,
 } from "./episode-boundary";
 import { deriveMeaningfulEvents } from "./meaningful-events";
 import type { Session } from "./sessions";
@@ -466,7 +469,26 @@ export const extractActivityEpisodes = (
 		);
 
 		const boundaryScore = evidence.boundaryScore;
-		const shouldSplit = boundaryScore >= BOUNDARY_CONFIG.splitThreshold;
+		// stabilization §7-9 — split-vs-merge penalty: the boundary penalty is
+		// the ONE configurable knob. It expresses the spec's core principle: a
+		// split must pay for itself. The penalty lowers the persistence bar
+		// needed: the baseline threshold (0.5) still gates, but the penalty
+		// means a boundary in the ambiguous band needs stronger evidence to
+		// split. Concretely: score >= 0.5 splits; score in [0.5, 0.5+penalty)
+		// splits only when the right side is clearly persistent. This resists
+		// transient fragments while preserving genuine task switches.
+		const persistence =
+			anchor.origin !== "" &&
+			isLowSemanticDensity(anchor.origin) &&
+			anchor.interactionCount === 0 &&
+			anchor.endAt - anchor.startAt < 60_000
+				? 0.1 // transient newtab/extension surface — no standalone episode
+				: rightSidePersistence(rightWindow);
+		const ambiguous =
+			boundaryScore < BOUNDARY_CONFIG.splitThreshold + EPISODE_BOUNDARY_PENALTY;
+		const shouldSplit =
+			boundaryScore >= BOUNDARY_CONFIG.splitThreshold &&
+			(!ambiguous || persistence >= 0.6);
 
 		// hysteresis: suppress single-point flicker. A split is confirmed when
 		// EITHER the next candidate boundary also stays high, OR this boundary is
@@ -510,6 +532,14 @@ export const extractActivityEpisodes = (
 			}
 		}
 
+		// stabilization §5-6 — persistence gate: even a confirmed boundary is
+		// not a split unless the right side carries enough behavioral mass.
+		// This converts light A → B → A excursions into stays-inside-A, while
+		// a genuinely persistent B still splits (weighted mass).
+		if (split && persistence < 0.35) {
+			split = false;
+		}
+
 		boundaryDiagnostics.push({
 			leftAnchorId: prev.id,
 			rightAnchorId: anchor.id,
@@ -528,22 +558,44 @@ export const extractActivityEpisodes = (
 	}
 	flush(true);
 
-	// post-segmentation cleanup (§9, §12 Test 6): a tiny episode (below
-	// MIN_EPISODE_*) merges ONLY when both neighbors genuinely support the same
-	// activity (shared domain/origin — not a 0.5 default that would fuse
-	// unrelated singleton fragments into a chain). Exception: an EMPTY-domain
-	// tiny episode (lifecycle noise — TAB_CREATED/PAGE_HIDDEN bursts, no URL
-	// identity) carries no activity, so it merges into whichever neighbor
-	// shares its session (pure noise removal, §16: no identity → no artifact).
+	// post-segmentation cleanup (§9, §12 Test 6 + stabilization §10): a tiny
+	// episode (below MIN_EPISODE_MASS — behavioral mass, not anchor count)
+	// merges ONLY when both neighbors genuinely support the same activity
+	// (shared domain/origin — not a 0.5 default that would fuse unrelated
+	// singleton fragments into a chain). A segment with 3 trivial
+	// browser-state anchors is tiny; 2 highly interactive anchors may be
+	// legitimate (§10). Exception: an EMPTY-domain tiny episode (lifecycle
+	// noise — TAB_CREATED/PAGE_HIDDEN bursts, no URL identity) carries no
+	// activity, so it merges into whichever neighbor shares its session (pure
+	// noise removal, §16: no identity → no artifact).
 	const cleaned = mergeTinyEpisodes(
 		episodes,
-		(e) =>
-			e.totalEventCount < MIN_EPISODE_EVENTS ||
-			e.duration < MIN_EPISODE_DURATION_MS,
+		(e) => {
+			// §10 — behavioral mass, not anchor count: a segment with 3 trivial
+			// browser-state anchors is tiny; 2 highly interactive anchors may be
+			// legitimate. A segment with NO interaction and < 1 minute of
+			// dwelling is a lifecycle-noise fragment regardless of event count
+			// (a burst of NAVIGATION/PAGE_HIDDEN events on one page is still a
+			// trivial fragment, not a real activity).
+			if (e.totalInteractionCount === 0 && e.duration < 60_000) return true;
+			const mass = e.anchorIds.reduce((s, id) => {
+				const a = anchorById.get(id);
+				return s + (a ? anchorMass(a) : 0);
+			}, 0);
+			return mass < MIN_EPISODE_MASS;
+		},
 		(left, right) => {
-			// an empty-domain tiny episode merges only into a TEMPORALLY-ADJACENT
-			// neighbor (within EPISODE_GAP_MS) — never across a day boundary
-			if (right.domains.length === 0) {
+			// §10 + §11 — a tiny episode with NO meaningful activity is lifecycle
+			// noise (TAB_CREATED/PAGE_HIDDEN bursts, transient newtab/extension
+			// surfaces): 0 interactions and < 1 minute of dwelling means nothing
+			// real happened, regardless of event count (a burst of NAVIGATION /
+			// PAGE_HIDDEN events on one page is still a trivial fragment). It
+			// merges into whichever neighbor is TEMPORALLY-ADJACENT (within
+			// EPISODE_GAP_MS), never across a day boundary. A MEANINGFUL tiny
+			// episode (interactive anchors) needs real neighbor support.
+			const noise =
+				right.totalInteractionCount === 0 && right.duration < 60_000;
+			if (right.domains.length === 0 || noise) {
 				const gap = right.startTimestamp - left.endTimestamp;
 				return gap <= GRAPH_THRESHOLDS.EPISODE_GAP_MS ? 1 : 0;
 			}

@@ -366,16 +366,169 @@ export const computeBoundaryEvidence = (
 	};
 };
 
+// --- Stabilization pass (§13-§16 of segmentation-stabilization spec) ---
+// Narrow addition on top of the V7 trajectory scorer: instead of thresholding
+// every adjacent boundary independently, we now SELECT boundaries with a
+// split-vs-merge objective (a split is accepted only when it pays for its own
+// boundary penalty) and we DEMAND persistence evidence from the right side.
+// All building blocks are pure and deterministic; buildActivityAnchors and
+// buildActivityGraph are untouched.
+
+// --- Low-semantic-density surfaces (§11) ---
+// chrome://newtab / chrome-extension:// pages have no real task identity. They
+// get weaker standalone boundary evidence unless interaction+duration+navigation
+// show a real activity. Generic classifier — no hard-coded URL lists.
+export const isLowSemanticDensity = (origin: string): boolean =>
+	origin.startsWith("chrome://") || origin.startsWith("chrome-extension://");
+
+// --- Behavioral mass (§6, §10) ---
+// A segment's "meaningfulness" is NOT anchor count alone: one long interactive
+// anchor out-weights five trivial browser-state anchors. Mass is a small,
+// documented composite of the existing per-anchor fields. Units are events
+// (an anchor of 1 trivial event has mass 1).
+export const anchorMass = (a: ActivityAnchor): number => {
+	const durationMin = (a.endAt - a.startAt) / 60_000;
+	// one event per 2 minutes of dwelling; interactions/navigations are heavier
+	return (
+		a.eventCount +
+		durationMin * 0.5 +
+		a.interactionCount * 3 +
+		a.navigationCount * 2
+	);
+};
+
+// A tiny episode must NOT survive merely because it has >= N anchors. It needs
+// minimum behavioral mass (spec §10). 3 events of mass is the old
+// MIN_EPISODE_EVENTS=3 threshold, now weighted: a 2-interaction anchor or a
+// 6-minute dwell also qualifies.
+export const MIN_EPISODE_MASS = 3;
+
+// --- Boundary penalty (§9) ---
+// The one tunable knob. A split is worthwhile only when
+//   cost(merged) - (cost(left) + cost(right)) > EPISODE_BOUNDARY_PENALTY
+// Higher penalty → fewer episodes; lower → more. Mirrors penalized change-point
+// methods (PELT-style). This is the ONLY segmentation threshold that must be
+// tuned; the rest are derived from the coherence cost.
+export const EPISODE_BOUNDARY_PENALTY = 0.35;
+
+// --- Activity coherence cost (§8) ---
+// Pure function: penalizes internal heterogeneity of an anchor group using ONLY
+// existing fields (origin/page diversity, transition discontinuity,
+// interaction-rate variance, temporal discontinuity, graph-edge weakness).
+// Normalized to [0, 1]: coherent single-activity → low cost; mixed unrelated
+// activity → high cost. Raw event count is NOT the dominant term.
+export const activityCoherenceCost = (
+	anchors: ActivityAnchor[],
+	graph: Graph<ActivityAnchor, RelationshipEdge>,
+): number => {
+	// a sub-minimum group is not a meaningful activity — its internal
+	// heterogeneity is not evidence of mixed activity (MIN_EPISODE_MASS
+	// already guards the minimum size). Cost 0 keeps single-anchor segments
+	// free so the split-vs-merge decision compares purely on the merged
+	// episode's cost.
+	if (anchors.length === 0) return 0;
+	if (anchors.reduce((s, a) => s + anchorMass(a), 0) < MIN_EPISODE_MASS)
+		return 0;
+
+	const originCounts = new Map<string, number>();
+	for (const a of anchors) {
+		if (a.origin === "") continue;
+		originCounts.set(a.origin, (originCounts.get(a.origin) ?? 0) + 1);
+	}
+	const totalOrigins = anchors.filter((a) => a.origin !== "").length;
+	const distinctOrigins = originCounts.size;
+	// a single-origin group (or single anchor, or empty) is maximally
+	// coherent: cost 0. Only multi-origin heterogeneity carries cost (§8:
+	// coherent activity → low cost; mixed unrelated activity → high cost).
+	if (distinctOrigins <= 1) return 0;
+	// dominant-origin share: the fraction of anchors in the dominant origin.
+	// A group where 2/3 anchors share one origin is mostly coherent; a group
+	// where every anchor is a different origin is maximally mixed. This is the
+	// right heterogeneity signal for the split-vs-merge objective: splitting
+	// a real transition yields two MORE internally-coherent halves.
+	const dominantShare =
+		totalOrigins > 0 ? Math.max(...originCounts.values()) / totalOrigins : 0;
+	// heterogeneity = 1 - dominantShare (0 = all one origin, 1 = all distinct)
+	const originHeterogeneity = distinctOrigins > 1 ? 1 - dominantShare : 0;
+
+	const pageDiversity =
+		new Set(anchors.map((a) => a.pageKey).filter(Boolean)).size /
+		Math.max(1, anchors.length);
+
+	// transition discontinuity: fraction of adjacent pairs with NO graph edge or
+	// a weak edge (temporal-adjacency only) — mixed chains are disjoint
+	let weakTransitions = 0;
+	let adjacencies = 0;
+	for (let i = 0; i < anchors.length - 1; i++) {
+		const a = anchors[i];
+		const b = anchors[i + 1];
+		if (!graph.hasEdge(a.id, b.id)) {
+			weakTransitions++;
+			adjacencies++;
+			continue;
+		}
+		const t = graph.getEdgeAttributes(
+			graph.edge(a.id, b.id),
+		) as RelationshipEdge;
+		if (t.type === "temporal-adjacency") weakTransitions++;
+		adjacencies++;
+	}
+	const transitionDiscontinuity =
+		adjacencies > 0 ? weakTransitions / adjacencies : 0;
+
+	// interaction-rate variance: mixed activities have wildly different rates
+	const rates = anchors
+		.map((a) => (a.eventCount > 0 ? a.interactionCount / a.eventCount : 0))
+		.filter((r) => Number.isFinite(r));
+	const meanRate =
+		rates.length > 0 ? rates.reduce((s, r) => s + r, 0) / rates.length : 0;
+	const rateVariance =
+		rates.length > 1
+			? rates.reduce((s, r) => s + (r - meanRate) ** 2, 0) / rates.length
+			: 0;
+
+	// temporal discontinuity: fraction of adjacent gaps that are long (> 2x the
+	// excursion window) — sparse activity inside one episode is incoherent
+	let longGaps = 0;
+	let gaps = 0;
+	for (let i = 0; i < anchors.length - 1; i++) {
+		const gap = anchors[i + 1].startAt - anchors[i].endAt;
+		if (gap > GRAPH_THRESHOLDS.SHORT_GAP_MS * 2) longGaps++;
+		gaps++;
+	}
+	const temporalDiscontinuity = gaps > 0 ? longGaps / gaps : 0;
+
+	// normalize: origin heterogeneity dominates (strongest mixed-activity
+	// signal), then transition discontinuity, then the rest. The result stays
+	// in [0,1]; a fully mixed group (every anchor a different origin, weak
+	// edges) approaches 1.
+	const normalizedVariance = Math.min(1, rateVariance / 0.25);
+	return Math.min(
+		1,
+		0.4 * originHeterogeneity +
+			0.2 * pageDiversity +
+			0.2 * transitionDiscontinuity +
+			0.1 * normalizedVariance +
+			0.1 * temporalDiscontinuity,
+	);
+};
+
+// --- Right-side persistence (§5, §6) ---
+// A candidate boundary is credible only if the behavioral difference PERSISTS
+// after the boundary: the right side must carry enough activity-weighted mass
+// to represent a real new activity. This is what turns "A → B → A" into an
+// excursion candidate instead of two boundaries — B's right-side window is
+// simply too light to pay for the split.
+export const rightSidePersistence = (rightWindow: ActivityAnchor[]): number =>
+	Math.min(1, rightWindow.reduce((s, a) => s + anchorMass(a), 0) / 8);
+
 // --- Post-segmentation cleanup (§9) ---
 
-// A tiny episode (below MIN_EPISODE_*) that both neighbors strongly support is
-// merged into the better-supported neighbor. This is a post-segmentation
+// A tiny episode (below MIN_EPISODE_MASS) that both neighbors strongly support
+// is merged into the better-supported neighbor. This is a post-segmentation
 // cleanup, not a clustering algorithm. The merge is performed by the caller
 // via `rebuild` (which must recompute the merged episode's aggregates from its
 // anchor ids) because episode shape is owned by the caller.
-export const MIN_EPISODE_DURATION_MS = 2 * 60 * 1000; // 2 minutes
-export const MIN_EPISODE_EVENTS = 3; // 3 meaningful events
-
 export const mergeTinyEpisodes = <T>(
 	episodes: T[],
 	isTiny: (e: T) => boolean,
