@@ -1,10 +1,10 @@
 import SiGithub from "@icons-pack/react-simple-icons/icons/SiGithub";
 
 const links = [
-	{ href: "#remember", label: "Remember" },
-	{ href: "#ask-better", label: "Ask better" },
-	{ href: "#make-it-yours", label: "Make it yours" },
-	{ href: "https://github.com/", label: "GitHub" },
+	{ href: "#local-first", label: "Local-first" },
+	{ href: "#how-it-works", label: "How it works" },
+	{ href: "#get-started", label: "Get started" },
+	{ href: "https://github.com/Shanvit7/tabot", label: "GitHub" },
 ] as const;
 
 export const Footer = () => (
@@ -18,14 +18,13 @@ export const Footer = () => (
 					across tabs.
 				</h2>
 				<p className="mt-10 max-w-md text-base leading-7 text-[#c2d1c7] sm:text-lg">
-					Close the tab. Keep the thought. Tabot makes it easier to pick up
-					where you left off.
+					Close the tab. Keep the context.
 				</p>
 			</div>
 
 			<div className="grid gap-10 py-8 sm:grid-cols-[1fr_auto] sm:items-end">
 				<p className="max-w-xs text-sm leading-6 text-[#8ca493]">
-					Local-first browser memory. Your activity stays on your device.
+					Local-first browser context. Your activity stays on your device.
 				</p>
 				<nav
 					aria-label="Footer navigation"
@@ -43,10 +42,10 @@ export const Footer = () => (
 				</nav>
 			</div>
 			<div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#405b4d] py-5 text-xs font-medium text-[#8ca493]">
-				<span>Private by default. Yours to keep.</span>
+				<span>Tabot v0.1 — Experimental · shipping soon</span>
 				<a
 					className="flex items-center gap-2 hover:text-[#bfff00]"
-					href="https://github.com/"
+					href="https://github.com/Shanvit7/tabot"
 				>
 					<SiGithub
 						aria-hidden="true"

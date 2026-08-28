@@ -1,8 +1,6 @@
-# Tabot - Technical Specification
+# Tabot Technical Specification
 
-> **Single source of truth for Tabot's technical architecture and deterministic browser-context layer.** This document supersedes `metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, and `liveContext-spec.md`.
->
-> `plan-phase-2.md` remains the high-level roadmap and Phase 7 decision gate. When it conflicts with this document on implemented behavior, this document wins.
+> **Single source of truth for Tabot's technical architecture and deterministic browser-context layer.** This document supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`). Companion walkthrough: [`system.md`](./system.md).
 
 ---
 
@@ -11,12 +9,13 @@
 Tabot is an engineering prototype: a Chrome extension and local web dashboard that collect browser activity at volume, retain it locally, and deterministically derive browser context.
 
 ```text
-Chrome extension
-  -> normalized browser events
+Chrome tab APIs + content script
+  -> background service worker (sole producer)
   -> SharedArrayBuffer ring buffer + Atomics
-  -> background drain, bounded batching, Dexie / IndexedDB
-  -> Sessions -> Contexts -> Memories -> Retrieval
-  -> Live browser-context snapshot
+  -> bounded drain + Dexie / IndexedDB
+  -> pure lazy derivation:
+     events -> sessions -> anchors -> graph -> episodes -> contexts -> memories -> retrieval
+  -> live browser-context snapshot
 ```
 
 All data remains local. There is no backend, authentication, cloud storage, remote ingestion, LLM, embeddings, vector database, productivity scoring, or semantic task inference.
@@ -31,18 +30,19 @@ All data remains local. There is no backend, authentication, cloud storage, remo
 
 ### Privacy boundary
 
-`KEY_ACTIVITY` records only that a key activity occurrence happened. Tabot never records typed text, key values, characters, input values, passwords, DOM snapshots, page content, or browsing data outside local IndexedDB.
+`KEY_ACTIVITY` records only that a key-activity occurrence happened. Tabot never records typed text, key values, characters, input values, passwords, DOM snapshots, page content, or browsing data outside local IndexedDB.
 
 ---
 
 ## 2. Stack and Repository
 
 - **Extension:** Plasmo, Manifest V3, Chrome target, background service worker.
-- **Dashboard:** TanStack Start, React 19, Tailwind, TanStack Charts, BoldKit UI.
+- **Dashboard:** TanStack Start (SPA mode), React 19, Tailwind, TanStack Charts, BoldKit UI.
 - **Language/package manager:** TypeScript (ESNext, bundler resolution), pnpm workspaces.
 - **Concurrency:** `SharedArrayBuffer` and `Atomics` using `Int32Array`.
 - **Rate shaping:** TanStack Pacer at the content-script boundary.
 - **Persistence:** Dexie 4.x over IndexedDB database `tabot_events`, `events` table.
+- **Graph substrate:** graphology.
 - **Backend:** none.
 
 ```text
@@ -53,13 +53,17 @@ tabot/
 │   │   ├── contents/tabot.ts            # page-level telemetry collection
 │   │   └── popup.tsx                    # aggregate pipeline statistics
 │   └── web/
-│       └── src/routes/                  # dashboard
+│       ├── src/routes/                  # landing + dashboard routes
+│       ├── src/lib/dashboard-data.ts    # extension transport + in-memory derivation
+│       └── src/components/              # landing, dashboard, and UI components
 ├── packages/shared/src/
 │   ├── events.ts, buffer.ts, protocol.ts, metadata.ts, db.ts, logger.ts
-│   ├── sessions.ts, contexts.ts, memories.ts, retrieval.ts, live-context.ts
+│   ├── sessions.ts, meaningful-events.ts, activity-graph.ts, episode-boundary.ts
+│   ├── contexts.ts, memories.ts, retrieval.ts, live-context.ts
 │   └── *.check.ts                       # runnable derivation checks
-├── docs/tech.md                         # this document
-└── docs/plan-phase-2.md                 # roadmap and evaluation gate
+└── docs/
+    ├── tech.md                          # this document
+    └── system.md                        # walkthrough of flow, algorithms, and graph
 ```
 
 ---
@@ -119,7 +123,7 @@ interface StoredTabEvent {
 ### Collection details
 
 - `SCROLL` and `KEY_ACTIVITY` are Pacer-throttled at the content-script boundary (currently 150ms).
-- `SCROLL` observes `window` plus nested elements with `overflow-y: auto|scroll` and `scrollHeight > clientHeight`. Viewport offset is `documentElement.scrollTop` with the document body as fallback.
+- `SCROLL` observes `window` plus nested elements with `overflow-y: auto|scroll` and `scrollHeight > clientHeight`.
 - `CLICK`, `PAGE_VISIBLE`, and `PAGE_HIDDEN` are emitted directly.
 - Chrome tab lifecycle and navigation events are not throttled.
 - `TAB_REMOVED` cleans its `tabMeta` entry. `TAB_CREATED` and `TAB_UPDATED`, plus navigation handling, update sidecar URL/title metadata.
@@ -141,7 +145,7 @@ interface StatsSnapshot {
 }
 ```
 
-The UI also obtains the authoritative persisted count through `db.events.count()`. It must show dropped events and buffer occupancy/peak, not only processed totals.
+The UI also obtains the authoritative persisted count through `db.events.count()`. It must show dropped events and buffer occupancy/peak, not only processed totals. The dashboard may additionally fetch raw events for in-browser derivation, but it never renders the raw stream.
 
 ---
 
@@ -163,7 +167,7 @@ The background service worker is the only producer. Content scripts send page ev
 - `SCROLL` stores `scrollY` in `value0`; `CLICK` stores `x` and `y` in `value0`/`value1`.
 - An attempt to write when `writeIndex - readIndex >= capacity` fails and increments `droppedEvents`.
 
-MV3 service workers cannot use `Atomics.wait`, so draining uses queued microtasks with short burst polling and a 200ms fallback poll. This keeps the implementation allocation-light without an unavailable Blob Worker.
+MV3 service workers cannot use `Atomics.wait`, so draining uses queued microtasks with short burst polling and a 200ms fallback poll.
 
 ### Drain and IndexedDB
 
@@ -183,7 +187,7 @@ events: 'id, timestamp, type, tabId'
 
 ### Messages
 
-`GET_STATS` is synchronous. `GET_COUNTS` is asynchronous and returns `{ dexieCount }` (with legacy `rxdbCount` compatibility while consumers retain it). `TABOT_PAGE_EVENT` accepts content-script events. Existing derived-query functions remain shared-package APIs; dashboard/popup messaging for them is intentionally deferred until Phase 7 validates their value.
+`GET_STATS` is synchronous. `GET_COUNTS` is asynchronous and returns `{ dexieCount }` (with legacy `rxdbCount` compatibility while consumers retain it). `TABOT_PAGE_EVENT` accepts content-script events. `GET_EVENTS` returns persisted events for in-browser derivation. Both internal and `onMessageExternal` listeners expose the same contract for the web dashboard.
 
 ---
 
@@ -193,13 +197,16 @@ The deterministic derived layer is:
 
 ```text
 StoredTabEvent[]
-  -> Session[]
-  -> BrowserContext[]
-  -> Memory[]
-  -> retrieval results and LiveBrowserContext
+  -> deriveMeaningfulEvents()      (collapse browser-state noise)
+  -> sessionize()                  -> Session[]
+  -> buildActivityAnchors() + buildActivityGraph() + extractActivityEpisodes()
+  -> buildContexts()               -> BrowserContext[]
+  -> buildMemories()               -> Memory[]
+  -> retrieval primitives          -> summaries / similarity / timeline
+  -> buildLiveContext()            -> LiveBrowserContext
 ```
 
-All layers use **Option A: lazy derivation**. No sessions, contexts, memories, retrieval, or live-context tables exist in IndexedDB. Persisted events remain the only durable source of truth.
+All layers use **lazy derivation**. No sessions, contexts, memories, retrieval, or live-context tables exist in IndexedDB. Persisted events remain the only durable source of truth.
 
 ### Shared constraints
 
@@ -225,17 +232,9 @@ interface Session {
   interactionCount: number; // CLICK + KEY_ACTIVITY + SCROLL
   navigationCount: number;
   tabSwitchCount: number;
-  eventSequence: StoredTabEvent[]; // cleared when > 1000 events
+  eventSequence: StoredTabEvent[]; // full sequence retained (no trim)
   activeTabId: number;
   activeWindowId: number;
-}
-
-interface TabParticipation {
-  tabId: number; eventCount: number; firstSeen: number; lastSeen: number; isActive: boolean;
-}
-
-interface DomainParticipation {
-  domain: string; eventCount: number; tabIds: number[]; firstSeen: number; lastSeen: number;
 }
 ```
 
@@ -252,6 +251,10 @@ A time-ordered event starts a new session when the first applicable condition su
 
 Events are sorted by timestamp first. Domain participation is only recorded for events with a URL; malformed URLs become domain `unknown`. Tab/window last-event maps survive session boundaries to detect a return after absence. `activeTabId` is the most active tab that received `TAB_ACTIVATED`; `activeWindowId` is the window with most events.
 
+### Sequence retention
+
+The full `eventSequence` is retained without trimming. The episode layer segments from real event trajectories, so collapsing a large session into an empty sequence would erase the material segmentation needs.
+
 ### APIs and bounds
 
 ```ts
@@ -261,47 +264,103 @@ getSessionById(db, id): Promise<Session | undefined>
 getRecentSessions(db, limit = 10): Promise<Session[]>
 ```
 
-`getSessions` uses indexed timestamp boundaries where supplied. `getRecentSessions` derives then slices. `sessionize([])` returns `[]`; a one-event input returns one valid zero-duration session.
+`getSessions` uses indexed timestamp boundaries where supplied. `sessionize([])` returns `[]`; a one-event input returns one valid zero-duration session.
 
 ---
 
-## 7. Sessions to Contexts
+## 7. Events to Episodes: the Activity Graph
 
-A `BrowserContext` is a non-overlapping cluster of related sessions. It is evidence of related browser activity, never a task label.
+An `ActivityAnchor` is a meaningful browser state: a page (`origin + pathname`) the user stayed on within one session, with event, interaction, and navigation counts. A page change or an inactivity gap (`> 30 minutes`) opens a new anchor. URL-less browser-chrome activity folds into the current anchor rather than creating a standalone empty identity.
+
+Graphology builds a sparse, directed, typed graph of anchors:
+
+- **Chronological within-session edges** between consecutive anchors, typed by the strongest evidence present (`same-page` > `same-origin` > `navigation` > `interaction-continuity` > `same-tab` > `temporal-adjacency`).
+- **Cross-session `return` edges** on the same page within a five-minute excursion window. Longer returns are recurrence, not continuity, and must not fuse disjoint sessions.
+
+Edge weights decay exponentially over a 15-minute scale; no edge crosses an inactivity gap beyond 15 minutes. Construction stays local, keeping `E << N²`.
+
+`extractActivityEpisodes` walks anchors chronologically — not connected components, not community detection. For each candidate boundary it computes a trajectory-coherence score from:
+
+| Signal | Weight |
+|---|---:|
+| local trajectory profile similarity | 0.45 |
+| typed graph continuity | 0.2 |
+| interaction continuity | 0.15 |
+| temporal continuity | 0.1 |
+| navigation continuity | 0.1 |
+
+A boundary splits when discontinuity is strong and the following activity persists. Hysteresis and a split-vs-merge penalty suppress flicker; a cleanup pass merges tiny weak fragments only where adjacent activity supports them. The result separates a session containing legal work, LinkedIn, and research into distinct episodes while keeping a coherent multi-site research chain whole.
+
+### Interfaces
+
+```ts
+interface ActivityAnchor {
+  id: string;
+  startAt: number; endAt: number;
+  sessionId: string; tabId: number; windowId: number;
+  origin: string; pathname: string; pageKey: string;
+  eventIds: string[]; eventCount: number;
+  interactionCount: number; navigationCount: number;
+  domainEvents?: Record<string, number>;
+}
+
+interface ActivityEpisode {
+  id: string;
+  anchorIds: string[];
+  startTimestamp: number; endTimestamp: number; duration: number;
+  sessionIds: string[]; domains: string[];
+  totalEventCount: number; totalInteractionCount: number; totalNavigationCount: number;
+  primaryDomain: string;
+  boundaryType: "start" | "end" | "internal";
+  homeOrigin: string;
+  domainEvents: Record<string, number>;
+  boundaries?: BoundaryDiagnostic[];
+  trajectorySegmented: boolean;
+}
+```
+
+`trajectorySegmented` distinguishes episodes built from real event trajectories from fallback summary anchors that have no raw sequence; the context layer trusts only fallback episodes for transition-chain merge evidence.
+
+---
+
+## 8. Episodes to Contexts
+
+A `BrowserContext` is a non-overlapping cluster of related episodes. It is evidence of related browser activity, never a task label.
 
 ```ts
 interface BrowserContext {
-  id: string; // `${firstSessionId}-${lastSessionId}`
+  id: string; // `${firstEpisodeId}-${lastEpisodeId}`
   startTimestamp: number; endTimestamp: number; duration: number;
   sessionIds: string[]; sessionCount: number;
   domains: ContextDomain[];
   totalEventCount: number; totalInteractionCount: number;
   totalNavigationCount: number; totalTabSwitchCount: number;
-  recurrenceCount: number; // supporting sessions for the top domain
+  recurrenceCount: number;
   primaryDomain: string;   // display label only
-}
-
-interface ContextDomain {
-  domain: string; eventCount: number; sessionCount: number;
-  sessionIds: string[]; firstSeen: number; lastSeen: number;
+  mergeEvidence?: string[];
+  sequence?: string[];
+  transitions?: ContextTransition[];
+  excursions?: Excursion[];
+  episodes?: ActivityEpisode[];
 }
 ```
 
 ### Construction rule
 
-Sessions are sorted by start time and processed as a chain. A session joins the immediately previous session's context only when both conditions hold:
+Episodes are processed chronologically. The next episode joins the current context only when:
 
-- the gap from prior session end is `<= 30 minutes`; and
-- the two adjacent sessions share at least one domain.
+- the gap from the previous episode end is `<= 30 minutes`; **and**
+- the merged context stays within a `90-minute` total-span cap; **and**
+- episode-level merge evidence exists.
 
-Otherwise it begins a new context. A session belongs to exactly one context. There is no overlapping, hierarchical, or transitive bridging: `GitHub -> YouTube -> GitHub` forms three contexts because the middle session has no adjacent domain overlap.
+For trajectory-segmented episodes the boundary decision is final; a context does not re-merge them. Only fallback episodes (no raw trajectory) may merge via strong same-origin continuation or a coherent cross-domain transition chain. Same-tab alone never creates a context: a tab is a surface, not a task.
 
-Context domains aggregate event counts and session IDs; they sort by event count descending, then first seen ascending. `primaryDomain` is the first item in that evidence ordering and has no semantic meaning.
+Context domains aggregate per-origin event counts from the context's own episodes (not whole sessions), sort by event count descending then first-seen ascending. `primaryDomain` is the first item in that evidence ordering and has no semantic meaning. `sequence`, `transitions`, and `excursions` are derived from the transition stream and are evidence-only.
 
 ### APIs
 
 ```ts
-buildContexts(sessions): BrowserContext[]
+buildContexts(sessions, transitions?): BrowserContext[]
 getContexts(db, start?, end?): Promise<BrowserContext[]>
 getContextById(db, id): Promise<BrowserContext | undefined>
 getRecentContexts(db, limit = 10): Promise<BrowserContext[]>
@@ -311,46 +370,53 @@ The recent-context API reads at most 500 recent sessions before building and sli
 
 ---
 
-## 8. Contexts to Memories
+## 9. Contexts to Memories
 
-A `Memory` is a compact, evidence-backed representation of recurring or sufficiently dense browser-context history. It does not summarize user intent.
+A `Memory` is a compact, evidence-backed representation of recurring behavioral patterns across episodes. It does not summarize user intent.
 
 ```ts
 interface Memory {
   id: string; // a context id, or `${firstContextId}-${lastContextId}`
   kind: 'single' | 'recurrent';
   startTimestamp: number; endTimestamp: number;
-  signature: string;
-  domains: MemoryDomain[];
+  signature: string;                 // legacy diagnostic (top-6 domain signature)
+  fingerprint: BehaviorFingerprint;  // the behavioral pattern
+  sequence?: string[];
+  occurrences: MemoryOccurrence[];
   contextIds: string[]; contextCount: number;
   firstContextId: string; lastContextId: string;
   totalSessionCount: number; totalEventCount: number;
-  firstSeen: number; lastSeen: number; staleness: number; strength: number;
+  lastSeen: number; firstSeen: number; staleness: number;
+  strength: number; confidence: number;
+  evidence: {
+    occurrenceCount: number;
+    temporalSpreadMs: number;
+    similarityScores: number[];
+    sharedSequenceTokens: number;
+    sharedDomains: number;
+  };
   observation: string; // observed domain-based statement
   inference: null;
-}
-
-interface MemoryDomain {
-  domain: string; eventCount: number; contextCount: number;
-  contextIds: string[]; firstSeen: number; lastSeen: number;
 }
 ```
 
 ### Identity, qualification, and ranking
 
-A canonical signature takes a context's six highest-event-count domains, alphabetizes them, then joins with `+`.
+Identity is a behavioral fingerprint: weighted domains, ordered origins and transitions, entry/exit origins, and an interaction profile (duration, event density, navigation and interaction rates). Candidate contexts cluster when behavioral similarity is at least `0.65`.
 
-| Threshold | Value |
+Similarity combines token-level ordered-sequence edit distance, domain Jaccard, transition overlap, entry/exit agreement, and interaction-profile proximity. A strict domain superset is blocked from merging (`github+slack` is not `github+slack+jira`). Identical trails floor at `0.75` to survive reading-depth noise.
+
+| Rule | Value |
 |---|---:|
-| recurrent contexts | 2 |
-| single-context minimum event count | 500 |
-| domains in signature | 6 |
-| stale after | 7 days |
-| returned memory cap | 50 |
+| recurrent occurrences | `>= 2` separate occurrences |
+| single-occurrence minimum events | `500` |
+| similarity merge threshold | `0.65` |
+| recurrence minimum gap | `30 minutes` |
+| legacy signature domain cap | `6` |
+| stale after | `7 days` |
+| returned memory cap | `50` |
 
-Contexts with the exact same signature consolidate into one memory. Partial overlaps deliberately remain separate: `github.com+slack.com` is not `github.com+slack.com+jira.com`. A one-context group is retained only when it has at least 500 events. A multi-context group is a `recurrent` memory.
-
-`strength = contextCount * min(domainCount, 5)`. `staleness = max(0, now - lastSeen)`. Stale memories are not deleted; consumers receive their staleness and decide how to rank them. The observation is a template such as `visited github.com, slack.com across 3 activity periods`; `inference` is always `null`.
+Recurrence requires separate temporal occurrences at least 30 minutes apart; temporally-adjacent fragments of one visit fold into a single occurrence. Generic single-site activity (Google, ChatGPT, YouTube, new-tab) never qualifies. `strength = recurrenceEvidence × similarityConfidence × recencyFactor`. Stale memories are not deleted; consumers receive staleness and decide how to rank it. `observation` is an evidence summary (e.g. "Recurring sequence: github.com → slack.com, observed in 3 separate activity periods"); `inference` is always `null`.
 
 ### APIs
 
@@ -365,34 +431,17 @@ Memory APIs derive from no more than 500 recent contexts and return strength-ord
 
 ---
 
-## 9. Browser-context Retrieval
+## 10. Browser-context Retrieval
 
 Retrieval makes the derived layer usable without interpreting raw events at query time. It is domain-based, evidence-first, bounded, and returns structured results rather than task claims.
 
 ### Result types
 
 ```ts
-interface SimilarContextResult {
-  context: BrowserContext;
-  similarity: number;
-  sharedDomains: string[];
-}
-interface SimilarMemoryResult {
-  memory: Memory;
-  similarity: number;
-  sharedDomains: string[];
-}
-interface ContextSummary {
-  context: BrowserContext;
-  observation: string;
-  domainList: string[];
-  eventDensity: number; // events per millisecond
-}
-interface RecurrenceReport {
-  isRecurrent: boolean;
-  memory?: Memory;
-  similarMemories?: SimilarMemoryResult[];
-}
+interface SimilarContextResult { context: BrowserContext; similarity: number; sharedDomains: string[]; }
+interface SimilarMemoryResult { memory: Memory; similarity: number; sharedDomains: string[]; }
+interface ContextSummary { context: BrowserContext; observation: string; domainList: string[]; eventDensity: number; }
+interface RecurrenceReport { isRecurrent: boolean; memory?: Memory; similarMemories?: SimilarMemoryResult[]; }
 interface TimelineEntry { context: BrowserContext; isRecurrent: boolean; memoryId?: string; }
 interface DomainHistoryReport {
   domain: string; contexts: BrowserContext[]; memories: Memory[];
@@ -410,7 +459,7 @@ interface DomainHistoryReport {
 | Current context | `getCurrentContext`, `getPreviousContext`, `isDomainNovel`, `isSignatureRecurrent` | Supplies recent state, prior context, lookback novelty, and exact-signature recurrence. |
 | Composites | `summarizeContext`, `reportRecurrence`, `getActivityTimeline`, `getDomainHistory` | Structured summaries, recurrence evidence, annotated timeline, and domain evidence history. |
 
-Similarity is Jaccard index over domain sets:
+Context similarity is Jaccard index over domain sets:
 
 ```text
 jaccard(A, B) = |A intersection B| / |A union B|
@@ -426,7 +475,7 @@ Retrieval derives at most 500 contexts and 50 memories. Similarity is consequent
 
 ---
 
-## 10. Live Browser Context
+## 11. Live Browser Context
 
 `LiveBrowserContext` is an on-demand snapshot that joins live event-stream state with the derived historical layer. It answers which browser context is currently observable, not what task the user is performing.
 
@@ -468,19 +517,24 @@ getLiveNavigationSequence(db, limit = 10): Promise<string[]>
 
 ---
 
-## 11. Validation and Engineering Checks
+## 12. Validation and Engineering Checks
 
 Each derivation core is deterministic and has a runnable Node assert check:
 
 ```bash
+pnpm lint
 pnpm --filter shared check:sessions
+pnpm --filter shared check:meaningfulEvents
+pnpm --filter shared check:activityGraph
 pnpm --filter shared check:contexts
+pnpm --filter shared check:stabilization
 pnpm --filter shared check:memories
 pnpm --filter shared check:retrieval
-pnpm --filter shared check:live-context
-pnpm lint
-pnpm --filter extension exec tsc --noEmit
-pnpm --filter web exec tsc --noEmit
+pnpm --filter shared check:liveContext
+pnpm --filter shared check:pipeline
+pnpm --filter shared check:v5regression
+pnpm --filter extension build
+pnpm --filter web build
 ```
 
 The check scripts exercise the respective pure functions and rebuild consistency: the same events/sessions/contexts/memories and fixed clock must produce deep-equal output.
@@ -488,8 +542,9 @@ The check scripts exercise the respective pure functions and rebuild consistency
 ### Required behavioral coverage
 
 - **Sessions:** continuous activity stays whole; inactivity, visibility, tab-return, and window boundaries split sensibly; empty/single-event streams work; rapid switching does not fragment; long reading remains low intensity.
-- **Contexts:** adjacent overlapping domains within 30 minutes group; disjoint domains or longer gaps split; no transitive bridging; empty and one-session inputs work.
-- **Memories:** exact signatures consolidate; partial overlap stays separate; dense singles qualify; recurrent groups qualify; signature cap, staleness, and rebuild consistency hold.
+- **Episodes:** a cross-domain research chain stays one episode; a short weak excursion stays one episode; a durable task switch splits; browser chrome does not produce a standalone episode; a long coherent activity has no duration cap.
+- **Contexts:** adjacent episode evidence within 30 minutes groups; disjoint domains or longer gaps split; no transitive bridging; same-tab alone does not merge; empty and one-episode inputs work.
+- **Memories:** reordered identical trails consolidate; strict domain supersets do not auto-consolidate; empty fingerprints create no memory; occurrences are preserved individually; recurrent patterns outrank one-off event blobs.
 - **Retrieval:** today/range/domain filtering, exact recurrence, Jaccard ranking, previous context, novelty, timeline, domain history, and empty inputs work.
 - **Live context:** active tab/window and current URL select latest matching events; navigation cap/order, related items, staleness, low intensity, absent data, and rebuild consistency work.
 
@@ -499,12 +554,12 @@ Do not add derived IndexedDB tables, full event-cache indexes, derived dashboard
 
 ---
 
-## 12. Phase 7 Decision Gate
+## 13. Phase 7 Decision Gate
 
 Before adding any AI capability, evaluate representative real and constructed browsing scenarios:
 
 1. session quality and explainable boundaries;
-2. context coherence and separation;
+2. episode and context coherence and separation;
 3. memory usefulness and evidence traceability;
 4. historical retrieval relevance;
 5. live-context stability as browsing changes;
@@ -526,12 +581,12 @@ rather than raw event history.
 
 ---
 
-## 13. Constraints and Out of Scope
+## 14. Constraints and Out of Scope
 
 1. Background service worker is the sole SAB producer; content scripts never write shared memory.
 2. SAB contains only fixed-size numeric fields; URLs/titles remain in the sidecar.
 3. IndexedDB persists raw normalized events in batches; derived data is lazy and rebuildable.
-4. Dashboard and popup do not receive raw events.
+4. Dashboard and popup do not render raw event streams; they show aggregates plus derived views.
 5. Derived output never names a task, intent, or content meaning.
 6. There is no cloud/backend/authentication/multi-user path.
 7. No LLM, embeddings, semantic search, vector database, cross-device identity, content capture, predictive context, or automation is implemented.
@@ -539,7 +594,8 @@ rather than raw event history.
 
 ---
 
-## 14. History
+## 15. History
 
 - `2026-08-22` - Consolidated initial collection, SAB, Dexie, and dashboard documentation into `tech.md`.
 - `2026-08-24` - Added the implemented deterministic derived layer: sessions, contexts, memories, retrieval, and live browser context; merged metrics into this document and retired split specification files.
+- `2026-08-28` - Rewrote the derived-layer sections to match the V6/V7 implementation: added the meaningful-event, activity-anchor, activity-graph, and episode stages; contexts are now built from episodes with trajectory-coherence segmentation; memories use behavioral fingerprints rather than exact domain signatures; sessions retain full event sequences; added a companion `system.md` walkthrough.

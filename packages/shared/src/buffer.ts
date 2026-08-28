@@ -1,6 +1,6 @@
 // packages/shared/src/buffer.ts
 
-import { EventTypeToValue, type TabEvent, ValueToEventType } from "./events";
+import { EVENT_TYPES, type TabEvent, ValueToEventType } from "./events";
 
 export const EVENT_SLOT_SIZE = 8;
 export const CONTROL_SLOTS = 4;
@@ -86,7 +86,7 @@ export function encodeEvent(
 ): void {
 	const base = slot * EVENT_SLOT_SIZE;
 	const timestamp = event.timestamp;
-	Atomics.store(events, base + 0, EventTypeToValue[event.type]);
+	Atomics.store(events, base + 0, EVENT_TYPES[event.type]);
 	Atomics.store(events, base + 1, event.tabId);
 	Atomics.store(events, base + 2, event.windowId);
 	Atomics.store(events, base + 3, 0);

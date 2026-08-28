@@ -5,6 +5,7 @@ import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+	base: process.env.VITE_BASE_PATH ?? "/",
 	server: {
 		port: 3000,
 	},
@@ -14,6 +15,12 @@ export default defineConfig({
 	plugins: [
 		tailwindcss(),
 		tanstackStart({
+			spa: {
+				enabled: true,
+				prerender: {
+					outputPath: "/index.html",
+				},
+			},
 			srcDirectory: "src",
 		}),
 		viteReact(),

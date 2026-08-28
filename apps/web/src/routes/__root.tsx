@@ -6,6 +6,8 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { NotFound } from "~/components/not-found";
+import ReactScan from "~/providers/react-scan";
 import appCss from "~/styles/app.css?url";
 
 const RootLayout = () => {
@@ -16,6 +18,7 @@ const RootLayout = () => {
 			</head>
 			<body>
 				<Outlet />
+				{process.env.NODE_ENV === "development" && <ReactScan />}
 				<TanStackRouterDevtools position="bottom-right" />
 				<Scripts />
 			</body>
@@ -42,9 +45,14 @@ export const Route = createRootRoute({
 				href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap",
 			},
 			{ rel: "stylesheet", href: appCss },
-			{ rel: "icon", type: "image/png", href: "/logo.png" },
-			{ rel: "og:image", href: "/logo.png" },
+			{
+				rel: "icon",
+				type: "image/png",
+				href: `${import.meta.env.BASE_URL}logo.png`,
+			},
+			{ rel: "og:image", href: `${import.meta.env.BASE_URL}logo.png` },
 		],
 	}),
 	component: RootLayout,
+	notFoundComponent: NotFound,
 });

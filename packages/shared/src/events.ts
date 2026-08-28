@@ -15,8 +15,6 @@ export const EVENT_TYPES = {
 
 export type TabEventType = keyof typeof EVENT_TYPES;
 
-export const EventTypeToValue = EVENT_TYPES;
-
 export const ValueToEventType: Record<number, TabEventType> =
 	Object.fromEntries(
 		Object.entries(EVENT_TYPES).map(([key, value]) => [value, key]),

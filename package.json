@@ -1,8 +1,7 @@
 {
 	"name": "tabot",
-	"version": "1.0.0",
+	"version": "0.0.1",
 	"description": "",
-	"main": "index.js",
 	"type": "module",
 	"private": true,
 	"packageManager": "pnpm@11.22.0",
@@ -12,6 +11,9 @@
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
+		"knip": "knip",
+		"doctor": "pnpm --filter web doctor",
+		"doctor:staged": "pnpm --filter web exec react-doctor --staged --blocking error",
 		"dev": "pnpm --filter extension dev & pnpm --filter web dev",
 		"dev:extension": "pnpm --filter extension dev",
 		"dev:web": "pnpm --filter web dev"
@@ -22,6 +24,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.9",
 		"husky": "^9.1.7",
+		"knip": "^6.32.3",
 		"lint-staged": "^17.3.0",
 		"plasmo": "^0.90.5"
 	},

@@ -1,1 +1,4 @@
+pnpm lint-staged
 pnpm test
+pnpm doctor:staged
+pnpm knip

@@ -39,7 +39,6 @@ export {
 } from "./db";
 export {
 	EVENT_TYPES,
-	EventTypeToValue,
 	type TabEvent,
 	type TabEventType,
 	ValueToEventType,

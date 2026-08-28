@@ -410,108 +410,12 @@ export const MIN_EPISODE_MASS = 3;
 // methods (PELT-style). This is the ONLY segmentation threshold that must be
 // tuned; the rest are derived from the coherence cost.
 export const EPISODE_BOUNDARY_PENALTY = 0.35;
-
 // --- Activity coherence cost (§8) ---
 // Pure function: penalizes internal heterogeneity of an anchor group using ONLY
 // existing fields (origin/page diversity, transition discontinuity,
 // interaction-rate variance, temporal discontinuity, graph-edge weakness).
 // Normalized to [0, 1]: coherent single-activity → low cost; mixed unrelated
 // activity → high cost. Raw event count is NOT the dominant term.
-export const activityCoherenceCost = (
-	anchors: ActivityAnchor[],
-	graph: Graph<ActivityAnchor, RelationshipEdge>,
-): number => {
-	// a sub-minimum group is not a meaningful activity — its internal
-	// heterogeneity is not evidence of mixed activity (MIN_EPISODE_MASS
-	// already guards the minimum size). Cost 0 keeps single-anchor segments
-	// free so the split-vs-merge decision compares purely on the merged
-	// episode's cost.
-	if (anchors.length === 0) return 0;
-	if (anchors.reduce((s, a) => s + anchorMass(a), 0) < MIN_EPISODE_MASS)
-		return 0;
-
-	const originCounts = new Map<string, number>();
-	for (const a of anchors) {
-		if (a.origin === "") continue;
-		originCounts.set(a.origin, (originCounts.get(a.origin) ?? 0) + 1);
-	}
-	const totalOrigins = anchors.filter((a) => a.origin !== "").length;
-	const distinctOrigins = originCounts.size;
-	// a single-origin group (or single anchor, or empty) is maximally
-	// coherent: cost 0. Only multi-origin heterogeneity carries cost (§8:
-	// coherent activity → low cost; mixed unrelated activity → high cost).
-	if (distinctOrigins <= 1) return 0;
-	// dominant-origin share: the fraction of anchors in the dominant origin.
-	// A group where 2/3 anchors share one origin is mostly coherent; a group
-	// where every anchor is a different origin is maximally mixed. This is the
-	// right heterogeneity signal for the split-vs-merge objective: splitting
-	// a real transition yields two MORE internally-coherent halves.
-	const dominantShare =
-		totalOrigins > 0 ? Math.max(...originCounts.values()) / totalOrigins : 0;
-	// heterogeneity = 1 - dominantShare (0 = all one origin, 1 = all distinct)
-	const originHeterogeneity = distinctOrigins > 1 ? 1 - dominantShare : 0;
-
-	const pageDiversity =
-		new Set(anchors.map((a) => a.pageKey).filter(Boolean)).size /
-		Math.max(1, anchors.length);
-
-	// transition discontinuity: fraction of adjacent pairs with NO graph edge or
-	// a weak edge (temporal-adjacency only) — mixed chains are disjoint
-	let weakTransitions = 0;
-	let adjacencies = 0;
-	for (let i = 0; i < anchors.length - 1; i++) {
-		const a = anchors[i];
-		const b = anchors[i + 1];
-		if (!graph.hasEdge(a.id, b.id)) {
-			weakTransitions++;
-			adjacencies++;
-			continue;
-		}
-		const t = graph.getEdgeAttributes(
-			graph.edge(a.id, b.id),
-		) as RelationshipEdge;
-		if (t.type === "temporal-adjacency") weakTransitions++;
-		adjacencies++;
-	}
-	const transitionDiscontinuity =
-		adjacencies > 0 ? weakTransitions / adjacencies : 0;
-
-	// interaction-rate variance: mixed activities have wildly different rates
-	const rates = anchors
-		.map((a) => (a.eventCount > 0 ? a.interactionCount / a.eventCount : 0))
-		.filter((r) => Number.isFinite(r));
-	const meanRate =
-		rates.length > 0 ? rates.reduce((s, r) => s + r, 0) / rates.length : 0;
-	const rateVariance =
-		rates.length > 1
-			? rates.reduce((s, r) => s + (r - meanRate) ** 2, 0) / rates.length
-			: 0;
-
-	// temporal discontinuity: fraction of adjacent gaps that are long (> 2x the
-	// excursion window) — sparse activity inside one episode is incoherent
-	let longGaps = 0;
-	let gaps = 0;
-	for (let i = 0; i < anchors.length - 1; i++) {
-		const gap = anchors[i + 1].startAt - anchors[i].endAt;
-		if (gap > GRAPH_THRESHOLDS.SHORT_GAP_MS * 2) longGaps++;
-		gaps++;
-	}
-	const temporalDiscontinuity = gaps > 0 ? longGaps / gaps : 0;
-
-	// normalize: origin heterogeneity dominates (strongest mixed-activity
-	// signal), then transition discontinuity, then the rest. The result stays
-	// in [0,1]; a fully mixed group (every anchor a different origin, weak
-	// edges) approaches 1.
-	const normalizedVariance = Math.min(1, rateVariance / 0.25);
-	return Math.min(
-		1,
-		0.4 * originHeterogeneity +
-			0.2 * pageDiversity +
-			0.2 * transitionDiscontinuity +
-			0.1 * normalizedVariance +
-			0.1 * temporalDiscontinuity,
-	);
-};
 
 // --- Right-side persistence (§5, §6) ---
 // A candidate boundary is credible only if the behavioral difference PERSISTS

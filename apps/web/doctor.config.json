@@ -1,0 +1,33 @@
+{
+	"$schema": "https://react.doctor/schema/config.json",
+	"rules": {
+		"react-doctor/use-lazy-motion": "warn",
+		"react-doctor/no-array-index-as-key": "warn",
+		"react-doctor/no-multi-comp": "warn"
+	},
+	"ignore": {
+		"overrides": [
+			{
+				"files": [
+					"src/components/landing/local-first.tsx",
+					"src/components/ui/dashboard-panels.tsx"
+				],
+				"rules": ["react-doctor/no-multi-comp"]
+			},
+			{
+				"files": [
+					"src/components/landing/hero.tsx",
+					"src/components/landing/local-first.tsx"
+				],
+				"rules": ["react-doctor/use-lazy-motion"]
+			},
+			{
+				"files": [
+					"src/routes/dashboard.tsx",
+					"src/components/landing/browser-context-film.tsx"
+				],
+				"rules": ["react-doctor/no-giant-component"]
+			}
+		]
+	}
+}

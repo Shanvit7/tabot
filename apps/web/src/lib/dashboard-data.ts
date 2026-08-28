@@ -64,15 +64,6 @@ export const fetchStats = (): Promise<StatsSnapshot | null> =>
 		);
 	});
 
-export const fetchCounts = (): Promise<number | null> =>
-	new Promise((resolve) => {
-		send({ type: "GET_COUNTS" }, (res) => {
-			const v = res as { dexieCount?: number; rxdbCount?: number } | undefined;
-			const n = v?.dexieCount ?? v?.rxdbCount;
-			resolve(typeof n === "number" ? n : null);
-		});
-	});
-
 export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 	new Promise((resolve) => {
 		send({ type: "GET_EVENTS" }, (res) => {
@@ -179,28 +170,32 @@ export const buildExportJsonl = (d: Derived): string => {
 			...s,
 		}),
 	);
-	const contextLines = d.contexts.map((c) =>
-		JSON.stringify({
-			record: "context",
-			...c,
-		}),
-	);
+	const contextLines: string[] = [];
+	const episodeLines: string[] = [];
+	for (const c of d.contexts) {
+		contextLines.push(
+			JSON.stringify({
+				record: "context",
+				...c,
+			}),
+		);
+		// V7 — episode records carry per-episode boundary diagnostics (§11) so
+		// the evaluation can inspect WHY each boundary split/merged.
+		for (const e of c.episodes ?? []) {
+			episodeLines.push(
+				JSON.stringify({
+					record: "episode",
+					...e,
+				}),
+			);
+		}
+	}
 	const memoryLines = d.memories.map((m) =>
 		JSON.stringify({
 			record: "memory",
 			...m, // canonical Memory (its own `kind` is single|recurrent)
 		}),
 	);
-	// V7 — episode records carry per-episode boundary diagnostics (§11) so the
-	// evaluation can inspect WHY each boundary split/merged.
-	const episodeLines = d.contexts
-		.flatMap((c) => c.episodes ?? [])
-		.map((e) =>
-			JSON.stringify({
-				record: "episode",
-				...e,
-			}),
-		);
 
 	const manifest = {
 		manifest: {
@@ -299,9 +294,10 @@ export const downloadFile = (
 
 // --- Shared formatters ---
 
-export const formatAgo = (ts: number): string => {
-	if (!ts) return "never";
-	const d = Math.round((Date.now() - ts) / 1000);
+// `msAgo` is a duration in ms since the event happened (not a timestamp).
+export const formatAgo = (msAgo: number): string => {
+	if (!msAgo) return "never";
+	const d = Math.round(msAgo / 1000);
 	if (d < 2) return "just now";
 	if (d < 60) return `${d}s ago`;
 	return `${Math.round(d / 60)}m ago`;

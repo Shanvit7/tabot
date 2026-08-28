@@ -22,7 +22,6 @@
 	},
 	"dependencies": {
 		"dexie": "^4.4.5",
-		"fastest-levenshtein": "^1.0.16",
 		"graphology": "^0.26.0"
 	},
 	"devDependencies": {

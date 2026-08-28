@@ -52,12 +52,6 @@ export class TabotDatabase extends Dexie {
 	}
 }
 
-export type TabotCollections = {
-	events: Table<StoredTabEvent, string>;
-};
-
-export type EventsCollection = Table<StoredTabEvent, string>;
-
 const DB_NAME = "tabot_events";
 
 const deleteLegacyRxDb = () => {

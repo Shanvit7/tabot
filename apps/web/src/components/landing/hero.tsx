@@ -1,7 +1,6 @@
 import { Player } from "@remotion/player";
 import { motion, useReducedMotion } from "framer-motion";
-import { BrowserMemoryFilm } from "~/components/landing/browser-memory-film";
-import { Button } from "~/components/ui/button";
+import { BrowserContextFilm } from "~/components/landing/browser-context-film";
 
 const reveal = {
 	hidden: { opacity: 0, y: 16 },
@@ -29,40 +28,24 @@ export const Hero = () => {
 						className="max-w-xl text-[clamp(3.3rem,7vw,6.7rem)] font-semibold leading-[0.9] tracking-[-0.055em] text-[#12221d] [text-wrap:balance]"
 						variants={reveal}
 					>
-						Your browser history was never built for work.
+						Your browser history was never built for work
 					</motion.h1>
 					<motion.p
 						className="mt-7 max-w-lg text-lg leading-8 text-[#4a5a52] sm:text-xl"
 						variants={reveal}
 					>
-						Tabot turns the tabs you open, revisit, and move between into a
-						private timeline of the work you are already doing.
+						Tabot turns browser activity into private, portable context — so
+						you, your AI, and every tool you use can pick work up without
+						starting over.
 					</motion.p>
-					<motion.div
-						className="mt-9 flex flex-wrap items-center gap-3"
-						variants={reveal}
-					>
-						<Button
-							asChild
-							className="rounded-full border-[#1d332a] bg-[#163d2d] px-6 text-[#eff5e7] shadow-none hover:bg-[#24523f]"
-							size="lg"
-						>
-							<a href="/metrics">Open the dashboard</a>
-						</Button>
-						<a
-							className="rounded-full px-5 py-3 text-sm font-semibold text-[#244d39] underline decoration-[#9bc65b] decoration-2 underline-offset-4 transition-colors hover:text-[#12221d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#4d7c0f]"
-							href="#ask-better"
-						>
-							See how it works
-						</a>
-					</motion.div>
 					<motion.div
 						className="mt-11 flex flex-wrap gap-x-6 gap-y-3 border-t border-[#d9ddd0] pt-5 text-sm font-medium text-[#52635a]"
 						variants={reveal}
 					>
-						<span>Runs locally in your browser</span>
-						<span>Open source by design</span>
-						<span>Raw activity stays yours</span>
+						<span>Runs locally</span>
+						<span>Open source</span>
+						<span>Your data stays yours</span>
+						<span>Built for every digital worker</span>
 					</motion.div>
 				</motion.div>
 
@@ -75,9 +58,9 @@ export const Hero = () => {
 					<div className="overflow-hidden rounded-[20px] bg-[#0c151f] shadow-[0_24px_55px_rgba(18,34,29,0.2)] ring-1 ring-[#2b3c47]">
 						<Player
 							acknowledgeRemotionLicense
-							aria-label="Illustrative Tabot activity timeline"
+							aria-label="Tabot preserving work context for digital workers"
 							autoPlay={!reduceMotion}
-							component={BrowserMemoryFilm}
+							component={BrowserContextFilm}
 							compositionHeight={620}
 							compositionWidth={960}
 							controls={false}
@@ -88,7 +71,7 @@ export const Hero = () => {
 						/>
 					</div>
 					<p className="mt-4 text-center text-xs font-medium text-[#64736a]">
-						Illustrative activity model - no browsing data leaves your device.
+						Your work context, preserved locally — for you or your AI.
 					</p>
 				</motion.div>
 			</div>
