@@ -405,8 +405,12 @@ assert.deepEqual(buildMemories([], NOW), [], "S8: empty stream");
 		"fixture J2: sequence omitted when no evidence",
 	);
 	assert.ok(
-		(memories[0].observation ?? "").includes("visited"),
-		"fixture J2: falls back to domain-set observation",
+		(memories[0].observation ?? "").includes("Observed in"),
+		"fixture J2: observation is an evidence summary (V7 §25)",
+	);
+	assert.ok(
+		!/stalk|intent|want|think|stalked/.test(memories[0].observation),
+		"fixture J2: no intent vocabulary",
 	);
 }
 
@@ -432,6 +436,148 @@ assert.deepEqual(buildMemories([], NOW), [], "S8: empty stream");
 			"fixture I: no intent vocabulary in observation",
 		);
 	}
+}
+
+// --- V7 fixtures (Downloads/prompt.md §13, §20-25) ---
+
+// V7-1 — same discovery trail in a different ORDER consolidates (§13):
+// LinkedIn→Google→GitHub→YC→Amboras vs Google→YC→Amboras→LinkedIn→GitHub.
+{
+	const mk = (start: number, sequence: string[]): BrowserContext => ({
+		...ctx({
+			start,
+			domains: [
+				{ domain: "linkedin.com", eventCount: 100 },
+				{ domain: "google.com", eventCount: 100 },
+				{ domain: "github.com", eventCount: 100 },
+				{ domain: "ycombinator.com", eventCount: 100 },
+				{ domain: "amboras.ai", eventCount: 100 },
+			],
+		}),
+		sequence,
+	});
+	const c1 = mk(NOW - 6 * day, [
+		"https://linkedin.com/feed",
+		"https://google.com/search",
+		"https://github.com/x",
+		"https://ycombinator.com",
+		"https://amboras.ai",
+	]);
+	const c2 = mk(NOW - 2 * day, [
+		"https://google.com/search",
+		"https://ycombinator.com",
+		"https://amboras.ai",
+		"https://linkedin.com/feed",
+		"https://github.com/x",
+	]);
+	const memories = buildMemories([c1, c2], NOW);
+	assert.equal(
+		memories.length,
+		1,
+		"V7-1: reordered same trail consolidates (behavioral, not signature)",
+	);
+	assert.equal(memories[0].contextCount, 2, "V7-1: both occurrences");
+	assert.ok(
+		memories[0].confidence > 0.5,
+		"V7-1: confidence reflects repeated pattern",
+	);
+}
+
+// V7-2 — different behavior sharing common domains does NOT consolidate (§31):
+// github+slack (dev work) vs github+slack+jira (different task mix) stay separate.
+{
+	const c1 = ctx({
+		start: NOW - 5 * day,
+		domains: [
+			{ domain: "github.com", eventCount: 400 },
+			{ domain: "slack.com", eventCount: 100 },
+		],
+	});
+	const c2 = ctx({
+		start: NOW - 1 * day,
+		domains: [
+			{ domain: "github.com", eventCount: 300 },
+			{ domain: "slack.com", eventCount: 80 },
+			{ domain: "jira.com", eventCount: 200 },
+		],
+	});
+	const memories = buildMemories([c1, c2], NOW);
+	assert.equal(
+		memories.length,
+		2,
+		"V7-2: strict-superset domain set does not auto-consolidate",
+	);
+}
+
+// V7-3 — empty/identity-less fingerprints create no memory (§21 hard invariant)
+{
+	const empty = ctx({ start: NOW - 2 * day, domains: [] });
+	const memories = buildMemories([empty], NOW);
+	assert.equal(memories.length, 0, "V7-3: no behavioral identity → no memory");
+}
+
+// V7-4 — occurrences preserved individually, not flattened (§22)
+{
+	const c1 = ctx({
+		start: NOW - 3 * day,
+		domains: [
+			{ domain: "google.com", eventCount: 300 },
+			{ domain: "amboras.ai", eventCount: 200 },
+		],
+	});
+	const c2 = ctx({
+		start: NOW - 1 * day,
+		domains: [
+			{ domain: "google.com", eventCount: 250 },
+			{ domain: "amboras.ai", eventCount: 150 },
+		],
+	});
+	const memories = buildMemories([c1, c2], NOW);
+	assert.equal(memories.length, 1, "V7-4: one memory");
+	assert.equal(
+		memories[0].occurrences.length,
+		2,
+		"V7-4: occurrences preserved individually",
+	);
+	assert.ok(
+		memories[0].evidence.occurrenceCount === 2 &&
+			memories[0].evidence.temporalSpreadMs > 0,
+		"V7-4: evidence exposed",
+	);
+}
+
+// V7-5 — strength is evidence-derived, not raw event count (§23): a repeated
+// 3-minute high-confidence pattern beats a one-off 10k-event blob.
+{
+	const thinRecurrent = [
+		ctx({
+			start: NOW - 4 * day,
+			totalEventCount: 50,
+			domains: [
+				{ domain: "google.com", eventCount: 25 },
+				{ domain: "amboras.ai", eventCount: 25 },
+			],
+		}),
+		ctx({
+			start: NOW - 2 * day,
+			totalEventCount: 50,
+			domains: [
+				{ domain: "google.com", eventCount: 25 },
+				{ domain: "amboras.ai", eventCount: 25 },
+			],
+		}),
+	];
+	const bigSingle = ctx({
+		start: NOW - 1 * day,
+		totalEventCount: 10_000,
+		domains: [{ domain: "noisy.com", eventCount: 10_000 }],
+	});
+	const memories = buildMemories([...thinRecurrent, bigSingle], NOW);
+	assert.equal(memories.length, 2, "V7-5: two memories");
+	assert.ok(
+		memories[0].strength > memories[1].strength,
+		"V7-5: recurrent pattern outranks one-off event blob",
+	);
 }
 
 logger.info("memories.check — all scenarios pass");

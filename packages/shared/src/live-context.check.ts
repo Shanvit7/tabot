@@ -225,6 +225,40 @@ const ctx = (
 		startTimestamp: NOW - 30 * DAY,
 		endTimestamp: NOW - 2 * DAY,
 		signature: "github.com+slack.com",
+		fingerprint: {
+			domains: [
+				{ domain: "github.com", weight: 1000 },
+				{ domain: "slack.com", weight: 800 },
+			],
+			pageKeys: [],
+			orderedOrigins: ["github.com", "slack.com"],
+			orderedTransitions: ["github.com→slack.com"],
+			interactionProfile: {
+				duration: 30 * MIN,
+				eventDensity: 1800 / (30 * 60 + 1),
+				navigationRate: 0.1,
+				interactionRate: 0.5,
+			},
+			entryOrigin: "github.com",
+			exitOrigin: "slack.com",
+		},
+		occurrences: [
+			{
+				contextId: "c1",
+				startTimestamp: NOW - 30 * DAY,
+				endTimestamp: NOW - 2 * DAY,
+				domains: ["github.com", "slack.com"],
+				sequence: [],
+			},
+		],
+		confidence: 0.8,
+		evidence: {
+			occurrenceCount: 1,
+			temporalSpreadMs: 0,
+			similarityScores: [],
+			sharedSequenceTokens: 2,
+			sharedDomains: 2,
+		},
 		domains: [
 			{
 				domain: "github.com",

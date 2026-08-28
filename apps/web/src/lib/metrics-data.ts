@@ -127,13 +127,27 @@ export const EXPORT_THRESHOLDS = {
 	},
 	context: {
 		gapThresholdMs: 1800000,
-		excursionReturnWindowMs: 300000, // T3 short-gap window + excursion bound
+		excursionReturnWindowMs: 300000, // excursion bound
 		excursionActivityMin: 2,
 		consecutiveTransitionCount: 2,
 		relationshipEvidenceCutoffMs: 900000,
 		maxContextSpanMs: 5400000,
 		episodeGapMs: 1800000, // V6: max gap between anchors within one episode
 		strongWeight: 0.5, // V6: min edge weight for episode continuity
+		// V7 — trajectory-coherence boundary scoring (§4, §8)
+		boundary: {
+			temporalScaleMs: 300000,
+			splitThreshold: 0.5,
+			weights: {
+				temporal: 0.1,
+				graph: 0.2,
+				navigation: 0.1,
+				interaction: 0.15,
+				profile: 0.45,
+			},
+			minEpisodeDurationMs: 120000,
+			minEpisodeEvents: 3,
+		},
 	},
 	memory: {
 		minContexts: 2,
@@ -141,6 +155,14 @@ export const EXPORT_THRESHOLDS = {
 		maxSignatureDomains: 6,
 		staleMs: 604800000,
 		maxMemories: 50,
+		// V5 — behavioral similarity (§17, §18) + low-info guard (§16)
+		similarityMergeThreshold: 0.65,
+		sequenceWeight: 0.2,
+		domainWeight: 0.4,
+		transitionWeight: 0.1,
+		entryExitWeight: 0.05,
+		interactionWeight: 0.25,
+		recurrenceMinGapMs: 1800000,
 	},
 } as const;
 
@@ -169,6 +191,16 @@ export const buildExportJsonl = (d: Derived): string => {
 			...m, // canonical Memory (its own `kind` is single|recurrent)
 		}),
 	);
+	// V7 — episode records carry per-episode boundary diagnostics (§11) so the
+	// evaluation can inspect WHY each boundary split/merged.
+	const episodeLines = d.contexts
+		.flatMap((c) => c.episodes ?? [])
+		.map((e) =>
+			JSON.stringify({
+				record: "episode",
+				...e,
+			}),
+		);
 
 	const manifest = {
 		manifest: {
@@ -177,18 +209,35 @@ export const buildExportJsonl = (d: Derived): string => {
 			exportedAt: new Date().toISOString(),
 			source: "tabot-web@0.0.1",
 			telemetrySchemaVersion: 1,
-			derivationSchemaVersion: 6,
+			derivationSchemaVersion: 8,
 			graph: {
 				enabled: true,
 				nodeGranularity: "activity-anchor",
 				relationshipCutoffMs: 900000,
-				algorithm: "temporal-weighted-local-graph",
+				algorithm: "trajectory-coherence-boundary",
+			},
+			segmentation: {
+				enabled: true,
+				signal: "local-trajectory-coherence",
+				weights: {
+					temporal: 0.1,
+					graph: 0.2,
+					navigation: 0.1,
+					interaction: 0.15,
+					profile: 0.45,
+				},
+				temporalScaleMs: 300000,
+				splitThreshold: 0.5,
 			},
 			thresholds: EXPORT_THRESHOLDS,
 			counts: {
 				events: d.events.length,
 				sessions: d.sessions.length,
 				contexts: d.contexts.length,
+				episodes: d.contexts.reduce(
+					(sum, c) => sum + (c.episodes?.length ?? 0),
+					0,
+				),
 				memories: d.memories.length,
 			},
 			coverage: {
@@ -207,6 +256,7 @@ export const buildExportJsonl = (d: Derived): string => {
 		...eventLines,
 		...sessionLines,
 		...contextLines,
+		...episodeLines,
 		...memoryLines,
 	].join("\n");
 };

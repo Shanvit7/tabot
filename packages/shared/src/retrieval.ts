@@ -208,7 +208,9 @@ export const getMemoryHistoryForDomain = async (
 	domain: string,
 ): Promise<Memory[]> => {
 	const memories = await getMemories(db);
-	return memories.filter((m) => m.domains.some((d) => d.domain === domain));
+	return memories.filter((m) =>
+		m.fingerprint.domains.some((d) => d.domain === domain),
+	);
 };
 
 // --- Similarity primitives (tech.md §4.3) ---

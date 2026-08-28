@@ -250,10 +250,11 @@ const finalizeSession = (
 		session.activeTabId,
 	);
 
-	// keep the sequence bounded — summary fields survive trimming
-	if (session.eventSequence.length > 1000) {
-		session.eventSequence = [];
-	}
+	// V5 — no eventSequence trim: the anchor/episode layer segments from the
+	// full raw sequence. Trimming to [] above 1000 events collapses a huge
+	// session into ONE fallback anchor and segmentation becomes impossible
+	// (the "very large episode" regression). The sequence is the raw material
+	// for trajectory segmentation, not a summary.
 
 	return session;
 };

@@ -345,9 +345,9 @@ assert.deepEqual(buildContexts([]), [], "scenario 10: empty → []");
 		"fixture A: cross-domain research chain → 1 related context",
 	);
 	assert.equal(
-		contexts[0]?.mergeEvidence?.some((e) => e.includes("same-tab-transition")),
+		contexts[0]?.mergeEvidence?.some((e) => e.includes("chain:")),
 		true,
-		"fixture A: same-tab-transition evidence present",
+		"fixture A: coherent chain evidence present (V7 — same-tab no longer merges)",
 	);
 	assert.ok(
 		(contexts[0]?.sequence?.length ?? 0) > 0,
@@ -437,8 +437,8 @@ assert.deepEqual(buildContexts([]), [], "scenario 10: empty → []");
 		"fixture C: excursion does not split main context",
 	);
 	assert.ok(
-		contexts[0]?.mergeEvidence?.some((e) => e.includes("same-tab-transition")),
-		"fixture C: merge evidence present",
+		contexts[0]?.mergeEvidence?.some((e) => e.includes("chain:")),
+		"fixture C: merge evidence present (V7 — chain, not same-tab)",
 	);
 	assert.equal(
 		contexts[0]?.excursions?.length,
@@ -544,21 +544,16 @@ assert.deepEqual(buildContexts([]), [], "scenario 10: empty → []");
 	const contexts = buildContexts(sessions, t);
 	assert.equal(
 		contexts.length,
-		3,
-		"fixture 4: departure/return chain splits at home boundaries, not one giant context",
+		5,
+		"fixture 4 (V7): same-tab transitions do NOT merge episodes — each cross-origin session is its own context; the eventual return is a recurrence",
 	);
 	assert.equal(
 		contexts[0]?.primaryDomain,
 		"main.com",
-		"fixture 4: first context is the main home cluster",
+		"fixture 4: first context is main.com",
 	);
 	assert.equal(
-		contexts[1]?.sessionCount,
-		3,
-		"fixture 4: away-run (google+github+youtube) is one bounded context",
-	);
-	assert.equal(
-		contexts[2]?.primaryDomain,
+		contexts[4]?.primaryDomain,
 		"main.com",
 		"fixture 4: eventual return is a recurrence context",
 	);

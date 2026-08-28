@@ -436,14 +436,17 @@ const Metrics = () => {
 											<span className="font-bold text-sm">{m.signature}</span>
 											<span className="text-muted-foreground">{m.kind}</span>
 											<span className="text-muted-foreground">
-												strength {m.strength}
+												strength {m.strength.toFixed(2)}
+											</span>
+											<span className="text-muted-foreground">
+												conf {(m.confidence ?? 0).toFixed(2)}
 											</span>
 											<span className="text-muted-foreground">
 												stale{" "}
 												{formatAgo(m.staleness ? Date.now() - m.staleness : 0)}
 											</span>
 										</div>
-										<div className="mt-1 text-muted-foreground">
+										<div className="mt-1 whitespace-pre-line text-muted-foreground">
 											{m.observation}
 										</div>
 										{m.sequence && (

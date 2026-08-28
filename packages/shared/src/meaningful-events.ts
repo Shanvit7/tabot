@@ -50,7 +50,10 @@ export const activityRef = (url?: string): ActivityRef | undefined => {
 	if (!url) return undefined;
 	try {
 		const u = new URL(url);
-		return { origin: u.origin, pathname: u.pathname, exactUrl: url };
+		// chrome://newtab, file://, about:blank, data: all report origin "null"
+		// — that is not a real origin, treat it as empty (no identity).
+		const origin = u.origin === "null" ? "" : u.origin;
+		return { origin, pathname: u.pathname, exactUrl: url };
 	} catch {
 		return { origin: "", pathname: "", exactUrl: url };
 	}

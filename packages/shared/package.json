@@ -16,10 +16,12 @@
 		"check:liveContext": "node --import ./resolve-hook.mjs src/live-context.check.ts",
 		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/meaningful-events.check.ts",
 		"check:pipeline": "node --import ./resolve-hook.mjs src/pipeline.check.ts",
-		"check:activityGraph": "node --import ./resolve-hook.mjs src/activity-graph.check.ts"
+		"check:activityGraph": "node --import ./resolve-hook.mjs src/activity-graph.check.ts",
+		"check:v5regression": "node --import ./resolve-hook.mjs src/v5regression.check.ts"
 	},
 	"dependencies": {
 		"dexie": "^4.4.5",
+		"fastest-levenshtein": "^1.0.16",
 		"graphology": "^0.26.0"
 	},
 	"devDependencies": {

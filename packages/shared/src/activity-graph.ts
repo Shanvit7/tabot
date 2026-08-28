@@ -12,6 +12,15 @@
 // No persistence, no LLM, no new telemetry. Graphology is the graph substrate.
 
 import Graph from "graphology";
+import {
+	BOUNDARY_CONFIG,
+	type BoundaryDiagnostic,
+	buildProfile,
+	computeBoundaryEvidence,
+	MIN_EPISODE_DURATION_MS,
+	MIN_EPISODE_EVENTS,
+	mergeTinyEpisodes,
+} from "./episode-boundary";
 import { deriveMeaningfulEvents } from "./meaningful-events";
 import type { Session } from "./sessions";
 
@@ -76,6 +85,14 @@ export interface ActivityEpisode {
 	homeOrigin: string;
 	// per-origin event counts within this episode (accurate activity attribution)
 	domainEvents: Record<string, number>;
+	// boundary diagnostics — why each internal boundary split/merged (§11)
+	boundaries?: BoundaryDiagnostic[];
+	// true when this episode was segmented from REAL event trajectories (the
+	// boundary scorer ran); false for fallback session-summary anchors that have
+	// no event sequence to segment. The context layer uses chain evidence (T2)
+	// ONLY for fallback episodes — a trajectory-segmented episode's splits are
+	// final (§12 Test 5).
+	trajectorySegmented: boolean;
 }
 
 // --- Thresholds (§7, §9) ---
@@ -113,10 +130,19 @@ export const buildActivityAnchors = (sessions: Session[]): ActivityAnchor[] => {
 	for (const session of sessions) {
 		const stream = deriveMeaningfulEvents(session.eventSequence);
 
+		// V5 — sessions with NO URL-bearing activity (only TAB_CREATED /
+		// PAGE_HIDDEN / TAB_REMOVED lifecycle events, chrome://newtab, etc.)
+		// are not activity: skip them. They would otherwise produce empty-origin
+		// anchors that pollute episodes/contexts with noise fragments.
+		const hasUrlActivity = stream.some((e) => e.ref !== undefined);
+		if (!hasUrlActivity && session.eventSequence.length > 0) continue;
+
 		// Sessions without event sequences (trimmed by sessionize at 1000 events,
-		// or hand-built in check fixtures) still contribute one anchor so the
-		// graph layer degrades gracefully: one anchor per session, carrying the
-		// session's full domain summary in domainEvents.
+		// or hand-built in check fixtures) still contribute ONE anchor so the
+		// session stays the temporal unit (session = time continuity; we do NOT
+		// fabricate a fake intra-session trajectory from domain summaries). The
+		// full domain summary travels in domainEvents so episode/context domain
+		// attribution is accurate.
 		if (stream.length === 0 && session.eventSequence.length === 0) {
 			const primary = session.domains
 				.filter((d) => d.domain !== "")
@@ -157,12 +183,19 @@ export const buildActivityAnchors = (sessions: Session[]): ActivityAnchor[] => {
 			const pathname = event.ref?.pathname ?? "";
 			const pageKey = pageKeyOf(origin, pathname);
 			const gap = lastTs > 0 ? event.timestamp - lastTs : 0;
+			// url-less events (chrome://newtab, about:blank, tab state) have NO
+			// origin — they do not change activity. Fold them into the current
+			// anchor; never create a standalone empty-origin anchor that would
+			// bridge session boundaries (an empty-origin anchor merges unrelated
+			// sessions via profile similarity — the V5 regression).
+			const noIdentity = origin === "";
 			const pageChanged =
 				event.ref !== undefined &&
+				!noIdentity &&
 				(current === null || current.pageKey !== pageKey);
 			const inactivityBoundary = gap > GRAPH_THRESHOLDS.EPISODE_GAP_MS;
 
-			if (!current || pageChanged || inactivityBoundary) {
+			if (!current || (pageChanged && !noIdentity) || inactivityBoundary) {
 				if (current) {
 					current.endAt = lastTs;
 					anchors.push(current);
@@ -311,40 +344,16 @@ export const buildActivityGraph = (
 };
 
 // --- Episode extraction (§11, §12) ---
-// NOT connectedComponents. Walk anchors chronologically; a boundary appears
-// when the graph relationship between consecutive anchors is weak OR there is
-// a strong temporal gap OR the local activity pattern changes materially.
+// NOT connectedComponents, NOT home-origin heuristics. Walk anchors
+// chronologically and, for every candidate boundary between adjacent anchors,
+// compute a boundary score from local trajectory evidence (temporal
+// continuity, graph transition continuity, navigation/interaction continuity,
+// local profile similarity). Split when the score indicates a discontinuity
+// (with hysteresis to suppress flicker), then merge tiny episodes into their
+// better-supported neighbor.
 //
-// Home-origin tracking: a session often has a DOMINANT origin (the task
-// cluster, e.g. localhost legal work). Leaving that home is an episode
-// boundary (departure); returning to it after being away is also a boundary
-// (the away-run is a separate episode). Monotonic cross-domain runs with no
-// dominant origin (DeepSeek → Google → Amboras → LinkedIn) stay coherent —
-// there is no home to leave, so the research chain is one episode.
-//
-// The graph supplies the evidence (same-page/same-origin edges keep an episode
-// together); chronological order supplies the segmentation constraint.
-const sessionDominantOrigin = (anchors: ActivityAnchor[]): string => {
-	const byOrigin = new Map<string, ActivityAnchor[]>();
-	for (const a of anchors) {
-		if (a.origin === "") continue;
-		const list = byOrigin.get(a.origin);
-		if (list) list.push(a);
-		else byOrigin.set(a.origin, [a]);
-	}
-	const entries = [...byOrigin.entries()];
-	if (entries.length === 0) return "";
-	const sorted = entries.sort(
-		(a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
-	);
-	const [home, homeAnchors] = sorted[0];
-	// require a genuine cluster: >= 2 anchors AND strictly more than any other
-	// origin — a balanced chain has no dominant and stays one episode
-	if (homeAnchors.length < 2) return "";
-	if (sorted[1] && homeAnchors.length <= sorted[1][1].length) return "";
-	return home;
-};
-
+// The graph supplies the evidence; chronological order supplies the
+// segmentation constraint. Home-origin is NOT used as a decision signal.
 export const extractActivityEpisodes = (
 	anchors: ActivityAnchor[],
 	graph: Graph<ActivityAnchor, RelationshipEdge>,
@@ -353,15 +362,30 @@ export const extractActivityEpisodes = (
 	const episodes: ActivityEpisode[] = [];
 	let current: ActivityAnchor[] = [];
 	let epSeq = 0;
+	let boundaryDiagnostics: BoundaryDiagnostic[] = [];
+	const anchorById = new Map(sorted.map((a) => [a.id, a]));
 
-	const flush = () => {
-		if (current.length === 0) return;
-		const first = current[0];
-		const last = current[current.length - 1];
-		const sessionIds = [...new Set(current.map((a) => a.sessionId))];
-		const domains = [...new Set(current.map((a) => a.origin).filter(Boolean))];
+	// build an episode from a list of anchor ids (recomputes all aggregates;
+	// used both by flush and by tiny-episode cleanup)
+	const buildEpisode = (
+		anchorIds: string[],
+		diagnostics?: BoundaryDiagnostic[],
+	): ActivityEpisode => {
+		const list = anchorIds
+			.map((id) => anchorById.get(id))
+			.filter((a): a is ActivityAnchor => a !== undefined)
+			.sort((a, b) => a.startAt - b.startAt);
+		const first = list[0];
+		const last = list[list.length - 1];
+		const sessionIds = [...new Set(list.map((a) => a.sessionId))];
+		const domains = [
+			...new Set([
+				...list.map((a) => a.origin).filter(Boolean),
+				...list.flatMap((a) => Object.keys(a.domainEvents ?? {})),
+			]),
+		];
 		const domainEvents: Record<string, number> = {};
-		for (const a of current) {
+		for (const a of list) {
 			if (a.domainEvents) {
 				for (const [origin, count] of Object.entries(a.domainEvents)) {
 					domainEvents[origin] = (domainEvents[origin] ?? 0) + count;
@@ -370,94 +394,171 @@ export const extractActivityEpisodes = (
 			if (a.origin === "") continue;
 			domainEvents[a.origin] = (domainEvents[a.origin] ?? 0) + a.eventCount;
 		}
-		const primaryDomain = current
+		const primaryDomain = list
 			.filter((a) => a.origin !== "")
 			.sort((a, b) => b.eventCount - a.eventCount)[0]?.origin;
-		episodes.push({
+		// trajectorySegmented: ANY real anchor (has event ids from the actual
+		// event stream) means this episode came from a real trajectory
+		const trajectorySegmented = list.some((a) => a.eventIds.length > 0);
+		return {
 			id: `ep-${++epSeq}`,
-			anchorIds: current.map((a) => a.id),
+			anchorIds: list.map((a) => a.id),
 			startTimestamp: first.startAt,
 			endTimestamp: last.endAt,
 			duration: last.endAt - first.startAt,
 			sessionIds,
 			domains,
-			totalEventCount: current.reduce((s, a) => s + a.eventCount, 0),
-			totalInteractionCount: current.reduce(
-				(s, a) => s + a.interactionCount,
-				0,
-			),
-			totalNavigationCount: current.reduce((s, a) => s + a.navigationCount, 0),
+			totalEventCount: list.reduce((s, a) => s + a.eventCount, 0),
+			totalInteractionCount: list.reduce((s, a) => s + a.interactionCount, 0),
+			totalNavigationCount: list.reduce((s, a) => s + a.navigationCount, 0),
 			primaryDomain: primaryDomain ?? "",
 			boundaryType: "internal",
-			homeOrigin,
+			homeOrigin: "",
 			domainEvents,
-		});
-		current = [];
+			boundaries: diagnostics,
+			trajectorySegmented,
+		};
 	};
 
-	// home origin: the DOMINANT origin across the whole anchor stream (a session
-	// often has a task cluster; a long session can span multiple sessions but
-	// still revolve around one home). Recompute once — stable across the stream.
-	const homeOrigin = sessionDominantOrigin(sorted);
+	const flush = (withDiagnostics: boolean) => {
+		if (current.length === 0) return;
+		episodes.push(
+			buildEpisode(
+				current.map((a) => a.id),
+				withDiagnostics ? boundaryDiagnostics : undefined,
+			),
+		);
+		current = [];
+		boundaryDiagnostics = [];
+	};
 
-	for (const anchor of sorted) {
+	for (let i = 0; i < sorted.length; i++) {
+		const anchor = sorted[i];
+
 		if (current.length === 0) {
 			current.push(anchor);
 			continue;
 		}
 		const prev = current[current.length - 1];
 
-		// hard temporal gap
+		// hard temporal gate: inactivity beyond EPISODE_GAP_MS is always a split
 		if (anchor.startAt - prev.endAt > GRAPH_THRESHOLDS.EPISODE_GAP_MS) {
-			flush();
+			flush(false);
 			current.push(anchor);
 			continue;
 		}
 
-		// cross-session boundary with no graph edge → split (disjoint activity)
-		const sameSession = anchor.sessionId === prev.sessionId;
-		const hasEdge = graph.hasEdge(prev.id, anchor.id);
-		if (!sameSession && !hasEdge) {
-			flush();
-			current.push(anchor);
-			continue;
-		}
+		// candidate boundary — evaluate local trajectory coherence
+		const leftWindow = sorted.slice(
+			Math.max(0, i - 1 - BOUNDARY_CONFIG.profileWindow),
+			i,
+		);
+		const rightWindow = sorted.slice(
+			i,
+			Math.min(sorted.length, i + 1 + BOUNDARY_CONFIG.profileWindow),
+		);
+		const evidence = computeBoundaryEvidence(
+			prev,
+			anchor,
+			leftWindow,
+			rightWindow,
+			graph,
+		);
 
-		// strong same-page/same-origin continuity → stay (application navigation)
-		if (graph.hasEdge(prev.id, anchor.id)) {
-			const attrs = graph.getEdgeAttributes(
-				graph.edge(prev.id, anchor.id),
-			) as RelationshipEdge;
+		const boundaryScore = evidence.boundaryScore;
+		const shouldSplit = boundaryScore >= BOUNDARY_CONFIG.splitThreshold;
+
+		// hysteresis: suppress single-point flicker. A split is confirmed when
+		// EITHER the next candidate boundary also stays high, OR this boundary is
+		// a genuine focused-cluster departure (left profile is focused on an
+		// origin the right side does not continue) — a real transition even if
+		// the activity that follows is itself internally coherent.
+		const next = sorted[i + 1];
+		let split = shouldSplit;
+		if (split && next) {
+			const nextWindow = sorted.slice(
+				i + 1,
+				Math.min(sorted.length, i + 2 + BOUNDARY_CONFIG.profileWindow),
+			);
+			const nextEvidence = computeBoundaryEvidence(
+				anchor,
+				next,
+				sorted.slice(Math.max(0, i - BOUNDARY_CONFIG.profileWindow), i + 1),
+				nextWindow,
+				graph,
+			);
+			const leftWindowForFocus = buildProfile(
+				sorted.slice(Math.max(0, i - 1 - BOUNDARY_CONFIG.profileWindow), i),
+				graph,
+			);
+			const rightWindowForFocus = buildProfile(
+				sorted.slice(
+					i,
+					Math.min(sorted.length, i + 1 + BOUNDARY_CONFIG.profileWindow),
+				),
+				graph,
+			);
+			const leftFocus =
+				evidence.profileSimilarity < 0.35 &&
+				(leftWindowForFocus.focusedOrigin !== "" ||
+					rightWindowForFocus.focusedOrigin !== "");
 			if (
-				(attrs.type === "same-page" || attrs.type === "same-origin") &&
-				attrs.weight >= GRAPH_THRESHOLDS.STRONG_WEIGHT
+				nextEvidence.boundaryScore < BOUNDARY_CONFIG.splitThreshold &&
+				!leftFocus
 			) {
-				current.push(anchor);
-				continue;
+				split = false; // single-point flicker — stay merged
 			}
 		}
 
-		// home-origin departure/return → episode boundary
-		if (homeOrigin !== "" && anchor.origin !== "") {
-			const leavingHome =
-				prev.origin === homeOrigin && anchor.origin !== homeOrigin;
-			const returningHome =
-				prev.origin !== homeOrigin && anchor.origin === homeOrigin;
-			if (leavingHome || returningHome) {
-				flush();
-				current.push(anchor);
-				continue;
-			}
-		}
+		boundaryDiagnostics.push({
+			leftAnchorId: prev.id,
+			rightAnchorId: anchor.id,
+			gapMs: anchor.startAt - prev.endAt,
+			boundaryScore,
+			decision: split ? "split" : "merge",
+			reasons: evidence.reasons,
+			profileSimilarity: evidence.profileSimilarity,
+			graphContinuity: evidence.graphContinuity,
+		});
 
+		if (split) {
+			flush(true);
+		}
 		current.push(anchor);
 	}
-	flush();
+	flush(true);
 
-	for (let i = 0; i < episodes.length; i++) {
-		const ep = episodes[i];
+	// post-segmentation cleanup (§9, §12 Test 6): a tiny episode (below
+	// MIN_EPISODE_*) merges ONLY when both neighbors genuinely support the same
+	// activity (shared domain/origin — not a 0.5 default that would fuse
+	// unrelated singleton fragments into a chain). Exception: an EMPTY-domain
+	// tiny episode (lifecycle noise — TAB_CREATED/PAGE_HIDDEN bursts, no URL
+	// identity) carries no activity, so it merges into whichever neighbor
+	// shares its session (pure noise removal, §16: no identity → no artifact).
+	const cleaned = mergeTinyEpisodes(
+		episodes,
+		(e) =>
+			e.totalEventCount < MIN_EPISODE_EVENTS ||
+			e.duration < MIN_EPISODE_DURATION_MS,
+		(left, right) => {
+			// an empty-domain tiny episode merges only into a TEMPORALLY-ADJACENT
+			// neighbor (within EPISODE_GAP_MS) — never across a day boundary
+			if (right.domains.length === 0) {
+				const gap = right.startTimestamp - left.endTimestamp;
+				return gap <= GRAPH_THRESHOLDS.EPISODE_GAP_MS ? 1 : 0;
+			}
+			const shared = right.domains.filter((d) =>
+				left.domains.includes(d),
+			).length;
+			return shared; // 0 = no support, do not merge
+		},
+		(anchorIds) => buildEpisode(anchorIds),
+	);
+
+	for (let i = 0; i < cleaned.length; i++) {
+		const ep = cleaned[i];
 		ep.boundaryType =
-			i === 0 ? "start" : i === episodes.length - 1 ? "end" : "internal";
+			i === 0 ? "start" : i === cleaned.length - 1 ? "end" : "internal";
 	}
-	return episodes;
+	return cleaned;
 };

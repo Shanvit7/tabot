@@ -79,12 +79,10 @@ const run = (events: StoredTabEvent[]) => {
 	];
 	const { contexts, memories } = run(events);
 	for (const c of contexts) {
-		// mergeEvidence/sequence must be evidence-only
+		// mergeEvidence/sequence must be evidence-only (V7 vocabulary)
 		for (const e of c.mergeEvidence ?? []) {
 			assert.ok(
-				/^same-origin-navigation$|^chain:\d+-transitions$|^same-tab-transition:tabId=/.test(
-					e,
-				),
+				/^same-origin-navigation$/.test(e),
 				`fixture I: evidence string is observable rule, got: ${e}`,
 			);
 		}

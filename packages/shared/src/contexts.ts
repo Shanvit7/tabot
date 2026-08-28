@@ -142,50 +142,13 @@ export const buildContexts = (
 				episode.endTimestamp - current.episodes[0].startTimestamp >
 				CONTEXT_THRESHOLDS.MAX_CONTEXT_SPAN_MS;
 			if (!spanExceeded) {
-				// V6 §15 — departure/return cycle: leaving the home cluster
-				// (departure) or returning home after an away-run (recurrence) is a
-				// context boundary. Strong evidence (same-origin continuation T1,
-				// coherent chain T2) overrides it; weak same-tab evidence (T3)
-				// does NOT — a tab is a surface, not a task, and the away-run is a
-				// separate episode. Short excursions (round-trip within the
-				// excursion window) stay one context.
-				const firstEp = current.episodes[0];
-				const home = firstEp.homeOrigin;
-				const roundTripSpan = episode.endTimestamp - firstEp.startTimestamp;
-				const isShortExcursion =
-					home !== "" &&
-					home === episode.homeOrigin &&
-					roundTripSpan <= CONTEXT_THRESHOLDS.EXCURSION_RETURN_WINDOW_MS;
-				const departing =
-					home !== "" &&
-					prev.primaryDomain === home &&
-					episode.primaryDomain !== home &&
-					!isShortExcursion;
-				const returning =
-					home !== "" &&
-					episode.primaryDomain === home &&
-					prev.primaryDomain !== home &&
-					current.episodes.some((e) => e.primaryDomain !== home) &&
-					!isShortExcursion;
-				const homeBoundary = departing || returning;
-
-				if (!homeBoundary) {
-					evidence = episodeMergeEvidence(prev, episode, transitions);
-					if (evidence.length > 0) merge = true;
-				} else {
-					// home boundary: only STRONG evidence (T1 same-origin, T2 chain)
-					// can override; weak T3 same-tab cannot.
-					evidence = episodeMergeEvidence(prev, episode, transitions);
-					if (
-						evidence.some(
-							(e) => e === "same-origin-navigation" || e.startsWith("chain:"),
-						)
-					) {
-						merge = true;
-					} else {
-						evidence = [];
-					}
-				}
+				// V7 — episodes already encode the trajectory-coherence decision.
+				// A context groups adjacent episodes only when STRONG evidence
+				// supports continuity (T1 same-origin continuation, T2 coherent
+				// cross-domain chain). Same-tab (T3) is NOT a merge trigger at the
+				// context layer: a tab is a surface, not a task (§12 Test 3).
+				evidence = episodeMergeEvidence(prev, episode, transitions);
+				if (evidence.length > 0) merge = true;
 			}
 		}
 
@@ -200,9 +163,10 @@ export const buildContexts = (
 };
 
 // Episode-level merge evidence: same-origin continuation across the episode
-// boundary, a coherent cross-domain chain, or a same-tab transition with a
-// short boundary gap. Mirrors the V4.1 tiered evidence but at episode
-// granularity.
+// boundary or a coherent cross-domain chain in the boundary neighborhood.
+// Mirrors the V4.1 tiered evidence but at episode granularity. Same-tab
+// transitions do NOT merge episodes (a tab is a surface, not a task — §12
+// Test 3); the episodes already encode the trajectory decision.
 const episodeMergeEvidence = (
 	a: ActivityEpisode,
 	b: ActivityEpisode,
@@ -215,34 +179,51 @@ const episodeMergeEvidence = (
 	const bStart = b.startTimestamp;
 	const cutoff = CONTEXT_THRESHOLDS.RELATIONSHIP_EVIDENCE_CUTOFF_MS;
 
-	// find transitions straddling the episode boundary
+	// find transitions in the LOCAL NEIGHBORHOOD of the episode boundary:
+	// straddling it (from in a's tail, to in b's head) OR entirely inside b's
+	// head window (continuing the trajectory that crossed the boundary). This
+	// mirrors the trajectory-coherence view (§5: A-2 A-1 A | B B+1 B+2) — a
+	// chain that starts before the boundary and continues inside b is one
+	// trajectory even if only ONE edge literally straddles.
+	const straddles = (o: ActivityTransition["occurrences"][number]): boolean =>
+		o.fromTs >= aEnd - cutoff &&
+		o.fromTs <= aEnd &&
+		o.toTs >= bStart &&
+		o.toTs <= bStart + cutoff &&
+		o.gapMs <= cutoff;
+	const insideB = (o: ActivityTransition["occurrences"][number]): boolean =>
+		o.fromTs >= bStart - cutoff &&
+		o.toTs <= bStart + cutoff &&
+		o.gapMs <= cutoff;
 	const edges = transitions.filter((t) =>
-		t.occurrences.some(
-			(o) =>
-				o.fromTs >= aEnd - cutoff &&
-				o.fromTs <= aEnd &&
-				o.toTs >= bStart &&
-				o.toTs <= bStart + cutoff &&
-				o.gapMs <= cutoff,
-		),
+		t.occurrences.some((o) => straddles(o) || insideB(o)),
 	);
 	if (edges.length === 0) return evidence;
 
-	// T1 — same-origin navigation
-	const sameOrigin = edges.find(
-		(t) => t.from.origin !== "" && t.from.origin === t.to.origin,
-	);
-	if (sameOrigin) return ["same-origin-navigation"];
+	// T1 — same-origin navigation ACROSS the boundary. Valid ONLY for FALLBACK
+	// episodes (no event sequence — the transition is the only evidence). For
+	// trajectory-segmented episodes, same-origin is NOT a merge trigger: the
+	// episode boundary already encoded the trajectory decision, and a
+	// same-origin hop (e.g. linkedin.com → linkedin.com/feed) can bridge two
+	// DIFFERENT activities (§6: same surface ≠ same task).
+	if (!a.trajectorySegmented && !b.trajectorySegmented) {
+		const sameOrigin = edges.find(
+			(t) =>
+				t.from.origin !== "" &&
+				t.from.origin === t.to.origin &&
+				t.occurrences.some(straddles),
+		);
+		if (sameOrigin) return ["same-origin-navigation"];
+	}
 
-	// T2 — coherent cross-domain chain
-	const chain = R2_chain(edges);
-	if (chain.ok) return [chain.detail];
-
-	// T3 — same-tab + short boundary gap
-	const boundaryGap = bStart - aEnd;
-	const r1 = edges.find(R1_sameTab);
-	if (r1 && boundaryGap <= CONTEXT_THRESHOLDS.EXCURSION_RETURN_WINDOW_MS) {
-		return [`same-tab-transition:tabId=${r1.fromTabId}`];
+	// T2 — coherent cross-domain chain in the boundary neighborhood. Valid ONLY
+	// for FALLBACK episodes (no event sequence — the trajectory scorer could
+	// not run, so the transition chain is the only evidence). For
+	// trajectory-segmented episodes the split is final: re-merging with chain
+	// evidence would undo the segmentation (§12 Test 5).
+	if (!a.trajectorySegmented && !b.trajectorySegmented) {
+		const chain = R2_chain(edges);
+		if (chain.ok) return [chain.detail];
 	}
 
 	return evidence;
@@ -255,13 +236,7 @@ const episodeMergeEvidence = (
 //   T1 same-origin navigation across the boundary — strong (same-site work)
 //   T2 coherent cross-domain chain                — strong (research hop)
 //   T3 same-tab + short boundary gap             — supporting (surface+recency)
-// Time actively splits: gap > CONTEXT_GAP_THRESHOLD splits in buildContexts;
-// T3 additionally refuses same-tab merges when the boundary gap exceeds the
-// short-gap window (reuses EXCURSION_RETURN_WINDOW_MS — ponytail: no new time
-// threshold; split it only if evaluation demonstrates the need).
-
-const R1_sameTab = (t: ActivityTransition): boolean =>
-	t.fromTabId === t.toTabId && !t.tabSwitch;
+// Time actively splits: gap > CONTEXT_GAP_THRESHOLD splits in buildContexts.
 
 const R2_chain = (
 	edges: ActivityTransition[],
@@ -360,13 +335,18 @@ const finalizeContextFromEpisodes = (
 		sessionIds: sessions.map((s) => s.id),
 		sessionCount: sessions.length,
 		domains: domainList,
-		totalEventCount: sessions.reduce((sum, s) => sum + s.eventCount, 0),
-		totalInteractionCount: sessions.reduce(
-			(sum, s) => sum + s.interactionCount,
+		// §2.1 — event accounting must not double-count: a session can be split
+		// across multiple contexts (one session → several episodes), so the
+		// context's event count is the sum of its EPISODES' counts (each anchor
+		// belongs to exactly one episode → episodes partition the session's
+		// events). Summing session.eventCount would over-account.
+		totalEventCount: episodes.reduce((sum, ep) => sum + ep.totalEventCount, 0),
+		totalInteractionCount: episodes.reduce(
+			(sum, ep) => sum + ep.totalInteractionCount,
 			0,
 		),
-		totalNavigationCount: sessions.reduce(
-			(sum, s) => sum + s.navigationCount,
+		totalNavigationCount: episodes.reduce(
+			(sum, ep) => sum + ep.totalNavigationCount,
 			0,
 		),
 		totalTabSwitchCount: sessions.reduce((sum, s) => sum + s.tabSwitchCount, 0),
