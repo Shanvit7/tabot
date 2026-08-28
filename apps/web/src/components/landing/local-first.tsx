@@ -14,7 +14,7 @@ const scenes = [
 		id: "context",
 	},
 	{
-		body: "Your browser activity stays on your device by default. No Tabot cloud is required for core pipeline.",
+		body: "Your browser activity stays on your device. Nothing is uploaded, synced, or shared unless you explicitly export it.",
 		headline: "Nothing leaves by accident.",
 		id: "private",
 	},
@@ -26,6 +26,19 @@ const scenes = [
 ] as const;
 
 const transition = { duration: 0.38, ease: [0.22, 1, 0.36, 1] } as const;
+
+const contextChipPositions = [
+	"left-[8%] top-[52%] sm:left-[4%] sm:top-[24%]",
+	"left-[54%] top-[52%] sm:left-[8%] sm:top-[39%]",
+	"left-[8%] top-[68%] sm:left-[12%] sm:top-[54%]",
+	"left-[54%] top-[68%] sm:left-[16%] sm:top-[69%]",
+] as const;
+
+const privateChipPositions = [
+	"left-1/2 top-[60%] -translate-x-1/2 sm:left-[7%] sm:top-[21%] sm:translate-x-0",
+	"left-1/2 top-[74%] -translate-x-1/2 sm:left-[35%] sm:top-[76%] sm:translate-x-0",
+	"left-1/2 top-[88%] -translate-x-1/2 sm:left-[63%] sm:top-[67%] sm:translate-x-0",
+] as const;
 
 export const LocalFirst = () => {
 	const sectionRef = useRef<HTMLElement>(null);
@@ -49,10 +62,10 @@ export const LocalFirst = () => {
 			id="local-first"
 			ref={sectionRef}
 		>
-			<div className="sticky top-0 min-h-[100svh] overflow-hidden">
+			<div className="sticky top-0 min-h-svh overflow-hidden">
 				<div className="absolute inset-0 bg-[radial-gradient(circle_at_65%_48%,rgba(191,255,0,0.7),transparent_18%),radial-gradient(circle_at_44%_55%,rgba(53,112,77,0.16),transparent_34%)]" />
-				<div className="relative mx-auto grid min-h-[100svh] max-w-7xl items-center gap-12 px-6 py-20 sm:px-10 lg:grid-cols-[0.78fr_1.22fr] lg:gap-20 lg:px-14">
-					<div className="relative min-h-[19rem] max-w-xl lg:min-h-[24rem]">
+				<div className="relative mx-auto grid min-h-svh max-w-7xl items-center gap-12 px-6 py-20 sm:px-10 lg:grid-cols-[0.78fr_1.22fr] lg:gap-20 lg:px-14">
+					<div className="relative min-h-76 max-w-xl lg:min-h-96">
 						<AnimatePresence initial={false} mode="wait">
 							<motion.div
 								animate={{ opacity: 1, y: 0 }}
@@ -62,7 +75,7 @@ export const LocalFirst = () => {
 								key={scene.id}
 								transition={reduceMotion ? { duration: 0 } : transition}
 							>
-								<h2 className="text-[clamp(3.2rem,5.8vw,6rem)] font-semibold leading-[0.9] tracking-[-0.04em] [text-wrap:balance]">
+								<h2 className="text-[clamp(3.2rem,5.8vw,6rem)] font-semibold leading-[0.9] tracking-[-0.04em] text-balance">
 									{scene.headline}
 								</h2>
 								<p className="mt-8 max-w-lg text-lg leading-8 text-[#40584a] sm:text-xl">
@@ -72,7 +85,7 @@ export const LocalFirst = () => {
 						</AnimatePresence>
 					</div>
 
-					<div className="relative mx-auto h-[24rem] w-full max-w-3xl sm:h-[31rem]">
+					<div className="relative mx-auto h-96 w-full max-w-3xl sm:h-124">
 						<AnimatePresence initial={false} mode="wait">
 							{scene.id === "context" && (
 								<ContextScene reduceMotion={reduceMotion} />
@@ -102,16 +115,15 @@ const ContextScene = ({ reduceMotion }: { reduceMotion: boolean | null }) => (
 	>
 		<div
 			aria-hidden="true"
-			className="absolute left-[7%] top-1/2 h-[16rem] w-[16rem] -translate-y-1/2 bg-lime/35 blur-3xl"
+			className="absolute left-[7%] top-1/2 h-64 w-[16rem] -translate-y-1/2 bg-lime/35 blur-3xl"
 		/>
 		{["TAB ACTIVATED", "NAVIGATION", "VISIBILITY", "TAB REMOVED"].map(
 			(signal, index) => (
 				<motion.div
 					animate={{ opacity: 1, x: 0 }}
-					className="absolute z-10 border-2 border-[#102219] bg-[#f5faec] px-3 py-2 font-mono text-[10px] font-bold tracking-[0.08em] shadow-hard sm:px-4 sm:py-3 sm:text-xs"
+					className={`absolute z-10 border-2 border-[#102219] bg-[#f5faec] px-3 py-2 font-mono text-[10px] font-bold tracking-[0.08em] shadow-hard sm:px-4 sm:py-3 sm:text-xs ${contextChipPositions[index]}`}
 					initial={{ opacity: 0, x: -72 }}
 					key={signal}
-					style={{ left: `${4 + index * 4}%`, top: `${24 + index * 15}%` }}
 					transition={
 						reduceMotion
 							? { duration: 0 }
@@ -125,7 +137,7 @@ const ContextScene = ({ reduceMotion }: { reduceMotion: boolean | null }) => (
 		)}
 		<motion.div
 			animate={{ opacity: 1, rotate: 0, scale: 1 }}
-			className="absolute left-[60%] top-1/2 z-20 h-48 w-48 -translate-x-1/2 -translate-y-1/2 border-[3px] border-[#102219] bg-lime p-5 shadow-hard-xl sm:h-60 sm:w-60 sm:p-7"
+			className="absolute left-1/2 top-[24%] z-20 h-40 w-40 -translate-x-1/2 -translate-y-1/2 border-[3px] border-[#102219] bg-lime p-5 shadow-hard-xl sm:left-[60%] sm:top-1/2 sm:h-60 sm:w-60 sm:p-7"
 			initial={{ opacity: 0, rotate: -14, scale: 0.65 }}
 			transition={
 				reduceMotion ? { duration: 0 } : { ...transition, delay: 0.2 }
@@ -154,13 +166,13 @@ const PrivateScene = ({ reduceMotion }: { reduceMotion: boolean | null }) => (
 	>
 		<motion.div
 			animate={{ opacity: 1, scale: 1 }}
-			className="absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2 border-[3px] border-[#102219] bg-[#102219] p-7 shadow-hard-xl sm:h-64 sm:w-64"
+			className="absolute left-1/2 top-[30%] h-52 w-52 -translate-x-1/2 -translate-y-1/2 border-[3px] border-[#102219] bg-[#102219] p-5 shadow-hard-xl sm:top-1/2 sm:h-64 sm:w-64 sm:p-7"
 			initial={{ opacity: 0, scale: 0.7 }}
 			transition={reduceMotion ? { duration: 0 } : transition}
 		>
-			<div className="mx-auto h-20 w-20 rounded-t-full border-[12px] border-[#f5faec] border-b-0" />
-			<div className="mx-auto -mt-1 h-16 w-24 bg-[#f5faec]" />
-			<p className="mt-7 text-center font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-lime">
+			<div className="mx-auto h-16 w-16 rounded-t-full border-12 border-[#f5faec] border-b-0 sm:h-20 sm:w-20" />
+			<div className="mx-auto -mt-1 h-12 w-20 bg-[#f5faec] sm:h-16 sm:w-24" />
+			<p className="mt-5 text-center font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-lime sm:mt-7">
 				On your device
 			</p>
 		</motion.div>
@@ -168,13 +180,9 @@ const PrivateScene = ({ reduceMotion }: { reduceMotion: boolean | null }) => (
 			(rule, index) => (
 				<motion.div
 					animate={{ opacity: 1, y: 0 }}
-					className="absolute border-2 border-[#102219] bg-[#f5faec] px-3 py-2 font-mono text-[10px] font-bold tracking-[0.08em] shadow-hard sm:text-xs"
+					className={`absolute border-2 border-[#102219] bg-[#f5faec] px-3 py-2 font-mono text-[10px] font-bold tracking-[0.08em] shadow-hard sm:text-xs ${privateChipPositions[index]}`}
 					initial={{ opacity: 0, y: 38 }}
 					key={rule}
-					style={{
-						left: `${7 + index * 28}%`,
-						top: index === 1 ? "76%" : index === 0 ? "21%" : "67%",
-					}}
 					transition={
 						reduceMotion
 							? { duration: 0 }

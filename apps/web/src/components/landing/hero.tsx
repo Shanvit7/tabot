@@ -25,7 +25,7 @@ export const Hero = () => {
 					}}
 				>
 					<motion.h1
-						className="max-w-xl text-[clamp(3.3rem,7vw,6.7rem)] font-semibold leading-[0.9] tracking-[-0.055em] text-[#12221d] [text-wrap:balance]"
+						className="max-w-xl text-[clamp(3.3rem,7vw,6.7rem)] font-semibold leading-[0.9] tracking-[-0.055em] text-[#12221d] text-balance"
 						variants={reveal}
 					>
 						Your browser history was never built for work

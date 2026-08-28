@@ -7,7 +7,7 @@ export const GetStarted = () => (
 	>
 		<div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-20">
 			<div className="max-w-3xl">
-				<h2 className="text-[clamp(3.4rem,7vw,7rem)] font-semibold leading-[0.84] tracking-[-0.04em] [text-wrap:balance]">
+				<h2 className="text-[clamp(3.4rem,7vw,7rem)] font-semibold leading-[0.84] tracking-[-0.04em] text-balance">
 					Putting final pieces in place.
 				</h2>
 				<p className="mt-8 max-w-xl text-lg leading-8 text-[#244d39] sm:text-xl">
