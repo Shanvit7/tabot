@@ -4,6 +4,7 @@ const links = [
 	{ href: "#local-first", label: "Local-first" },
 	{ href: "#how-it-works", label: "How it works" },
 	{ href: "#get-started", label: "Get started" },
+	{ href: `${import.meta.env.BASE_URL}privacy`, label: "Privacy" },
 	{ href: "https://github.com/Shanvit7/tabot", label: "GitHub" },
 ] as const;
 

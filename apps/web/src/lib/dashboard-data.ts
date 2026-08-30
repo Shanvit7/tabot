@@ -27,6 +27,7 @@ const chromeSend = (): ChromeSend | null => {
 
 const configuredExtensionId = import.meta.env.VITE_TABOT_EXTENSION_ID?.trim();
 export const allowsManualExtensionId =
+	import.meta.env.DEV ||
 	import.meta.env.VITE_TABOT_SHOW_EXTENSION_ID_INPUT === "true";
 
 const getExtId = (): string | undefined => {
