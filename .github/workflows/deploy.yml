@@ -42,6 +42,8 @@ jobs:
       - name: Prepare Pages artifact
         run: |
           cp apps/web/.output/public/index.html apps/web/.output/public/404.html
+          mkdir -p apps/web/.output/public/privacy
+          cp apps/web/.output/public/index.html apps/web/.output/public/privacy/index.html
           touch apps/web/.output/public/.nojekyll
 
       - uses: actions/upload-pages-artifact@v4
