@@ -4,10 +4,10 @@
 // Run: node --import ./resolve-hook.mjs src/live-context.check.ts
 
 import assert from "node:assert/strict";
-import type { BrowserContext, ContextDomain } from "./contexts.ts";
-import type { StoredTabEvent } from "./db.ts";
-import { buildLiveContext } from "./live-context.ts";
-import { logger } from "./logger.ts";
+import type { BrowserContext, ContextDomain } from "../contexts/contexts.ts";
+import type { StoredTabEvent } from "../events/db.ts";
+import { logger } from "../lib/logger.ts";
+import { buildLiveContext } from "../recall/live-context.ts";
 
 const NOW = 1_700_000_000_000; // fixed reference
 const MIN = 60_000;

@@ -4,8 +4,8 @@
 // Combines the derived layer (current context, related contexts/memories) with the
 // event stream (active tab/window, current URL, recent navigations). No LLM, no persistence.
 
-import type { BrowserContext } from "./contexts";
-import type { StoredTabEvent, TabotDatabase } from "./db";
+import type { BrowserContext } from "../contexts/contexts";
+import type { StoredTabEvent, TabotDatabase } from "../events/db";
 import {
 	findSimilarContexts,
 	findSimilarMemories,

@@ -12,11 +12,14 @@
 
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
-import { buildContexts } from "./contexts";
-import { logger } from "./logger";
-import { deriveMeaningfulEvents, deriveTransitions } from "./meaningful-events";
-import { buildMemories } from "./memories";
-import { sessionize } from "./sessions";
+import {
+	deriveMeaningfulEvents,
+	deriveTransitions,
+} from "../activities/meaningful-events";
+import { buildContexts } from "../contexts/contexts";
+import { logger } from "../lib/logger";
+import { buildMemories } from "../memories/memories";
+import { sessionize } from "../sessions/sessions";
 
 const file =
 	process.argv[2] ??

@@ -3,8 +3,8 @@
 // Pure derivation: StoredTabEvent[] in → DerivedEvent[] → ActivityTransition[] out.
 // Raw events untouched; no new telemetry; no graph library; no new dependencies.
 
-import type { StoredTabEvent } from "./db";
-import type { TabEventType } from "./events";
+import type { StoredTabEvent } from "../events/db";
+import type { TabEventType } from "../events/events";
 
 export interface ActivityRef {
 	origin: string; // scheme + host ("" when URL unparseable)

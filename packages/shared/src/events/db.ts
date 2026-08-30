@@ -1,6 +1,6 @@
 import Dexie, { type Table } from "dexie";
+import { logger } from "../lib/logger";
 import type { TabEventType } from "./events";
-import { logger } from "./logger";
 
 export interface StoredTabEvent {
 	id: string;

@@ -3,9 +3,9 @@
 // Run: node --import ./resolve-hook.mjs src/memories.check.ts
 
 import assert from "node:assert/strict";
-import type { BrowserContext, ContextDomain } from "./contexts";
-import { logger } from "./logger";
-import { buildMemories, MEMORY_THRESHOLDS } from "./memories";
+import type { BrowserContext, ContextDomain } from "../contexts/contexts";
+import { logger } from "../lib/logger";
+import { buildMemories, MEMORY_THRESHOLDS } from "../memories/memories";
 
 // --- helpers ---
 

@@ -12,6 +12,7 @@
 // No persistence, no LLM, no new telemetry. Graphology is the graph substrate.
 
 import Graph from "graphology";
+import type { Session } from "../sessions/sessions";
 import {
 	anchorMass,
 	BOUNDARY_CONFIG,
@@ -25,7 +26,6 @@ import {
 	rightSidePersistence,
 } from "./episode-boundary";
 import { deriveMeaningfulEvents } from "./meaningful-events";
-import type { Session } from "./sessions";
 
 // --- Node: ActivityAnchor (§5) ---
 

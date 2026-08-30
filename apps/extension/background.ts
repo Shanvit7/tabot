@@ -39,9 +39,17 @@ const TYPE_NAMES: TabEventType[] = [
 	"KEY_ACTIVITY",
 ];
 
+const TRACKING_KEY = "tabot_tracking_enabled";
 const latestStats: StatsSnapshot = createEmptyStats(capacity);
 let droppedEvents = 0;
 let drainScheduled = false;
+let trackingEnabled = true;
+const trackingReady = chrome.storage.local
+	.get(TRACKING_KEY)
+	.then((stored) => {
+		trackingEnabled = stored[TRACKING_KEY] !== false;
+	})
+	.catch(() => {});
 
 // ponytail: batch Dexie persistence downstream of SAB — IndexedDB bulkPut keeps hot path allocation-free
 let dbPromise: ReturnType<typeof createEventsDb> | null = null;
@@ -146,12 +154,14 @@ setInterval(() => {
 }, 200);
 
 // --- Single producer (spec §5, §9) ---
-function push(
+const push = async (
 	type: TabEventType,
 	tabId: number,
 	windowId: number,
 	metadata?: { x?: number; y?: number; scrollY?: number },
-) {
+) => {
+	await trackingReady;
+	if (!trackingEnabled) return false;
 	const ok = pushEvent(control, events, capacity, {
 		type,
 		tabId,
@@ -166,7 +176,7 @@ function push(
 		scheduleDrain();
 	}
 	return ok;
-}
+};
 
 // --- Chrome tab lifecycle ---
 chrome.tabs.onCreated.addListener((tab) => {
@@ -219,6 +229,20 @@ const getMergedStats = (): StatsSnapshot => {
 
 // --- Content-script page events (spec §5: never write SAB directly, background is single producer) ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+	if (message?.type === "SET_TRACKING") {
+		trackingEnabled = message.enabled === true;
+		chrome.storage.local
+			.set({ [TRACKING_KEY]: trackingEnabled })
+			.then(() => sendResponse({ enabled: trackingEnabled }))
+			.catch(() => sendResponse({ enabled: trackingEnabled }));
+		return true;
+	}
+
+	if (message?.type === "GET_TRACKING") {
+		trackingReady.then(() => sendResponse({ enabled: trackingEnabled }));
+		return true;
+	}
+
 	if (message?.kind === "TABOT_PAGE_EVENT") {
 		const tabId = sender.tab?.id ?? 0;
 		const windowId = sender.tab?.windowId ?? 0;

@@ -8,17 +8,23 @@ import {
 	buildActivityAnchors,
 	buildActivityGraph,
 	extractActivityEpisodes,
-} from "./activity-graph";
-import type { TabotDatabase } from "./db";
-import { getAllEvents } from "./db";
-import type { ActivityRef, ActivityTransition } from "./meaningful-events";
-import { deriveMeaningfulEvents, deriveTransitions } from "./meaningful-events";
+} from "../activities/activity-graph";
+import type {
+	ActivityRef,
+	ActivityTransition,
+} from "../activities/meaningful-events";
+import {
+	deriveMeaningfulEvents,
+	deriveTransitions,
+} from "../activities/meaningful-events";
+import type { TabotDatabase } from "../events/db";
+import { getAllEvents } from "../events/db";
 import {
 	getRecentSessions,
 	getSessions,
 	type Session,
 	sessionize,
-} from "./sessions";
+} from "../sessions/sessions";
 
 export interface BrowserContext {
 	id: string; // `${firstSessionId}-${lastSessionId}`

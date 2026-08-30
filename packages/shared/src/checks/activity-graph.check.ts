@@ -7,15 +7,15 @@ import {
 	buildActivityAnchors,
 	buildActivityGraph,
 	extractActivityEpisodes,
-} from "./activity-graph.ts";
-import { buildContexts, CONTEXT_THRESHOLDS } from "./contexts.ts";
-import type { StoredTabEvent } from "./db.ts";
-import { logger } from "./logger.ts";
+} from "../activities/activity-graph.ts";
 import {
 	deriveMeaningfulEvents,
 	deriveTransitions,
-} from "./meaningful-events.ts";
-import { sessionize } from "./sessions.ts";
+} from "../activities/meaningful-events.ts";
+import { buildContexts, CONTEXT_THRESHOLDS } from "../contexts/contexts.ts";
+import type { StoredTabEvent } from "../events/db.ts";
+import { logger } from "../lib/logger.ts";
+import { sessionize } from "../sessions/sessions.ts";
 
 const MIN = 60_000;
 const T0 = 1_700_000_000_000;

@@ -120,7 +120,7 @@ Single-occurrence patterns require 500 events. Generic single-site activity such
 
 `apps/web/src/routes/dashboard.tsx` has Overview, Activity, Memories, and Export views. It asks the extension for `GET_STATS`, `GET_COUNTS`, and `GET_EVENTS`, then derives dashboard views in browser memory using shared pure functions. It does not send data to a server.
 
-The dashboard must run at an origin allowed by extension `externally_connectable`. Current manifest permits `http://localhost:3000/*` and placeholder `https://tabot.example/*`. GitHub Pages is currently landing-site hosting; it cannot connect to the extension until its final Pages origin is explicitly added to extension manifest and extension is rebuilt.
+The dashboard must run at an origin allowed by extension `externally_connectable`. Production permits `https://shanvit7.github.io/*`; local development permits `http://localhost:3000/*`. The Chrome Web Store assigns one stable extension ID. Set it as GitHub Actions variable `TABOT_EXTENSION_ID`; deploy passes it to `VITE_TABOT_EXTENSION_ID`, so installed users connect automatically. Local builds can set `VITE_TABOT_SHOW_EXTENSION_ID_INPUT=true` to show the unpacked-extension ID field.
 
 ## Checks
 

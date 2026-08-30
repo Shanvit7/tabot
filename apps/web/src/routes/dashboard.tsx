@@ -1,5 +1,6 @@
 import type { StatsSnapshot, StoredTabEvent } from "@tabot/shared";
-import { areaY, barY, defineChart } from "@tanstack/charts";
+import { areaY, barX, defineChart, dot, lineY } from "@tanstack/charts";
+import { pie, polar, radialArc } from "@tanstack/charts/polar";
 import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { Chart, type ChartDefinition } from "@tanstack/react-charts";
@@ -8,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Empty, Panel, TabBar } from "~/components/ui/dashboard-panels";
 import {
+	allowsManualExtensionId,
 	buildExportCsv,
 	buildExportJsonl,
 	derive,
@@ -136,10 +138,32 @@ const buildTopSites = (
 };
 
 // event types → friendly names, sorted desc, filtered to range
+interface EventMixDatum {
+	label: string;
+	count: number;
+}
+
+interface FocusDatum {
+	id: string;
+	switches: number;
+	interactions: number;
+	radius: number;
+}
+
+const buildFocusMap = (
+	sessions: ReturnType<typeof derive>["sessions"],
+): FocusDatum[] =>
+	sessions.map((session) => ({
+		id: session.id,
+		switches: session.tabSwitchCount,
+		interactions: session.interactionCount,
+		radius: Math.min(12, Math.max(4, Math.sqrt(session.eventCount))),
+	}));
+
 const buildEventMix = (
 	events: StoredTabEvent[],
 	range: RangeId,
-): Array<{ label: string; count: number }> => {
+): EventMixDatum[] => {
 	const from = rangeStart(range);
 	const counts = new Map<string, number>();
 	for (const e of events) {
@@ -165,6 +189,19 @@ const activityChart = (data: HourBucket[]): ChartDefinition<HourBucket> =>
 				x: "label",
 				y: "events",
 				fill: "#bfff00",
+				fillOpacity: 0.7,
+			}),
+			lineY(data, {
+				x: "label",
+				y: "events",
+				stroke: "#000",
+				strokeWidth: 3,
+			}),
+			dot(data, {
+				x: "label",
+				y: "events",
+				r: 4,
+				fill: "#f97316",
 				stroke: "#000",
 				strokeWidth: 2,
 			}),
@@ -193,9 +230,9 @@ const activityChart = (data: HourBucket[]): ChartDefinition<HourBucket> =>
 const sitesChart = (data: SiteDatum[]): ChartDefinition<SiteDatum> =>
 	defineChart({
 		marks: [
-			barY(data, {
-				x: "label",
-				y: "visits",
+			barX(data, {
+				x: "visits",
+				y: "label",
 				fill: "#f97316",
 				stroke: "#000",
 				strokeWidth: 2,
@@ -203,8 +240,43 @@ const sitesChart = (data: SiteDatum[]): ChartDefinition<SiteDatum> =>
 		],
 		scales: {
 			x: {
+				scale: () => scaleLinear().nice(4),
+				grid: true,
+				axis: { tickLabels: { fontSize: 10 } },
+			},
+			y: {
 				scale: () => scaleBand().padding(0.2),
-				axis: { tickLabels: { fontSize: 10, rotate: -25 } },
+				axis: { tickLabels: { fontSize: 11 } },
+			},
+		},
+		tooltip: false,
+		svgAnimation: true,
+		theme: {
+			foreground: "#000",
+			muted: "#666",
+			grid: "#d4d4d4",
+			palette: NEON,
+		},
+	});
+
+const focusChart = (data: FocusDatum[]): ChartDefinition<FocusDatum> =>
+	defineChart({
+		marks: [
+			dot(data, {
+				x: "switches",
+				y: "interactions",
+				r: "radius",
+				key: "id",
+				fill: "#ec4899",
+				stroke: "#000",
+				strokeWidth: 2,
+			}),
+		],
+		scales: {
+			x: {
+				scale: () => scaleLinear().nice(4),
+				grid: true,
+				axis: { tickLabels: { fontSize: 10 } },
 			},
 			y: {
 				scale: () => scaleLinear().nice(4),
@@ -222,6 +294,39 @@ const sitesChart = (data: SiteDatum[]): ChartDefinition<SiteDatum> =>
 		},
 	});
 
+const eventMixChart = (
+	data: EventMixDatum[],
+): ChartDefinition<EventMixDatum> => {
+	const slices = pie(data, { value: "count" });
+
+	return defineChart({
+		marks: [
+			polar({
+				inset: 8,
+				radiusRatio: 0.84,
+				scales: { angle: null, radius: null },
+				marks: [
+					radialArc(slices, {
+						innerRadius: ({ radius }) => radius * 0.56,
+						cornerRadius: 0,
+						color: "label",
+						key: "label",
+						stroke: "#000",
+						strokeWidth: 2,
+					}),
+				],
+			}),
+		],
+		scales: { x: null, y: null },
+		color: {
+			domain: data.map((item) => item.label),
+			range: NEON,
+		},
+		tooltip: false,
+		svgAnimation: true,
+	});
+};
+
 // ─── Route component ───
 
 const Dashboard = () => {
@@ -233,9 +338,11 @@ const Dashboard = () => {
 	const [exporting, setExporting] = useState<"jsonl" | "csv" | null>(null);
 
 	useEffect(() => {
-		try {
-			setExtId(localStorage.getItem("tabot_extension_id") || "");
-		} catch {}
+		if (allowsManualExtensionId) {
+			try {
+				setExtId(localStorage.getItem("tabot_extension_id") || "");
+			} catch {}
+		}
 		let alive = true;
 
 		const pollStats = async () => {
@@ -286,9 +393,22 @@ const Dashboard = () => {
 		return top ? top[0] : null;
 	}, [rangeSessions]);
 
+	const rangeEvents = useMemo(
+		() => events?.filter((event) => event.timestamp >= rangeStart(range)) ?? [],
+		[events, range],
+	);
 	const activityData = useMemo(
 		() => (events ? buildActivityBuckets(events, range) : []),
 		[events, range],
+	);
+	const busiestMoment = useMemo(
+		() =>
+			activityData.reduce<HourBucket | null>(
+				(peak, bucket) =>
+					!peak || bucket.events > peak.events ? bucket : peak,
+				null,
+			),
+		[activityData],
 	);
 	const siteData = useMemo(
 		() => (events ? buildTopSites(events, range) : []),
@@ -297,6 +417,45 @@ const Dashboard = () => {
 	const eventMix = useMemo(
 		() => (events ? buildEventMix(events, range) : []),
 		[events, range],
+	);
+	const tabSwitches = useMemo(
+		() => rangeEvents.filter((event) => event.type === "TAB_ACTIVATED").length,
+		[rangeEvents],
+	);
+	const interactionCount = useMemo(
+		() =>
+			rangeEvents.filter(
+				(event) =>
+					event.type === "CLICK" ||
+					event.type === "SCROLL" ||
+					event.type === "KEY_ACTIVITY",
+			).length,
+		[rangeEvents],
+	);
+	const navigationCount = useMemo(
+		() => rangeEvents.filter((event) => event.type === "NAVIGATION").length,
+		[rangeEvents],
+	);
+	const domainCount = useMemo(
+		() =>
+			new Set(
+				rangeSessions.flatMap((session) =>
+					session.domains.map((domain) => domain.domain),
+				),
+			).size,
+		[rangeSessions],
+	);
+	const focusData = useMemo(
+		() => buildFocusMap(rangeSessions),
+		[rangeSessions],
+	);
+	const focusDef = useMemo(
+		() => (focusData.length > 0 ? focusChart(focusData) : null),
+		[focusData],
+	);
+	const eventMixDef = useMemo(
+		() => (eventMix.length > 0 ? eventMixChart(eventMix.slice(0, 5)) : null),
+		[eventMix],
 	);
 	const activityDef = useMemo(
 		() => (activityData.length > 0 ? activityChart(activityData) : null),
@@ -339,7 +498,7 @@ const Dashboard = () => {
 					<div>
 						<h1 className="text-3xl font-bold tracking-tight">Tabot</h1>
 						<p className="font-mono text-sm text-muted-foreground">
-							Your browsing, decoded
+							Thinking across tabs.
 						</p>
 					</div>
 					<div className="ml-auto flex items-center gap-2 font-mono text-xs">
@@ -350,31 +509,18 @@ const Dashboard = () => {
 					</div>
 				</div>
 
-				{!hasExtension && (
+				{!hasExtension && allowsManualExtensionId && (
 					<div className="border-hard bg-lime/20 p-4 mb-6 font-mono text-xs leading-relaxed">
 						<div className="font-bold uppercase tracking-wider mb-1">
 							Extension not detected
 						</div>
-						Install the Tabot extension and open this dashboard from{" "}
-						<code className="bg-black text-lime px-1">chrome://extensions</code>{" "}
-						(enable Developer mode → Load unpacked{" "}
-						<code className="bg-black text-lime px-1">
-							apps/extension/build/chrome-mv3-prod
-						</code>
-						). For local dev the manifest allows{" "}
-						<code className="bg-black text-lime px-1">
-							http://localhost:3000/*
-						</code>{" "}
-						via{" "}
-						<code className="bg-black text-lime px-1">
-							externally_connectable
-						</code>{" "}
-						— paste the extension ID below if needed.
+						Local development only: load the unpacked extension, then paste its
+						ID.
 						<div className="mt-3 flex gap-2">
 							<input
 								value={extId}
 								onChange={(e) => setExtId(e.target.value)}
-								placeholder="Extension ID (from chrome://extensions)"
+								placeholder="Extension ID"
 								aria-label="Extension ID"
 								className="flex-1 border-hard px-3 py-2 font-mono text-xs bg-white"
 							/>
@@ -396,6 +542,20 @@ const Dashboard = () => {
 
 				{tab === TAB.OVERVIEW && (
 					<>
+						<div className="mb-6 flex flex-col gap-4 border-hard bg-lime p-4 shadow-hard-sm md:flex-row md:items-end md:justify-between">
+							<div>
+								<h2 className="text-3xl font-bold tracking-tight">
+									Your browsing story
+								</h2>
+								<p className="mt-1 max-w-xl text-sm">
+									Follow what you did, where you went, and when your browser got
+									busy.
+								</p>
+							</div>
+							<div className="font-mono text-xs uppercase tracking-wider">
+								{rangeEvents.length.toLocaleString()} moments captured
+							</div>
+						</div>
 						<div className="flex flex-wrap gap-2 mb-4">
 							{RANGES.map((r) => (
 								<button
@@ -412,104 +572,216 @@ const Dashboard = () => {
 								</button>
 							))}
 						</div>
-						<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-							<div className="border-hard shadow-hard-sm p-4">
-								<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-									Activities tracked
+						<div className="mb-3 border-hard bg-black p-4 text-white shadow-hard-sm">
+							<div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] md:items-center">
+								<div>
+									<h3 className="text-2xl font-bold">What this tells you</h3>
+									<p className="mt-1 max-w-md text-sm text-zinc-300">
+										Lots of tab changes and page hops can mean your attention
+										was split. Lots of hands-on activity in fewer places can
+										mean you settled into work.
+									</p>
 								</div>
-								<div className="font-bold text-2xl">
-									{events
-										? events
-												.filter((e) => e.timestamp >= rangeStart(range))
-												.length.toLocaleString()
-										: "—"}
+								<div className="border-hard bg-pink-300 p-3 text-black">
+									<div className="font-mono text-xs uppercase tracking-wider">
+										You did
+									</div>
+									<div className="mt-1 text-2xl font-bold tabular-nums">
+										{interactionCount.toLocaleString()} things
+									</div>
+									<div className="mt-1 font-mono text-xs">
+										Clicked, scrolled, or typed
+									</div>
+								</div>
+								<div className="border-hard bg-orange-400 p-3 text-black">
+									<div className="font-mono text-xs uppercase tracking-wider">
+										You opened
+									</div>
+									<div className="mt-1 text-2xl font-bold tabular-nums">
+										{navigationCount.toLocaleString()} pages
+									</div>
+									<div className="mt-1 font-mono text-xs">
+										New pages that loaded
+									</div>
+								</div>
+								<div className="border-hard bg-cyan-300 p-3 text-black">
+									<div className="font-mono text-xs uppercase tracking-wider">
+										You explored
+									</div>
+									<div className="mt-1 text-2xl font-bold tabular-nums">
+										{domainCount.toLocaleString()} sites
+									</div>
+									<div className="mt-1 font-mono text-xs">
+										Different places in your browser
+									</div>
 								</div>
 							</div>
-							<div className="border-hard shadow-hard-sm p-4">
-								<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-									Sessions {range === "today" ? "today" : "in range"}
+						</div>
+						<div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+							<div className="border-hard bg-black p-4 text-white shadow-hard-sm">
+								<div className="font-mono text-xs uppercase tracking-wider text-lime">
+									Browser moments
 								</div>
-								<div className="font-bold text-2xl">
+								<div className="mt-2 text-3xl font-bold tabular-nums">
+									{events ? rangeEvents.length.toLocaleString() : "—"}
+								</div>
+								<div className="mt-1 font-mono text-xs text-zinc-400">
+									Tab moves, page loads, and actions
+								</div>
+							</div>
+							<div className="border-hard bg-white p-4 shadow-hard-sm">
+								<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+									Browsing stretches
+								</div>
+								<div className="mt-2 text-3xl font-bold tabular-nums">
 									{derived ? rangeSessions.length.toLocaleString() : "—"}
 								</div>
-							</div>
-							<div className="border-hard shadow-hard-sm p-4">
-								<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-									Active time
-								</div>
-								<div className="font-bold text-2xl">
-									{derived ? formatDuration(activeTimeMs) : "—"}
+								<div className="mt-1 font-mono text-xs text-muted-foreground">
+									{derived && rangeSessions.length > 0
+										? `${formatDuration(activeTimeMs / rangeSessions.length)} average span`
+										: "A stretch starts after you browse"}
 								</div>
 							</div>
-							<div className="border-hard shadow-hard-sm p-4">
-								<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-									Top site
+							<div className="border-hard bg-orange-400 p-4 shadow-hard-sm">
+								<div className="font-mono text-xs uppercase tracking-wider">
+									Times you changed tabs
 								</div>
-								<div className="font-bold text-xl break-all">
+								<div className="mt-2 text-3xl font-bold tabular-nums">
+									{tabSwitches.toLocaleString()}
+								</div>
+								<div className="mt-1 font-mono text-xs">
+									{rangeSessions.length > 0
+										? `${(tabSwitches / rangeSessions.length).toFixed(1)} per stretch`
+										: "No tab changes yet"}
+								</div>
+							</div>
+							<div className="border-hard bg-cyan-300 p-4 shadow-hard-sm">
+								<div className="font-mono text-xs uppercase tracking-wider">
+									Most visited site
+								</div>
+								<div className="mt-2 break-all text-xl font-bold">
 									{derived ? (topSite ?? "—") : "—"}
+								</div>
+								<div className="mt-1 font-mono text-xs">
+									Site you returned to most
 								</div>
 							</div>
 						</div>
 
-						<Panel
-							title={
-								range === "today"
-									? "Your activity today"
-									: `Your activity (${RANGES.find((r) => r.id === range)?.label})`
-							}
-						>
-							{activityDef ? (
-								<Chart
-									className="ts-chart-host w-full"
-									definition={activityDef}
-									ariaLabel="Browser activity over the last 24 hours"
-									height={220}
-								/>
-							) : (
-								<Empty text="No activity yet — browse with the extension connected." />
-							)}
-						</Panel>
-
-						<div className="grid md:grid-cols-2 gap-3 mt-6">
-							<Panel title="What you did most">
-								{eventMix.every((m) => m.count === 0) ? (
-									<Empty text="Nothing recorded yet." />
-								) : (
-									<div className="space-y-2">
-										{eventMix.slice(0, 6).map((m) => (
-											<div
-												key={m.label}
-												className="flex items-center gap-2 font-mono text-xs"
-											>
-												<span className="flex-1 text-muted-foreground">
-													{m.label}
-												</span>
-												<div
-													className="h-3 border-hard bg-lime"
-													style={{
-														width: `${Math.max(4, (m.count / (eventMix[0]?.count ?? 1)) * 100)}%`,
-													}}
-												/>
-												<span className="w-16 text-right font-bold">
-													{m.count.toLocaleString()}
-												</span>
-											</div>
-										))}
+						<div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
+							<div className="border-hard bg-zinc-100 p-4 shadow-hard-sm">
+								<div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+									<div>
+										<h3 className="text-xl font-bold">
+											When your browser got busy
+										</h3>
+										<p className="font-mono text-xs text-muted-foreground">
+											Taller peaks mean more things happening in your browser.
+										</p>
 									</div>
+									<span className="border-hard bg-white px-2 py-1 font-mono text-xs">
+										{busiestMoment
+											? `Busiest: ${busiestMoment.label} (${busiestMoment.events})`
+											: "Waiting for activity"}
+									</span>
+								</div>
+								{activityDef ? (
+									<Chart
+										className="ts-chart-host w-full"
+										definition={activityDef}
+										ariaLabel="When browser activity was busiest"
+										ariaDescription="Each point shows how many browser moments Tabot recorded in that hour or day. Taller peaks mean more activity."
+										height={250}
+									/>
+								) : (
+									<Empty text="No activity yet — browse with the extension connected." />
 								)}
-							</Panel>
-							<Panel title="Top sites">
+							</div>
+							<div className="border-hard bg-pink-300 p-4 shadow-hard-sm">
+								<h3 className="text-xl font-bold">
+									How each browsing stretch felt
+								</h3>
+								<p className="mb-3 font-mono text-xs">
+									Each bubble is one stretch of browsing. Read it left to right,
+									then bottom to top.
+								</p>
+								{focusDef ? (
+									<Chart
+										className="ts-chart-host w-full"
+										definition={focusDef}
+										ariaLabel="How browsing stretches compare"
+										ariaDescription="Each bubble is one browsing stretch. Bubbles farther right had more tab changes. Bubbles higher up had more clicks, scrolling, or typing. Bigger bubbles contain more activity."
+										height={250}
+									/>
+								) : (
+									<Empty text="Browse for a while to compare your stretches." />
+								)}
+								<div className="mt-2 flex justify-between font-mono text-[10px] uppercase tracking-wider">
+									<span>More tab changes →</span>
+									<span>More hands-on activity ↑</span>
+								</div>
+							</div>
+						</div>
+
+						<div className="mt-6 grid gap-3 md:grid-cols-2">
+							<div className="border-hard bg-white p-4 shadow-hard-sm">
+								<h3 className="text-xl font-bold">What you did most</h3>
+								<p className="mb-3 font-mono text-xs text-muted-foreground">
+									Your browser actions, grouped by type
+								</p>
+								{eventMixDef ? (
+									<div className="grid grid-cols-[140px_1fr] items-center gap-3 sm:grid-cols-[180px_1fr]">
+										<Chart
+											className="ts-chart-host w-full"
+											definition={eventMixDef}
+											ariaLabel="Browser activity mix"
+											ariaDescription="Proportional breakdown of recorded browser signal types."
+											height={180}
+										/>
+										<div className="space-y-2">
+											{eventMix.slice(0, 5).map((item, index) => (
+												<div
+													key={item.label}
+													className="flex items-center gap-2 font-mono text-xs"
+												>
+													<span
+														className="h-3 w-3 border-hard"
+														style={{ backgroundColor: NEON[index] }}
+													/>
+													<span className="min-w-0 flex-1 truncate">
+														{item.label}
+													</span>
+													<span className="font-bold tabular-nums">
+														{item.count.toLocaleString()}
+													</span>
+												</div>
+											))}
+										</div>
+									</div>
+								) : (
+									<Empty text="Nothing recorded yet." />
+								)}
+							</div>
+							<div className="border-hard bg-yellow-200 p-4 shadow-hard-sm">
+								<h3 className="text-xl font-bold">
+									Sites you kept returning to
+								</h3>
+								<p className="mb-3 font-mono text-xs">
+									A longer bar means you opened or returned to that site more
+									often.
+								</p>
 								{sitesDef ? (
 									<Chart
 										className="ts-chart-host w-full"
 										definition={sitesDef}
-										ariaLabel="Most visited sites"
-										height={220}
+										ariaLabel="Sites returned to most often"
+										ariaDescription="Sites ranked by how often you opened them or returned to their tabs."
+										height={Math.max(220, siteData.length * 36 + 48)}
 									/>
 								) : (
 									<Empty text="No sites recorded yet." />
 								)}
-							</Panel>
+							</div>
 						</div>
 
 						<div className="flex gap-3 mt-6">

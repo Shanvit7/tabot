@@ -25,7 +25,13 @@ const chromeSend = (): ChromeSend | null => {
 	return g.chrome?.runtime?.sendMessage ?? null;
 };
 
+const configuredExtensionId = import.meta.env.VITE_TABOT_EXTENSION_ID?.trim();
+export const allowsManualExtensionId =
+	import.meta.env.VITE_TABOT_SHOW_EXTENSION_ID_INPUT === "true";
+
 const getExtId = (): string | undefined => {
+	if (configuredExtensionId) return configuredExtensionId;
+	if (!allowsManualExtensionId) return undefined;
 	try {
 		return localStorage.getItem("tabot_extension_id") || undefined;
 	} catch {
@@ -202,7 +208,7 @@ export const buildExportJsonl = (d: Derived): string => {
 			format: "tabot-export",
 			version: 1,
 			exportedAt: new Date().toISOString(),
-			source: "tabot-web@0.0.1",
+			source: "tabot-web@0.1.0",
 			telemetrySchemaVersion: 1,
 			derivationSchemaVersion: 8,
 			graph: {

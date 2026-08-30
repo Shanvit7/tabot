@@ -36,6 +36,7 @@ jobs:
         run: pnpm --filter web build
         env:
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+          VITE_TABOT_EXTENSION_ID: ${{ vars.TABOT_EXTENSION_ID }}
 
       - name: Prepare Pages artifact
         run: |

@@ -3,14 +3,14 @@
 // Run: node --import ./resolve-hook.mjs src/meaningful-events.check.ts
 
 import assert from "node:assert/strict";
-import type { StoredTabEvent } from "./db";
-import { logger } from "./logger";
 import {
 	type ActivityRef,
 	activityRef,
 	deriveMeaningfulEvents,
 	deriveTransitions,
-} from "./meaningful-events";
+} from "../activities/meaningful-events";
+import type { StoredTabEvent } from "../events/db";
+import { logger } from "../lib/logger";
 
 const T0 = 1_700_000_000_000;
 
