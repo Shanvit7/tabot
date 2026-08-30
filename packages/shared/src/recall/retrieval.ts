@@ -2,10 +2,18 @@
 // Phase 5 — Memories → Retrieval (docs/tech.md)
 // Query primitives + composites over the derived layer. No LLM, no persistence.
 
-import type { BrowserContext, ContextDomain } from "./contexts";
-import { getContextById, getContexts, getRecentContexts } from "./contexts";
-import type { TabotDatabase } from "./db";
-import { getMemories, getMemoriesBySignature, type Memory } from "./memories";
+import type { BrowserContext, ContextDomain } from "../contexts/contexts";
+import {
+	getContextById,
+	getContexts,
+	getRecentContexts,
+} from "../contexts/contexts";
+import type { TabotDatabase } from "../events/db";
+import {
+	getMemories,
+	getMemoriesBySignature,
+	type Memory,
+} from "../memories/memories";
 
 // --- Result types (tech.md §4.3, §5) ---
 

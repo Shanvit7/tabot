@@ -1,8 +1,8 @@
 {
 	"name": "extension",
 	"displayName": "Tabot",
-	"description": "Browser activity event pipeline",
-	"version": "0.0.1",
+	"description": "Private, local browser activity timeline. Thinking across tabs.",
+	"version": "0.1.0",
 	"private": true,
 	"scripts": {
 		"dev": "plasmo dev",
@@ -32,7 +32,7 @@
 		"externally_connectable": {
 			"matches": [
 				"http://localhost:3000/*",
-				"https://tabot.example/*"
+				"https://shanvit7.github.io/*"
 			]
 		}
 	}

@@ -3,9 +3,9 @@
 // Run: node packages/shared/src/sessions.check.ts  (Node 24+ strips types natively)
 
 import assert from "node:assert/strict";
-import type { StoredTabEvent } from "./db.ts";
-import { logger } from "./logger.ts";
-import { sessionize } from "./sessions.ts";
+import type { StoredTabEvent } from "../events/db.ts";
+import { logger } from "../lib/logger.ts";
+import { sessionize } from "../sessions/sessions.ts";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;

@@ -4,9 +4,9 @@
 // Run: node --import ./resolve-hook.mjs src/retrieval.check.ts
 
 import assert from "node:assert/strict";
-import type { BrowserContext, ContextDomain } from "./contexts.ts";
-import { logger } from "./logger.ts";
-import { buildMemories } from "./memories.ts";
+import type { BrowserContext, ContextDomain } from "../contexts/contexts.ts";
+import { logger } from "../lib/logger.ts";
+import { buildMemories } from "../memories/memories.ts";
 import {
 	annotateTimelineCore,
 	contextSignature,
@@ -14,7 +14,7 @@ import {
 	findSimilarMemoriesCore,
 	jaccardIndex,
 	summarizeContextCore,
-} from "./retrieval.ts";
+} from "../recall/retrieval.ts";
 
 const NOW = 1_700_000_000_000; // fixed reference
 const DAY = 24 * 60 * 60 * 1000;

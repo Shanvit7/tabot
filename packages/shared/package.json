@@ -1,6 +1,6 @@
 {
 	"name": "@tabot/shared",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"private": true,
 	"type": "module",
 	"main": "./src/index.ts",
@@ -9,16 +9,16 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"check:sessions": "node src/sessions.check.ts",
-		"check:contexts": "node --import ./resolve-hook.mjs src/contexts.check.ts",
-		"check:memories": "node --import ./resolve-hook.mjs src/memories.check.ts",
-		"check:retrieval": "node --import ./resolve-hook.mjs src/retrieval.check.ts",
-		"check:liveContext": "node --import ./resolve-hook.mjs src/live-context.check.ts",
-		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/meaningful-events.check.ts",
-		"check:pipeline": "node --import ./resolve-hook.mjs src/pipeline.check.ts",
-		"check:activityGraph": "node --import ./resolve-hook.mjs src/activity-graph.check.ts",
-		"check:stabilization": "node --import ./resolve-hook.mjs src/stabilization.check.ts",
-		"check:v5regression": "node --import ./resolve-hook.mjs src/v5regression.check.ts"
+		"check:sessions": "node src/checks/sessions.check.ts",
+		"check:contexts": "node --import ./resolve-hook.mjs src/checks/contexts.check.ts",
+		"check:memories": "node --import ./resolve-hook.mjs src/checks/memories.check.ts",
+		"check:retrieval": "node --import ./resolve-hook.mjs src/checks/retrieval.check.ts",
+		"check:liveContext": "node --import ./resolve-hook.mjs src/checks/live-context.check.ts",
+		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/checks/meaningful-events.check.ts",
+		"check:pipeline": "node --import ./resolve-hook.mjs src/checks/pipeline.check.ts",
+		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
+		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
+		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts"
 	},
 	"dependencies": {
 		"dexie": "^4.4.5",

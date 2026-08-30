@@ -1,3 +1,4 @@
+import logo from "data-base64:~assets/icon.png";
 import type { StatsSnapshot } from "@tabot/shared";
 import { createEmptyStats } from "@tabot/shared";
 import { useEffect, useState } from "react";
@@ -5,25 +6,15 @@ import { useEffect, useState } from "react";
 const theme = {
 	lime: "#BFFF00",
 	black: "#000000",
-	white: "#ffffff",
+	white: "#FFFFFF",
+	orange: "#FF6B2C",
+	pink: "#FF8FD8",
 	border: "2px solid #000000",
 	shadow: "4px 4px 0px #000000",
+	shadowSmall: "2px 2px 0px #000000",
 	font: "'IBM Plex Sans', sans-serif",
 	mono: "'IBM Plex Mono', monospace",
 } as const;
-
-const ROWS: Array<{ key: keyof StatsSnapshot; label: string }> = [
-	{ key: "tabCreated", label: "TAB_CREATED" },
-	{ key: "tabActivated", label: "TAB_ACTIVATED" },
-	{ key: "tabUpdated", label: "TAB_UPDATED" },
-	{ key: "tabRemoved", label: "TAB_REMOVED" },
-	{ key: "navigation", label: "NAVIGATION" },
-	{ key: "pageVisible", label: "PAGE_VISIBLE" },
-	{ key: "pageHidden", label: "PAGE_HIDDEN" },
-	{ key: "scroll", label: "SCROLL" },
-	{ key: "click", label: "CLICK" },
-	{ key: "keyActivity", label: "KEY_ACTIVITY" },
-];
 
 const fetchStatsHelper = (
 	setStats: React.Dispatch<React.SetStateAction<StatsSnapshot>>,
@@ -49,43 +40,65 @@ const IndexPopup = () => {
 		createEmptyStats(10_000),
 	);
 	const [dexieCount, setDexieCount] = useState<number | null>(null);
+	const [trackingEnabled, setTrackingEnabled] = useState(true);
 
 	useEffect(() => {
+		chrome.runtime.sendMessage(
+			{ type: "GET_TRACKING" },
+			(response: { enabled?: boolean } | undefined) => {
+				if (typeof response?.enabled === "boolean")
+					setTrackingEnabled(response.enabled);
+			},
+		);
 		const run = () => fetchStatsHelper(setStats, setDexieCount);
 		run();
 		const id = setInterval(run, 1000);
 		return () => clearInterval(id);
 	}, []);
 
-	const formatTime = (ts: number) => {
-		if (!ts) return "never";
-		const diff = Math.round((Date.now() - ts) / 1000);
-		if (diff < 2) return "just now";
-		if (diff < 60) return `${diff}s ago`;
-		return `${Math.round(diff / 60)}m ago`;
+	const toggleTracking = () => {
+		const enabled = !trackingEnabled;
+		setTrackingEnabled(enabled);
+		chrome.runtime.sendMessage(
+			{ type: "SET_TRACKING", enabled },
+			(response: { enabled?: boolean } | undefined) => {
+				if (typeof response?.enabled === "boolean")
+					setTrackingEnabled(response.enabled);
+			},
+		);
 	};
 
+	const formatTime = (ts: number) => {
+		if (!ts) return "Waiting for your first moment";
+		const diff = Math.round((Date.now() - ts) / 1000);
+		if (diff < 2) return "Picking up your activity now";
+		if (diff < 60) return `Last moment ${diff}s ago`;
+		if (diff < 3600) return `Last moment ${Math.round(diff / 60)}m ago`;
+		return `Last moment ${Math.round(diff / 3600)}h ago`;
+	};
+
+	const interactions = stats.click + stats.keyActivity + stats.scroll;
+	const totalSaved = dexieCount ?? stats.totalEvents;
 	const card: React.CSSProperties = {
 		background: theme.white,
 		border: theme.border,
-		boxShadow: theme.shadow,
-		padding: 12,
-		marginBottom: 12,
+		boxShadow: theme.shadowSmall,
+		padding: "11px 12px",
 	};
-
 	const label: React.CSSProperties = {
 		fontFamily: theme.mono,
-		fontSize: 11,
+		fontSize: 10,
+		fontWeight: 700,
+		letterSpacing: "0.07em",
 		textTransform: "uppercase",
-		letterSpacing: "0.05em",
-		color: "#666",
 	};
 
 	return (
 		<div
 			style={{
 				width: 360,
-				padding: 16,
+				boxSizing: "border-box",
+				padding: 14,
 				fontFamily: theme.font,
 				background: theme.lime,
 				color: theme.black,
@@ -96,136 +109,146 @@ const IndexPopup = () => {
 				style={{
 					display: "flex",
 					alignItems: "center",
-					gap: 12,
-					marginBottom: 16,
+					justifyContent: "space-between",
+					marginBottom: 15,
 				}}
 			>
-				<img
-					src={chrome.runtime.getURL("icon.png")}
-					alt="Tabot"
-					style={{ width: 40, height: 40, border: theme.border }}
-				/>
-				<h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Tabot</h1>
-			</div>
-
-			<div style={card}>
-				<div style={label}>Events captured</div>
-				<div style={{ fontSize: 24, fontWeight: 700 }}>
-					{stats.totalEvents.toLocaleString()}
-				</div>
-			</div>
-
-			<div style={card}>
-				<div style={label}>Events processed</div>
-				<div style={{ fontSize: 24, fontWeight: 700 }}>
-					{stats.eventsProcessed.toLocaleString()}
-				</div>
-			</div>
-
-			<div style={card}>
-				<div style={label}>Worker status</div>
-				<div
-					style={{
-						fontSize: 16,
-						fontWeight: 700,
-						display: "flex",
-						alignItems: "center",
-						gap: 8,
-					}}
-				>
-					<span
+				<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+					<img
+						src={logo}
+						alt="Tabot"
 						style={{
-							width: 10,
-							height: 10,
-							background: theme.lime,
+							width: 38,
+							height: 38,
 							border: theme.border,
-							display: "inline-block",
+							background: theme.white,
+							objectFit: "cover",
 						}}
 					/>
-					Running
+					<div>
+						<div style={{ fontSize: 21, fontWeight: 800, lineHeight: 1 }}>
+							Tabot
+						</div>
+						<div style={{ fontFamily: theme.mono, fontSize: 11, marginTop: 4 }}>
+							Thinking across tabs.
+						</div>
+					</div>
 				</div>
-			</div>
-
-			<div style={card}>
-				<div style={label}>Last event</div>
-				<div style={{ fontSize: 16, fontWeight: 700 }}>
-					{formatTime(stats.lastProcessedAt)}
-				</div>
-			</div>
-
-			<div style={{ ...card, padding: 10 }}>
-				<div style={label}>Breakdown</div>
-				<div
+				<button
+					onClick={toggleTracking}
+					type="button"
+					aria-pressed={trackingEnabled}
 					style={{
-						display: "grid",
-						gridTemplateColumns: "1fr 1fr",
-						gap: "4px 12px",
-						marginTop: 8,
+						background: trackingEnabled ? theme.black : theme.white,
+						color: trackingEnabled ? theme.lime : theme.black,
+						border: theme.border,
+						boxShadow: theme.shadowSmall,
+						cursor: "pointer",
 						fontFamily: theme.mono,
-						fontSize: 11,
+						fontSize: 10,
+						fontWeight: 700,
+						padding: "5px 7px",
 					}}
 				>
-					{ROWS.map((r) => (
-						<div
-							key={r.key}
-							style={{
-								display: "flex",
-								justifyContent: "space-between",
-								gap: 8,
-							}}
-						>
-							<span style={{ color: "#333" }}>{r.label}</span>
-							<span style={{ fontWeight: 700 }}>
-								{(stats[r.key] as number).toLocaleString()}
-							</span>
-						</div>
-					))}
+					{trackingEnabled ? "PAUSE" : "RESUME"}
+				</button>
+			</div>
+
+			<div
+				style={{
+					background: theme.black,
+					color: theme.white,
+					border: theme.border,
+					boxShadow: theme.shadow,
+					padding: "15px 16px 14px",
+				}}
+			>
+				<div style={{ ...label, color: theme.lime }}>
+					{trackingEnabled ? "Your browser, in motion" : "Tracking is paused"}
+				</div>
+				<div
+					style={{ fontSize: 39, fontWeight: 800, lineHeight: 1, marginTop: 7 }}
+				>
+					{totalSaved.toLocaleString()}
+				</div>
+				<div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>
+					moments saved privately
+				</div>
+				<div style={{ color: theme.lime, fontSize: 11, marginTop: 13 }}>
+					{trackingEnabled
+						? formatTime(stats.lastProcessedAt)
+						: "No new moments will be saved"}
 				</div>
 			</div>
 
 			<div
 				style={{
-					...card,
 					display: "grid",
-					gridTemplateColumns: "1fr 1fr 1fr",
+					gridTemplateColumns: "1fr 1fr",
 					gap: 8,
-					textAlign: "center",
+					marginTop: 13,
 				}}
 			>
-				<div>
-					<div style={label}>Dropped</div>
-					<div style={{ fontWeight: 700, fontSize: 16 }}>
-						{stats.droppedEvents.toLocaleString()}
-					</div>
-				</div>
-				<div>
-					<div style={label}>Occupancy</div>
-					<div style={{ fontWeight: 700, fontSize: 16 }}>
-						{stats.bufferOccupancy}/{stats.bufferCapacity}
-					</div>
-				</div>
-				<div>
-					<div style={label}>Peak</div>
-					<div style={{ fontWeight: 700, fontSize: 16 }}>
-						{stats.peakBufferOccupancy.toLocaleString()}
-					</div>
-				</div>
-				{dexieCount !== null && (
+				<div style={card}>
+					<div style={label}>New pages</div>
 					<div
 						style={{
-							gridColumn: "1 / -1",
-							marginTop: 4,
-							fontFamily: theme.mono,
-							fontSize: 11,
-							color: "#333",
+							fontSize: 25,
+							fontWeight: 800,
+							lineHeight: 1.1,
+							marginTop: 5,
 						}}
 					>
-						Dexie (IndexedDB) persisted:{" "}
-						<span style={{ fontWeight: 700 }}>
-							{dexieCount.toLocaleString()}
-						</span>
+						{stats.tabCreated.toLocaleString()}
 					</div>
-				)}
+					<div style={{ fontSize: 11, marginTop: 4 }}>you opened</div>
+				</div>
+				<div style={card}>
+					<div style={label}>Tab changes</div>
+					<div
+						style={{
+							fontSize: 25,
+							fontWeight: 800,
+							lineHeight: 1.1,
+							marginTop: 5,
+						}}
+					>
+						{stats.tabActivated.toLocaleString()}
+					</div>
+					<div style={{ fontSize: 11, marginTop: 4 }}>along way</div>
+				</div>
+				<div
+					style={{
+						...card,
+						gridColumn: "1 / -1",
+						background: theme.orange,
+						display: "flex",
+						alignItems: "baseline",
+						gap: 8,
+					}}
+				>
+					<span style={{ fontSize: 26, fontWeight: 800 }}>
+						{interactions.toLocaleString()}
+					</span>
+					<span style={{ fontSize: 12, fontWeight: 700 }}>
+						ways you interacted with pages
+					</span>
+				</div>
+			</div>
+
+			<div
+				style={{
+					marginTop: 13,
+					border: theme.border,
+					background: stats.droppedEvents > 0 ? theme.pink : theme.white,
+					padding: "8px 10px",
+					fontSize: 11,
+					lineHeight: 1.35,
+				}}
+			>
+				{stats.droppedEvents > 0
+					? `A few moments could not be saved (${stats.droppedEvents.toLocaleString()}).`
+					: "Everything stays on this device. Nothing is sent anywhere."}
 			</div>
 		</div>
 	);

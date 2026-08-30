@@ -15,9 +15,9 @@ import {
 	buildActivityAnchors,
 	buildActivityGraph,
 	extractActivityEpisodes,
-} from "./activity-graph.ts";
-import { logger } from "./logger.ts";
-import { sessionize } from "./sessions.ts";
+} from "../activities/activity-graph.ts";
+import { logger } from "../lib/logger.ts";
+import { sessionize } from "../sessions/sessions.ts";
 
 const MIN = 60_000;
 const T0 = 1_700_000_000_000;

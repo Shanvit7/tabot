@@ -9,8 +9,8 @@
 // tokenized origins + domain overlap + transition overlap + entry/exit match),
 // and recurrence requires separate temporal occurrences.
 
-import { type BrowserContext, getRecentContexts } from "./contexts";
-import type { TabotDatabase } from "./db";
+import { type BrowserContext, getRecentContexts } from "../contexts/contexts";
+import type { TabotDatabase } from "../events/db";
 
 // --- Behavioral fingerprint (§15) ---
 

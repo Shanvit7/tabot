@@ -2,8 +2,8 @@
 // Phase 2 Layer 1 — Events → Sessions (docs/tech.md)
 // Pure derivation layer: raw events in, Session[] out. No persistence, no LLM.
 
-import type { StoredTabEvent, TabotDatabase } from "./db";
-import type { TabEventType } from "./events";
+import type { StoredTabEvent, TabotDatabase } from "../events/db";
+import type { TabEventType } from "../events/events";
 
 export interface TabParticipation {
 	tabId: number;

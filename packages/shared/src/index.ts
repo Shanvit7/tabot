@@ -1,4 +1,22 @@
 export {
+	type ActivityRef,
+	type ActivityTransition,
+	activityRef,
+	type DerivedEvent,
+	deriveMeaningfulEvents,
+	deriveTransitions,
+} from "./activities/meaningful-events";
+export {
+	type BrowserContext,
+	buildContexts,
+	CONTEXT_THRESHOLDS,
+	type ContextDomain,
+	type Excursion,
+	getContextById,
+	getContexts,
+	getRecentContexts,
+} from "./contexts/contexts";
+export {
 	advanceReadIndex,
 	attachBuffer,
 	availableCount,
@@ -18,17 +36,7 @@ export {
 	READ_INDEX,
 	reserveSlot,
 	WRITE_INDEX,
-} from "./buffer";
-export {
-	type BrowserContext,
-	buildContexts,
-	CONTEXT_THRESHOLDS,
-	type ContextDomain,
-	type Excursion,
-	getContextById,
-	getContexts,
-	getRecentContexts,
-} from "./contexts";
+} from "./events/buffer";
 export {
 	bulkInsertEvents,
 	countEvents,
@@ -36,45 +44,21 @@ export {
 	getAllEvents,
 	type StoredTabEvent,
 	storedTabEventSchema,
-} from "./db";
+} from "./events/db";
 export {
 	EVENT_TYPES,
 	type TabEvent,
 	type TabEventType,
 	ValueToEventType,
-} from "./events";
-export {
-	buildLiveContext,
-	getCurrentBrowserContext,
-	getLiveInteractionIntensity,
-	getLiveNavigationSequence,
-	type LiveBrowserContext,
-} from "./live-context";
-export { logger } from "./logger";
-export {
-	type ActivityRef,
-	type ActivityTransition,
-	activityRef,
-	type DerivedEvent,
-	deriveMeaningfulEvents,
-	deriveTransitions,
-} from "./meaningful-events";
-export {
-	buildMemories,
-	getMemories,
-	getMemoriesBySignature,
-	getMemoryById,
-	MEMORY_THRESHOLDS,
-	type Memory,
-	type MemoryDomain,
-} from "./memories";
+} from "./events/events";
 export {
 	getMeta,
 	removeMeta,
 	type TabMeta,
 	tabMeta,
 	updateMeta,
-} from "./metadata";
+} from "./events/metadata";
+export { logger } from "./lib/logger";
 export {
 	type BufferReadyMessage,
 	createEmptyStats,
@@ -83,7 +67,23 @@ export {
 	type PipelineStats,
 	type StatsSnapshot,
 	type StatsUpdateMessage,
-} from "./protocol";
+} from "./lib/protocol";
+export {
+	buildMemories,
+	getMemories,
+	getMemoriesBySignature,
+	getMemoryById,
+	MEMORY_THRESHOLDS,
+	type Memory,
+	type MemoryDomain,
+} from "./memories/memories";
+export {
+	buildLiveContext,
+	getCurrentBrowserContext,
+	getLiveInteractionIntensity,
+	getLiveNavigationSequence,
+	type LiveBrowserContext,
+} from "./recall/live-context";
 export {
 	annotateTimelineCore,
 	type ContextSummary,
@@ -114,7 +114,7 @@ export {
 	summarizeContext,
 	summarizeContextCore,
 	type TimelineEntry,
-} from "./retrieval";
+} from "./recall/retrieval";
 export {
 	type DomainParticipation,
 	getRecentSessions,
@@ -124,4 +124,4 @@ export {
 	type Session,
 	sessionize,
 	type TabParticipation,
-} from "./sessions";
+} from "./sessions/sessions";

@@ -4,14 +4,17 @@
 // Run: node packages/shared/src/contexts.check.ts  (Node 24+ strips types natively)
 
 import assert from "node:assert/strict";
+import type {
+	ActivityRef,
+	ActivityTransition,
+} from "../activities/meaningful-events.ts";
 import {
 	type BrowserContext,
 	buildContexts,
 	CONTEXT_THRESHOLDS,
-} from "./contexts.ts";
-import { logger } from "./logger.ts";
-import type { ActivityRef, ActivityTransition } from "./meaningful-events.ts";
-import type { Session } from "./sessions.ts";
+} from "../contexts/contexts.ts";
+import { logger } from "../lib/logger.ts";
+import type { Session } from "../sessions/sessions.ts";
 
 const MIN = 60_000;
 const T0 = Date.now() - 24 * 60 * MIN;
