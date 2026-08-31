@@ -9,13 +9,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Empty, Panel, TabBar } from "~/components/ui/dashboard-panels";
 import {
-	allowsManualExtensionId,
 	buildExportCsv,
 	buildExportJsonl,
 	derive,
 	downloadFile,
 	fetchEvents,
 	fetchStats,
+	filterDerived,
 	formatAgo,
 	formatDuration,
 } from "~/lib/dashboard-data";
@@ -46,6 +46,19 @@ const RANGES = [
 	{ id: "all", label: "All time" },
 ] as const;
 type RangeId = (typeof RANGES)[number]["id"];
+
+// Local "YYYY-MM-DD" (toISOString is UTC — would shift the day in negative offsets)
+const fmtLocalDay = (d: Date): string =>
+	`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+// Export-period quick presets (same labels as overview ranges)
+const EXPORT_PRESETS = [
+	{ id: "all", label: "All time" },
+	{ id: "7d", label: "Last 7 days" },
+	{ id: "30d", label: "Last 30 days" },
+	{ id: "custom", label: "Custom" },
+] as const;
+type ExportPresetId = (typeof EXPORT_PRESETS)[number]["id"];
 
 const rangeStart = (r: RangeId): number => {
 	if (r === "all") return 0;
@@ -334,15 +347,13 @@ const Dashboard = () => {
 	const [stats, setStats] = useState<StatsSnapshot | null>(null);
 	const [events, setEvents] = useState<StoredTabEvent[] | null>(null);
 	const [range, setRange] = useState<RangeId>("today");
-	const [extId, setExtId] = useState("");
 	const [exporting, setExporting] = useState<"jsonl" | "csv" | null>(null);
+	// Export period filter: from/to as "YYYY-MM-DD" (inclusive); empty = unbounded.
+	const [expFrom, setExpFrom] = useState("");
+	const [expTo, setExpTo] = useState("");
+	const [expPreset, setExpPreset] = useState<ExportPresetId>("all");
 
 	useEffect(() => {
-		if (allowsManualExtensionId) {
-			try {
-				setExtId(localStorage.getItem("tabot_extension_id") || "");
-			} catch {}
-		}
 		let alive = true;
 
 		const pollStats = async () => {
@@ -368,6 +379,32 @@ const Dashboard = () => {
 
 	const hasExtension = stats !== null;
 	const derived = useMemo(() => (events ? derive(events) : null), [events]);
+	// Full filtered data for export (overlap semantics on the selected period)
+	const exportData = useMemo(() => {
+		if (!derived) return null;
+		const dayBounds = (d: string): number | undefined => {
+			if (!d) return undefined;
+			const t = new Date(`${d}T00:00:00`).getTime();
+			return Number.isNaN(t) ? undefined : t;
+		};
+		const from = dayBounds(expFrom);
+		const toRaw = dayBounds(expTo);
+		const to = toRaw === undefined ? undefined : toRaw + 86_400_000 - 1;
+		return filterDerived(derived, from, to);
+	}, [derived, expFrom, expTo]);
+	// Live preview counts for the selected period
+	const exportCounts = useMemo(
+		() =>
+			exportData
+				? {
+						events: exportData.events.length,
+						sessions: exportData.sessions.length,
+						contexts: exportData.contexts.length,
+						memories: exportData.memories.length,
+					}
+				: { events: 0, sessions: 0, contexts: 0, memories: 0 },
+		[exportData],
+	);
 	const lastSessions = derived?.sessions.slice(-10).reverse() ?? [];
 	const lastContexts = derived?.contexts.slice(-10).reverse() ?? [];
 	const lastMemories = derived?.memories ?? [];
@@ -467,19 +504,19 @@ const Dashboard = () => {
 	);
 
 	const handleExport = (format: "jsonl" | "csv") => {
-		if (!derived) return;
+		if (!derived || !exportData) return;
 		setExporting(format);
 		const date = new Date().toISOString().slice(0, 10);
 		if (format === "jsonl") {
 			downloadFile(
 				`tabot-export-${date}.jsonl`,
-				buildExportJsonl(derived),
+				buildExportJsonl(exportData),
 				"application/x-ndjson",
 			);
 		} else {
 			downloadFile(
 				`tabot-export-${date}.csv`,
-				buildExportCsv(derived),
+				buildExportCsv(exportData),
 				"text/csv",
 			);
 		}
@@ -509,32 +546,12 @@ const Dashboard = () => {
 					</div>
 				</div>
 
-				{!hasExtension && allowsManualExtensionId && (
+				{!hasExtension && (
 					<div className="border-hard bg-lime/20 p-4 mb-6 font-mono text-xs leading-relaxed">
 						<div className="font-bold uppercase tracking-wider mb-1">
 							Extension not detected
 						</div>
-						Local development only: load the unpacked extension, then paste its
-						ID.
-						<div className="mt-3 flex gap-2">
-							<input
-								value={extId}
-								onChange={(e) => setExtId(e.target.value)}
-								placeholder="Extension ID"
-								aria-label="Extension ID"
-								className="flex-1 border-hard px-3 py-2 font-mono text-xs bg-white"
-							/>
-							<Button
-								size="sm"
-								onClick={() => {
-									try {
-										localStorage.setItem("tabot_extension_id", extId.trim());
-									} catch {}
-								}}
-							>
-								Save
-							</Button>
-						</div>
+						Load the unpacked extension and reload this page.
 					</div>
 				)}
 
@@ -992,6 +1009,75 @@ const Dashboard = () => {
 									(self-describing, reproducible); CSV is a flat convenience
 									view of sessions only and is <strong>not canonical</strong>.
 								</div>
+
+								{/* Period filter — neobrutal themed, native date inputs */}
+								<div className="border-2 border-black bg-white p-4 space-y-3">
+									<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+										Export period
+									</div>
+									<div className="flex flex-wrap gap-2">
+										{EXPORT_PRESETS.map((p) => (
+											<button
+												key={p.id}
+												type="button"
+												onClick={() => {
+													setExpPreset(p.id);
+													if (p.id === "all") {
+														setExpFrom("");
+														setExpTo("");
+													} else if (p.id === "7d" || p.id === "30d") {
+														const d = new Date();
+														d.setDate(d.getDate() - (p.id === "7d" ? 7 : 30));
+														setExpFrom(fmtLocalDay(d));
+														setExpTo("");
+													}
+												}}
+												className={`font-mono text-xs uppercase tracking-wider border-2 px-3 py-1.5 ${
+													expPreset === p.id
+														? "bg-lime text-black border-black"
+														: "bg-white text-black border-black hover:bg-lime/20"
+												}`}
+											>
+												{p.label}
+											</button>
+										))}
+									</div>
+									{expPreset === "custom" && (
+										<div className="flex flex-wrap items-center gap-3">
+											<label className="font-mono text-xs uppercase tracking-wider">
+												From
+												<input
+													type="date"
+													value={expFrom}
+													max={expTo || undefined}
+													onChange={(e) => {
+														setExpFrom(e.target.value);
+													}}
+													className="ml-2 border-2 border-black px-2 py-1 font-mono text-xs bg-white"
+												/>
+											</label>
+											<label className="font-mono text-xs uppercase tracking-wider">
+												To
+												<input
+													type="date"
+													value={expTo}
+													min={expFrom || undefined}
+													onChange={(e) => {
+														setExpTo(e.target.value);
+													}}
+													className="ml-2 border-2 border-black px-2 py-1 font-mono text-xs bg-white"
+												/>
+											</label>
+										</div>
+									)}
+									<div className="font-mono text-xs text-muted-foreground">
+										{exportCounts.events.toLocaleString()} events ·{" "}
+										{exportCounts.sessions.toLocaleString()} sessions ·{" "}
+										{exportCounts.contexts.toLocaleString()} contexts ·{" "}
+										{exportCounts.memories.toLocaleString()} memories
+									</div>
+								</div>
+
 								<div className="grid grid-cols-2 gap-3">
 									<Button
 										variant="default"
@@ -1010,10 +1096,11 @@ const Dashboard = () => {
 											: "Export CSV (non-canonical)"}
 									</Button>
 								</div>
+
 								<div className="font-mono text-xs text-muted-foreground">
-									{derived.events.length} events · {derived.sessions.length}{" "}
-									sessions · {derived.contexts.length} contexts ·{" "}
-									{derived.memories.length} memories
+									Total available: {derived.events.length} events ·{" "}
+									{derived.sessions.length} sessions · {derived.contexts.length}{" "}
+									contexts · {derived.memories.length} memories
 								</div>
 							</div>
 						)}

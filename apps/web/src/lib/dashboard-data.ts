@@ -26,19 +26,8 @@ const chromeSend = (): ChromeSend | null => {
 };
 
 const configuredExtensionId = import.meta.env.VITE_TABOT_EXTENSION_ID?.trim();
-export const allowsManualExtensionId =
-	import.meta.env.DEV ||
-	import.meta.env.VITE_TABOT_SHOW_EXTENSION_ID_INPUT === "true";
 
-const getExtId = (): string | undefined => {
-	if (configuredExtensionId) return configuredExtensionId;
-	if (!allowsManualExtensionId) return undefined;
-	try {
-		return localStorage.getItem("tabot_extension_id") || undefined;
-	} catch {
-		return undefined;
-	}
-};
+const getExtId = (): string | undefined => configuredExtensionId || undefined;
 
 const send = (
 	msg: Record<string, unknown>,
@@ -163,6 +152,37 @@ export const EXPORT_THRESHOLDS = {
 		recurrenceMinGapMs: 1800000,
 	},
 } as const;
+
+// --- Export range filter (overlap semantics) ---
+// from/to are inclusive epoch-ms bounds; undefined = unbounded.
+const overlaps = (
+	start: number,
+	end: number,
+	from?: number,
+	to?: number,
+): boolean =>
+	(from === undefined || end >= from) && (to === undefined || start <= to);
+
+export const filterDerived = (
+	d: Derived,
+	from?: number,
+	to?: number,
+): Derived => {
+	if (from === undefined && to === undefined) return d;
+	const events = d.events.filter((e) =>
+		overlaps(e.timestamp, e.timestamp, from, to),
+	);
+	const sessions = d.sessions.filter((s) =>
+		overlaps(s.startTimestamp, s.endTimestamp, from, to),
+	);
+	const contexts = d.contexts.filter((c) =>
+		overlaps(c.startTimestamp, c.endTimestamp, from, to),
+	);
+	const memories = d.memories.filter((m) =>
+		overlaps(m.startTimestamp, m.endTimestamp, from, to),
+	);
+	return { events, sessions, contexts, memories, live: d.live };
+};
 
 export const buildExportJsonl = (d: Derived): string => {
 	const eventLines = d.events.map((e) =>
