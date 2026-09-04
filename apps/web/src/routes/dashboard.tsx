@@ -1,13 +1,14 @@
 import type { StatsSnapshot, StoredTabEvent } from "@tabot/shared";
-import { areaY, barX, defineChart, dot, lineY } from "@tanstack/charts";
-import { pie, polar, radialArc } from "@tanstack/charts/polar";
-import { scaleBand } from "@tanstack/charts/scales/band";
-import { scaleLinear } from "@tanstack/charts/scales/linear";
-import { Chart, type ChartDefinition } from "@tanstack/react-charts";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
-import { Empty, Panel, TabBar } from "~/components/ui/dashboard-panels";
+import {
+	Empty,
+	Loading,
+	Panel,
+	TabBar,
+} from "~/components/ui/dashboard-panels";
+import type { HourBucket } from "~/lib/dashboard-charts";
 import {
 	buildExportCsv,
 	buildExportJsonl,
@@ -18,23 +19,14 @@ import {
 	filterDerived,
 	formatAgo,
 	formatDuration,
+	rangeStart,
 } from "~/lib/dashboard-data";
 import { TAB, type Tab } from "~/lib/dashboard-tabs";
+import type { CliTarget, WebTarget } from "~/lib/share-targets";
 
-// ─── Human labels for event types (non-technical audience) ───
-
-const EVENT_LABELS: Record<string, string> = {
-	TAB_CREATED: "Tabs opened",
-	TAB_ACTIVATED: "Tab switches",
-	TAB_UPDATED: "Tab updates",
-	TAB_REMOVED: "Tabs closed",
-	NAVIGATION: "Page visits",
-	PAGE_VISIBLE: "Returned to tab",
-	PAGE_HIDDEN: "Switched away",
-	SCROLL: "Scrolling",
-	CLICK: "Clicks",
-	KEY_ACTIVITY: "Typing",
-};
+// Lazy-loaded modules (charts + share icons) — types only, no runtime import.
+type ChartsApi = typeof import("~/lib/dashboard-charts");
+type ShareTargets = typeof import("~/lib/share-targets");
 
 // event type (SCREAMING) → StatsSnapshot key (camelCase)
 // (kept only if a future tab needs the raw breakdown)
@@ -51,294 +43,49 @@ type RangeId = (typeof RANGES)[number]["id"];
 const fmtLocalDay = (d: Date): string =>
 	`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-// Export-period quick presets (same labels as overview ranges)
+// Export-period quick presets — today first, all time last.
 const EXPORT_PRESETS = [
-	{ id: "all", label: "All time" },
+	{ id: "today", label: "Today" },
 	{ id: "7d", label: "Last 7 days" },
 	{ id: "30d", label: "Last 30 days" },
 	{ id: "custom", label: "Custom" },
+	{ id: "all", label: "All time" },
 ] as const;
 type ExportPresetId = (typeof EXPORT_PRESETS)[number]["id"];
 
-const rangeStart = (r: RangeId): number => {
-	if (r === "all") return 0;
-	const d = new Date();
-	if (r === "today") d.setHours(0, 0, 0, 0);
-	else d.setDate(d.getDate() - (r === "7d" ? 7 : 30));
-	return d.getTime();
+// ─── Chat-about-your-data targets (lazy: ~/lib/share-targets) ───
+
+const MAX_CHAT_CHARS = 300_000;
+
+// ─── Module-scope pure helpers (defined once, not per render) ───
+
+// Filenames both Download flows share.
+const exportFilename = (ext: string) =>
+	`tabot-export-${new Date().toISOString().slice(0, 10)}.${ext}`;
+
+const copyText = async (text: string): Promise<boolean> => {
+	try {
+		await navigator.clipboard.writeText(text);
+		return true;
+	} catch {
+		// Non-secure context (LAN/mobile) — fall back to a temp textarea.
+		try {
+			const el = document.createElement("textarea");
+			el.value = text;
+			el.style.position = "fixed";
+			el.style.opacity = "0";
+			document.body.appendChild(el);
+			el.select();
+			document.execCommand("copy");
+			document.body.removeChild(el);
+			return true;
+		} catch {
+			return false;
+		}
+	}
 };
 
 // ─── Tab navigation ───
-
-// ─── Chart data helpers (plain arrays, cheap to build each poll) ───
-
-interface HourBucket {
-	label: string;
-	events: number;
-}
-
-// last 24h by hour, or day buckets for longer ranges
-const buildActivityBuckets = (
-	events: StoredTabEvent[],
-	range: RangeId,
-): HourBucket[] => {
-	const from = rangeStart(range);
-	if (events.length === 0 || range === "all") return [];
-	if (range === "today") {
-		const buckets: HourBucket[] = [];
-		const start = new Date();
-		start.setHours(start.getHours() - 23, 0, 0, 0);
-		for (let i = 0; i < 24; i += 1) {
-			const d = new Date(start.getTime() + i * 3600_000);
-			buckets.push({
-				label: `${String(d.getHours()).padStart(2, "0")}:00`,
-				events: 0,
-			});
-		}
-		for (const e of events) {
-			if (e.timestamp < from) continue;
-			const idx = Math.round((e.timestamp - start.getTime()) / 3600_000);
-			if (idx >= 0 && idx < buckets.length) buckets[idx].events += 1;
-		}
-		return buckets;
-	}
-	// 7d / 30d: one bar per day
-	const days = range === "7d" ? 7 : 30;
-	const buckets: HourBucket[] = [];
-	const start = new Date();
-	start.setHours(0, 0, 0, 0);
-	start.setDate(start.getDate() - (days - 1));
-	for (let i = 0; i < days; i += 1) {
-		const d = new Date(start.getTime() + i * 86400_000);
-		buckets.push({
-			label: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`,
-			events: 0,
-		});
-	}
-	for (const e of events) {
-		if (e.timestamp < from) continue;
-		const idx = Math.floor((e.timestamp - start.getTime()) / 86400_000);
-		if (idx >= 0 && idx < buckets.length) buckets[idx].events += 1;
-	}
-	return buckets;
-};
-
-interface SiteDatum {
-	label: string;
-	visits: number;
-}
-
-// top 8 domains by NAVIGATION + TAB_ACTIVATED with a URL (hostname only)
-const buildTopSites = (
-	events: StoredTabEvent[],
-	range: RangeId,
-): SiteDatum[] => {
-	const from = rangeStart(range);
-	const counts = new Map<string, number>();
-	for (const e of events) {
-		if (e.timestamp < from) continue;
-		if (e.type !== "NAVIGATION" && e.type !== "TAB_ACTIVATED") continue;
-		if (!e.url) continue;
-		try {
-			const host = new URL(e.url).hostname.replace(/^www\./, "");
-			counts.set(host, (counts.get(host) ?? 0) + 1);
-		} catch {}
-	}
-	return [...counts.entries()]
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, 8)
-		.map(([label, visits]) => ({ label, visits }));
-};
-
-// event types → friendly names, sorted desc, filtered to range
-interface EventMixDatum {
-	label: string;
-	count: number;
-}
-
-interface FocusDatum {
-	id: string;
-	switches: number;
-	interactions: number;
-	radius: number;
-}
-
-const buildFocusMap = (
-	sessions: ReturnType<typeof derive>["sessions"],
-): FocusDatum[] =>
-	sessions.map((session) => ({
-		id: session.id,
-		switches: session.tabSwitchCount,
-		interactions: session.interactionCount,
-		radius: Math.min(12, Math.max(4, Math.sqrt(session.eventCount))),
-	}));
-
-const buildEventMix = (
-	events: StoredTabEvent[],
-	range: RangeId,
-): EventMixDatum[] => {
-	const from = rangeStart(range);
-	const counts = new Map<string, number>();
-	for (const e of events) {
-		if (e.timestamp < from) continue;
-		counts.set(e.type, (counts.get(e.type) ?? 0) + 1);
-	}
-	return [...counts.entries()]
-		.map(([type, count]) => ({
-			label: EVENT_LABELS[type] ?? type,
-			count,
-		}))
-		.sort((a, b) => b.count - a.count);
-};
-
-// ─── Chart definitions (memoized per tab so pointer focus survives) ───
-
-const NEON = ["#bfff00", "#f97316", "#06b6d4", "#ec4899", "#a78bfa", "#10b981"];
-
-const activityChart = (data: HourBucket[]): ChartDefinition<HourBucket> =>
-	defineChart({
-		marks: [
-			areaY(data, {
-				x: "label",
-				y: "events",
-				fill: "#bfff00",
-				fillOpacity: 0.7,
-			}),
-			lineY(data, {
-				x: "label",
-				y: "events",
-				stroke: "#000",
-				strokeWidth: 3,
-			}),
-			dot(data, {
-				x: "label",
-				y: "events",
-				r: 4,
-				fill: "#f97316",
-				stroke: "#000",
-				strokeWidth: 2,
-			}),
-		],
-		scales: {
-			x: {
-				scale: () => scaleBand().padding(0.2),
-				axis: { tickLabels: { fontSize: 10 } },
-			},
-			y: {
-				scale: () => scaleLinear().nice(4),
-				grid: true,
-				axis: { tickLabels: { fontSize: 10 } },
-			},
-		},
-		tooltip: false,
-		svgAnimation: true,
-		theme: {
-			foreground: "#000",
-			muted: "#666",
-			grid: "#d4d4d4",
-			palette: NEON,
-		},
-	});
-
-const sitesChart = (data: SiteDatum[]): ChartDefinition<SiteDatum> =>
-	defineChart({
-		marks: [
-			barX(data, {
-				x: "visits",
-				y: "label",
-				fill: "#f97316",
-				stroke: "#000",
-				strokeWidth: 2,
-			}),
-		],
-		scales: {
-			x: {
-				scale: () => scaleLinear().nice(4),
-				grid: true,
-				axis: { tickLabels: { fontSize: 10 } },
-			},
-			y: {
-				scale: () => scaleBand().padding(0.2),
-				axis: { tickLabels: { fontSize: 11 } },
-			},
-		},
-		tooltip: false,
-		svgAnimation: true,
-		theme: {
-			foreground: "#000",
-			muted: "#666",
-			grid: "#d4d4d4",
-			palette: NEON,
-		},
-	});
-
-const focusChart = (data: FocusDatum[]): ChartDefinition<FocusDatum> =>
-	defineChart({
-		marks: [
-			dot(data, {
-				x: "switches",
-				y: "interactions",
-				r: "radius",
-				key: "id",
-				fill: "#ec4899",
-				stroke: "#000",
-				strokeWidth: 2,
-			}),
-		],
-		scales: {
-			x: {
-				scale: () => scaleLinear().nice(4),
-				grid: true,
-				axis: { tickLabels: { fontSize: 10 } },
-			},
-			y: {
-				scale: () => scaleLinear().nice(4),
-				grid: true,
-				axis: { tickLabels: { fontSize: 10 } },
-			},
-		},
-		tooltip: false,
-		svgAnimation: true,
-		theme: {
-			foreground: "#000",
-			muted: "#666",
-			grid: "#d4d4d4",
-			palette: NEON,
-		},
-	});
-
-const eventMixChart = (
-	data: EventMixDatum[],
-): ChartDefinition<EventMixDatum> => {
-	const slices = pie(data, { value: "count" });
-
-	return defineChart({
-		marks: [
-			polar({
-				inset: 8,
-				radiusRatio: 0.84,
-				scales: { angle: null, radius: null },
-				marks: [
-					radialArc(slices, {
-						innerRadius: ({ radius }) => radius * 0.56,
-						cornerRadius: 0,
-						color: "label",
-						key: "label",
-						stroke: "#000",
-						strokeWidth: 2,
-					}),
-				],
-			}),
-		],
-		scales: { x: null, y: null },
-		color: {
-			domain: data.map((item) => item.label),
-			range: NEON,
-		},
-		tooltip: false,
-		svgAnimation: true,
-	});
-};
 
 // ─── Route component ───
 
@@ -347,23 +94,67 @@ const Dashboard = () => {
 	const [stats, setStats] = useState<StatsSnapshot | null>(null);
 	const [events, setEvents] = useState<StoredTabEvent[] | null>(null);
 	const [range, setRange] = useState<RangeId>("today");
-	const [exporting, setExporting] = useState<"jsonl" | "csv" | null>(null);
+	const [exporting, setExporting] = useState(false);
+	// Chat-about-your-data feedback line
+	const [copiedTo, setCopiedTo] = useState<string | null>(null);
 	// Export period filter: from/to as "YYYY-MM-DD" (inclusive); empty = unbounded.
 	const [expFrom, setExpFrom] = useState("");
 	const [expTo, setExpTo] = useState("");
 	const [expPreset, setExpPreset] = useState<ExportPresetId>("all");
+	// First stats/events attempt hasn't finished yet — cover the shell instead of
+	// flashing "No extension" + empty cards. Gates on attempt completion, not
+	// data: with no extension the fetches resolve null and stay null forever.
+	const [initialized, setInitialized] = useState(false);
+
+	// Heavy modules, lazy-loaded off the critical path:
+	const [charts, setCharts] = useState<ChartsApi | null>(null);
+	const [targets, setTargets] = useState<ShareTargets | null>(null);
 
 	useEffect(() => {
 		let alive = true;
+		import("~/lib/dashboard-charts")
+			.then((m) => {
+				if (alive) setCharts(m);
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, []);
+
+	// Icons only needed on the Share Context tab — load on first open.
+	useEffect(() => {
+		if (tab !== TAB.SHARE_CONTEXT || targets) return;
+		let alive = true;
+		import("~/lib/share-targets")
+			.then((m) => {
+				if (alive) setTargets(m);
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, [tab, targets]);
+
+	useEffect(() => {
+		let alive = true;
+		let firstDone = false;
+		const markFirst = () => {
+			if (firstDone) return;
+			firstDone = true;
+			if (alive) setInitialized(true);
+		};
 
 		const pollStats = async () => {
 			const s = await fetchStats();
-			if (!alive || !s) return;
-			setStats(s);
+			if (!alive) return;
+			if (s) setStats(s);
+			markFirst();
 		};
 		const pollEvents = async () => {
 			const ev = await fetchEvents();
 			if (alive && ev && ev.length > 0) setEvents(ev);
+			markFirst();
 		};
 
 		pollStats();
@@ -435,8 +226,8 @@ const Dashboard = () => {
 		[events, range],
 	);
 	const activityData = useMemo(
-		() => (events ? buildActivityBuckets(events, range) : []),
-		[events, range],
+		() => (charts && events ? charts.buildActivityBuckets(events, range) : []),
+		[charts, events, range],
 	);
 	const busiestMoment = useMemo(
 		() =>
@@ -448,12 +239,12 @@ const Dashboard = () => {
 		[activityData],
 	);
 	const siteData = useMemo(
-		() => (events ? buildTopSites(events, range) : []),
-		[events, range],
+		() => (charts && events ? charts.buildTopSites(events, range) : []),
+		[charts, events, range],
 	);
 	const eventMix = useMemo(
-		() => (events ? buildEventMix(events, range) : []),
-		[events, range],
+		() => (charts && events ? charts.buildEventMix(events, range) : []),
+		[charts, events, range],
 	);
 	const tabSwitches = useMemo(
 		() => rangeEvents.filter((event) => event.type === "TAB_ACTIVATED").length,
@@ -483,45 +274,73 @@ const Dashboard = () => {
 		[rangeSessions],
 	);
 	const focusData = useMemo(
-		() => buildFocusMap(rangeSessions),
-		[rangeSessions],
-	);
-	const focusDef = useMemo(
-		() => (focusData.length > 0 ? focusChart(focusData) : null),
-		[focusData],
-	);
-	const eventMixDef = useMemo(
-		() => (eventMix.length > 0 ? eventMixChart(eventMix.slice(0, 5)) : null),
-		[eventMix],
-	);
-	const activityDef = useMemo(
-		() => (activityData.length > 0 ? activityChart(activityData) : null),
-		[activityData],
-	);
-	const sitesDef = useMemo(
-		() => (siteData.length > 0 ? sitesChart(siteData) : null),
-		[siteData],
+		() => (charts ? charts.buildFocusMap(rangeSessions) : []),
+		[charts, rangeSessions],
 	);
 
-	const handleExport = (format: "jsonl" | "csv") => {
+	// Filenames both Download flows share.
+	const handleDownload = (format: "jsonl" | "csv") => {
 		if (!derived || !exportData) return;
-		setExporting(format);
-		const date = new Date().toISOString().slice(0, 10);
+		setExporting(true);
 		if (format === "jsonl") {
 			downloadFile(
-				`tabot-export-${date}.jsonl`,
-				buildExportJsonl(exportData),
+				exportFilename("jsonl"),
+				buildExportJsonl(derived),
 				"application/x-ndjson",
 			);
 		} else {
 			downloadFile(
-				`tabot-export-${date}.csv`,
-				buildExportCsv(exportData),
-				"text/csv",
+				exportFilename("csv"),
+				buildExportCsv(derived),
+				"text/csv;charset=utf-8",
 			);
 		}
-		setTimeout(() => setExporting(null), 800);
+		setTimeout(() => setExporting(false), 800);
 	};
+
+	// Same canonical JSONL the Download button emits, from the selected period —
+	// chat works off the selection directly, no file upload.
+	const chatBody = useMemo(() => {
+		if (!exportData) return null;
+		let body = buildExportJsonl(exportData);
+		if (body.length > MAX_CHAT_CHARS) {
+			body = `${body.slice(0, MAX_CHAT_CHARS)}…\n[truncated ${(body.length - MAX_CHAT_CHARS).toLocaleString()} chars]`;
+		}
+		return body;
+	}, [exportData]);
+
+	const openAiChat = async (t: WebTarget) => {
+		if (!chatBody || !exportData) return;
+		// Gemini has no chat prefill — alert user, copy prompt, only open on OK.
+		if (t.name === "Gemini") {
+			const copied = await copyText(t.prompt);
+			const ok = window.confirm(
+				copied
+					? "Gemini has no chat prefill. Prompt copied to clipboard — paste it in the chat box after Gemini opens."
+					: `Gemini has no chat prefill. Copy this prompt yourself:\n\n${t.prompt.slice(0, 200)}…`,
+			);
+			if (!ok) return;
+			window.open(t.url, "_blank", "noopener");
+			return;
+		}
+		window.open(t.url, "_blank", "noopener");
+		setCopiedTo(`${t.name} opened — prompt pre-filled in the chat box`);
+		setTimeout(() => setCopiedTo(null), 3500);
+	};
+
+	const copyCli = async (t: CliTarget) => {
+		const copied = await copyText(t.cmd);
+		setCopiedTo(
+			copied
+				? `${t.name} command copied — paste into your terminal`
+				: `${t.name} — copy this command:\n${t.cmd.slice(0, 120)}…`,
+		);
+		setTimeout(() => setCopiedTo(null), 3500);
+	};
+
+	// First stats/events attempt hasn't finished yet — cover the shell instead of
+	// flashing "No extension" + empty cards while the fetch resolves.
+	if (!initialized) return <Loading />;
 
 	return (
 		<div className="min-h-screen bg-black flex items-center justify-center p-4 md:p-8">
@@ -702,14 +521,8 @@ const Dashboard = () => {
 											: "Waiting for activity"}
 									</span>
 								</div>
-								{activityDef ? (
-									<Chart
-										className="ts-chart-host w-full"
-										definition={activityDef}
-										ariaLabel="When browser activity was busiest"
-										ariaDescription="Each point shows how many browser moments Tabot recorded in that hour or day. Taller peaks mean more activity."
-										height={250}
-									/>
+								{charts && activityData.length > 0 ? (
+									<charts.ActivityChart data={activityData} height={250} />
 								) : (
 									<Empty text="No activity yet — browse with the extension connected." />
 								)}
@@ -722,14 +535,8 @@ const Dashboard = () => {
 									Each bubble is one stretch of browsing. Read it left to right,
 									then bottom to top.
 								</p>
-								{focusDef ? (
-									<Chart
-										className="ts-chart-host w-full"
-										definition={focusDef}
-										ariaLabel="How browsing stretches compare"
-										ariaDescription="Each bubble is one browsing stretch. Bubbles farther right had more tab changes. Bubbles higher up had more clicks, scrolling, or typing. Bigger bubbles contain more activity."
-										height={250}
-									/>
+								{charts && focusData.length > 0 ? (
+									<charts.FocusChart data={focusData} height={250} />
 								) : (
 									<Empty text="Browse for a while to compare your stretches." />
 								)}
@@ -746,13 +553,10 @@ const Dashboard = () => {
 								<p className="mb-3 font-mono text-xs text-muted-foreground">
 									Your browser actions, grouped by type
 								</p>
-								{eventMixDef ? (
+								{charts && eventMix.length > 0 ? (
 									<div className="grid grid-cols-[140px_1fr] items-center gap-3 sm:grid-cols-[180px_1fr]">
-										<Chart
-											className="ts-chart-host w-full"
-											definition={eventMixDef}
-											ariaLabel="Browser activity mix"
-											ariaDescription="Proportional breakdown of recorded browser signal types."
+										<charts.EventMixChart
+											data={eventMix.slice(0, 5)}
 											height={180}
 										/>
 										<div className="space-y-2">
@@ -763,7 +567,7 @@ const Dashboard = () => {
 												>
 													<span
 														className="h-3 w-3 border-hard"
-														style={{ backgroundColor: NEON[index] }}
+														style={{ backgroundColor: charts.NEON[index] }}
 													/>
 													<span className="min-w-0 flex-1 truncate">
 														{item.label}
@@ -787,12 +591,9 @@ const Dashboard = () => {
 									A longer bar means you opened or returned to that site more
 									often.
 								</p>
-								{sitesDef ? (
-									<Chart
-										className="ts-chart-host w-full"
-										definition={sitesDef}
-										ariaLabel="Sites returned to most often"
-										ariaDescription="Sites ranked by how often you opened them or returned to their tabs."
+								{charts && siteData.length > 0 ? (
+									<charts.SitesChart
+										data={siteData}
 										height={Math.max(220, siteData.length * 36 + 48)}
 									/>
 								) : (
@@ -825,7 +626,7 @@ const Dashboard = () => {
 											className="border-hard bg-zinc-50 p-3 font-mono text-xs"
 										>
 											<div className="flex flex-wrap gap-x-4 gap-y-1">
-												<span className="font-bold text-sm">
+												<span className="min-w-0 wrap-break-word font-bold text-sm">
 													{sess.domains[0]?.domain ?? "?"}
 												</span>
 												<span className="text-muted-foreground">
@@ -849,7 +650,7 @@ const Dashboard = () => {
 												<span>{sess.navigationCount} navigations</span>
 												<span>{sess.tabSwitchCount} tab switches</span>
 											</div>
-											<div className="mt-1 text-muted-foreground">
+											<div className="mt-1 break-all text-muted-foreground">
 												{sess.domains.map((d) => d.domain).join(" · ")}
 											</div>
 										</div>
@@ -869,7 +670,7 @@ const Dashboard = () => {
 											className="border-hard bg-zinc-50 p-3 font-mono text-xs"
 										>
 											<div className="flex flex-wrap gap-x-4 gap-y-1">
-												<span className="font-bold text-sm">
+												<span className="min-w-0 wrap-break-word font-bold text-sm">
 													{c.primaryDomain}
 												</span>
 												<span className="text-muted-foreground">
@@ -895,13 +696,13 @@ const Dashboard = () => {
 												<span>{c.totalInteractionCount} interactions</span>
 												<span>recurrence {c.recurrenceCount}</span>
 											</div>
-											<div className="mt-1 text-muted-foreground">
+											<div className="mt-1 break-all text-muted-foreground">
 												{c.domains
 													.map((d) => `${d.domain} (${d.sessionCount})`)
 													.join(" · ")}
 											</div>
 											{c.episodes && c.episodes.length > 0 && (
-												<div className="mt-1 text-violet-700">
+												<div className="mt-1 break-all text-violet-700">
 													<span className="font-semibold">episodes:</span>{" "}
 													{c.episodes.length}
 													{" · "}
@@ -915,7 +716,7 @@ const Dashboard = () => {
 												</div>
 											)}
 											{c.sequence && (
-												<div className="mt-1 text-emerald-700">
+												<div className="mt-1 break-all text-emerald-700">
 													<span className="font-semibold">seq:</span>{" "}
 													{c.sequence
 														.map((s) => s.split("://")[1] ?? s)
@@ -923,13 +724,13 @@ const Dashboard = () => {
 												</div>
 											)}
 											{c.mergeEvidence && c.mergeEvidence.length > 0 && (
-												<div className="mt-1 text-amber-700">
+												<div className="mt-1 break-all text-amber-700">
 													<span className="font-semibold">evidence:</span>{" "}
 													{c.mergeEvidence.join(", ")}
 												</div>
 											)}
 											{c.excursions && c.excursions.length > 0 && (
-												<div className="mt-1 text-sky-700">
+												<div className="mt-1 break-all text-sky-700">
 													<span className="font-semibold">excursion:</span>{" "}
 													{c.excursions
 														.map(
@@ -959,7 +760,9 @@ const Dashboard = () => {
 										className="border-hard bg-zinc-50 p-3 font-mono text-xs"
 									>
 										<div className="flex flex-wrap gap-x-4 gap-y-1">
-											<span className="font-bold text-sm">{m.signature}</span>
+											<span className="min-w-0 wrap-break-word font-bold text-sm">
+												{m.signature}
+											</span>
 											<span className="text-muted-foreground">{m.kind}</span>
 											<span className="text-muted-foreground">
 												strength {m.strength.toFixed(2)}
@@ -975,7 +778,7 @@ const Dashboard = () => {
 											{m.observation}
 										</div>
 										{m.sequence && (
-											<div className="mt-1 text-emerald-700">
+											<div className="mt-1 break-all text-emerald-700">
 												<span className="font-semibold">seq:</span>{" "}
 												{m.sequence
 													.map((s) => s.split("://")[1] ?? s)
@@ -993,27 +796,16 @@ const Dashboard = () => {
 					</Panel>
 				)}
 
-				{tab === TAB.EXPORT && (
-					<Panel title="Export">
+				{tab === TAB.SHARE_CONTEXT && (
+					<Panel title="Share Context">
 						{!derived ? (
 							<Empty text="No data to export yet — connect the extension and browse." />
 						) : (
 							<div className="space-y-4">
-								<div className="font-mono text-xs text-muted-foreground">
-									Export the raw events plus derived sessions, contexts, and
-									memories.
-									<strong className="text-black">
-										{" "}
-										JSONL + manifest is the canonical format
-									</strong>{" "}
-									(self-describing, reproducible); CSV is a flat convenience
-									view of sessions only and is <strong>not canonical</strong>.
-								</div>
-
-								{/* Period filter — neobrutal themed, native date inputs */}
+								{/* 1 of 3 — pick the period, then chat or download */}
 								<div className="border-2 border-black bg-white p-4 space-y-3">
 									<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-										Export period
+										1 · Pick the period
 									</div>
 									<div className="flex flex-wrap gap-2">
 										{EXPORT_PRESETS.map((p) => (
@@ -1022,7 +814,10 @@ const Dashboard = () => {
 												type="button"
 												onClick={() => {
 													setExpPreset(p.id);
-													if (p.id === "all") {
+													if (p.id === "today") {
+														setExpFrom(fmtLocalDay(new Date()));
+														setExpTo("");
+													} else if (p.id === "all") {
 														setExpFrom("");
 														setExpTo("");
 													} else if (p.id === "7d" || p.id === "30d") {
@@ -1074,27 +869,106 @@ const Dashboard = () => {
 										{exportCounts.events.toLocaleString()} events ·{" "}
 										{exportCounts.sessions.toLocaleString()} sessions ·{" "}
 										{exportCounts.contexts.toLocaleString()} contexts ·{" "}
-										{exportCounts.memories.toLocaleString()} memories
+										{exportCounts.memories.toLocaleString()} memories in
+										selection
 									</div>
 								</div>
 
-								<div className="grid grid-cols-2 gap-3">
-									<Button
-										variant="default"
-										disabled={exporting === "jsonl"}
-										onClick={() => handleExport("jsonl")}
-									>
-										{exporting === "jsonl" ? "Exporting…" : "Export JSONL"}
-									</Button>
-									<Button
-										variant="outline"
-										disabled={exporting === "csv"}
-										onClick={() => handleExport("csv")}
-									>
-										{exporting === "csv"
-											? "Exporting…"
-											: "Export CSV (non-canonical)"}
-									</Button>
+								{/* 2 of 3 — chat, first-class, works off the selection */}
+								<div className="border-2 border-black bg-yellow-200 p-4 space-y-3">
+									<div className="font-mono text-xs uppercase tracking-wider">
+										2 · Chat about your data
+									</div>
+									<p className="font-mono text-xs text-muted-foreground">
+										From your selection above. Web opens a prefilled chat.
+										CLI/apps copy a command or prompt.
+									</p>
+									<div className="space-y-2 border-2 border-black bg-white p-3">
+										<div className="flex items-center justify-between gap-2">
+											<div className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground">
+												Web
+											</div>
+											<span className="font-mono text-[10px] text-muted-foreground">
+												{chatBody ? (chatBody.length / 1024).toFixed(0) : 0} KB
+												to clipboard
+											</span>
+										</div>
+										{targets ? (
+											<div className="flex flex-wrap gap-2">
+												{targets.WEB_TARGETS.map((t) => (
+													<button
+														key={t.name}
+														type="button"
+														disabled={!chatBody}
+														onClick={() => openAiChat(t)}
+														className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-1.5 font-mono text-xs uppercase tracking-wider hover:bg-lime/20 disabled:pointer-events-none disabled:opacity-40"
+													>
+														<t.icon size={16} />
+														{t.name}
+													</button>
+												))}
+											</div>
+										) : (
+											<div className="font-mono text-xs text-muted-foreground">
+												Loading targets…
+											</div>
+										)}
+									</div>
+									<div className="space-y-2 border-2 border-black bg-white p-3">
+										<div className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground">
+											CLI & apps
+										</div>
+										{targets && (
+											<div className="flex flex-wrap gap-2">
+												{targets.CLI_TARGETS.map((t) => (
+													<button
+														key={t.name}
+														type="button"
+														disabled={!chatBody}
+														onClick={() => copyCli(t)}
+														className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-1.5 font-mono text-xs uppercase tracking-wider hover:bg-lime/20 disabled:pointer-events-none disabled:opacity-40"
+													>
+														<t.icon size={16} />
+														{t.name}
+													</button>
+												))}
+											</div>
+										)}
+									</div>
+									{copiedTo && (
+										<div className="font-mono text-xs font-bold">
+											{copiedTo}
+										</div>
+									)}
+									{/* 3 of 3 — download the selection */}
+									<div className="border-2 border-black bg-white p-4 space-y-3">
+										<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+											3 · Download the selection
+										</div>
+										<Button
+											className="w-full"
+											variant="secondary"
+											disabled={exporting}
+											onClick={() => handleDownload("jsonl")}
+										>
+											{exporting
+												? "Downloading…"
+												: "Download JSONL (recommended for LLMs)"}
+										</Button>
+										<Button
+											className="w-full"
+											variant="outline"
+											disabled={exporting}
+											onClick={() => handleDownload("csv")}
+										>
+											Download CSV
+										</Button>
+										<div className="font-mono text-xs text-muted-foreground">
+											JSONL recommended for LLMs — canonical, self-describing
+											events + sessions + contexts + memories. CSV is a flat
+											session summary. All local — nothing leaves your machine.
+										</div>
+									</div>
 								</div>
 
 								<div className="font-mono text-xs text-muted-foreground">

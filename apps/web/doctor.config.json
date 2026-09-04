@@ -10,7 +10,8 @@
 			{
 				"files": [
 					"src/components/landing/local-first.tsx",
-					"src/components/ui/dashboard-panels.tsx"
+					"src/components/ui/dashboard-panels.tsx",
+					"src/lib/dashboard-charts.tsx"
 				],
 				"rules": ["react-doctor/no-multi-comp"]
 			},
@@ -27,6 +28,13 @@
 					"src/components/landing/browser-context-film.tsx"
 				],
 				"rules": ["react-doctor/no-giant-component"]
+			},
+			{
+				"files": [
+					"src/components/ui/button.tsx",
+					"src/lib/dashboard-charts.tsx"
+				],
+				"rules": ["react-doctor/only-export-components"]
 			}
 		]
 	}

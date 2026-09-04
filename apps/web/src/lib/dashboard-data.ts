@@ -34,13 +34,18 @@ const send = (
 	cb: (res: unknown) => void,
 ): void => {
 	const s = chromeSend();
-	if (!s) return;
 	let done = false;
 	const finish = (res: unknown) => {
 		if (done) return;
 		done = true;
 		cb(res);
 	};
+	// No chrome runtime (plain web page, extension absent) — resolve null once
+	// so callers never hang on an unresolved promise.
+	if (!s) {
+		finish(null);
+		return;
+	}
 	const extId = getExtId();
 	if (extId)
 		(s as (a: string, b: unknown, c: (r: unknown) => void) => void)(
@@ -59,6 +64,16 @@ export const fetchStats = (): Promise<StatsSnapshot | null> =>
 			resolve((res as StatsSnapshot) || null),
 		);
 	});
+
+export type StatsRange = "today" | "7d" | "30d" | "all";
+
+export const rangeStart = (r: StatsRange): number => {
+	if (r === "all") return 0;
+	const d = new Date();
+	if (r === "today") d.setHours(0, 0, 0, 0);
+	else d.setDate(d.getDate() - (r === "7d" ? 7 : 30));
+	return d.getTime();
+};
 
 export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 	new Promise((resolve) => {

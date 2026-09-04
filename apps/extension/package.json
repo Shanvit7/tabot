@@ -23,6 +23,7 @@
 	},
 	"manifest": {
 		"permissions": [
+			"storage",
 			"tabs",
 			"webNavigation"
 		],

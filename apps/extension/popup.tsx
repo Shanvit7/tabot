@@ -35,6 +35,10 @@ const fetchStatsHelper = (
 	);
 };
 
+const DASHBOARD_URL =
+	process.env.PLASMO_PUBLIC_DASHBOARD_URL ??
+	"https://shanvit7.github.io/tabot/dashboard";
+
 const IndexPopup = () => {
 	const [stats, setStats] = useState<StatsSnapshot>(() =>
 		createEmptyStats(10_000),
@@ -55,6 +59,10 @@ const IndexPopup = () => {
 		const id = setInterval(run, 1000);
 		return () => clearInterval(id);
 	}, []);
+
+	const openDashboard = () => {
+		chrome.tabs.create({ url: DASHBOARD_URL });
+	};
 
 	const toggleTracking = () => {
 		const enabled = !trackingEnabled;
@@ -235,6 +243,28 @@ const IndexPopup = () => {
 					</span>
 				</div>
 			</div>
+
+			<button
+				onClick={openDashboard}
+				type="button"
+				style={{
+					marginTop: 13,
+					width: "100%",
+					background: theme.black,
+					color: theme.lime,
+					border: theme.border,
+					boxShadow: theme.shadow,
+					cursor: "pointer",
+					fontFamily: theme.mono,
+					fontSize: 12,
+					fontWeight: 800,
+					letterSpacing: "0.08em",
+					textTransform: "uppercase",
+					padding: "11px",
+				}}
+			>
+				Go to Dashboard →
+			</button>
 
 			<div
 				style={{
