@@ -55,7 +55,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build + package extension
-        run: pnpm --filter extension package
+        run: |
+          pnpm --filter extension build
+          pnpm --filter extension package
 
       - name: Browser Platform Publish
         uses: PlasmoHQ/bpp@v3

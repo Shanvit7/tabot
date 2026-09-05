@@ -2,7 +2,7 @@
 	"name": "extension",
 	"displayName": "Tabot",
 	"description": "Private, local browser activity timeline. Thinking across tabs.",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"private": true,
 	"scripts": {
 		"dev": "plasmo dev",
