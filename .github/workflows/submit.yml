@@ -64,7 +64,6 @@ jobs:
         with:
           keys: ${{ secrets.SUBMIT_KEYS }}
           artifact: apps/extension/build/chrome-mv3-prod.zip
-          target: draft
           verbose: true
 
       - name: Tag release version
