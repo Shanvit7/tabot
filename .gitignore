@@ -17,6 +17,7 @@ build
 
 # Plasmo
 .plasmo
+keys.json
 
 # Turbo
 .turbo

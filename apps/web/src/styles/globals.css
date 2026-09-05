@@ -107,3 +107,39 @@ body {
 	transform: translate(2px, 2px);
 	box-shadow: var(--shadow-hard-sm);
 }
+
+/* ── Loading indicator — tabs stamp in, one wave ── */
+.loading-tab {
+	width: 2.75rem;
+	height: 1.75rem;
+	border: 2px solid var(--black);
+	background: var(--white);
+	box-shadow: var(--shadow-hard-sm);
+	animation: loading-stamp 1.6s ease-in-out infinite;
+}
+
+@keyframes loading-stamp {
+	0% {
+		transform: translateY(-0.6rem);
+		opacity: 0;
+	}
+	18% {
+		transform: translateY(0);
+		opacity: 1;
+	}
+	42% {
+		background: var(--lime);
+	}
+	100% {
+		background: var(--lime);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.loading-tab {
+		animation: none;
+	}
+	.loading-tab:first-child {
+		background: var(--lime);
+	}
+}

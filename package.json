@@ -17,7 +17,7 @@
 		"knip": "knip",
 		"doctor": "pnpm --filter web doctor",
 		"doctor:staged": "pnpm --filter web exec react-doctor --staged --blocking error",
-		"dev": "pnpm --filter extension dev & pnpm --filter web dev",
+		"dev": "pnpm -r --if-present --parallel dev",
 		"dev:extension": "pnpm --filter extension dev",
 		"dev:web": "pnpm --filter web dev"
 	},
@@ -26,6 +26,7 @@
 	"license": "MIT",
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.9",
+		"destr": "2.0.5",
 		"husky": "^9.1.7",
 		"knip": "^6.32.3",
 		"lint-staged": "^17.3.0",

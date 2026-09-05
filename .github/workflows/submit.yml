@@ -1,0 +1,80 @@
+name: Submit Extension to Web Store
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/extension/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/submit.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version not already tagged
+        id: check
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./apps/extension/package.json').version" 2>/dev/null)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read apps/extension/package.json version"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git tag --list "v$VERSION" | grep -q .; then
+            echo "Tag v$VERSION already exists — skipping (version not bumped)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  submit:
+    needs: check
+    if: needs.check.outputs.skip == 'false' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build + package extension
+        run: |
+          pnpm --filter extension build
+          pnpm --filter extension package
+
+      - name: Browser Platform Publish
+        uses: PlasmoHQ/bpp@v3
+        with:
+          keys: ${{ secrets.SUBMIT_KEYS }}
+          artifact: apps/extension/build/chrome-mv3-prod.zip
+          target: draft
+          verbose: true
+
+      - name: Tag release version
+        run: |
+          TAG="v${{ needs.check.outputs.version }}"
+          if git ls-remote --tags origin "$TAG" | grep -q .; then
+            echo "Tag $TAG already exists on origin — skipping tag creation."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
