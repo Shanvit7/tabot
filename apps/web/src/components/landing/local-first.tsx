@@ -214,7 +214,7 @@ const ExportScene = ({ reduceMotion }: { reduceMotion: boolean | null }) => (
 			<div className="flex items-center justify-between gap-4">
 				<div>
 					<p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#40584a]">
-						Export context
+						Share context
 					</p>
 					<p className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
 						Your choice.

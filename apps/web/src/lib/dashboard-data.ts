@@ -26,32 +26,26 @@ const chromeSend = (): ChromeSend | null => {
 };
 
 const configuredExtensionId = import.meta.env.VITE_TABOT_EXTENSION_ID?.trim();
-export const allowsManualExtensionId =
-	import.meta.env.DEV ||
-	import.meta.env.VITE_TABOT_SHOW_EXTENSION_ID_INPUT === "true";
 
-const getExtId = (): string | undefined => {
-	if (configuredExtensionId) return configuredExtensionId;
-	if (!allowsManualExtensionId) return undefined;
-	try {
-		return localStorage.getItem("tabot_extension_id") || undefined;
-	} catch {
-		return undefined;
-	}
-};
+const getExtId = (): string | undefined => configuredExtensionId || undefined;
 
 const send = (
 	msg: Record<string, unknown>,
 	cb: (res: unknown) => void,
 ): void => {
 	const s = chromeSend();
-	if (!s) return;
 	let done = false;
 	const finish = (res: unknown) => {
 		if (done) return;
 		done = true;
 		cb(res);
 	};
+	// No chrome runtime (plain web page, extension absent) — resolve null once
+	// so callers never hang on an unresolved promise.
+	if (!s) {
+		finish(null);
+		return;
+	}
 	const extId = getExtId();
 	if (extId)
 		(s as (a: string, b: unknown, c: (r: unknown) => void) => void)(
@@ -70,6 +64,16 @@ export const fetchStats = (): Promise<StatsSnapshot | null> =>
 			resolve((res as StatsSnapshot) || null),
 		);
 	});
+
+export type StatsRange = "today" | "7d" | "30d" | "all";
+
+export const rangeStart = (r: StatsRange): number => {
+	if (r === "all") return 0;
+	const d = new Date();
+	if (r === "today") d.setHours(0, 0, 0, 0);
+	else d.setDate(d.getDate() - (r === "7d" ? 7 : 30));
+	return d.getTime();
+};
 
 export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 	new Promise((resolve) => {
@@ -163,6 +167,37 @@ export const EXPORT_THRESHOLDS = {
 		recurrenceMinGapMs: 1800000,
 	},
 } as const;
+
+// --- Export range filter (overlap semantics) ---
+// from/to are inclusive epoch-ms bounds; undefined = unbounded.
+const overlaps = (
+	start: number,
+	end: number,
+	from?: number,
+	to?: number,
+): boolean =>
+	(from === undefined || end >= from) && (to === undefined || start <= to);
+
+export const filterDerived = (
+	d: Derived,
+	from?: number,
+	to?: number,
+): Derived => {
+	if (from === undefined && to === undefined) return d;
+	const events = d.events.filter((e) =>
+		overlaps(e.timestamp, e.timestamp, from, to),
+	);
+	const sessions = d.sessions.filter((s) =>
+		overlaps(s.startTimestamp, s.endTimestamp, from, to),
+	);
+	const contexts = d.contexts.filter((c) =>
+		overlaps(c.startTimestamp, c.endTimestamp, from, to),
+	);
+	const memories = d.memories.filter((m) =>
+		overlaps(m.startTimestamp, m.endTimestamp, from, to),
+	);
+	return { events, sessions, contexts, memories, live: d.live };
+};
 
 export const buildExportJsonl = (d: Derived): string => {
 	const eventLines = d.events.map((e) =>
