@@ -20,7 +20,8 @@
 		"dev": "pnpm -r --if-present --parallel dev",
 		"dev:extension": "pnpm --filter extension dev",
 		"dev:web": "pnpm --filter web dev",
-		"changeset": "changeset"
+		"changeset": "changeset",
+		"release:tag": "node scripts/release-tag.mjs"
 	},
 	"keywords": [],
 	"author": "",

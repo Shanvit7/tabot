@@ -11,6 +11,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   version:
@@ -29,12 +30,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Opens / updates the "Version Packages" PR. Merging it bumps the extension
-      # version + changelog on main; the existing deploy.yml + submit.yml then
-      # publish to Pages and the Chrome Web Store automatically.
+      # Opens / updates the "Version Packages" PR. When it's merged, changesets
+      # runs the publish script: we tag v<version> and dispatch the store submit
+      # workflow. Single release path — only this hook can trigger submit.yml.
       - name: Create / update versioning PR
         uses: changesets/action@v1
         with:
           version: pnpm changeset version
+          publish: pnpm release:tag
           commit: "chore: version packages"
           title: "chore: version packages"
