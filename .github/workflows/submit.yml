@@ -10,6 +10,9 @@ on:
       - '.github/workflows/submit.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
