@@ -1,13 +1,6 @@
 name: Submit Extension to Web Store
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/extension/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/submit.yml'
   workflow_dispatch:
 
 permissions:
@@ -18,13 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
-      skip: ${{ steps.check.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check version not already tagged
+      - name: Read extension version
         id: check
         shell: bash
         run: |
@@ -34,16 +26,9 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git tag --list "v$VERSION" | grep -q .; then
-            echo "Tag v$VERSION already exists — skipping (version not bumped)."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
 
   submit:
     needs: check
-    if: needs.check.outputs.skip == 'false' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,15 +53,3 @@ jobs:
           keys: ${{ secrets.SUBMIT_KEYS }}
           artifact: apps/extension/build/chrome-mv3-prod.zip
           verbose: true
-
-      - name: Tag release version
-        run: |
-          TAG="v${{ needs.check.outputs.version }}"
-          if git ls-remote --tags origin "$TAG" | grep -q .; then
-            echo "Tag $TAG already exists on origin — skipping tag creation."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$TAG"
-          git push origin "$TAG"

@@ -1,57 +1,60 @@
 # Deployment — Tabot
 
-Simple model: **merge to `main` deploys.** Nothing else.
+Simple model: **merge to `main` deploys.** No develop branch — feature branches PR straight into `main`. The only release path for the extension is the changesets "Version Packages" PR.
 
 ```text
-feat/* / fix/*  ──PR──►  develop  ──merge►  main ──►  prod
-branches        integrate        release    dashboard live + extension uploaded
+feat/* / fix/*  ──PR──►  main  ──►  prod
+branches                 release   dashboard live + extension uploaded
 ```
 
-## The two workflows (auto, on merge to main)
+## The three workflows
 
 | Event | Workflow | Result |
 | --- | --- | --- |
 | Any merge to `main` | `deploy.yml` | Dashboard → GitHub Pages, **live immediately** |
-| Merge touches `apps/extension/**` + new version | `submit.yml` | Extension zip → Chrome Web Store **draft** |
+| Any merge to `main` (if `.changeset/*.md` exists) | `release.yml` | Opens / updates the **"Version Packages" PR** |
+| Merge of that Version PR | `release.yml` → `submit.yml` | Extension zip → Chrome Web Store **draft** |
 
 - **Dashboard** = fully auto. Every merge ships.
-- **Extension** = auto-builds + uploads as a *draft*. A human clicks **Publish** in the [Chrome Web Store dashboard][dashboard] to take it live. A green workflow ≠ live extension.
+- **Extension** = ships **only** through the Version Packages PR merge (details below). A green workflow ≠ live extension — a human still clicks **Publish** in the [Chrome Web Store dashboard][dashboard].
 
-## How to release
+## How to make a release (plain English)
 
-1. **Work** — branch off `develop`, PR into `develop` when green.
+1. **Work** — branch off `main`, PR straight into `main` when green.
 
    ```bash
-   git checkout develop && git pull
+   git checkout main && git pull
    git checkout -b feat/my-thing
    # work, commit, push
    git push -u origin feat/my-thing
-   # PR: feat/my-thing → develop
+   # PR: feat/my-thing → main
    ```
 
-2. **Integrate** — merge the PR into `develop`. Nothing deploys.
-
-3. **Release** — bump `apps/extension/package.json` `version`, open PR `develop → main`, merge. That's it.
+2. **Write a changeset** — when your PR touches extension code, add a note that describes the user-visible change. The `changeset` CLI walks you through it and writes a file like `.changeset/tidy-pumpkins.md`:
 
    ```bash
-   git checkout develop && git pull
-   # edit apps/extension/package.json version
-   git add apps/extension/package.json && git commit -m "release: v0.1.1" && git push
-   # PR: develop → main, merge
+   pnpm changeset
+   # pick the "extension" package, choose patch (most changes) or minor,
+   # write "what users will notice"
    ```
 
-On the merge: dashboard goes live, extension packages + uploads a draft.
+   Merge your PR into `main`. Dashboard goes live. If a changeset exists, GitHub Actions opens a **"Version Packages"** PR that bumps `apps/extension/package.json` and writes `CHANGELOG.md`.
+
+3. **Merge the Version PR** — this is the release decision. Merging it:
+
+   - bumps the version (e.g. `0.1.2 → 0.1.3`),
+   - tags it `v0.1.3` on `main` (a marker, so it never releases twice),
+   - dispatches `submit.yml`, which builds + uploads a **draft** to the store.
 
 4. **Approve** — in the [Chrome Web Store dashboard][dashboard], review the draft and click **Publish**. Chrome auto-updates installed copies.
 
-## Version bump = the only gate
+## Why it's one path, not two
 
-The store rejects duplicate versions. Every release **must** bump `package.json` `version`:
+Version numbers can only go up inside the Version Packages PR — that's the only place `.changeset/*.md` becomes a bump. `submit.yml` **cannot be triggered by any ordinary `main` push**; it only runs when the release hook fires it. So a hand-edited `package.json` on a normal PR merges and the store does nothing. There is no second door.
 
-- bump → merge → new draft created
-- no bump (same version as last time) → `submit.yml` skips, dashboard still ships
+## The tag's job: a marker, not a trigger
 
-If a change is web-only (no extension code) it can release with no version bump.
+`v0.1.3` is pushed by `scripts/release-tag.mjs` (the changesets publish hook) right before the store upload. Its only job is **idempotency** — if a run needs re-doing, the script sees the tag already exists, skips the tag, and just dispatches the upload again. It never causes a double upload or a rejected duplicate version.
 
 ## Credentials (one time)
 
@@ -74,8 +77,9 @@ Serves unpacked to `build/chrome-mv3-dev`. Load via `chrome://extensions` → De
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
+| No Version PR after main merge | No `.changeset/*.md` in the merged PR. | Run `pnpm changeset` before merging your feature PR. |
 | Workflow fails at `package` | Zip missing — `build` used instead of `package`. | Keep `pnpm --filter extension package` in the workflow. |
-| Upload rejected: version already used | Released without bumping `package.json`. | Bump on every release. |
+| Upload rejected: version already used | Tag exists but upload re-ran against same version. | The tag normally prevents this. Delete the `v*` tag only if you truly intend to re-upload. |
 | `bpp` auth error | `SUBMIT_KEYS` empty, expired, or wrong Google account. | Regenerate with `bpp chrome-webstore upload`, update secret. |
 | Draft never appears | No store listing yet. | Bootstrap listing in the dev dashboard first. |
 
