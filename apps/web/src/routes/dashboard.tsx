@@ -43,13 +43,13 @@ type RangeId = (typeof RANGES)[number]["id"];
 const fmtLocalDay = (d: Date): string =>
 	`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-// Export-period quick presets — today first, all time last.
+// Export-period quick presets — today first, all time before custom (last).
 const EXPORT_PRESETS = [
 	{ id: "today", label: "Today" },
 	{ id: "7d", label: "Last 7 days" },
 	{ id: "30d", label: "Last 30 days" },
-	{ id: "custom", label: "Custom" },
 	{ id: "all", label: "All time" },
+	{ id: "custom", label: "Custom" },
 ] as const;
 type ExportPresetId = (typeof EXPORT_PRESETS)[number]["id"];
 

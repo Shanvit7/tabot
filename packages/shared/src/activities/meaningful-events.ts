@@ -3,6 +3,7 @@
 // Pure derivation: StoredTabEvent[] in → DerivedEvent[] → ActivityTransition[] out.
 // Raw events untouched; no new telemetry; no graph library; no new dependencies.
 
+import { isDiagnostic } from "../activities/sw-semantics";
 import type { StoredTabEvent } from "../events/db";
 import type { TabEventType } from "../events/events";
 
@@ -76,6 +77,12 @@ export const deriveMeaningfulEvents = (
 	const lastIdentity = new Map<number, string>();
 
 	for (const e of sorted) {
+		// FINAL taxonomy — diagnostic SW events (popup/toggle/download/lifecycle)
+		// never reach the behavioral meaningful stream. SW_WINDOW_FOCUS passes
+		// through (contextual) but carries no url → deriveTransitions needs a
+		// ref, so it forms no transition.
+		if (isDiagnostic(e.type)) continue;
+
 		const toDerived = (): DerivedEvent => ({
 			id: e.id,
 			type: e.type,

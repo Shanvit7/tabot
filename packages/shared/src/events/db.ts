@@ -1,6 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import { logger } from "../lib/logger";
-import type { TabEventType } from "./events";
+import type { TabEventMetadata, TabEventType } from "./events";
 
 export interface StoredTabEvent {
 	id: string;
@@ -9,11 +9,7 @@ export interface StoredTabEvent {
 	windowId: number;
 	timestamp: number;
 	url?: string;
-	metadata?: {
-		x?: number;
-		y?: number;
-		scrollY?: number;
-	};
+	metadata?: TabEventMetadata;
 }
 
 // ponytail: kept for backwards compat — Dexie uses stores() string, not JSON schema
@@ -34,6 +30,9 @@ export const storedTabEventSchema = {
 				x: { type: "number" },
 				y: { type: "number" },
 				scrollY: { type: "number" },
+				previousWindowId: { type: "number" },
+				enabled: { type: "boolean" },
+				state: { type: "number" },
 			},
 		},
 	},

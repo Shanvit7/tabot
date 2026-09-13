@@ -59,6 +59,7 @@ tabot/
 ├── packages/shared/src/
 │   ├── events.ts, buffer.ts, protocol.ts, metadata.ts, db.ts, logger.ts
 │   ├── sessions.ts, meaningful-events.ts, activity-graph.ts, episode-boundary.ts
+│   ├── sw-semantics.ts, sw-graph.ts          # SW telemetry layer (Phase 2)
 │   ├── contexts.ts, memories.ts, retrieval.ts, live-context.ts
 │   └── *.check.ts                       # runnable derivation checks
 └── docs/
@@ -86,6 +87,13 @@ export const EVENT_TYPES = {
   SCROLL: 7,
   CLICK: 8,
   KEY_ACTIVITY: 9,
+  // SW telemetry (Phase 2). Indices fixed — ever. Historical Dexie rows
+  // decode via these values even though only SW_WINDOW_FOCUS is produced.
+  SW_WINDOW_FOCUS: 10,
+  SW_POPUP_OPEN: 11,
+  SW_TRACKING_TOGGLE: 12,
+  SW_DOWNLOAD: 13,
+  SW_LIFECYCLE: 14,
 } as const;
 ```
 
@@ -103,6 +111,9 @@ export const EVENT_TYPES = {
 | `SCROLL` | window and qualifying nested scroll containers | `scrollY` |
 | `CLICK` | document `click` listener | client `x`, `y` |
 | `KEY_ACTIVITY` | document `keydown` listener | none |
+| `SW_WINDOW_FOCUS` | `chrome.windows.onFocusChanged` | `previousWindowId` (see [SW telemetry](#15-service-worker-telemetry-phase-2-final)) |
+
+`SW_POPUP_OPEN`, `SW_TRACKING_TOGGLE`, `SW_DOWNLOAD`, `SW_LIFECYCLE` occupy indices 11–14 for historical decode only; the extension no longer produces them and derivation classifies them `diagnostic` (never behavioral).
 
 Every persisted event has this representation:
 
@@ -533,6 +544,9 @@ pnpm --filter shared check:retrieval
 pnpm --filter shared check:liveContext
 pnpm --filter shared check:pipeline
 pnpm --filter shared check:v5regression
+pnpm --filter shared check:bufferRoundtrip
+pnpm --filter shared run swSemantics swDerivation swGraph swEpisodes
+pnpm --filter shared run swFirstSignal swCost swValidation
 pnpm --filter extension build
 pnpm --filter web build
 ```
@@ -594,8 +608,62 @@ rather than raw event history.
 
 ---
 
-## 15. History
+## 15. Service Worker Telemetry (Phase 2 final)
+
+Phase 2 ran a Service Worker (SW) telemetry experiment and concluded **KEEP WITH REDUCTION**: one SW signal survives, four were retired, the `downloads` permission was removed. Raw events remain the source of truth; SW rows flow through the exact same SAB → Dexie → pure-derivation path as Phase 1 events.
+
+### Semantic classification (single derivation gate)
+
+The classifier in `sw-semantics.ts` assigns every event one class; every behavioral layer consults it before using an event:
+
+| Class | Effect |
+|---|---|
+| `behavioral` | may contribute to sessions/episodes/contexts/memories as evidence |
+| `contextual` | shapes interpretation of *other* events (continuity) but is not itself activity |
+| `diagnostic` | invisible to derivation; engineering only — the firewall rule |
+
+Final taxonomy:
+
+| Event | Class | Produced? | Effect |
+|---|---|---|---|
+| `SW_WINDOW_FOCUS` | contextual | **yes** | graph continuity evidence only |
+| `SW_POPUP_OPEN` | diagnostic | no (historical rows decode) | none |
+| `SW_TRACKING_TOGGLE` | diagnostic | no | none |
+| `SW_DOWNLOAD` | diagnostic | no | none |
+| `SW_LIFECYCLE` | diagnostic | no | none |
+
+Retired types are **deterministically** ignored — classification is hardcoded, not runtime-configurable. Enum indices 10–14 and the buffer decode branches are kept so persisted historical rows still decode, then are excluded by the same classifier. Producer (`background.ts`) emits only `SW_WINDOW_FOCUS`.
+
+### `SW_WINDOW_FOCUS` semantics
+
+- Source: `chrome.windows.onFocusChanged`; requires `windows` permission. `windowId = -1` is the no-window sentinel; `previousWindowId` goes in SAB slot 3.
+- **Session layer:** `sessionize` skips it entirely. It cannot open, extend, merge, or split a session; it never updates activity clocks; a focus-only trace yields 0 sessions.
+- **Meaningful events:** classified contextual; never forms a transition (no URL).
+- **Graph layer:** `applyFocusContinuity` (in `sw-graph.ts`) may only **decorate an existing same-session edge** with a strengthened weight when a causal focus sandwich is present (departure w→x, return x→w chained via `previousWindowId` inside the anchor span). Chains where `previousWindowId === -1`/`WINDOW_ID_NONE` are excluded (focus loss/regain is not an excursion return). SW adds zero nodes/edges/counts.
+- **Episode layer:** no SW terms in the boundary scorer — no focus boost; evidence is a causal record only.
+
+Measured on real browsing: SW telemetry adds **0** sessions, anchors, graph edges, episodes, contexts, memories; only graph evidence counts change where genuine cross-window continuity occurred. Cost (from `sw-cost.check.ts`): SW ratio far under the 30% acceptance ceiling; SW derivation cost within measurement noise.
+
+### SW checks
+
+```bash
+pnpm --filter shared run swSemantics    # taxonomy + firewall classification
+pnpm --filter shared run swDerivation   # Pipeline A vs B: SW-invariance of derived layers
+pnpm --filter shared run swGraph        # focus-continuity evidence rules (-1 chains excluded)
+pnpm --filter shared run swEpisodes     # focus changes NO episode boundary; focus-only burst -> 0
+pnpm --filter shared run swFirstSignal  # per-signal decision audit
+pnpm --filter shared run swCost         # noise + storage + CPU vs Phase 1
+pnpm --filter shared run swValidation   # encode -> decode roundtrip, noise-bounded popup
+pnpm --filter shared run swRealReport   # real trace: Phase 1 vs Phase 2 report (needs trace.json)
+```
+
+Schema/encode detail survives in `docs/sw-schema.md`. The Step 11 report's episode-merge claims were superseded: the corrected final semantics is that focus changes **no** session or episode boundary.
+
+---
+
+## 16. History
 
 - `2026-08-22` - Consolidated initial collection, SAB, Dexie, and dashboard documentation into `tech.md`.
 - `2026-08-24` - Added the implemented deterministic derived layer: sessions, contexts, memories, retrieval, and live browser context; merged metrics into this document and retired split specification files.
 - `2026-08-28` - Rewrote the derived-layer sections to match the V6/V7 implementation: added the meaningful-event, activity-anchor, activity-graph, and episode stages; contexts are now built from episodes with trajectory-coherence segmentation; memories use behavioral fingerprints rather than exact domain signatures; sessions retain full event sequences; added a companion `system.md` walkthrough.
+- `2026-09-13` - Synthesized the Phase 2 SW experiment into §15 (KEEP WITH REDUCTION): `SW_WINDOW_FOCUS` retained as the only SW signal; popup/toggle/download/lifecycle retired to diagnostic; `downloads` permission dropped; retired `docs/sw-events.md`, `docs/sw-inventory.md`, `docs/sw-phase.md`, `docs/sw-step11-report.md` folded in here and `system.md`.
