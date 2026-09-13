@@ -9,7 +9,7 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"check:sessions": "node src/checks/sessions.check.ts",
+		"check:sessions": "node --import ./resolve-hook.mjs src/checks/sessions.check.ts",
 		"check:contexts": "node --import ./resolve-hook.mjs src/checks/contexts.check.ts",
 		"check:memories": "node --import ./resolve-hook.mjs src/checks/memories.check.ts",
 		"check:retrieval": "node --import ./resolve-hook.mjs src/checks/retrieval.check.ts",
@@ -18,7 +18,16 @@
 		"check:pipeline": "node --import ./resolve-hook.mjs src/checks/pipeline.check.ts",
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
 		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
-		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts"
+		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts",
+		"check:bufferRoundtrip": "node --import ./resolve-hook.mjs src/checks/buffer-roundtrip.check.ts",
+		"swValidation": "node --import ./resolve-hook.mjs src/checks/sw-validation.check.ts",
+		"swCost": "node --import ./resolve-hook.mjs src/checks/sw-cost.check.ts",
+		"swSemantics": "node --import ./resolve-hook.mjs src/checks/sw-semantics.check.ts",
+		"swDerivation": "node --import ./resolve-hook.mjs src/checks/sw-derivation.check.ts",
+		"swFirstSignal": "node --import ./resolve-hook.mjs src/checks/sw-first-signal.check.ts",
+		"swGraph": "node --import ./resolve-hook.mjs src/checks/sw-graph.check.ts",
+		"swEpisodes": "node --import ./resolve-hook.mjs src/checks/sw-episodes.check.ts",
+		"swRealReport": "node --import ./resolve-hook.mjs src/checks/sw-real.report.ts"
 	},
 	"dependencies": {
 		"dexie": "^4.4.5",

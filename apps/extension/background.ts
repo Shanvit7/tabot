@@ -8,11 +8,14 @@ import {
 	createEventsDb,
 	getAllEvents,
 	getMeta,
+	LIFECYCLE_KINDS,
 	logger,
+	POPUP_SOURCE,
 	pushEvent,
 	removeMeta,
 	type StatsSnapshot,
 	type StoredTabEvent,
+	type TabEventMetadata,
 	type TabEventType,
 	updateMeta,
 } from "@tabot/shared";
@@ -37,6 +40,15 @@ const TYPE_NAMES: TabEventType[] = [
 	"SCROLL",
 	"CLICK",
 	"KEY_ACTIVITY",
+	// --- SW telemetry — must stay index-aligned with EVENT_TYPES 10–14 ---
+	// FINAL: only SW_WINDOW_FOCUS is produced. Entries 11–14 remain index-aligned
+	// so HISTORICAL persisted rows still decode deterministically; they are never
+	// emitted by this producer anymore.
+	"SW_WINDOW_FOCUS",
+	"SW_POPUP_OPEN",
+	"SW_TRACKING_TOGGLE",
+	"SW_DOWNLOAD",
+	"SW_LIFECYCLE",
 ];
 
 const TRACKING_KEY = "tabot_tracking_enabled";
@@ -58,6 +70,11 @@ const getDb = (): ReturnType<typeof createEventsDb> => {
 	return dbPromise;
 };
 
+// --- SW telemetry: browser focus is the ONLY emitted SW signal ---
+// popup polling (GET_STATS/GET_COUNTS/GET_EVENTS) is answered without
+// recording telemetry — extension UI interaction must not inflate event counts.
+let lastFocusedWindow = -1;
+
 const processBatch = (): number => {
 	const read = Atomics.load(control, READ_INDEX);
 	const published = Atomics.load(control, PUBLISHED_INDEX);
@@ -73,6 +90,7 @@ const processBatch = (): number => {
 		const type = TYPE_NAMES[typeVal] ?? "TAB_CREATED";
 		const tabId = Atomics.load(events, base + 1);
 		const windowId = Atomics.load(events, base + 2);
+		const slot3 = Atomics.load(events, base + 3);
 		const tsHigh = Atomics.load(events, base + 4);
 		const tsLow = Atomics.load(events, base + 5);
 		const v0 = Atomics.load(events, base + 6);
@@ -94,6 +112,17 @@ const processBatch = (): number => {
 		if (type === "SCROLL" && v0 !== 0) metadata = { scrollY: v0 };
 		else if (type === "CLICK" && (v0 !== 0 || v1 !== 0))
 			metadata = { x: v0, y: v1 };
+		else if (type === "SW_WINDOW_FOCUS") metadata = { previousWindowId: slot3 };
+		else if (type === "SW_TRACKING_TOGGLE") metadata = { enabled: slot3 !== 0 };
+		else if (type === "SW_DOWNLOAD") metadata = { state: v0 };
+		else if (type === "SW_POPUP_OPEN")
+			metadata = {
+				source: windowId === POPUP_SOURCE.POPUP ? "popup" : "dashboard",
+			};
+		else if (type === "SW_LIFECYCLE") {
+			const kind = LIFECYCLE_KINDS[windowId];
+			if (kind) metadata = { lifecycle: kind };
+		}
 		docs.push({
 			id: `${timestamp}-${tabId}-${logical}`,
 			type,
@@ -158,7 +187,7 @@ const push = async (
 	type: TabEventType,
 	tabId: number,
 	windowId: number,
-	metadata?: { x?: number; y?: number; scrollY?: number },
+	metadata?: TabEventMetadata,
 ) => {
 	await trackingReady;
 	if (!trackingEnabled) return false;
@@ -187,6 +216,7 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 chrome.tabs.onActivated.addListener((info) => {
+	lastFocusedWindow = info.windowId ?? lastFocusedWindow;
 	push("TAB_ACTIVATED", info.tabId, info.windowId);
 });
 
@@ -212,6 +242,24 @@ if (chrome.webNavigation?.onCommitted) {
 		if (details.url) updateMeta(details.tabId, { url: details.url });
 	});
 }
+
+// --- SW telemetry: browser focus (needs `windows` permission) ---
+// FINAL: the ONLY SW signal in production. Cross-window continuity evidence,
+// consumed at the graph layer (applyFocusContinuity), never a session boundary.
+if (chrome.windows?.onFocusChanged) {
+	chrome.windows.onFocusChanged.addListener((windowId) => {
+		const previousWindowId = lastFocusedWindow;
+		// WINDOW_ID_NONE (-1) is a valid Chrome value; normalize, never drop it
+		lastFocusedWindow = windowId;
+		push("SW_WINDOW_FOCUS", 0, windowId, { previousWindowId });
+	});
+}
+
+// --- retired SW signals: NO producers. Historical rows still decode ---
+// (SW_POPUP_OPEN, SW_TRACKING_TOGGLE, SW_DOWNLOAD, SW_LIFECYCLE were removed
+// from the production telemetry path. The tracking state still lives in
+// chrome.storage.local via SET_TRACKING — just no longer persisted as a
+// behavioral event. See packages/shared/src/activities/sw-semantics.ts.)
 
 const getMergedStats = (): StatsSnapshot => {
 	const occupancy = Math.max(

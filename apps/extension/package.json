@@ -5,27 +5,34 @@
 	"version": "0.1.1",
 	"private": true,
 	"scripts": {
-		"dev": "plasmo dev",
+		"predev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css",
+		"dev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css --watch & plasmo dev",
+		"prebuild": "tailwindcss -i ./popup.css -o ./popup.tailwind.css --minify",
 		"build": "plasmo build",
 		"package": "plasmo package"
 	},
 	"dependencies": {
+		"@lobehub/icons": "^5.16.0",
 		"@tabot/shared": "workspace:*",
 		"@tanstack/pacer": "^0.22.0",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0"
 	},
 	"devDependencies": {
+		"@tailwindcss/cli": "^4.3.3",
+		"@tailwindcss/postcss": "^4.3.3",
 		"@types/chrome": "^0.0.268",
 		"@types/react": "^19.0.0",
 		"@types/react-dom": "^19.0.0",
+		"tailwindcss": "^4.3.3",
 		"typescript": "^5.7.0"
 	},
 	"manifest": {
 		"permissions": [
 			"storage",
 			"tabs",
-			"webNavigation"
+			"webNavigation",
+			"windows"
 		],
 		"host_permissions": [
 			"<all_urls>"

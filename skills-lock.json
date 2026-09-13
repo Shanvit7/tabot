@@ -1,6 +1,12 @@
 {
 	"version": 1,
 	"skills": {
+		"changesets": {
+			"source": "cloudflare/sandbox-sdk",
+			"sourceType": "github",
+			"skillPath": ".agents/skills/changesets/SKILL.md",
+			"computedHash": "2020df8f95396a449430c48654ba94adf9c06bb03104909305c4448377703655"
+		},
 		"chrome-extensions": {
 			"source": "googlechrome/modern-web-guidance",
 			"sourceType": "github",

@@ -35,12 +35,52 @@ The content script and Chrome APIs collect these signals:
 | `SCROLL` | viewport and discovered nested scroll containers | scroll offset |
 | `CLICK` | document click | client coordinates |
 | `KEY_ACTIVITY` | document keydown | event only |
+| `SW_WINDOW_FOCUS` | `chrome.windows.onFocusChanged` | window ID focus transition (see SW telemetry section) |
 
 `SCROLL` and `KEY_ACTIVITY` are throttled to 150 ms by TanStack Pacer before messaging the background worker. Key values, text, form values, DOM, screenshots, and page content are never recorded.
 
 Content scripts send `TABOT_PAGE_EVENT` messages. They never touch shared memory. Background service worker is sole producer and owns tab URL/title metadata in an in-memory sidecar.
 
-## Transport And Storage
+The extension also observes one service-worker-level signal (`SW_WINDOW_FOCUS`, see [SW telemetry](#service-worker-telemetry-phase-2-outcome)); four experimental SW signals (popup open, tracking toggle, download, lifecycle) were retired in the Phase 2 final reduction.
+
+## Service Worker Telemetry (Phase 2 outcome)
+
+Phase 2 ran a Service Worker (SW) telemetry experiment: could browser/extension-level signals improve segmentation beyond tab/page telemetry? The **final decision was KEEP WITH REDUCTION** — exactly one SW signal survives, four were retired.
+
+### Surviving signal: `SW_WINDOW_FOCUS`
+
+| | |
+| --- | --- |
+| Source | `chrome.windows.onFocusChanged` (requires `windows` permission) |
+| Carries | `windowId`; sentinel `-1` = no window focused inside Chrome; metadata `previousWindowId` |
+| Semantics | **contextual** — browser state, not activity. It may inform *continuity evidence* at the graph layer; it is never activity itself |
+| Privacy | window identity only; no URL, no title, no content |
+
+Why it exists: `tabs.onActivated` fires only when the active *tab* changes. Focusing a window without changing its tab (title-bar click, click-through) is invisible to Phase 1 telemetry. `SW_WINDOW_FOCUS` closes that gap.
+
+What it is allowed to do (enforced by code, not convention):
+
+- **Never a session boundary.** `sessionize` skips it entirely (like diagnostic events) — it cannot open, extend, merge, or split a session. A focus-only trace yields **0 sessions**.
+- **No episode-boundary score boost.** The episode scorer has no SW terms; focus evidence is a causal record, not a scoring input.
+- **Graph continuity evidence only.** `applyFocusContinuity` decorates an *existing* same-session edge with a strengthened weight when a causal focus sandwich is present (departure window w→x, return x→w chained by `previousWindowId`). Chains involving `previousWindowId === -1` (browser focus loss/regain) are excluded. Evidence requires behavioral anchors on both sides — it can never create a node, edge, or episode, only strengthen an existing trajectory.
+
+Net measured effect on real browsing: SW telemetry adds **zero** sessions, episodes, contexts, or memories; the only delta is graph evidence counts where cross-window continuity genuinely occurred.
+
+### Retired signals (historical rows only)
+
+`SW_POPUP_OPEN`, `SW_TRACKING_TOGGLE`, `SW_DOWNLOAD`, `SW_LIFECYCLE` are classified **diagnostic**: invisible to every behavioral layer (sessions, transitions, contexts, memories). The extension no longer produces them. Their enum indices 10–14 and decode branches are **kept** so historical Dexie rows still decode deterministically — then are filtered out at derivation. Deterministic, not runtime-configurable.
+
+### Taxonomy rules
+
+Every event carries a semantic class, applied by the shared classifier before any derivation touches it:
+
+| Class | Effect |
+| --- | --- |
+| `behavioral` | may contribute to sessions/episodes/contexts as evidence |
+| `contextual` | shapes interpretation of *other* events; not itself activity |
+| `diagnostic` | never influences derivation; engineering only — the firewall rule |
+
+The SW experiment documented 5 signals, 4 categories, 1 new permission (`downloads`), 0 content-bearing fields — and ended with `downloads` permission **removed** and only `SW_WINDOW_FOCUS` retained. Full experimental record: `docs/sw-schema.md` (schema design, still current for encode/decode).
 
 `packages/shared/src/buffer.ts` defines a 10,000-slot `SharedArrayBuffer` ring buffer. Each 32-byte slot stores fixed-width numeric data only:
 
@@ -136,6 +176,14 @@ pnpm --filter shared check:retrieval
 pnpm --filter shared check:liveContext
 pnpm --filter shared check:pipeline
 pnpm --filter shared check:v5regression
+pnpm --filter shared check:bufferRoundtrip
+pnpm --filter shared run swSemantics
+pnpm --filter shared run swDerivation
+pnpm --filter shared run swGraph
+pnpm --filter shared run swEpisodes
+pnpm --filter shared run swFirstSignal
+pnpm --filter shared run swCost
+pnpm --filter shared run swValidation
 pnpm --filter extension build
 pnpm --filter web build
 ```

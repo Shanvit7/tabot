@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+	--color-lime-brand: #bfff00;
+	--color-ink: #000000;
+	--color-orange-brand: #ff6b2c;
+	--color-pink-brand: #ff8fd8;
+
+	--font-sans-brand: "IBM Plex Sans", sans-serif;
+	--font-mono-brand: "IBM Plex Mono", monospace;
+
+	--shadow-hard: 4px 4px 0px #000000;
+	--shadow-hard-sm: 2px 2px 0px #000000;
+}
+
+@layer components {
+	.card {
+		@apply border-2 border-ink bg-white px-[12px] py-[11px] shadow-hard-sm;
+	}
+
+	.label {
+		@apply font-mono-brand text-[10px] font-bold tracking-[0.07em] uppercase;
+	}
+
+	.share-btn {
+		@apply inline-flex w-full items-center justify-center gap-[6px] border-2 border-lime-brand bg-white px-[9px] py-[7px] font-mono-brand text-[10px] font-bold text-ink uppercase shadow-hard-sm disabled:cursor-wait disabled:opacity-60;
+	}
+
+	.cli-btn {
+		@apply inline-flex items-center gap-[6px] border-2 border-white/70 bg-transparent px-[9px] py-[7px] font-mono-brand text-[10px] font-bold text-white uppercase disabled:cursor-wait disabled:opacity-60;
+	}
+}
