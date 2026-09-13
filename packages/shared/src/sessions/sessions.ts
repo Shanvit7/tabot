@@ -2,6 +2,7 @@
 // Phase 2 Layer 1 — Events → Sessions (docs/tech.md)
 // Pure derivation layer: raw events in, Session[] out. No persistence, no LLM.
 
+import { isDiagnostic } from "../activities/sw-semantics";
 import type { StoredTabEvent, TabotDatabase } from "../events/db";
 import type { TabEventType } from "../events/events";
 
@@ -94,6 +95,26 @@ export const sessionize = (events: StoredTabEvent[]): Session[] => {
 	let prevEvent: StoredTabEvent | null = null;
 
 	for (const event of sorted) {
+		// Step 7 — a diagnostic SW event (e.g. SW_LIFECYCLE) is engineering-only:
+		// it is invisible to derivation and can't create a session boundary.
+		// Without this guard, suspend/startup events fragment one session into
+		// many (Step 7 evidence: 7 vs 2). Raw events still persist; derivation
+		// simply doesn't treat lifecycle as behavior.
+		if (isDiagnostic(event.type)) continue;
+
+		// Step 10 correction — SW_WINDOW_FOCUS is CONTEXT, never session
+		// authority. A focus transition must not reset the inactivity timer,
+		// prevent a session from ending, open a session, or bridge a gap:
+		// browser focus state is not user intent, and a focus regain after
+		// long silence is not proof the same task resumed (real-trace observer
+		// verdict: a 28-min session was kept alive across silent spans by
+		// focus rows alone). Session continuity belongs to behavioral
+		// telemetry only — navigation, tab activation, visibility, clicks,
+		// key activity, scroll. Focus causality survives as GRAPH edge
+		// evidence (sw-graph.ts applyFocusContinuity), never as a session
+		// decision. Phase 1 and Phase 2 sessions are therefore identical.
+		if (event.type === "SW_WINDOW_FOCUS") continue;
+
 		let shouldStartNew = current === null;
 
 		if (!shouldStartNew && prevEvent) {

@@ -1,0 +1,40 @@
+name: Release — Version Packages
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Opens / updates the "Version Packages" PR. Merging it bumps the extension
+      # version + changelog on main; the existing deploy.yml + submit.yml then
+      # publish to Pages and the Chrome Web Store automatically.
+      - name: Create / update versioning PR
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset version
+          commit: "chore: version packages"
+          title: "chore: version packages"

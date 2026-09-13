@@ -182,6 +182,15 @@ export const buildActivityAnchors = (sessions: Session[]): ActivityAnchor[] => {
 		let lastTs = 0;
 
 		for (const event of stream) {
+			// Phase 2 Step 11 — SW focus events are PRESENCE, not page activity:
+			// they carry no URL, so folding them into the current anchor would
+			// extend its span to the excursion's return and collapse the real gap
+			// to ~0 — false-merging a subsequent task change into the previous
+			// page (measured in sw-episodes.check S2). The SESSION layer consumes
+			// their presence signal (sessions.ts); anchors are page-trajectory
+			// only. Phase 1 emits no focus events → anchors byte-identical.
+			if (event.type === "SW_WINDOW_FOCUS") continue;
+
 			const origin = event.ref?.origin ?? "";
 			const pathname = event.ref?.pathname ?? "";
 			const pageKey = pageKeyOf(origin, pathname);

@@ -19,13 +19,15 @@
 		"doctor:staged": "pnpm --filter web exec react-doctor --staged --blocking error",
 		"dev": "pnpm -r --if-present --parallel dev",
 		"dev:extension": "pnpm --filter extension dev",
-		"dev:web": "pnpm --filter web dev"
+		"dev:web": "pnpm --filter web dev",
+		"changeset": "changeset"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.9",
+		"@changesets/cli": "^3.0.2",
 		"destr": "2.0.5",
 		"husky": "^9.1.7",
 		"knip": "^6.32.3",

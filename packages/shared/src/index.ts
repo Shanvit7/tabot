@@ -47,7 +47,11 @@ export {
 } from "./events/db";
 export {
 	EVENT_TYPES,
+	LIFECYCLE_KINDS,
+	type LifecycleKind,
+	POPUP_SOURCE,
 	type TabEvent,
+	type TabEventMetadata,
 	type TabEventType,
 	ValueToEventType,
 } from "./events/events";
@@ -125,3 +129,18 @@ export {
 	sessionize,
 	type TabParticipation,
 } from "./sessions/sessions";
+export {
+	buildExportJsonl,
+	type Derived,
+	derive,
+	EXPORT_THRESHOLDS,
+	filterDerived,
+	fmtIso,
+} from "./share/export";
+export {
+	type AiTargetDef,
+	CLI_TARGET_DEFS,
+	type CliTargetDef,
+	WEB_TARGET_DEFS,
+	type WebTargetDef,
+} from "./share/targets";
