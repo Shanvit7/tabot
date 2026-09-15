@@ -8,11 +8,11 @@
   </p>
 </p>
 
-> Tabs know where your work went. Now you do too.
+> Thinking across tabs
 
 Tabot is a privacy-first work-memory layer for people who do their work in a browser — founders, operators, researchers, marketers, designers, support teams, and developers. It turns local browser activity into structured, portable context you own, so you, an AI assistant, or any future tool can pick work up without rebuilding it from scratch.
 
-** Open source · Privacy-first · MIT**
+**Open source · Privacy-first · MIT**
 
 ---
 
