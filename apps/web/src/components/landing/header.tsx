@@ -1,3 +1,4 @@
+import SiGithub from "@icons-pack/react-simple-icons/icons/SiGithub";
 import { Button } from "~/components/ui/button";
 
 const links = [
@@ -31,10 +32,12 @@ export const Header = () => (
 			<div className="flex items-center gap-3">
 				<Button asChild size="sm" variant="outline">
 					<a
+						className="flex items-center gap-1.5"
 						href="https://github.com/Shanvit7/tabot"
 						rel="noopener"
 						target="_blank"
 					>
+						<SiGithub size={14} />
 						Star on GitHub
 					</a>
 				</Button>
