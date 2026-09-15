@@ -61,8 +61,12 @@ export const GetStarted = () => {
 		>
 			<div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-20">
 				<div className="max-w-3xl">
-					<h2 className="text-[clamp(3.4rem,7vw,7rem)] font-semibold leading-[0.84] tracking-[-0.04em] text-balance">
-						Keep context. Lose less momentum.
+					<h2 className="text-[clamp(2.75rem,5.5vw,5.5rem)] font-semibold leading-[0.88] tracking-[-0.03em] text-balance">
+						Keep and share context. Lose{" "}
+						<span className="inline-block bg-black px-[0.14em] text-lime shadow-hard-sm">
+							less
+						</span>{" "}
+						momentum.
 					</h2>
 					<p className="mt-8 max-w-xl text-lg leading-8 text-[#244d39] sm:text-xl">
 						Install Tabot, browse normally, then review your own activity from

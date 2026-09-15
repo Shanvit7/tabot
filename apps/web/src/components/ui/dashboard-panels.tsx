@@ -37,11 +37,7 @@ export const Loading = () => (
 			/>
 			<div className="flex items-end gap-2" aria-hidden="true">
 				{[0, 0.16, 0.32, 0.48, 0.64].map((delay) => (
-					<span
-						key={delay}
-						className="loading-tab"
-						style={{ animationDelay: `${delay}s` }}
-					/>
+					<span key={delay} className="loading-tab" />
 				))}
 			</div>
 			<div className="font-mono text-xs uppercase tracking-widest">Loading</div>

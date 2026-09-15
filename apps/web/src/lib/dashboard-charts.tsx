@@ -152,6 +152,16 @@ export const NEON = [
 	"#10b981",
 ];
 
+/** Tailwind class equivalents of NEON — use for className styling (no style props). */
+export const NEON_BG = [
+	"bg-[#bfff00]",
+	"bg-[#f97316]",
+	"bg-[#06b6d4]",
+	"bg-[#ec4899]",
+	"bg-[#a78bfa]",
+	"bg-[#10b981]",
+];
+
 const activityChart = (data: HourBucket[]): ChartDefinition<HourBucket> =>
 	defineChart({
 		marks: [

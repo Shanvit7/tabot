@@ -3,16 +3,16 @@
   <h1 align="center">Tabot</h1>
   <p align="center">
     <a href="https://github.com/Shanvit7/tabot/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-062A23?style=flat-square" alt="License: MIT" /></a>
-    <img src="https://img.shields.io/badge/status-experimental-062A23?style=flat-square" alt="Status" />
-    <img src="https://img.shields.io/badge/local_first-062A23?style=flat-square" alt="Local-first" />
+    <img src="https://img.shields.io/badge/chrome_extension-062A23?style=flat-square" alt="Chrome extension" />
+    <img src="https://img.shields.io/badge/privacy_first-062A23?style=flat-square" alt="Privacy-first" />
   </p>
 </p>
 
-> Every digital worker needs a memory.
+> Thinking across tabs
 
-Tabot is a local-first work-memory layer for people who do their work in a browser — founders, operators, researchers, marketers, designers, support teams, and developers. It turns local browser activity into structured, portable context you own, so you, an AI assistant, or any future tool can pick work up without rebuilding it from scratch.
+Tabot is a privacy-first work-memory layer for people who do their work in a browser — founders, operators, researchers, marketers, designers, support teams, and developers. It turns local browser activity into structured, portable context you own, so you, an AI assistant, or any future tool can pick work up without rebuilding it from scratch.
 
-**Experimental · Open source · Local-first · MIT**
+**Open source · Privacy-first · MIT**
 
 ---
 
@@ -50,11 +50,11 @@ The graph is evidence for relationships between activity. Chronological order re
 
 ## Bring your own AI
 
-Tabot does not own the intelligence layer. It is context infrastructure for every digital worker, whatever tools they use. Use exported data with ChatGPT, Claude, Gemini, local models, your own agent, your own scripts — or no AI at all.
+Tabot does not own the intelligence layer. It is context infrastructure for anyone whose work happens in a browser, whatever tools they use. Use exported data with ChatGPT, Claude, Gemini, local models, your own agent, your own scripts — or no AI at all.
 
 **your data → your context → your choice of AI**
 
-## Local-first
+## Privacy-first
 
 The core telemetry and derivation run locally. There is no Tabot cloud required for the core pipeline, and you control when data is exported.
 
@@ -64,7 +64,7 @@ Browser telemetry is sensitive. Even without page contents, URLs, domains, times
 
 The canonical export is **JSONL with a manifest**. The manifest describes the export and its schema/derivation versions; the remaining lines contain the canonical event and derived records, preserving provenance through IDs.
 
-The export is intended to be human inspectable, scriptable, reproducible, portable, and usable by AI agents. The exact schema is documented in the repository's export specification and may evolve while Tabot is experimental.
+The export is intended to be human inspectable, scriptable, reproducible, portable, and usable by AI agents. The exact schema is documented in the repository's export specification and may evolve while Tabot is in active development.
 
 ## What Tabot can and cannot know
 
@@ -92,7 +92,7 @@ Tabot is intended to work from browser activity signals rather than indiscrimina
 
 ## Get started
 
-Currently experimental. Typical development commands:
+Typical development commands:
 
 ```bash
 pnpm install

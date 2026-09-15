@@ -1,7 +1,7 @@
 import SiGithub from "@icons-pack/react-simple-icons/icons/SiGithub";
 
 const links = [
-	{ href: "#local-first", label: "Local-first" },
+	{ href: "#privacy-first", label: "Privacy-first" },
 	{ href: "#how-it-works", label: "How it works" },
 	{ href: "#get-started", label: "Get started" },
 	{ href: `${import.meta.env.BASE_URL}privacy`, label: "Privacy" },
@@ -13,7 +13,7 @@ export const Footer = () => (
 		<div className="mx-auto max-w-7xl">
 			<div className="border-b border-[#405b4d] pb-10 sm:pb-14">
 				<p className="text-sm font-semibold text-[#bfff00]">TABOT</p>
-				<h2 className="mt-6 max-w-5xl text-balance text-[clamp(4.5rem,12vw,12rem)] font-semibold leading-[0.72] tracking-[-0.04em]">
+				<h2 className="mt-6 max-w-5xl text-balance text-[clamp(4.5rem,12vw,12rem)] font-semibold leading-[0.8] tracking-[-0.04em]">
 					Thinking
 					<br />
 					across tabs.
@@ -25,7 +25,7 @@ export const Footer = () => (
 
 			<div className="grid gap-10 py-8 sm:grid-cols-[1fr_auto] sm:items-end">
 				<p className="max-w-xs text-sm leading-6 text-[#8ca493]">
-					Local-first browser context. Your activity stays on your device.
+					Privacy-first browser context. Your activity stays on your device.
 				</p>
 				<nav
 					aria-label="Footer navigation"

@@ -79,6 +79,11 @@ Chrome Extension (Plasmo)
 | Quotes | single |
 | Semicolons | always |
 
+### No Inline Style Props
+
+- **Style with Tailwind `className`, never the `style` prop** — static styling (colors, sizes, positions, gradients, shadows, typography) goes in Tailwind classes, including arbitrary values (`bg-[radial-gradient(...)]`, `w-[172px]`)
+- **Exception: runtime-computed values only** — per-frame animation values (Remotion `interpolate`/`spring`), or values derived from runtime data (per-item colors, dynamic delays) may stay in `style`. Keep `style` to those dynamic keys only; every other key belongs in `className`
+
 ---
 
 ## 🔧 Tooling
@@ -114,3 +119,4 @@ Chrome Extension (Plasmo)
 - ❌ No double equals (`==`)
 - ❌ No raw event objects in UI components — only aggregated stats
 - ❌ No cloud storage or backend APIs in V1 — everything stays local
+- ❌ No inline `style` props for static styling — use Tailwind `className` (dynamic runtime values are the only exception)
