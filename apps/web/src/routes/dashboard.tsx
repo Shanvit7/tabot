@@ -566,8 +566,7 @@ const Dashboard = () => {
 													className="flex items-center gap-2 font-mono text-xs"
 												>
 													<span
-														className="h-3 w-3 border-hard"
-														style={{ backgroundColor: charts.NEON[index] }}
+														className={`h-3 w-3 border-hard ${charts.NEON_BG[index]}`}
 													/>
 													<span className="min-w-0 flex-1 truncate">
 														{item.label}

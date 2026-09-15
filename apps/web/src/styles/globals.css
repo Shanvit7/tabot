@@ -118,6 +118,22 @@ body {
 	animation: loading-stamp 1.6s ease-in-out infinite;
 }
 
+.loading-tab:nth-child(2) {
+	animation-delay: 0.16s;
+}
+
+.loading-tab:nth-child(3) {
+	animation-delay: 0.32s;
+}
+
+.loading-tab:nth-child(4) {
+	animation-delay: 0.48s;
+}
+
+.loading-tab:nth-child(5) {
+	animation-delay: 0.64s;
+}
+
 @keyframes loading-stamp {
 	0% {
 		transform: translateY(-0.6rem);

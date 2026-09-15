@@ -7,12 +7,49 @@ import {
 	useCurrentFrame,
 	useVideoConfig,
 } from "remotion";
+import { cn } from "~/lib/utils";
 
 const moments = [
-	{ label: "Search", x: 118, y: 160, color: "#7dd3fc", delay: 0 },
-	{ label: "Open page", x: 690, y: 138, color: "#fbbf24", delay: 8 },
-	{ label: "Back to it", x: 708, y: 396, color: "#f9a8d4", delay: 16 },
-	{ label: "New tab", x: 112, y: 412, color: "#c4b5fd", delay: 24 },
+	{
+		border: "border-[#7dd3fc55]",
+		color: "#7dd3fc",
+		delay: 0,
+		label: "Search",
+		shadow: "shadow-[0_18px_40px_#7dd3fc18]",
+		text: "text-[#7dd3fc]",
+		x: 118,
+		y: 212,
+	},
+	{
+		border: "border-[#fbbf2455]",
+		color: "#fbbf24",
+		delay: 8,
+		label: "Open page",
+		shadow: "shadow-[0_18px_40px_#fbbf2418]",
+		text: "text-[#fbbf24]",
+		x: 690,
+		y: 138,
+	},
+	{
+		border: "border-[#f9a8d455]",
+		color: "#f9a8d4",
+		delay: 16,
+		label: "Back to it",
+		shadow: "shadow-[0_18px_40px_#f9a8d418]",
+		text: "text-[#f9a8d4]",
+		x: 708,
+		y: 396,
+	},
+	{
+		border: "border-[#c4b5fd55]",
+		color: "#c4b5fd",
+		delay: 24,
+		label: "New tab",
+		shadow: "shadow-[0_18px_40px_#c4b5fd18]",
+		text: "text-[#c4b5fd]",
+		x: 112,
+		y: 412,
+	},
 ] as const;
 
 const ambientDots = Array.from({ length: 30 }, (_, index) => ({
@@ -41,18 +78,10 @@ export const BrowserContextFilm = () => {
 	});
 
 	return (
-		<AbsoluteFill
-			style={{
-				background:
-					"radial-gradient(circle at 50% 50%, #183d35 0%, #0b1d21 35%, #061014 78%)",
-				color: "#eff8ed",
-				fontFamily: "IBM Plex Sans, sans-serif",
-				overflow: "hidden",
-			}}
-		>
+		<AbsoluteFill className="overflow-hidden bg-[radial-gradient(circle_at_50%_50%,#183d35_0%,#0b1d21_35%,#061014_78%)] font-sans text-[#eff8ed]">
 			<svg
+				className="absolute inset-0 w-240"
 				height="620"
-				style={{ inset: 0, position: "absolute", width: "960px" }}
 				viewBox="0 0 960 620"
 			>
 				<title>Browser moments gathering into local Tabot context</title>
@@ -121,14 +150,12 @@ export const BrowserContextFilm = () => {
 
 			{ambientDots.map((dot, index) => (
 				<div
+					className="absolute rounded-full bg-[#d9ff98]"
 					key={`${dot.x}-${dot.y}`}
 					style={{
-						background: "#d9ff98",
-						borderRadius: 999,
 						height: dot.size,
 						left: dot.x,
 						opacity: 0.1 + (Math.sin(frame / 10 + index) + 1) * 0.08,
-						position: "absolute",
 						top: dot.y,
 						width: dot.size,
 					}}
@@ -136,72 +163,36 @@ export const BrowserContextFilm = () => {
 			))}
 
 			<Interactive.Div
+				className="absolute left-9.5 top-7.5 flex items-center gap-2.5"
 				name="Tabot label"
 				style={{
-					alignItems: "center",
-					display: "flex",
-					gap: 10,
-					left: 38,
 					opacity: interpolate(frame, [0, 12], [0, 1], {
 						extrapolateLeft: "clamp",
 						extrapolateRight: "clamp",
 					}),
-					position: "absolute",
-					top: 30,
 				}}
 			>
-				<span
-					style={{
-						background: "#bfff00",
-						borderRadius: 99,
-						height: 10,
-						width: 10,
-					}}
-				/>
-				<span
-					style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.04em" }}
-				>
-					TABOT
-				</span>
-				<span
-					style={{
-						border: "1px solid #4e706a",
-						borderRadius: 99,
-						color: "#a8c7bc",
-						fontSize: 11,
-						letterSpacing: "0.04em",
-						padding: "6px 9px",
-					}}
-				>
+				<span className="size-2.5 rounded-full bg-[#bfff00]" />
+				<span className="text-[19px] font-bold tracking-[-0.04em]">TABOT</span>
+				<span className="rounded-full border border-[#4e706a] px-2.25 py-1.5 text-[11px] tracking-[0.04em] text-[#a8c7bc]">
 					KEPT LOCAL
 				</span>
 			</Interactive.Div>
 
 			<Interactive.Div
+				className="absolute left-9.5 top-21"
 				name="Work statement"
 				style={{
-					left: 38,
 					opacity: interpolate(frame, [4, 22, 84, 101], [0, 1, 1, 0], {
 						extrapolateLeft: "clamp",
 						extrapolateRight: "clamp",
 					}),
-					position: "absolute",
-					top: 84,
 				}}
 			>
-				<div
-					style={{ color: "#9fbdb3", fontSize: 13, letterSpacing: "0.06em" }}
-				>
+				<div className="text-[13px] tracking-[0.06em] text-[#9fbdb3]">
 					YOUR DAY MOVES FAST
 				</div>
-				<div
-					style={{
-						fontSize: 32,
-						fontWeight: 650,
-						letterSpacing: "-0.04em",
-						marginTop: 7,
-					}}
-				>
+				<div className="mt-1.75 text-[32px] font-[650] tracking-[-0.04em]">
 					Keep what happened together.
 				</div>
 			</Interactive.Div>
@@ -212,19 +203,19 @@ export const BrowserContextFilm = () => {
 					fps,
 					frame: frame - moment.delay - 6,
 				});
-				const currentX = moment.x + (480 - (moment.x + 86)) * collect;
-				const currentY = moment.y + (308 - (moment.y + 39)) * collect;
+				const currentX = moment.x + (480 - moment.x) * collect;
+				const currentY = moment.y + (308 - moment.y) * collect;
 
 				return (
 					<Interactive.Div
+						className={cn(
+							"absolute w-43 -translate-x-1/2 -translate-y-1/2 rounded-[13px] border bg-[linear-gradient(135deg,rgba(31,65,65,0.94),rgba(11,29,33,0.9))] p-[12px_14px]",
+							moment.border,
+							moment.shadow,
+						)}
 						key={moment.label}
 						name={`${moment.label} browser moment`}
 						style={{
-							background:
-								"linear-gradient(135deg, rgba(31, 65, 65, 0.94), rgba(11, 29, 33, 0.9))",
-							border: `1px solid ${moment.color}55`,
-							borderRadius: 13,
-							boxShadow: `0 18px 40px ${moment.color}18`,
 							left: currentX,
 							opacity:
 								interpolate(frame, [moment.delay, moment.delay + 12], [0, 1], {
@@ -232,31 +223,14 @@ export const BrowserContextFilm = () => {
 									extrapolateRight: "clamp",
 								}) *
 								(1 - collect * 0.92),
-							padding: "12px 14px",
-							position: "absolute",
 							scale: Math.max(0.01, scale) * (1 - collect * 0.58),
 							top: currentY,
-							translate: "-50% -50%",
-							width: 172,
 						}}
 					>
-						<div
-							style={{
-								color: moment.color,
-								fontSize: 11,
-								letterSpacing: "0.06em",
-							}}
-						>
+						<div className={cn("text-[11px] tracking-[0.06em]", moment.text)}>
 							BROWSER MOMENT
 						</div>
-						<div
-							style={{
-								fontSize: 17,
-								fontWeight: 600,
-								letterSpacing: "-0.025em",
-								marginTop: 7,
-							}}
-						>
+						<div className="mt-1.75 text-[17px] font-semibold tracking-tight">
 							{moment.label}
 						</div>
 					</Interactive.Div>
@@ -264,123 +238,65 @@ export const BrowserContextFilm = () => {
 			})}
 
 			<Interactive.Div
+				className="absolute left-120 top-77 w-59.5 -translate-x-1/2 -translate-y-1/2 rounded-[22px] border border-[#efffc6] bg-[linear-gradient(145deg,#d9ff8b,#91c900)] p-[18px_20px] text-[#102219] shadow-[0_0_0_8px_rgba(191,255,0,0.1),0_0_55px_rgba(191,255,0,0.34)]"
 				name="Context core"
 				style={{
-					background: "linear-gradient(145deg, #d9ff8b, #91c900)",
-					border: "1px solid #efffc6",
-					borderRadius: 22,
-					boxShadow:
-						"0 0 0 8px rgba(191,255,0,0.1), 0 0 55px rgba(191,255,0,0.34)",
-					color: "#102219",
-					left: 480,
 					opacity: ready,
-					padding: "18px 20px",
-					position: "absolute",
 					scale: spring({
 						config: { damping: 13, mass: 0.8, stiffness: 120 },
 						fps,
 						frame: frame - 101,
 					}),
-					top: 308,
-					translate: "-50% -50%",
-					width: 238,
 				}}
 			>
-				<div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em" }}>
+				<div className="text-[11px] font-bold tracking-[0.08em]">
 					YOUR CONTEXT
 				</div>
-				<div
-					style={{
-						fontSize: 25,
-						fontWeight: 700,
-						letterSpacing: "-0.04em",
-						lineHeight: 1,
-						marginTop: 9,
-					}}
-				>
+				<div className="mt-2.25 text-[25px] font-bold leading-none tracking-[-0.04em]">
 					All in one place.
 				</div>
-				<div
-					style={{ fontSize: 13, fontWeight: 600, marginTop: 8, opacity: 0.7 }}
-				>
+				<div className="mt-2 text-[13px] font-semibold opacity-70">
 					Built from browser activity.
 				</div>
 			</Interactive.Div>
 
 			<Interactive.Div
+				className="absolute left-170.5 top-77 w-50 -translate-y-1/2 rounded-2xl border border-[#bfff00] bg-[rgba(8,22,25,0.88)] p-[16px_18px] shadow-[0_18px_48px_rgba(0,0,0,0.28)]"
 				name="Use your context"
 				style={{
-					background: "rgba(8, 22, 25, 0.88)",
-					border: "1px solid #bfff00",
-					borderRadius: 16,
-					boxShadow: "0 18px 48px rgba(0,0,0,0.28)",
-					left: 682,
 					opacity: useIt,
-					padding: "16px 18px",
-					position: "absolute",
 					scale: spring({
 						config: { damping: 18, mass: 0.6, stiffness: 150 },
 						fps,
 						frame: frame - 134,
 					}),
-					top: 308,
-					translate: "0 -50%",
-					width: 200,
 				}}
 			>
-				<div
-					style={{ color: "#bfff00", fontSize: 11, letterSpacing: "0.08em" }}
-				>
+				<div className="text-[11px] tracking-[0.08em] text-[#bfff00]">
 					WHEN YOU NEED IT
 				</div>
-				<div
-					style={{
-						fontSize: 20,
-						fontWeight: 650,
-						letterSpacing: "-0.04em",
-						lineHeight: 1.05,
-						marginTop: 9,
-					}}
-				>
+				<div className="mt-2.25 text-[20px] font-[650] leading-[1.05] tracking-[-0.04em]">
 					Continue with clarity.
 				</div>
-				<div
-					style={{
-						color: "#a9c1b6",
-						fontSize: 12,
-						lineHeight: 1.35,
-						marginTop: 9,
-					}}
-				>
+				<div className="mt-2.25 text-[12px] leading-[1.35] text-[#a9c1b6]">
 					Use it yourself or with an AI you choose.
 				</div>
 			</Interactive.Div>
 
 			<Interactive.Div
+				className="absolute bottom-9 left-9.5"
 				name="Closing statement"
 				style={{
-					bottom: 36,
-					left: 38,
 					opacity: interpolate(frame, [148, 164], [0, 1], {
 						extrapolateLeft: "clamp",
 						extrapolateRight: "clamp",
 					}),
-					position: "absolute",
 				}}
 			>
-				<div
-					style={{ color: "#bfff00", fontSize: 12, letterSpacing: "0.08em" }}
-				>
-					LOCAL-FIRST
+				<div className="text-[12px] tracking-[0.08em] text-[#bfff00]">
+					PRIVACY-FIRST
 				</div>
-				<div
-					style={{
-						fontSize: 27,
-						fontWeight: 650,
-						letterSpacing: "-0.04em",
-						marginTop: 6,
-					}}
-				>
+				<div className="mt-1.5 text-[27px] font-[650] tracking-[-0.04em]">
 					Your activity. Yours to use.
 				</div>
 			</Interactive.Div>

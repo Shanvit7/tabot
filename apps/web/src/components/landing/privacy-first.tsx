@@ -40,7 +40,7 @@ const privateChipPositions = [
 	"left-1/2 top-[88%] -translate-x-1/2 sm:left-[63%] sm:top-[67%] sm:translate-x-0",
 ] as const;
 
-export const LocalFirst = () => {
+export const PrivacyFirst = () => {
 	const sectionRef = useRef<HTMLElement>(null);
 	const [sceneIndex, setSceneIndex] = useState(0);
 	const reduceMotion = useReducedMotion();
@@ -59,7 +59,7 @@ export const LocalFirst = () => {
 	return (
 		<section
 			className="relative bg-[#e9f4d6] text-[#102219]"
-			id="local-first"
+			id="privacy-first"
 			ref={sectionRef}
 		>
 			<div className="sticky top-0 min-h-svh overflow-hidden">

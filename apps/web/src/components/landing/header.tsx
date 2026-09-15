@@ -2,8 +2,7 @@ import { Button } from "~/components/ui/button";
 
 const links = [
 	{ href: "#how-it-works", label: "How it works" },
-	{ href: "#local-first", label: "Local-first" },
-	{ href: "#get-started", label: "Get started" },
+	{ href: "#privacy-first", label: "Privacy-first" },
 ] as const;
 
 export const Header = () => (
@@ -18,7 +17,7 @@ export const Header = () => (
 			>
 				TABOT
 			</a>
-			<div className="hidden items-center gap-7 pl-40 font-mono text-xs font-medium uppercase tracking-wider md:flex">
+			<div className="hidden items-center gap-7 pl-16 font-mono text-xs font-medium uppercase tracking-wider md:flex lg:pl-40">
 				{links.map((link) => (
 					<a
 						className="underline-offset-4 hover:underline"
@@ -29,8 +28,8 @@ export const Header = () => (
 					</a>
 				))}
 			</div>
-			<div className="flex items-center gap-2">
-				<Button asChild size="sm" variant="secondary">
+			<div className="flex items-center gap-3">
+				<Button asChild size="sm" variant="outline">
 					<a
 						href="https://github.com/Shanvit7/tabot"
 						rel="noopener"
@@ -38,6 +37,9 @@ export const Header = () => (
 					>
 						Star on GitHub
 					</a>
+				</Button>
+				<Button asChild size="sm" variant="secondary">
+					<a href="#get-started">Get started</a>
 				</Button>
 			</div>
 		</nav>

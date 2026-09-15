@@ -9,7 +9,7 @@
 		"overrides": [
 			{
 				"files": [
-					"src/components/landing/local-first.tsx",
+					"src/components/landing/privacy-first.tsx",
 					"src/components/ui/dashboard-panels.tsx",
 					"src/lib/dashboard-charts.tsx"
 				],
@@ -18,7 +18,7 @@
 			{
 				"files": [
 					"src/components/landing/hero.tsx",
-					"src/components/landing/local-first.tsx"
+					"src/components/landing/privacy-first.tsx"
 				],
 				"rules": ["react-doctor/use-lazy-motion"]
 			},
