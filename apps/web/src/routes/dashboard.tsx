@@ -10,16 +10,17 @@ import {
 } from "~/components/ui/dashboard-panels";
 import type { HourBucket } from "~/lib/dashboard-charts";
 import {
-	buildExportCsv,
 	buildExportJsonl,
 	derive,
 	downloadFile,
+	exportFilename,
 	fetchEvents,
 	fetchStats,
 	filterDerived,
 	formatAgo,
 	formatDuration,
 	rangeStart,
+	sanitizeDerived,
 } from "~/lib/dashboard-data";
 import { TAB, type Tab } from "~/lib/dashboard-tabs";
 import type { CliTarget, WebTarget } from "~/lib/share-targets";
@@ -59,10 +60,6 @@ const MAX_CHAT_CHARS = 300_000;
 
 // ─── Module-scope pure helpers (defined once, not per render) ───
 
-// Filenames both Download flows share.
-const exportFilename = (ext: string) =>
-	`tabot-export-${new Date().toISOString().slice(0, 10)}.${ext}`;
-
 const copyText = async (text: string): Promise<boolean> => {
 	try {
 		await navigator.clipboard.writeText(text);
@@ -97,6 +94,8 @@ const Dashboard = () => {
 	const [exporting, setExporting] = useState(false);
 	// Chat-about-your-data feedback line
 	const [copiedTo, setCopiedTo] = useState<string | null>(null);
+	// Export failure line — surfaced instead of silently downloading raw data
+	const [exportError, setExportError] = useState<string | null>(null);
 	// Export period filter: from/to as "YYYY-MM-DD" (inclusive); empty = unbounded.
 	const [expFrom, setExpFrom] = useState("");
 	const [expTo, setExpTo] = useState("");
@@ -279,34 +278,50 @@ const Dashboard = () => {
 	);
 
 	// Filenames both Download flows share.
-	const handleDownload = (format: "jsonl" | "csv") => {
+	const handleDownload = async () => {
 		if (!derived || !exportData) return;
 		setExporting(true);
-		if (format === "jsonl") {
+		setExportError(null);
+		try {
+			// Privacy boundary: external consumers only ever see sanitized data.
 			downloadFile(
-				exportFilename("jsonl"),
-				buildExportJsonl(derived),
+				exportFilename(derived.events, "jsonl"),
+				buildExportJsonl(await sanitizeDerived(derived)),
 				"application/x-ndjson",
 			);
-		} else {
-			downloadFile(
-				exportFilename("csv"),
-				buildExportCsv(derived),
-				"text/csv;charset=utf-8",
-			);
+		} catch {
+			setExportError("Redaction failed — nothing was downloaded.");
+		} finally {
+			setTimeout(() => setExporting(false), 800);
 		}
-		setTimeout(() => setExporting(false), 800);
 	};
 
 	// Same canonical JSONL the Download button emits, from the selected period —
 	// chat works off the selection directly, no file upload.
-	const chatBody = useMemo(() => {
-		if (!exportData) return null;
-		let body = buildExportJsonl(exportData);
-		if (body.length > MAX_CHAT_CHARS) {
-			body = `${body.slice(0, MAX_CHAT_CHARS)}…\n[truncated ${(body.length - MAX_CHAT_CHARS).toLocaleString()} chars]`;
+	const [chatBody, setChatBody] = useState<string | null>(null);
+	useEffect(() => {
+		if (!exportData) {
+			setChatBody(null);
+			return;
 		}
-		return body;
+		let cancelled = false;
+		sanitizeDerived(exportData)
+			.then((safe) => {
+				if (cancelled) return;
+				let body = buildExportJsonl(safe);
+				if (body.length > MAX_CHAT_CHARS) {
+					body = `${body.slice(0, MAX_CHAT_CHARS)}…\n[truncated ${(body.length - MAX_CHAT_CHARS).toLocaleString()} chars]`;
+				}
+				setChatBody(body);
+			})
+			.catch(() => {
+				if (cancelled) return;
+				setChatBody(null);
+				setExportError("Redaction failed — chat prefill disabled.");
+			});
+		return () => {
+			cancelled = true;
+		};
 	}, [exportData]);
 
 	const openAiChat = async (t: WebTarget) => {
@@ -948,25 +963,20 @@ const Dashboard = () => {
 											className="w-full"
 											variant="secondary"
 											disabled={exporting}
-											onClick={() => handleDownload("jsonl")}
+											onClick={() => handleDownload()}
 										>
-											{exporting
-												? "Downloading…"
-												: "Download JSONL (recommended for LLMs)"}
-										</Button>
-										<Button
-											className="w-full"
-											variant="outline"
-											disabled={exporting}
-											onClick={() => handleDownload("csv")}
-										>
-											Download CSV
+											{exporting ? "Downloading…" : "Download JSONL"}
 										</Button>
 										<div className="font-mono text-xs text-muted-foreground">
-											JSONL recommended for LLMs — canonical, self-describing
-											events + sessions + contexts + memories. CSV is a flat
-											session summary. All local — nothing leaves your machine.
+											Canonical, self-describing events + sessions + contexts +
+											memories — sanitized before it leaves the app. All local,
+											nothing goes to a server.
 										</div>
+										{exportError && (
+											<div className="font-mono text-xs font-bold">
+												{exportError}
+											</div>
+										)}
 									</div>
 								</div>
 

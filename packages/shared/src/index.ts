@@ -82,6 +82,16 @@ export {
 	type MemoryDomain,
 } from "./memories/memories";
 export {
+	PII_REDACTION_DEFAULT_ENABLED,
+	sanitizeDerived,
+} from "./privacy/sanitize";
+export type {
+	PiiFinding,
+	PiiRedactionOptions,
+	PiiRedactor,
+	RedactionResult,
+} from "./privacy/types";
+export {
 	buildLiveContext,
 	getCurrentBrowserContext,
 	getLiveInteractionIntensity,
@@ -134,6 +144,7 @@ export {
 	type Derived,
 	derive,
 	EXPORT_THRESHOLDS,
+	exportFilename,
 	filterDerived,
 	fmtIso,
 } from "./share/export";

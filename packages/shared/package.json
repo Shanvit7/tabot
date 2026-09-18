@@ -16,6 +16,8 @@
 		"check:liveContext": "node --import ./resolve-hook.mjs src/checks/live-context.check.ts",
 		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/checks/meaningful-events.check.ts",
 		"check:pipeline": "node --import ./resolve-hook.mjs src/checks/pipeline.check.ts",
+		"check:privacy": "node --import ./resolve-hook.mjs src/checks/privacy.check.ts",
+		"check:exportFilename": "node --import ./resolve-hook.mjs src/checks/export-filename.check.ts",
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
 		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
 		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts",
@@ -30,6 +32,7 @@
 		"swRealReport": "node --import ./resolve-hook.mjs src/checks/sw-real.report.ts"
 	},
 	"dependencies": {
+		"@openredaction/core": "^1.1.5",
 		"dexie": "^4.4.5",
 		"graphology": "^0.26.0"
 	},

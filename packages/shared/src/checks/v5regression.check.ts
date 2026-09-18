@@ -1,4 +1,4 @@
-// packages/shared/src/v5regression.check.ts
+// packages/shared/src/checks/v5regression.check.ts
 // V5 regression suite (Downloads/prompt-v5-segmentation-memory-fix.md §21).
 // Replays a real export's raw events through the full derivation chain and
 // asserts the invariants the V5 prompt requires:
@@ -8,10 +8,12 @@
 //   §11/§16 memory quality         — no low-info singleton memories
 //   §15   recurrence requires separate occurrences
 //   §22   rebuild determinism
-// Usage: node --import ./resolve-hook.mjs src/v5regression.check.ts
+// Usage: node --import ./resolve-hook.mjs src/checks/v5regression.check.ts [export.jsonl]
 
 import assert from "node:assert";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
 	deriveMeaningfulEvents,
 	deriveTransitions,
@@ -21,9 +23,34 @@ import { logger } from "../lib/logger";
 import { buildMemories } from "../memories/memories";
 import { sessionize } from "../sessions/sessions";
 
-const file =
-	process.argv[2] ??
-	"/Users/zosmaai/Downloads/tabot-export-2026-08-27 (4).jsonl";
+// Default to the newest export in ~/Downloads — the download naming scheme is
+// `tabot-export-<range>-<runStamp>.jsonl` (share/export.ts exportFilename), so
+// mtime order picks the most recent generation. Pass a path to override.
+const latestExport = (): string => {
+	const dir = join(homedir(), "Downloads");
+	let names: string[];
+	try {
+		names = readdirSync(dir);
+	} catch {
+		throw new Error(`cannot read ${dir} — pass an export path as argv[2]`);
+	}
+	const candidates = names
+		.filter((n) => /^tabot-export-.*\.jsonl$/.test(n))
+		.map((n) => {
+			const path = join(dir, n);
+			return { path, mtime: statSync(path).mtimeMs };
+		})
+		.sort((a, b) => b.mtime - a.mtime);
+	if (candidates.length === 0) {
+		throw new Error(
+			`no tabot-export-*.jsonl in ${dir} — download an export or pass a path as argv[2]`,
+		);
+	}
+	return candidates[0].path;
+};
+
+const file = process.argv[2] ?? latestExport();
+logger.info(`V5 regression: replaying ${file}`);
 const lines = readFileSync(file, "utf8").split("\n").filter(Boolean);
 const events = [];
 for (const line of lines) {
@@ -40,6 +67,7 @@ for (const line of lines) {
 	}
 }
 events.sort((a, b) => a.timestamp - b.timestamp);
+assert.ok(events.length > 0, `${file} contains no "record":"event" lines`);
 
 const sessions = sessionize(events);
 const transitions = deriveTransitions(deriveMeaningfulEvents(events));
@@ -76,6 +104,7 @@ logger.info(`  §2.2 sequence locality ok (${contexts.length} contexts)`);
 
 // §4 — no giant episode: the largest episode must be a fraction of the stream
 const episodes = contexts.flatMap((c) => c.episodes ?? []);
+assert.ok(episodes.length > 0, `§4 no episodes derived from ${file}`);
 const largest = episodes.reduce((a, b) =>
 	b.totalEventCount > a.totalEventCount ? b : a,
 );

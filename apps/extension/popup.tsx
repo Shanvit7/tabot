@@ -15,8 +15,10 @@ import {
 	CLI_TARGET_DEFS,
 	createEmptyStats,
 	derive,
+	exportFilename,
 	type StatsSnapshot,
 	type StoredTabEvent,
+	sanitizeDerived,
 	WEB_TARGET_DEFS,
 } from "@tabot/shared";
 import type { ComponentType, Dispatch, SetStateAction } from "react";
@@ -142,9 +144,6 @@ const downloadTextFile = (name: string, content: string) => {
 	a.click();
 	setTimeout(() => URL.revokeObjectURL(url), 10_000);
 };
-
-const exportFilename = (ext: string) =>
-	`tabot-export-${new Date().toISOString().slice(0, 10)}.${ext}`;
 
 // ─── Download checkpoint ───
 // Content-hash of the last downloaded export, kept in localStorage (extension
@@ -315,7 +314,7 @@ const IndexPopup = () => {
 				);
 				return;
 			}
-			let body = buildExportJsonl(derive(scoped));
+			let body = buildExportJsonl(await sanitizeDerived(derive(scoped)));
 			if (body.length > MAX_CHAT_CHARS) {
 				body = `${body.slice(0, MAX_CHAT_CHARS)}…\n[truncated ${(
 					body.length - MAX_CHAT_CHARS
@@ -324,7 +323,7 @@ const IndexPopup = () => {
 			const hash = hashBody(body);
 			const saved = readCheckpoint();
 			const alreadySaved = saved?.hash === hash;
-			const file = exportFilename("jsonl");
+			const file = exportFilename(scoped, "jsonl");
 			if (alreadySaved) {
 				// Same content on disk — don't re-trigger the download.
 				setPendingTarget({ name: target.name, file: saved.file });
