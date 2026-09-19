@@ -44,13 +44,17 @@ export default defineConfig({
 		nodeModuleShim(),
 		tailwindcss(),
 		tanstackStart({
-			spa: {
-				enabled: true,
-				prerender: {
-					outputPath: "/index.html",
-				},
-			},
 			srcDirectory: "src",
+			// Inline the CSS into the prerendered HTML so there is no render-blocking
+			// stylesheet round trip before first paint.
+			server: { build: { inlineCss: true } },
+			// Fully prerender the static marketing routes to real HTML. Without this
+			// the page ships an empty shell and FCP/LCP wait on the JS bundle — the
+			// single biggest Core Web Vitals cost on a throttled mobile connection.
+			prerender: {
+				enabled: true,
+				crawlLinks: true,
+			},
 		}),
 		viteReact(),
 		nitro(),

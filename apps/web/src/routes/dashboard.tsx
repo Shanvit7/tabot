@@ -995,5 +995,12 @@ const Dashboard = () => {
 };
 
 export const Route = createFileRoute("/dashboard")({
+	head: () => ({
+		meta: [
+			{ title: "Dashboard | Tabot" },
+			// App surface — requires the extension and has no crawlable content.
+			{ name: "robots", content: "noindex, nofollow" },
+		],
+	}),
 	component: Dashboard,
 });

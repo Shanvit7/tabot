@@ -8,6 +8,7 @@ import { HowItWorks } from "~/components/landing/how-it-works";
 import { PrivacyFirst } from "~/components/landing/privacy-first";
 import { UseCases } from "~/components/landing/use-cases";
 import { useSmoothScroll } from "~/components/landing/useSmoothScroll";
+import { SITE_DESCRIPTION, siteUrl } from "~/lib/site";
 
 const Landing = () => {
 	useSmoothScroll();
@@ -27,5 +28,13 @@ const Landing = () => {
 };
 
 export const Route = createFileRoute("/")({
+	head: () => ({
+		meta: [
+			{ title: "Tabot — Private, local browser activity timeline" },
+			{ name: "description", content: SITE_DESCRIPTION },
+			{ property: "og:url", content: siteUrl() },
+		],
+		links: [{ rel: "canonical", href: siteUrl() }],
+	}),
 	component: Landing,
 });

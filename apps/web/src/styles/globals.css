@@ -4,6 +4,70 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ═══════════════════════════════════════════════════
+   Fonts — self-hosted (latin subset, woff2).
+   Loaded from our own origin instead of a render-blocking
+   fonts.googleapis.com stylesheet + fonts.gstatic.com, which
+   cost two extra DNS/TLS handshakes on the critical path.
+   IBM Plex Sans is a variable font: all four weights share one file.
+   ═══════════════════════════════════════════════════ */
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("../assets/fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url("../assets/fonts/ibm-plex-mono-500.woff2") format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("../assets/fonts/ibm-plex-mono-600.woff2") format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("../assets/fonts/ibm-plex-mono-700.woff2") format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Sans";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("../assets/fonts/ibm-plex-sans-var.woff2") format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Sans";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url("../assets/fonts/ibm-plex-sans-var.woff2") format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Sans";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("../assets/fonts/ibm-plex-sans-var.woff2") format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Sans";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("../assets/fonts/ibm-plex-sans-var.woff2") format("woff2");
+}
+
+/* ═══════════════════════════════════════════════════
    Tabot Design System — Single source of truth
    ═══════════════════════════════════════════════════ */
 

@@ -3,10 +3,17 @@ import { motion, useReducedMotion } from "framer-motion";
 import { BrowserContextFilm } from "~/components/landing/browser-context-film";
 import { Button } from "~/components/ui/button";
 
-const reveal = {
-	hidden: { opacity: 0, y: 16 },
-	visible: { opacity: 1, y: 0 },
-};
+// Above-the-fold reveal runs as a CSS animation, not framer-motion. A JS-driven
+// `initial` state resets the prerendered text to opacity 0 on hydration, which
+// pushed LCP out by the hydration time + animation. CSS starts at first paint,
+// so the hero paints immediately and the reveal is free. Classes stay as whole
+// literals (no template-built names) so Tailwind actually emits them.
+const REVEAL =
+	"animate-in fade-in slide-in-from-bottom-4 fill-mode-both duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none";
+// The h1 is the LCP element: slide it without the opacity fade so it paints at
+// full opacity on the first frame instead of when a fade completes.
+const REVEAL_LCP =
+	"animate-in slide-in-from-bottom-4 fill-mode-both duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none";
 
 export const Hero = () => {
 	const reduceMotion = useReducedMotion();
@@ -15,33 +22,21 @@ export const Hero = () => {
 		<section className="relative overflow-hidden bg-[#f5f6f0] px-6 pb-14 pt-18 text-[#12221d] sm:px-10 sm:pb-20 sm:pt-24 lg:px-14 lg:pt-28">
 			<div className="absolute inset-x-0 top-0 h-px bg-[#d9ddd0]" />
 			<div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[minmax(0,0.94fr)_minmax(460px,1.06fr)] lg:gap-16">
-				<motion.div
-					animate="visible"
-					className="max-w-2xl"
-					initial={reduceMotion ? "visible" : "hidden"}
-					transition={{
-						duration: 0.65,
-						ease: [0.16, 1, 0.3, 1],
-						staggerChildren: 0.1,
-					}}
-				>
-					<motion.h1
-						className="max-w-xl text-[clamp(2.75rem,5vw,5.5rem)] font-semibold leading-[0.92] tracking-[-0.03em] text-[#12221d] text-balance"
-						variants={reveal}
+				<div className="max-w-2xl">
+					<h1
+						className={`max-w-xl text-[clamp(2.75rem,5vw,5.5rem)] font-semibold leading-[0.92] tracking-[-0.03em] text-[#12221d] text-balance ${REVEAL_LCP}`}
 					>
 						Your browser history was never built for work
-					</motion.h1>
-					<motion.p
-						className="mt-7 max-w-lg text-lg leading-8 text-[#4a5a52] sm:text-xl"
-						variants={reveal}
+					</h1>
+					<p
+						className={`mt-7 max-w-lg text-lg leading-8 text-[#4a5a52] sm:text-xl delay-100 ${REVEAL}`}
 					>
 						Tabot turns browser activity into private, portable context — so
 						you, your AI, and every tool you use can pick work up without
 						starting over.
-					</motion.p>
-					<motion.div
-						className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-4"
-						variants={reveal}
+					</p>
+					<div
+						className={`mt-10 flex flex-wrap items-center gap-x-6 gap-y-4 delay-200 ${REVEAL}`}
 					>
 						<Button asChild size="lg">
 							<a href="#get-started">Get started</a>
@@ -52,17 +47,16 @@ export const Hero = () => {
 						>
 							Learn How it works
 						</a>
-					</motion.div>
-					<motion.div
-						className="mt-11 flex flex-wrap gap-x-6 gap-y-3 border-t border-[#d9ddd0] pt-5 text-sm font-medium text-[#52635a]"
-						variants={reveal}
+					</div>
+					<div
+						className={`mt-11 flex flex-wrap gap-x-6 gap-y-3 border-t border-[#d9ddd0] pt-5 text-sm font-medium text-[#52635a] delay-300 ${REVEAL}`}
 					>
 						<span>Runs locally</span>
 						<span>Open source</span>
 						<span>Your data stays yours</span>
 						<span>Built for browser work</span>
-					</motion.div>
-				</motion.div>
+					</div>
+				</div>
 
 				<motion.div
 					animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
