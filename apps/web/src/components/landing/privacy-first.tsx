@@ -14,7 +14,7 @@ const scenes = [
 		id: "context",
 	},
 	{
-		body: "Your browser activity stays on your device. Nothing is uploaded, synced, or shared unless you explicitly share it.",
+		body: "Your browser activity stays on your device. Nothing is uploaded, synced, or shared unless you explicitly share it. Local PII redaction helps protect your personal information when you export.",
 		headline: "Nothing leaves by accident.",
 		id: "private",
 	},
