@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { siteUrl } from "~/lib/site";
 
 const Privacy = () => (
 	<main className="min-h-screen bg-[#07100c] px-6 py-12 text-[#eff5e7] sm:px-10 sm:py-16 lg:px-14">
@@ -87,7 +88,17 @@ const Privacy = () => (
 
 export const Route = createFileRoute("/privacy")({
 	head: () => ({
-		meta: [{ title: "Privacy Policy | Tabot" }],
+		meta: [
+			{ title: "Privacy Policy | Tabot" },
+			{
+				name: "description",
+				content:
+					"What Tabot records, where it is stored, and why nothing leaves your device. Tabot is local-first: no accounts, no cloud, no third-party sharing.",
+			},
+			{ property: "og:url", content: siteUrl("privacy/") },
+			{ property: "og:title", content: "Privacy Policy | Tabot" },
+		],
+		links: [{ rel: "canonical", href: siteUrl("privacy/") }],
 	}),
 	component: Privacy,
 });

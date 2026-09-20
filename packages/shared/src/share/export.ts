@@ -20,12 +20,20 @@ import {
 } from "../recall/retrieval";
 import { type Session, sessionize } from "../sessions/sessions";
 
+// Sanitization provenance for external consumers. Pattern types + counts only —
+// never a matched value (see privacy/sanitize.ts). Absent on unsanitized bundles.
+export interface PrivacyProvenance {
+	redacted: boolean;
+	findings: { type: string; count: number }[];
+}
+
 export interface Derived {
 	events: StoredTabEvent[];
 	sessions: Session[];
 	contexts: BrowserContext[];
 	memories: Memory[];
 	live: LiveBrowserContext | null;
+	privacy?: PrivacyProvenance;
 }
 
 export const derive = (events: StoredTabEvent[]): Derived => {
@@ -53,6 +61,42 @@ export const derive = (events: StoredTabEvent[]): Derived => {
 };
 
 export const fmtIso = (ts: number): string => new Date(ts).toISOString();
+
+// ─── Export filename ───
+// Prod-download convention: what the file is, the data range it covers, then a
+// unique generation id. All UTC so names sort chronologically and stay unique
+// across machines. Colons are stripped (Windows-illegal). Hyphens kept after the
+// `tabot-export` prefix so existing ~/Downloads/tabot-export-*.jsonl globs match.
+const dayStamp = (ms: number): string =>
+	new Date(ms).toISOString().slice(0, 10);
+
+// 20260918T143205123Z — millisecond resolution is the uniqueness source, so no
+// random suffix is needed for two exports in the same second.
+const runStamp = (ms: number): string =>
+	new Date(ms).toISOString().replace(/[-:.]/g, "");
+
+// null when there is nothing to describe — the segment is then omitted rather
+// than filled with a misleading range.
+const coverage = (events: StoredTabEvent[]): string | null => {
+	if (events.length === 0) return null;
+	let from = Number.POSITIVE_INFINITY;
+	let to = Number.NEGATIVE_INFINITY;
+	// Loop, not Math.min(...arr): a 100k-event export would blow the arg limit.
+	for (const e of events) {
+		if (e.timestamp < from) from = e.timestamp;
+		if (e.timestamp > to) to = e.timestamp;
+	}
+	return `${dayStamp(from)}_to_${dayStamp(to)}`;
+};
+
+export const exportFilename = (
+	events: StoredTabEvent[],
+	ext: string,
+	now: number = Date.now(),
+): string => {
+	const range = coverage(events);
+	return `tabot-export-${range ? `${range}-` : ""}${runStamp(now)}.${ext}`;
+};
 
 export const EXPORT_THRESHOLDS = {
 	session: {
@@ -201,6 +245,8 @@ export const buildExportJsonl = (d: Derived): string => {
 				splitThreshold: 0.5,
 			},
 			thresholds: EXPORT_THRESHOLDS,
+			// undefined on an unsanitized bundle — JSON.stringify drops the key
+			privacy: d.privacy,
 			counts: {
 				events: d.events.length,
 				sessions: d.sessions.length,

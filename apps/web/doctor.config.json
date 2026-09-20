@@ -6,7 +6,15 @@
 		"react-doctor/no-multi-comp": "warn"
 	},
 	"ignore": {
+		"files": [".output/**"],
 		"overrides": [
+			{
+				"files": [
+					"src/components/landing/hero.tsx",
+					"src/components/landing/header.tsx"
+				],
+				"rules": ["react-doctor/anchor-target-exists"]
+			},
 			{
 				"files": [
 					"src/components/landing/privacy-first.tsx",

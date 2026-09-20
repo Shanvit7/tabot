@@ -17,7 +17,7 @@
 		"knip": "knip",
 		"doctor": "pnpm --filter web doctor",
 		"doctor:staged": "pnpm --filter web exec react-doctor --staged --blocking error",
-		"dev": "pnpm -r --if-present --parallel dev",
+		"dev": "turbo dev",
 		"dev:extension": "pnpm --filter extension dev",
 		"dev:web": "pnpm --filter web dev",
 		"changeset": "changeset",
@@ -33,7 +33,8 @@
 		"husky": "^9.1.7",
 		"knip": "^6.32.3",
 		"lint-staged": "^17.3.0",
-		"plasmo": "^0.90.5"
+		"plasmo": "^0.90.5",
+		"turbo": "^2.10.13"
 	},
 	"lint-staged": {
 		"*.{js,jsx,ts,tsx,json,css,md}": [

@@ -14,12 +14,12 @@ const scenes = [
 		id: "context",
 	},
 	{
-		body: "Your browser activity stays on your device. Nothing is uploaded, synced, or shared unless you explicitly export it.",
+		body: "Your browser activity stays on your device. Nothing is uploaded, synced, or shared unless you explicitly share it. On export, local redaction strips sensitive details like emails and card numbers.",
 		headline: "Nothing leaves by accident.",
 		id: "private",
 	},
 	{
-		body: "Inspect it, keep it local, or export it to an AI or tool you choose.",
+		body: "Inspect it, keep it local, or share it to an AI or tool you choose.",
 		headline: "Use context where it helps.",
 		id: "export",
 	},

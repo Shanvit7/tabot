@@ -43,7 +43,7 @@ export const Footer = () => (
 				</nav>
 			</div>
 			<div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#405b4d] py-5 text-xs font-medium text-[#8ca493]">
-				<span>Tabot v0.1 — Experimental · shipping soon</span>
+				<span>Tabot v0.1.3 · shipping fast</span>
 				<a
 					className="flex items-center gap-2 hover:text-[#bfff00]"
 					href="https://github.com/Shanvit7/tabot"

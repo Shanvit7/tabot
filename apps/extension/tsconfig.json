@@ -4,7 +4,8 @@
 		"paths": {
 			"~*": ["./*"]
 		},
-		"baseUrl": "."
+		"baseUrl": ".",
+		"moduleResolution": "bundler"
 	},
 	"include": [".plasmo/index.d.ts", "./**/*.ts", "./**/*.tsx"],
 	"exclude": ["node_modules"]

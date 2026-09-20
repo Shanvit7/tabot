@@ -1,11 +1,11 @@
 import {
 	buildExportJsonl,
-	type Derived,
 	derive,
+	exportFilename,
 	filterDerived,
-	fmtIso,
 	type StatsSnapshot,
 	type StoredTabEvent,
+	sanitizeDerived,
 } from "@tabot/shared";
 
 // --- Message transport (extension ↔ web; same extId pattern as metrics used) ---
@@ -79,26 +79,12 @@ export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 // Derivation + JSONL building live in @tabot/shared (shared with the extension
 // popup "Share Context"); this module re-exports them for the dashboard route.
 
-export { buildExportJsonl, type Derived, derive, filterDerived };
-
-export const buildExportCsv = (d: Derived): string => {
-	if (d.sessions.length === 0) return "";
-	const header =
-		"sessionId,start,end,durationMs,eventCount,interactionCount,navigationCount,tabSwitchCount,domains";
-	const rows = d.sessions.map((s) =>
-		[
-			s.id,
-			fmtIso(s.startTimestamp),
-			fmtIso(s.endTimestamp),
-			s.duration,
-			s.eventCount,
-			s.interactionCount,
-			s.navigationCount,
-			s.tabSwitchCount,
-			s.domains.map((x) => x.domain).join("|"),
-		].join(","),
-	);
-	return [header, ...rows].join("\n");
+export {
+	buildExportJsonl,
+	derive,
+	exportFilename,
+	filterDerived,
+	sanitizeDerived,
 };
 
 export const downloadFile = (

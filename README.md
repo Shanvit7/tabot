@@ -56,7 +56,7 @@ Tabot does not own the intelligence layer. It is context infrastructure for anyo
 
 ## Privacy-first
 
-The core telemetry and derivation run locally. There is no Tabot cloud required for the core pipeline, and you control when data is exported.
+The core telemetry and derivation run locally. There is no Tabot cloud required for the core pipeline, and you control when data is exported. Before an export is downloaded or shared, local PII redaction runs on supported text fields to help prevent accidental personal-information leaks.
 
 Browser telemetry is sensitive. Even without page contents, URLs, domains, timestamps, and activity patterns can reveal a lot about someone. Treat exports as personal data.
 

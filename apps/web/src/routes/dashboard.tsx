@@ -1,35 +1,25 @@
-import type { StatsSnapshot, StoredTabEvent } from "@tabot/shared";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { ActivityList } from "~/components/dashboard-lists";
+import { DashboardShell } from "~/components/dashboard-shell";
+import { MemoryList } from "~/components/memory-list";
 import { Button } from "~/components/ui/button";
-import {
-	Empty,
-	Loading,
-	Panel,
-	TabBar,
-} from "~/components/ui/dashboard-panels";
+import { Empty, Loading } from "~/components/ui/dashboard-panels";
+import { useDashboardData } from "~/hooks/use-dashboard-data";
 import type { HourBucket } from "~/lib/dashboard-charts";
 import {
-	buildExportCsv,
 	buildExportJsonl,
-	derive,
 	downloadFile,
-	fetchEvents,
-	fetchStats,
+	exportFilename,
 	filterDerived,
-	formatAgo,
 	formatDuration,
 	rangeStart,
+	sanitizeDerived,
 } from "~/lib/dashboard-data";
-import { TAB, type Tab } from "~/lib/dashboard-tabs";
 import type { CliTarget, WebTarget } from "~/lib/share-targets";
 
-// Lazy-loaded modules (charts + share icons) — types only, no runtime import.
 type ChartsApi = typeof import("~/lib/dashboard-charts");
 type ShareTargets = typeof import("~/lib/share-targets");
-
-// event type (SCREAMING) → StatsSnapshot key (camelCase)
-// (kept only if a future tab needs the raw breakdown)
 
 const RANGES = [
 	{ id: "today", label: "Today" },
@@ -39,11 +29,6 @@ const RANGES = [
 ] as const;
 type RangeId = (typeof RANGES)[number]["id"];
 
-// Local "YYYY-MM-DD" (toISOString is UTC — would shift the day in negative offsets)
-const fmtLocalDay = (d: Date): string =>
-	`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-// Export-period quick presets — today first, all time before custom (last).
 const EXPORT_PRESETS = [
 	{ id: "today", label: "Today" },
 	{ id: "7d", label: "Last 7 days" },
@@ -53,31 +38,22 @@ const EXPORT_PRESETS = [
 ] as const;
 type ExportPresetId = (typeof EXPORT_PRESETS)[number]["id"];
 
-// ─── Chat-about-your-data targets (lazy: ~/lib/share-targets) ───
-
-const MAX_CHAT_CHARS = 300_000;
-
-// ─── Module-scope pure helpers (defined once, not per render) ───
-
-// Filenames both Download flows share.
-const exportFilename = (ext: string) =>
-	`tabot-export-${new Date().toISOString().slice(0, 10)}.${ext}`;
+const formatLocalDay = (date: Date) =>
+	`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
 const copyText = async (text: string): Promise<boolean> => {
 	try {
 		await navigator.clipboard.writeText(text);
 		return true;
 	} catch {
-		// Non-secure context (LAN/mobile) — fall back to a temp textarea.
 		try {
-			const el = document.createElement("textarea");
-			el.value = text;
-			el.style.position = "fixed";
-			el.style.opacity = "0";
-			document.body.appendChild(el);
-			el.select();
+			const element = document.createElement("textarea");
+			element.value = text;
+			element.className = "fixed opacity-0";
+			document.body.appendChild(element);
+			element.select();
 			document.execCommand("copy");
-			document.body.removeChild(el);
+			element.remove();
 			return true;
 		} catch {
 			return false;
@@ -85,36 +61,24 @@ const copyText = async (text: string): Promise<boolean> => {
 	}
 };
 
-// ─── Tab navigation ───
-
-// ─── Route component ───
-
 const Dashboard = () => {
-	const [tab, setTab] = useState<Tab>(TAB.OVERVIEW);
-	const [stats, setStats] = useState<StatsSnapshot | null>(null);
-	const [events, setEvents] = useState<StoredTabEvent[] | null>(null);
+	const { derived, events, hasExtension, initialized } = useDashboardData();
 	const [range, setRange] = useState<RangeId>("today");
 	const [exporting, setExporting] = useState(false);
-	// Chat-about-your-data feedback line
+	const [downloaded, setDownloaded] = useState(false);
 	const [copiedTo, setCopiedTo] = useState<string | null>(null);
-	// Export period filter: from/to as "YYYY-MM-DD" (inclusive); empty = unbounded.
-	const [expFrom, setExpFrom] = useState("");
-	const [expTo, setExpTo] = useState("");
-	const [expPreset, setExpPreset] = useState<ExportPresetId>("all");
-	// First stats/events attempt hasn't finished yet — cover the shell instead of
-	// flashing "No extension" + empty cards. Gates on attempt completion, not
-	// data: with no extension the fetches resolve null and stay null forever.
-	const [initialized, setInitialized] = useState(false);
-
-	// Heavy modules, lazy-loaded off the critical path:
+	const [exportError, setExportError] = useState<string | null>(null);
+	const [exportPreset, setExportPreset] = useState<ExportPresetId>("all");
+	const [exportFrom, setExportFrom] = useState("");
+	const [exportTo, setExportTo] = useState("");
 	const [charts, setCharts] = useState<ChartsApi | null>(null);
 	const [targets, setTargets] = useState<ShareTargets | null>(null);
 
 	useEffect(() => {
 		let alive = true;
 		import("~/lib/dashboard-charts")
-			.then((m) => {
-				if (alive) setCharts(m);
+			.then((module) => {
+				if (alive) setCharts(module);
 			})
 			.catch(() => {});
 		return () => {
@@ -122,147 +86,66 @@ const Dashboard = () => {
 		};
 	}, []);
 
-	// Icons only needed on the Share Context tab — load on first open.
 	useEffect(() => {
-		if (tab !== TAB.SHARE_CONTEXT || targets) return;
+		if (!derived) return;
 		let alive = true;
 		import("~/lib/share-targets")
-			.then((m) => {
-				if (alive) setTargets(m);
+			.then((module) => {
+				if (alive) setTargets(module);
 			})
 			.catch(() => {});
 		return () => {
 			alive = false;
 		};
-	}, [tab, targets]);
+	}, [derived]);
 
-	useEffect(() => {
-		let alive = true;
-		let firstDone = false;
-		const markFirst = () => {
-			if (firstDone) return;
-			firstDone = true;
-			if (alive) setInitialized(true);
-		};
-
-		const pollStats = async () => {
-			const s = await fetchStats();
-			if (!alive) return;
-			if (s) setStats(s);
-			markFirst();
-		};
-		const pollEvents = async () => {
-			const ev = await fetchEvents();
-			if (alive && ev && ev.length > 0) setEvents(ev);
-			markFirst();
-		};
-
-		pollStats();
-		pollEvents();
-		const tStats = setInterval(pollStats, 1000);
-		const tEvents = setInterval(pollEvents, 5000); // derived layers refresh slower
-		return () => {
-			alive = false;
-			clearInterval(tStats);
-			clearInterval(tEvents);
-		};
-	}, []);
-
-	const hasExtension = stats !== null;
-	const derived = useMemo(() => (events ? derive(events) : null), [events]);
-	// Full filtered data for export (overlap semantics on the selected period)
 	const exportData = useMemo(() => {
 		if (!derived) return null;
-		const dayBounds = (d: string): number | undefined => {
-			if (!d) return undefined;
-			const t = new Date(`${d}T00:00:00`).getTime();
-			return Number.isNaN(t) ? undefined : t;
-		};
-		const from = dayBounds(expFrom);
-		const toRaw = dayBounds(expTo);
-		const to = toRaw === undefined ? undefined : toRaw + 86_400_000 - 1;
-		return filterDerived(derived, from, to);
-	}, [derived, expFrom, expTo]);
-	// Live preview counts for the selected period
+		if (exportPreset !== "custom") {
+			return filterDerived(derived, rangeStart(exportPreset));
+		}
+		const start = exportFrom
+			? new Date(`${exportFrom}T00:00:00`).getTime()
+			: undefined;
+		const end = exportTo
+			? new Date(`${exportTo}T00:00:00`).getTime() + 86_399_999
+			: undefined;
+		return filterDerived(
+			derived,
+			Number.isNaN(start ?? 0) ? undefined : start,
+			Number.isNaN(end ?? 0) ? undefined : end,
+		);
+	}, [derived, exportFrom, exportPreset, exportTo]);
 	const exportCounts = useMemo(
-		() =>
-			exportData
-				? {
-						events: exportData.events.length,
-						sessions: exportData.sessions.length,
-						contexts: exportData.contexts.length,
-						memories: exportData.memories.length,
-					}
-				: { events: 0, sessions: 0, contexts: 0, memories: 0 },
+		() => ({
+			events: exportData?.events.length ?? 0,
+			sessions: exportData?.sessions.length ?? 0,
+			contexts: exportData?.contexts.length ?? 0,
+			memories: exportData?.memories.length ?? 0,
+		}),
 		[exportData],
 	);
-	const lastSessions = derived?.sessions.slice(-10).reverse() ?? [];
-	const lastContexts = derived?.contexts.slice(-10).reverse() ?? [];
-	const lastMemories = derived?.memories ?? [];
+	const readyLayers = Object.values(exportCounts).filter(
+		(count) => count > 0,
+	).length;
+	const recentSessions = derived?.sessions.slice(-5).reverse() ?? [];
+	const recentContexts = derived?.contexts.slice(-3).reverse() ?? [];
+	const recentMemories = derived?.memories.slice(-3).reverse() ?? [];
 
-	// sessions overlapping the selected range
 	const rangeSessions = useMemo(
 		() =>
 			(derived?.sessions ?? []).filter(
-				(x) => x.startTimestamp >= rangeStart(range),
+				(session) => session.startTimestamp >= rangeStart(range),
 			),
 		[derived, range],
 	);
-	const activeTimeMs = useMemo(
-		() => rangeSessions.reduce((sum, x) => sum + x.duration, 0),
-		[rangeSessions],
-	);
-	const topSite = useMemo(() => {
-		const counts = new Map<string, number>();
-		for (const sess of rangeSessions)
-			for (const d of sess.domains)
-				counts.set(d.domain, (counts.get(d.domain) ?? 0) + d.eventCount);
-		const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-		return top ? top[0] : null;
-	}, [rangeSessions]);
-
 	const rangeEvents = useMemo(
 		() => events?.filter((event) => event.timestamp >= rangeStart(range)) ?? [],
 		[events, range],
 	);
-	const activityData = useMemo(
-		() => (charts && events ? charts.buildActivityBuckets(events, range) : []),
-		[charts, events, range],
-	);
-	const busiestMoment = useMemo(
-		() =>
-			activityData.reduce<HourBucket | null>(
-				(peak, bucket) =>
-					!peak || bucket.events > peak.events ? bucket : peak,
-				null,
-			),
-		[activityData],
-	);
-	const siteData = useMemo(
-		() => (charts && events ? charts.buildTopSites(events, range) : []),
-		[charts, events, range],
-	);
-	const eventMix = useMemo(
-		() => (charts && events ? charts.buildEventMix(events, range) : []),
-		[charts, events, range],
-	);
-	const tabSwitches = useMemo(
-		() => rangeEvents.filter((event) => event.type === "TAB_ACTIVATED").length,
-		[rangeEvents],
-	);
-	const interactionCount = useMemo(
-		() =>
-			rangeEvents.filter(
-				(event) =>
-					event.type === "CLICK" ||
-					event.type === "SCROLL" ||
-					event.type === "KEY_ACTIVITY",
-			).length,
-		[rangeEvents],
-	);
-	const navigationCount = useMemo(
-		() => rangeEvents.filter((event) => event.type === "NAVIGATION").length,
-		[rangeEvents],
+	const activeTimeMs = useMemo(
+		() => rangeSessions.reduce((total, session) => total + session.duration, 0),
+		[rangeSessions],
 	);
 	const domainCount = useMemo(
 		() =>
@@ -273,717 +156,403 @@ const Dashboard = () => {
 			).size,
 		[rangeSessions],
 	);
+	const activityData = useMemo(
+		() => (charts && events ? charts.buildActivityBuckets(events, range) : []),
+		[charts, events, range],
+	);
 	const focusData = useMemo(
 		() => (charts ? charts.buildFocusMap(rangeSessions) : []),
 		[charts, rangeSessions],
 	);
+	const busiestMoment = useMemo(
+		() =>
+			activityData.reduce<HourBucket | null>(
+				(peak, bucket) =>
+					!peak || bucket.events > peak.events ? bucket : peak,
+				null,
+			),
+		[activityData],
+	);
 
-	// Filenames both Download flows share.
-	const handleDownload = (format: "jsonl" | "csv") => {
-		if (!derived || !exportData) return;
+	const handleDownload = async () => {
+		if (!exportData) return;
 		setExporting(true);
-		if (format === "jsonl") {
+		setExportError(null);
+		try {
 			downloadFile(
-				exportFilename("jsonl"),
-				buildExportJsonl(derived),
+				exportFilename(exportData.events, "jsonl"),
+				buildExportJsonl(await sanitizeDerived(exportData)),
 				"application/x-ndjson",
 			);
-		} else {
-			downloadFile(
-				exportFilename("csv"),
-				buildExportCsv(derived),
-				"text/csv;charset=utf-8",
+			setDownloaded(true);
+			setCopiedTo(
+				"Data downloaded. Open an assistant, then upload it in chat.",
 			);
+			setTimeout(() => setCopiedTo(null), 3500);
+		} catch {
+			setExportError("Redaction failed — nothing was downloaded.");
+		} finally {
+			setTimeout(() => setExporting(false), 800);
 		}
-		setTimeout(() => setExporting(false), 800);
 	};
 
-	// Same canonical JSONL the Download button emits, from the selected period —
-	// chat works off the selection directly, no file upload.
-	const chatBody = useMemo(() => {
-		if (!exportData) return null;
-		let body = buildExportJsonl(exportData);
-		if (body.length > MAX_CHAT_CHARS) {
-			body = `${body.slice(0, MAX_CHAT_CHARS)}…\n[truncated ${(body.length - MAX_CHAT_CHARS).toLocaleString()} chars]`;
-		}
-		return body;
-	}, [exportData]);
-
-	const openAiChat = async (t: WebTarget) => {
-		if (!chatBody || !exportData) return;
-		// Gemini has no chat prefill — alert user, copy prompt, only open on OK.
-		if (t.name === "Gemini") {
-			const copied = await copyText(t.prompt);
-			const ok = window.confirm(
-				copied
-					? "Gemini has no chat prefill. Prompt copied to clipboard — paste it in the chat box after Gemini opens."
-					: `Gemini has no chat prefill. Copy this prompt yourself:\n\n${t.prompt.slice(0, 200)}…`,
-			);
-			if (!ok) return;
-			window.open(t.url, "_blank", "noopener");
-			return;
-		}
-		window.open(t.url, "_blank", "noopener");
-		setCopiedTo(`${t.name} opened — prompt pre-filled in the chat box`);
+	const openAiChat = (target: WebTarget) => {
+		window.open(target.url, "_blank", "noopener");
+		setCopiedTo(`${target.name} opened. Upload downloaded data in chat.`);
 		setTimeout(() => setCopiedTo(null), 3500);
 	};
 
-	const copyCli = async (t: CliTarget) => {
-		const copied = await copyText(t.cmd);
+	const copyCli = async (target: CliTarget) => {
+		const copied = await copyText(target.cmd);
 		setCopiedTo(
 			copied
-				? `${t.name} command copied — paste into your terminal`
-				: `${t.name} — copy this command:\n${t.cmd.slice(0, 120)}…`,
+				? `${target.name} command copied.`
+				: `Copy command for ${target.name}.`,
 		);
 		setTimeout(() => setCopiedTo(null), 3500);
 	};
 
-	// First stats/events attempt hasn't finished yet — cover the shell instead of
-	// flashing "No extension" + empty cards while the fetch resolves.
 	if (!initialized) return <Loading />;
 
 	return (
-		<div className="min-h-screen bg-black flex items-center justify-center p-4 md:p-8">
-			<div className="bg-white border-hard shadow-hard-xl p-6 md:p-8 max-w-5xl w-full">
-				<div className="flex items-center gap-4 mb-6">
-					<img
-						src={`${import.meta.env.BASE_URL}logo.png`}
-						alt="Tabot"
-						className="h-16 w-16 border-hard"
-					/>
-					<div>
-						<h1 className="text-3xl font-bold tracking-tight">Tabot</h1>
-						<p className="font-mono text-sm text-muted-foreground">
-							Thinking across tabs.
-						</p>
-					</div>
-					<div className="ml-auto flex items-center gap-2 font-mono text-xs">
-						<span
-							className={`w-3 h-3 border-hard inline-block ${hasExtension ? "bg-lime" : "bg-zinc-300"}`}
-						/>
-						{hasExtension ? "Connected" : "No extension"}
-					</div>
+		<DashboardShell>
+			{!hasExtension && (
+				<div className="mb-6 border-hard bg-yellow-200 p-4 font-mono text-xs leading-relaxed">
+					<strong className="block text-sm">Extension not detected</strong>
+					Load unpacked extension, then reload this page.
 				</div>
+			)}
 
-				{!hasExtension && (
-					<div className="border-hard bg-lime/20 p-4 mb-6 font-mono text-xs leading-relaxed">
-						<div className="font-bold uppercase tracking-wider mb-1">
-							Extension not detected
-						</div>
-						Load the unpacked extension and reload this page.
-					</div>
-				)}
-
-				<TabBar active={tab} onChange={setTab} />
-
-				{tab === TAB.OVERVIEW && (
-					<>
-						<div className="mb-6 flex flex-col gap-4 border-hard bg-lime p-4 shadow-hard-sm md:flex-row md:items-end md:justify-between">
-							<div>
-								<h2 className="text-3xl font-bold tracking-tight">
-									Your browsing story
-								</h2>
-								<p className="mt-1 max-w-xl text-sm">
-									Follow what you did, where you went, and when your browser got
-									busy.
-								</p>
-							</div>
-							<div className="font-mono text-xs uppercase tracking-wider">
-								{rangeEvents.length.toLocaleString()} moments captured
-							</div>
-						</div>
-						<div className="flex flex-wrap gap-2 mb-4">
-							{RANGES.map((r) => (
+			<section
+				aria-labelledby="share-context-heading"
+				className="border-hard bg-lime p-5 shadow-hard-lg md:p-6"
+			>
+				<div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)] lg:items-start">
+					<div>
+						<h1
+							id="share-context-heading"
+							className="max-w-xl text-4xl font-bold leading-none tracking-tight md:text-5xl"
+						>
+							Share your context. Keep your momentum.
+						</h1>
+						<p className="mt-4 max-w-xl text-base leading-relaxed">
+							Package browser activity into portable, sanitized context for any
+							assistant or tool. Nothing leaves device until you choose.
+						</p>
+						<div className="mt-6 flex flex-wrap gap-2">
+							{EXPORT_PRESETS.map((preset) => (
 								<button
-									key={r.id}
+									key={preset.id}
 									type="button"
-									onClick={() => setRange(r.id)}
-									className={`font-mono text-xs uppercase tracking-wider border-2 px-3 py-1.5 ${
-										range === r.id
-											? "bg-lime text-black border-black"
-											: "bg-white text-black border-black hover:bg-lime/20"
-									}`}
+									onClick={() => {
+										setDownloaded(false);
+										setExportPreset(preset.id);
+										if (preset.id === "today") {
+											setExportFrom(formatLocalDay(new Date()));
+										}
+									}}
+									className={`border-2 border-black px-3 py-2 font-mono text-xs font-bold uppercase tracking-wider transition-colors ${exportPreset === preset.id ? "bg-black text-lime" : "bg-white hover:bg-yellow-200"}`}
 								>
-									{r.label}
+									{preset.label}
 								</button>
 							))}
 						</div>
-						<div className="mb-3 border-hard bg-black p-4 text-white shadow-hard-sm">
-							<div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] md:items-center">
-								<div>
-									<h3 className="text-2xl font-bold">What this tells you</h3>
-									<p className="mt-1 max-w-md text-sm text-zinc-300">
-										Lots of tab changes and page hops can mean your attention
-										was split. Lots of hands-on activity in fewer places can
-										mean you settled into work.
-									</p>
-								</div>
-								<div className="border-hard bg-pink-300 p-3 text-black">
-									<div className="font-mono text-xs uppercase tracking-wider">
-										You did
-									</div>
-									<div className="mt-1 text-2xl font-bold tabular-nums">
-										{interactionCount.toLocaleString()} things
-									</div>
-									<div className="mt-1 font-mono text-xs">
-										Clicked, scrolled, or typed
-									</div>
-								</div>
-								<div className="border-hard bg-orange-400 p-3 text-black">
-									<div className="font-mono text-xs uppercase tracking-wider">
-										You opened
-									</div>
-									<div className="mt-1 text-2xl font-bold tabular-nums">
-										{navigationCount.toLocaleString()} pages
-									</div>
-									<div className="mt-1 font-mono text-xs">
-										New pages that loaded
-									</div>
-								</div>
-								<div className="border-hard bg-cyan-300 p-3 text-black">
-									<div className="font-mono text-xs uppercase tracking-wider">
-										You explored
-									</div>
-									<div className="mt-1 text-2xl font-bold tabular-nums">
-										{domainCount.toLocaleString()} sites
-									</div>
-									<div className="mt-1 font-mono text-xs">
-										Different places in your browser
-									</div>
-								</div>
-							</div>
-						</div>
-						<div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-							<div className="border-hard bg-black p-4 text-white shadow-hard-sm">
-								<div className="font-mono text-xs uppercase tracking-wider text-lime">
-									Browser moments
-								</div>
-								<div className="mt-2 text-3xl font-bold tabular-nums">
-									{events ? rangeEvents.length.toLocaleString() : "—"}
-								</div>
-								<div className="mt-1 font-mono text-xs text-zinc-400">
-									Tab moves, page loads, and actions
-								</div>
-							</div>
-							<div className="border-hard bg-white p-4 shadow-hard-sm">
-								<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-									Browsing stretches
-								</div>
-								<div className="mt-2 text-3xl font-bold tabular-nums">
-									{derived ? rangeSessions.length.toLocaleString() : "—"}
-								</div>
-								<div className="mt-1 font-mono text-xs text-muted-foreground">
-									{derived && rangeSessions.length > 0
-										? `${formatDuration(activeTimeMs / rangeSessions.length)} average span`
-										: "A stretch starts after you browse"}
-								</div>
-							</div>
-							<div className="border-hard bg-orange-400 p-4 shadow-hard-sm">
-								<div className="font-mono text-xs uppercase tracking-wider">
-									Times you changed tabs
-								</div>
-								<div className="mt-2 text-3xl font-bold tabular-nums">
-									{tabSwitches.toLocaleString()}
-								</div>
-								<div className="mt-1 font-mono text-xs">
-									{rangeSessions.length > 0
-										? `${(tabSwitches / rangeSessions.length).toFixed(1)} per stretch`
-										: "No tab changes yet"}
-								</div>
-							</div>
-							<div className="border-hard bg-cyan-300 p-4 shadow-hard-sm">
-								<div className="font-mono text-xs uppercase tracking-wider">
-									Most visited site
-								</div>
-								<div className="mt-2 break-all text-xl font-bold">
-									{derived ? (topSite ?? "—") : "—"}
-								</div>
-								<div className="mt-1 font-mono text-xs">
-									Site you returned to most
-								</div>
-							</div>
-						</div>
-
-						<div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
-							<div className="border-hard bg-zinc-100 p-4 shadow-hard-sm">
-								<div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-									<div>
-										<h3 className="text-xl font-bold">
-											When your browser got busy
-										</h3>
-										<p className="font-mono text-xs text-muted-foreground">
-											Taller peaks mean more things happening in your browser.
-										</p>
-									</div>
-									<span className="border-hard bg-white px-2 py-1 font-mono text-xs">
-										{busiestMoment
-											? `Busiest: ${busiestMoment.label} (${busiestMoment.events})`
-											: "Waiting for activity"}
-									</span>
-								</div>
-								{charts && activityData.length > 0 ? (
-									<charts.ActivityChart data={activityData} height={250} />
-								) : (
-									<Empty text="No activity yet — browse with the extension connected." />
-								)}
-							</div>
-							<div className="border-hard bg-pink-300 p-4 shadow-hard-sm">
-								<h3 className="text-xl font-bold">
-									How each browsing stretch felt
-								</h3>
-								<p className="mb-3 font-mono text-xs">
-									Each bubble is one stretch of browsing. Read it left to right,
-									then bottom to top.
-								</p>
-								{charts && focusData.length > 0 ? (
-									<charts.FocusChart data={focusData} height={250} />
-								) : (
-									<Empty text="Browse for a while to compare your stretches." />
-								)}
-								<div className="mt-2 flex justify-between font-mono text-[10px] uppercase tracking-wider">
-									<span>More tab changes →</span>
-									<span>More hands-on activity ↑</span>
-								</div>
-							</div>
-						</div>
-
-						<div className="mt-6 grid gap-3 md:grid-cols-2">
-							<div className="border-hard bg-white p-4 shadow-hard-sm">
-								<h3 className="text-xl font-bold">What you did most</h3>
-								<p className="mb-3 font-mono text-xs text-muted-foreground">
-									Your browser actions, grouped by type
-								</p>
-								{charts && eventMix.length > 0 ? (
-									<div className="grid grid-cols-[140px_1fr] items-center gap-3 sm:grid-cols-[180px_1fr]">
-										<charts.EventMixChart
-											data={eventMix.slice(0, 5)}
-											height={180}
-										/>
-										<div className="space-y-2">
-											{eventMix.slice(0, 5).map((item, index) => (
-												<div
-													key={item.label}
-													className="flex items-center gap-2 font-mono text-xs"
-												>
-													<span
-														className={`h-3 w-3 border-hard ${charts.NEON_BG[index]}`}
-													/>
-													<span className="min-w-0 flex-1 truncate">
-														{item.label}
-													</span>
-													<span className="font-bold tabular-nums">
-														{item.count.toLocaleString()}
-													</span>
-												</div>
-											))}
-										</div>
-									</div>
-								) : (
-									<Empty text="Nothing recorded yet." />
-								)}
-							</div>
-							<div className="border-hard bg-yellow-200 p-4 shadow-hard-sm">
-								<h3 className="text-xl font-bold">
-									Sites you kept returning to
-								</h3>
-								<p className="mb-3 font-mono text-xs">
-									A longer bar means you opened or returned to that site more
-									often.
-								</p>
-								{charts && siteData.length > 0 ? (
-									<charts.SitesChart
-										data={siteData}
-										height={Math.max(220, siteData.length * 36 + 48)}
+						{exportPreset === "custom" && (
+							<div className="mt-3 flex flex-wrap gap-3 font-mono text-xs">
+								<label className="flex items-center gap-2">
+									From
+									<input
+										type="date"
+										value={exportFrom}
+										max={exportTo || undefined}
+										onChange={(event) => {
+											setDownloaded(false);
+											setExportFrom(event.target.value);
+										}}
+										className="border-2 border-black bg-white px-2 py-1"
 									/>
+								</label>
+								<label className="flex items-center gap-2">
+									To
+									<input
+										type="date"
+										value={exportTo}
+										min={exportFrom || undefined}
+										onChange={(event) => {
+											setDownloaded(false);
+											setExportTo(event.target.value);
+										}}
+										className="border-2 border-black bg-white px-2 py-1"
+									/>
+								</label>
+							</div>
+						)}
+					</div>
+					<div className="bg-black p-5 text-white">
+						<div className="flex items-end justify-between gap-4">
+							<div>
+								<h2 className="text-2xl font-bold">Context pack</h2>
+								<p className="mt-1 font-mono text-xs text-zinc-300">
+									{readyLayers}/4 layers ready to share
+								</p>
+							</div>
+							<span className="font-mono text-4xl font-bold text-lime tabular-nums">
+								{readyLayers}
+							</span>
+						</div>
+						<fieldset className="m-0 mt-5 grid min-w-0 grid-cols-4 gap-2 border-0 p-0">
+							<legend className="sr-only">
+								{readyLayers} of 4 context layers ready
+							</legend>
+							{Object.entries(exportCounts).map(([layer, count]) => (
+								<div
+									key={layer}
+									className={
+										count > 0
+											? "bg-lime p-2 text-black"
+											: "bg-zinc-700 p-2 text-zinc-300"
+									}
+								>
+									<div className="font-mono text-[10px] uppercase tracking-wider">
+										{layer}
+									</div>
+									<div className="mt-1 text-lg font-bold tabular-nums">
+										{count.toLocaleString()}
+									</div>
+								</div>
+							))}
+						</fieldset>
+					</div>
+				</div>
+
+				{derived ? (
+					<div className="mt-6 border-t-2 border-black pt-5">
+						<h2 className="text-xl font-bold">Share data with an assistant</h2>
+						<p className="mt-1 max-w-2xl text-sm">
+							Download selected browser data, then upload it in your assistant.
+							Nothing leaves this device until you upload it.
+						</p>
+						<div className="mt-4 flex flex-wrap items-center gap-4">
+							<Button
+								variant="secondary"
+								size="lg"
+								disabled={exporting}
+								onClick={handleDownload}
+							>
+								{exporting ? "Preparing context…" : "Download Context"}
+							</Button>
+							<p className="font-mono text-xs font-bold">
+								{downloaded
+									? "Data ready. Choose an assistant and upload it in chat."
+									: "Download Context first, then choose an assistant."}
+							</p>
+						</div>
+						<div className="mt-5 border-t-2 border-black pt-5">
+							<h3 className="text-base font-bold">Choose an assistant</h3>
+							<div className="mt-3 flex flex-wrap gap-2">
+								{targets ? (
+									targets.WEB_TARGETS.map((target) => (
+										<button
+											key={target.name}
+											type="button"
+											disabled={!downloaded}
+											onClick={() => openAiChat(target)}
+											className="inline-flex items-center gap-2 border-2 border-black bg-white px-4 py-3 font-mono text-xs font-bold uppercase tracking-wider shadow-hard-sm transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 disabled:opacity-50"
+										>
+											<target.icon size={18} /> {target.name}
+										</button>
+									))
 								) : (
-									<Empty text="No sites recorded yet." />
+									<span className="font-mono text-xs">
+										Preparing assistants…
+									</span>
 								)}
 							</div>
-						</div>
-
-						<div className="flex gap-3 mt-6">
-							<Button
-								className="flex-1"
-								onClick={() => window.location.reload()}
-							>
-								Refresh
-							</Button>
-						</div>
-					</>
-				)}
-
-				{tab === TAB.ACTIVITY && (
-					<>
-						<Panel title="Sessions">
-							{lastSessions.length === 0 ? (
-								<Empty text="No sessions yet — browse with the extension connected." />
-							) : (
-								<div className="space-y-3">
-									{lastSessions.map((sess) => (
-										<div
-											key={sess.id}
-											className="border-hard bg-zinc-50 p-3 font-mono text-xs"
-										>
-											<div className="flex flex-wrap gap-x-4 gap-y-1">
-												<span className="min-w-0 wrap-break-word font-bold text-sm">
-													{sess.domains[0]?.domain ?? "?"}
-												</span>
-												<span className="text-muted-foreground">
-													{new Date(sess.startTimestamp).toLocaleString(
-														Intl.DateTimeFormat().resolvedOptions().locale,
-														{
-															localeMatcher: "lookup",
-															timeZone:
-																Intl.DateTimeFormat().resolvedOptions()
-																	.timeZone,
-														},
-													)}
-												</span>
-												<span className="text-muted-foreground">
-													{formatDuration(sess.duration)}
-												</span>
-											</div>
-											<div className="mt-1 flex flex-wrap gap-3 text-muted-foreground">
-												<span>{sess.eventCount} events</span>
-												<span>{sess.interactionCount} interactions</span>
-												<span>{sess.navigationCount} navigations</span>
-												<span>{sess.tabSwitchCount} tab switches</span>
-											</div>
-											<div className="mt-1 break-all text-muted-foreground">
-												{sess.domains.map((d) => d.domain).join(" · ")}
-											</div>
-										</div>
-									))}
-								</div>
-							)}
-						</Panel>
-
-						<Panel title="Contexts" className="mt-6">
-							{lastContexts.length === 0 ? (
-								<Empty text="No contexts yet." />
-							) : (
-								<div className="space-y-3">
-									{lastContexts.map((c) => (
-										<div
-											key={c.id}
-											className="border-hard bg-zinc-50 p-3 font-mono text-xs"
-										>
-											<div className="flex flex-wrap gap-x-4 gap-y-1">
-												<span className="min-w-0 wrap-break-word font-bold text-sm">
-													{c.primaryDomain}
-												</span>
-												<span className="text-muted-foreground">
-													{new Date(c.startTimestamp).toLocaleString(
-														Intl.DateTimeFormat().resolvedOptions().locale,
-														{
-															localeMatcher: "lookup",
-															timeZone:
-																Intl.DateTimeFormat().resolvedOptions()
-																	.timeZone,
-														},
-													)}
-												</span>
-												<span className="text-muted-foreground">
-													{formatDuration(c.duration)}
-												</span>
-												<span className="text-muted-foreground">
-													{c.sessionCount} sessions
-												</span>
-											</div>
-											<div className="mt-1 flex flex-wrap gap-3 text-muted-foreground">
-												<span>{c.totalEventCount} events</span>
-												<span>{c.totalInteractionCount} interactions</span>
-												<span>recurrence {c.recurrenceCount}</span>
-											</div>
-											<div className="mt-1 break-all text-muted-foreground">
-												{c.domains
-													.map((d) => `${d.domain} (${d.sessionCount})`)
-													.join(" · ")}
-											</div>
-											{c.episodes && c.episodes.length > 0 && (
-												<div className="mt-1 break-all text-violet-700">
-													<span className="font-semibold">episodes:</span>{" "}
-													{c.episodes.length}
-													{" · "}
-													{c.episodes
-														.map((e) =>
-															e.domains
-																.map((d) => d.split("://")[1] ?? d)
-																.join(" → "),
-														)
-														.join(" || ")}
-												</div>
-											)}
-											{c.sequence && (
-												<div className="mt-1 break-all text-emerald-700">
-													<span className="font-semibold">seq:</span>{" "}
-													{c.sequence
-														.map((s) => s.split("://")[1] ?? s)
-														.join(" → ")}
-												</div>
-											)}
-											{c.mergeEvidence && c.mergeEvidence.length > 0 && (
-												<div className="mt-1 break-all text-amber-700">
-													<span className="font-semibold">evidence:</span>{" "}
-													{c.mergeEvidence.join(", ")}
-												</div>
-											)}
-											{c.excursions && c.excursions.length > 0 && (
-												<div className="mt-1 break-all text-sky-700">
-													<span className="font-semibold">excursion:</span>{" "}
-													{c.excursions
-														.map(
-															(e) =>
-																`${e.activities.map((a) => a.origin || a.exactUrl).join(" → ")}`,
-														)
-														.join(" · ")}
-												</div>
-											)}
-										</div>
-									))}
-								</div>
-							)}
-						</Panel>
-					</>
-				)}
-
-				{tab === TAB.MEMORIES && (
-					<Panel title={`Memories (${derived?.memories.length ?? 0})`}>
-						{lastMemories.length === 0 ? (
-							<Empty text="No memories yet — need ≥2 related contexts or ≥500 events in one." />
-						) : (
-							<div className="space-y-3">
-								{lastMemories.map((m) => (
-									<div
-										key={m.id}
-										className="border-hard bg-zinc-50 p-3 font-mono text-xs"
+							<div className="mt-4 flex flex-wrap items-center gap-2">
+								<p className="font-mono text-xs">Using local assistant?</p>
+								{targets?.CLI_TARGETS.map((target) => (
+									<button
+										key={target.name}
+										type="button"
+										disabled={!downloaded}
+										onClick={() => copyCli(target)}
+										className="border-2 border-black bg-lime px-3 py-2 font-mono text-xs font-bold hover:bg-white disabled:opacity-50"
 									>
-										<div className="flex flex-wrap gap-x-4 gap-y-1">
-											<span className="min-w-0 wrap-break-word font-bold text-sm">
-												{m.signature}
-											</span>
-											<span className="text-muted-foreground">{m.kind}</span>
-											<span className="text-muted-foreground">
-												strength {m.strength.toFixed(2)}
-											</span>
-											<span className="text-muted-foreground">
-												conf {(m.confidence ?? 0).toFixed(2)}
-											</span>
-											<span className="text-muted-foreground">
-												stale {formatAgo(m.staleness)}
-											</span>
-										</div>
-										<div className="mt-1 whitespace-pre-line text-muted-foreground">
-											{m.observation}
-										</div>
-										{m.sequence && (
-											<div className="mt-1 break-all text-emerald-700">
-												<span className="font-semibold">seq:</span>{" "}
-												{m.sequence
-													.map((s) => s.split("://")[1] ?? s)
-													.join(" → ")}
-											</div>
-										)}
-										<div className="mt-1 text-muted-foreground">
-											{m.contextCount} contexts · {m.totalSessionCount} sessions
-											· {m.totalEventCount} events
-										</div>
-									</div>
+										{target.name}
+									</button>
 								))}
 							</div>
+						</div>
+						{copiedTo && (
+							<p className="mt-4 font-mono text-xs font-bold" role="status">
+								{copiedTo}
+							</p>
 						)}
-					</Panel>
+						{exportError && (
+							<p className="mt-4 font-mono text-xs font-bold" role="alert">
+								{exportError}
+							</p>
+						)}
+					</div>
+				) : (
+					<p className="mt-6 border-t-2 border-black pt-5 font-mono text-xs">
+						Browse with extension connected to build context pack.
+					</p>
 				)}
+			</section>
 
-				{tab === TAB.SHARE_CONTEXT && (
-					<Panel title="Share Context">
-						{!derived ? (
-							<Empty text="No data to export yet — connect the extension and browse." />
-						) : (
-							<div className="space-y-4">
-								{/* 1 of 3 — pick the period, then chat or download */}
-								<div className="border-2 border-black bg-white p-4 space-y-3">
-									<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-										1 · Pick the period
-									</div>
-									<div className="flex flex-wrap gap-2">
-										{EXPORT_PRESETS.map((p) => (
-											<button
-												key={p.id}
-												type="button"
-												onClick={() => {
-													setExpPreset(p.id);
-													if (p.id === "today") {
-														setExpFrom(fmtLocalDay(new Date()));
-														setExpTo("");
-													} else if (p.id === "all") {
-														setExpFrom("");
-														setExpTo("");
-													} else if (p.id === "7d" || p.id === "30d") {
-														const d = new Date();
-														d.setDate(d.getDate() - (p.id === "7d" ? 7 : 30));
-														setExpFrom(fmtLocalDay(d));
-														setExpTo("");
-													}
-												}}
-												className={`font-mono text-xs uppercase tracking-wider border-2 px-3 py-1.5 ${
-													expPreset === p.id
-														? "bg-lime text-black border-black"
-														: "bg-white text-black border-black hover:bg-lime/20"
-												}`}
-											>
-												{p.label}
-											</button>
-										))}
-									</div>
-									{expPreset === "custom" && (
-										<div className="flex flex-wrap items-center gap-3">
-											<label className="font-mono text-xs uppercase tracking-wider">
-												From
-												<input
-													type="date"
-													value={expFrom}
-													max={expTo || undefined}
-													onChange={(e) => {
-														setExpFrom(e.target.value);
-													}}
-													className="ml-2 border-2 border-black px-2 py-1 font-mono text-xs bg-white"
-												/>
-											</label>
-											<label className="font-mono text-xs uppercase tracking-wider">
-												To
-												<input
-													type="date"
-													value={expTo}
-													min={expFrom || undefined}
-													onChange={(e) => {
-														setExpTo(e.target.value);
-													}}
-													className="ml-2 border-2 border-black px-2 py-1 font-mono text-xs bg-white"
-												/>
-											</label>
-										</div>
-									)}
-									<div className="font-mono text-xs text-muted-foreground">
-										{exportCounts.events.toLocaleString()} events ·{" "}
-										{exportCounts.sessions.toLocaleString()} sessions ·{" "}
-										{exportCounts.contexts.toLocaleString()} contexts ·{" "}
-										{exportCounts.memories.toLocaleString()} memories in
-										selection
-									</div>
-								</div>
-
-								{/* 2 of 3 — chat, first-class, works off the selection */}
-								<div className="border-2 border-black bg-yellow-200 p-4 space-y-3">
-									<div className="font-mono text-xs uppercase tracking-wider">
-										2 · Chat about your data
-									</div>
-									<p className="font-mono text-xs text-muted-foreground">
-										From your selection above. Web opens a prefilled chat.
-										CLI/apps copy a command or prompt.
-									</p>
-									<div className="space-y-2 border-2 border-black bg-white p-3">
-										<div className="flex items-center justify-between gap-2">
-											<div className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground">
-												Web
-											</div>
-											<span className="font-mono text-[10px] text-muted-foreground">
-												{chatBody ? (chatBody.length / 1024).toFixed(0) : 0} KB
-												to clipboard
-											</span>
-										</div>
-										{targets ? (
-											<div className="flex flex-wrap gap-2">
-												{targets.WEB_TARGETS.map((t) => (
-													<button
-														key={t.name}
-														type="button"
-														disabled={!chatBody}
-														onClick={() => openAiChat(t)}
-														className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-1.5 font-mono text-xs uppercase tracking-wider hover:bg-lime/20 disabled:pointer-events-none disabled:opacity-40"
-													>
-														<t.icon size={16} />
-														{t.name}
-													</button>
-												))}
-											</div>
-										) : (
-											<div className="font-mono text-xs text-muted-foreground">
-												Loading targets…
-											</div>
-										)}
-									</div>
-									<div className="space-y-2 border-2 border-black bg-white p-3">
-										<div className="font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground">
-											CLI & apps
-										</div>
-										{targets && (
-											<div className="flex flex-wrap gap-2">
-												{targets.CLI_TARGETS.map((t) => (
-													<button
-														key={t.name}
-														type="button"
-														disabled={!chatBody}
-														onClick={() => copyCli(t)}
-														className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-1.5 font-mono text-xs uppercase tracking-wider hover:bg-lime/20 disabled:pointer-events-none disabled:opacity-40"
-													>
-														<t.icon size={16} />
-														{t.name}
-													</button>
-												))}
-											</div>
-										)}
-									</div>
-									{copiedTo && (
-										<div className="font-mono text-xs font-bold">
-											{copiedTo}
-										</div>
-									)}
-									{/* 3 of 3 — download the selection */}
-									<div className="border-2 border-black bg-white p-4 space-y-3">
-										<div className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-											3 · Download the selection
-										</div>
-										<Button
-											className="w-full"
-											variant="secondary"
-											disabled={exporting}
-											onClick={() => handleDownload("jsonl")}
-										>
-											{exporting
-												? "Downloading…"
-												: "Download JSONL (recommended for LLMs)"}
-										</Button>
-										<Button
-											className="w-full"
-											variant="outline"
-											disabled={exporting}
-											onClick={() => handleDownload("csv")}
-										>
-											Download CSV
-										</Button>
-										<div className="font-mono text-xs text-muted-foreground">
-											JSONL recommended for LLMs — canonical, self-describing
-											events + sessions + contexts + memories. CSV is a flat
-											session summary. All local — nothing leaves your machine.
-										</div>
-									</div>
-								</div>
-
-								<div className="font-mono text-xs text-muted-foreground">
-									Total available: {derived.events.length} events ·{" "}
-									{derived.sessions.length} sessions · {derived.contexts.length}{" "}
-									contexts · {derived.memories.length} memories
-								</div>
+			<section
+				aria-labelledby="browser-summary-heading"
+				className="mt-10 border-t-2 border-black pt-8"
+			>
+				<div className="flex flex-wrap items-end justify-between gap-4">
+					<div>
+						<h2
+							id="browser-summary-heading"
+							className="text-3xl font-bold tracking-tight"
+						>
+							Browser activity
+						</h2>
+						<p className="mt-1 text-sm text-muted-foreground">
+							Observed activity, never productivity scoring.
+						</p>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						{RANGES.map((item) => (
+							<button
+								key={item.id}
+								type="button"
+								onClick={() => setRange(item.id)}
+								className={`border-2 border-black px-3 py-2 font-mono text-xs font-bold uppercase tracking-wider ${range === item.id ? "bg-black text-lime" : "bg-white hover:bg-lime"}`}
+							>
+								{item.label}
+							</button>
+						))}
+					</div>
+				</div>
+				<div className="mt-5 grid gap-3 sm:grid-cols-3">
+					<div className="border-hard bg-black p-4 text-white">
+						<div className="font-mono text-xs uppercase tracking-wider text-lime">
+							Moments
+						</div>
+						<div className="mt-2 text-3xl font-bold tabular-nums">
+							{events ? rangeEvents.length.toLocaleString() : "—"}
+						</div>
+						<p className="mt-1 font-mono text-xs text-zinc-400">
+							Events captured
+						</p>
+					</div>
+					<div className="border-hard bg-cyan-300 p-4">
+						<div className="font-mono text-xs uppercase tracking-wider">
+							Browsing stretches
+						</div>
+						<div className="mt-2 text-3xl font-bold tabular-nums">
+							{rangeSessions.length.toLocaleString()}
+						</div>
+						<p className="mt-1 font-mono text-xs">
+							{rangeSessions.length
+								? `${formatDuration(activeTimeMs / rangeSessions.length)} average`
+								: "No stretches yet"}
+						</p>
+					</div>
+					<div className="border-hard bg-pink-300 p-4">
+						<div className="font-mono text-xs uppercase tracking-wider">
+							Sites explored
+						</div>
+						<div className="mt-2 text-3xl font-bold tabular-nums">
+							{domainCount.toLocaleString()}
+						</div>
+						<p className="mt-1 font-mono text-xs">Different domains visited</p>
+					</div>
+				</div>
+				<div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
+					<div className="border-hard bg-zinc-100 p-4">
+						<div className="flex flex-wrap items-end justify-between gap-3">
+							<div>
+								<h3 className="text-xl font-bold">When browser got busy</h3>
+								<p className="mt-1 font-mono text-xs text-muted-foreground">
+									Peaks show more browser activity.
+								</p>
 							</div>
-						)}
-					</Panel>
-				)}
-			</div>
-		</div>
+							{busiestMoment && (
+								<span className="border-hard bg-white px-2 py-1 font-mono text-xs">
+									Busiest: {busiestMoment.label}
+								</span>
+							)}
+						</div>
+						<div className="mt-4">
+							{charts && activityData.length ? (
+								<charts.ActivityChart data={activityData} height={250} />
+							) : (
+								<Empty text="No activity yet." />
+							)}
+						</div>
+					</div>
+					<div className="border-hard bg-yellow-200 p-4">
+						<h3 className="text-xl font-bold">Browsing stretches</h3>
+						<p className="mt-1 font-mono text-xs">
+							Tab changes and hands-on activity.
+						</p>
+						<div className="mt-4">
+							{charts && focusData.length ? (
+								<charts.FocusChart data={focusData} height={250} />
+							) : (
+								<Empty text="Browse for a while to compare stretches." />
+							)}
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section aria-labelledby="activity-heading" className="mt-10">
+				<div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+					<div>
+						<h2
+							id="activity-heading"
+							className="text-3xl font-bold tracking-tight"
+						>
+							Recent activity
+						</h2>
+						<p className="mt-1 text-sm text-muted-foreground">
+							Latest browsing stretches and grouped contexts.
+						</p>
+					</div>
+					<Button asChild variant="outline" size="sm">
+						<Link to="/activities">Load more activity</Link>
+					</Button>
+				</div>
+				<ActivityList sessions={recentSessions} contexts={recentContexts} />
+			</section>
+
+			<section aria-labelledby="memories-heading" className="mt-10">
+				<div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+					<div>
+						<h2
+							id="memories-heading"
+							className="text-3xl font-bold tracking-tight"
+						>
+							Recent memories
+						</h2>
+						<p className="mt-1 text-sm text-muted-foreground">
+							Recurring browser patterns, backed by your recorded activity.
+						</p>
+					</div>
+					<Button asChild variant="outline" size="sm">
+						<Link to="/memories">Load more memories</Link>
+					</Button>
+				</div>
+				<MemoryList memories={recentMemories} />
+			</section>
+		</DashboardShell>
 	);
 };
 
 export const Route = createFileRoute("/dashboard")({
+	head: () => ({
+		meta: [
+			{ title: "Dashboard | Tabot" },
+			{ name: "robots", content: "noindex, nofollow" },
+		],
+	}),
 	component: Dashboard,
 });
