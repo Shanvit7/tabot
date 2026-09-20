@@ -2,7 +2,7 @@
 	"name": "extension",
 	"displayName": "Tabot",
 	"description": "Private, local browser activity timeline. Thinking across tabs.",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"private": true,
 	"scripts": {
 		"predev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css",

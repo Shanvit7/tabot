@@ -1,5 +1,11 @@
 # extension
 
+## 0.1.3
+
+### Patch Changes
+
+- 490bf03: Add a share-first dashboard with full activity and memory views, and protect exported context with local PII redaction.
+
 ## 0.1.2
 
 ### Patch Changes
