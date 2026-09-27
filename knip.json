@@ -3,5 +3,5 @@
 	"tags": ["-lintignore"],
 	"ignoreExportsUsedInFile": true,
 	"ignore": ["apps/extension/**"],
-	"ignoreDependencies": ["destr"]
+	"ignoreDependencies": ["destr", "cloudflare"]
 }

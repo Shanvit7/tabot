@@ -1,0 +1,31 @@
+name = "tabot-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-09-20"
+
+# Stable free Cloudflare Workers endpoint. No custom domain required.
+[vars]
+MCP_PUBLIC_URL = "https://tabot-mcp.shanvit7.workers.dev/mcp"
+
+# TABOT_AUTH_SECRET and TABOT_EXTENSION_ID are deployment bindings, not [vars]:
+#   local dev  -> apps/mcp-server/.dev.vars  (gitignored)
+#   production -> wrangler secret put TABOT_AUTH_SECRET
+#                 wrangler secret put TABOT_EXTENSION_ID
+# TABOT_EXTENSION_ID is the currently connecting extension's ID. The OAuth
+# page uses it for its one-time authorization message; one Worker supports one ID.
+
+[durable_objects]
+bindings = [
+	{ name = "TABOT_INSTALLATION", class_name = "TabotInstallation" },
+	{ name = "TABOT_AUTH", class_name = "TabotAuth" },
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TabotInstallation"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TabotAuth"]
+
+[observability]
+enabled = true

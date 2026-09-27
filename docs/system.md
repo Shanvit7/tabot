@@ -13,12 +13,13 @@ Chrome tab APIs + content script
   -> bounded drain and Dexie / IndexedDB
   -> pure derivation at read time
      events -> sessions -> anchors -> graph -> episodes -> contexts -> memories
-  -> extension popup or local dashboard
+  ├-> extension popup or local dashboard
+  └-> optional: extension relay -> Cloudflare MCP Worker -> ChatGPT
 ```
 
-Everything stays on device. There is no Tabot backend, account, cloud sync, page-content capture, typed-text capture, LLM, embedding store, or task/intent inference.
+Raw telemetry stays on device; the optional ChatGPT integration sends sanitized, derived context on tool requests. The Worker holds OAuth/installation routing state, not browser history. There is no Tabot account, cloud sync, page-content capture, typed-text capture, Tabot-hosted LLM, embedding store, or task/intent inference. See [MCP relay development and connection](../apps/mcp-server/README.md).
 
-Only raw normalized events are durable. Derived results are rebuilt from those events, so changing a derivation algorithm does not require migrating derived tables.
+Only raw normalized browser events are durable as browser data. Derived results are rebuilt from those events, so changing a derivation algorithm does not require migrating derived tables. The separate relay persists authentication/installation state.
 
 ## Capture
 
@@ -158,7 +159,7 @@ Single-occurrence patterns require 500 events. Generic single-site activity such
 
 ## Local Dashboard
 
-`apps/web/src/routes/dashboard.tsx` has Overview, Activity, Memories, and Export views. It asks the extension for `GET_STATS`, `GET_COUNTS`, and `GET_EVENTS`, then derives dashboard views in browser memory using shared pure functions. It does not send data to a server.
+`apps/web/src/routes/dashboard.tsx` has Overview, Activity, Memories, and Export views. It asks the extension for `GET_STATS`, `GET_COUNTS`, and `GET_EVENTS`, then derives dashboard views in browser memory using shared pure functions. It does not send data to a server. Separately, the optional extension relay answers four authenticated MCP tools (`search_context`, `get_recent_context`, `get_current_context`, `get_memory`) by computing and sanitizing local context before returning it to ChatGPT; the dashboard does not use the relay.
 
 The dashboard must run at an origin allowed by extension `externally_connectable`. Production permits `https://shanvit7.github.io/*`; local development permits `http://localhost:3000/*`. The Chrome Web Store assigns one stable extension ID. Set it as GitHub Actions variable `TABOT_EXTENSION_ID`; deploy passes it to `VITE_TABOT_EXTENSION_ID`, so installed users connect automatically
 

@@ -19,6 +19,11 @@ import {
 	type TabEventType,
 	updateMeta,
 } from "@tabot/shared";
+import {
+	approveAuthorizationTransaction,
+	getRelayStatus,
+	startRelay,
+} from "./relay";
 
 // --- Shared buffer (transient hot path) ---
 const CAPACITY = 10_000;
@@ -309,6 +314,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		return false;
 	}
 
+	if (message?.type === "GET_RELAY_STATUS") {
+		try {
+			sendResponse(getRelayStatus());
+		} catch {}
+		return false;
+	}
+
 	if (message?.type === "GET_STATS") {
 		try {
 			sendResponse(getMergedStats());
@@ -351,10 +363,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	return false;
 });
 
-// externally_connectable web dashboard (setup.md §10) — same contract, different entry point
+const isRelayAuthorizationPage = (url: string | undefined): boolean => {
+	if (!url) return false;
+	try {
+		return new URL(url).origin === new URL(getRelayStatus().relayUrl).origin;
+	} catch {
+		return false;
+	}
+};
+
+// externally_connectable dashboard + OAuth consent page — only the relay's
+// origin can ask this extension to approve an authorization transaction.
 if (chrome.runtime.onMessageExternal) {
 	chrome.runtime.onMessageExternal.addListener(
-		(message, _sender, sendResponse) => {
+		(message, sender, sendResponse) => {
+			if (message?.type === "TABOT_APPROVE_AUTHORIZATION") {
+				if (
+					!isRelayAuthorizationPage(sender.url) ||
+					typeof message.transactionId !== "string" ||
+					!message.transactionId
+				)
+					return false;
+				void (async () => {
+					try {
+						await approveAuthorizationTransaction(message.transactionId);
+						sendResponse({ ok: true });
+					} catch {
+						sendResponse({ ok: false });
+					}
+				})();
+				return true;
+			}
+
 			if (message?.type === "GET_STATS") {
 				try {
 					sendResponse(getMergedStats());
@@ -395,3 +435,5 @@ if (chrome.runtime.onMessageExternal) {
 		},
 	);
 }
+
+startRelay();

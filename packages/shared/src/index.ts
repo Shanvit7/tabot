@@ -100,6 +100,7 @@ export {
 } from "./recall/live-context";
 export {
 	annotateTimelineCore,
+	type ContextSearchResult,
 	type ContextSummary,
 	contextSignature,
 	type DomainHistoryReport,
@@ -125,6 +126,7 @@ export {
 	reportRecurrence,
 	type SimilarContextResult,
 	type SimilarMemoryResult,
+	searchContextsCore,
 	summarizeContext,
 	summarizeContextCore,
 	type TimelineEntry,

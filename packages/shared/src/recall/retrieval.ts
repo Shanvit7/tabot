@@ -123,6 +123,56 @@ export const findSimilarMemoriesCore = (
 	return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 };
 
+// --- Free-text context search (MCP `search_context`) ---
+// Pure core: score contexts against query tokens by domain/sequence match. No
+// db, no LLM — callers supply a bounded context list (getRecentContexts).
+export interface ContextSearchResult {
+	context: BrowserContext;
+	score: number; // matched terms / total terms [0, 1]
+	matchedTerms: string[];
+}
+
+export const searchContextsCore = (
+	contexts: BrowserContext[],
+	query: string,
+	limit = 8,
+): ContextSearchResult[] => {
+	const terms = query
+		.toLowerCase()
+		.split(/\s+/)
+		.filter((t) => t.length >= 2);
+	if (terms.length === 0) {
+		return [...contexts]
+			.sort((a, b) => b.startTimestamp - a.startTimestamp)
+			.slice(0, limit)
+			.map((context) => ({ context, score: 0, matchedTerms: [] }));
+	}
+	const results: ContextSearchResult[] = [];
+	for (const context of contexts) {
+		const haystack = [
+			context.primaryDomain,
+			...context.domains.map((d) => d.domain),
+			...(context.sequence ?? []),
+		]
+			.join(" ")
+			.toLowerCase();
+		const matchedTerms = terms.filter((t) => haystack.includes(t));
+		if (matchedTerms.length === 0) continue;
+		results.push({
+			context,
+			score: matchedTerms.length / terms.length,
+			matchedTerms,
+		});
+	}
+	return results
+		.sort(
+			(a, b) =>
+				b.score - a.score ||
+				b.context.startTimestamp - a.context.startTimestamp,
+		)
+		.slice(0, limit);
+};
+
 export const summarizeContextCore = (
 	context: BrowserContext,
 ): ContextSummary => {

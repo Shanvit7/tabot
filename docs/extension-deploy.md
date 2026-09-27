@@ -71,7 +71,7 @@ Get `SUBMIT_KEYS` with a one-time local OAuth consent: `pnpm --filter extension 
 pnpm --filter extension dev
 ```
 
-Serves unpacked to `build/chrome-mv3-dev`. Load via `chrome://extensions` → Developer mode → **Load unpacked** → point at that folder.
+Serves unpacked to `build/chrome-mv3-dev`. Load via `chrome://extensions` → Developer mode → **Load unpacked** → point at that folder. For the optional ChatGPT integration, the development extension and MCP Worker use separate credentials and URLs from production; follow [MCP relay development](../apps/mcp-server/README.md). MCP Worker deployment is **not** part of the extension store release workflow above.
 
 ## Common failures
 

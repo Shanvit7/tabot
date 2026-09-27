@@ -1,0 +1,15 @@
+{
+	"include": ["src/**/*.ts"],
+	"compilerOptions": {
+		"strict": true,
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"lib": ["ES2024"],
+		"types": ["@cloudflare/workers-types"],
+		"target": "ES2024",
+		"isolatedModules": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"noEmit": true
+	}
+}

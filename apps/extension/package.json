@@ -39,8 +39,10 @@
 		],
 		"externally_connectable": {
 			"matches": [
-				"http://localhost:3000/*",
-				"https://shanvit7.github.io/*"
+				"http://localhost/*",
+				"https://shanvit7.github.io/*",
+				"https://tabot-mcp.shanvit7.workers.dev/*",
+				"https://tabot-mcp-dev.shanvit7.workers.dev/*"
 			]
 		}
 	}

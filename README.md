@@ -50,13 +50,13 @@ The graph is evidence for relationships between activity. Chronological order re
 
 ## Bring your own AI
 
-Tabot does not own the intelligence layer. It is context infrastructure for anyone whose work happens in a browser, whatever tools they use. Use exported data with ChatGPT, Claude, Gemini, local models, your own agent, your own scripts — or no AI at all.
+Tabot does not own the intelligence layer. It is context infrastructure for anyone whose work happens in a browser. Connect the optional ChatGPT MCP integration to query locally-derived context, use exported data with other tools, or use no AI at all. The current live integration supports ChatGPT; other providers can use exports.
 
 **your data → your context → your choice of AI**
 
 ## Privacy-first
 
-The core telemetry and derivation run locally. There is no Tabot cloud required for the core pipeline, and you control when data is exported. Before an export is downloaded or shared, local PII redaction runs on supported text fields to help prevent accidental personal-information leaks.
+The core telemetry and derivation run locally. There is no Tabot cloud required for the core pipeline, and you control when data is exported. Before an export is downloaded or shared, local PII redaction runs on supported text fields to help prevent accidental personal-information leaks. If you connect ChatGPT, Tabot's relay holds connection/authentication state and forwards **sanitized, derived context** from your live extension when ChatGPT calls a tool; raw event history is not uploaded to the relay. That context leaves your device and is shared with ChatGPT.
 
 Browser telemetry is sensitive. Even without page contents, URLs, domains, timestamps, and activity patterns can reveal a lot about someone. Treat exports as personal data.
 
@@ -97,11 +97,11 @@ Typical development commands:
 ```bash
 pnpm install
 pnpm lint
-pnpm typecheck
-pnpm test
+pnpm --filter mcp-server typecheck
+pnpm --filter shared check:retrieval
 ```
 
-Check the repository's package scripts for the current build and extension-development commands.
+For the ChatGPT developer connection, use the **full** MCP URL `https://tabot-mcp-dev.shanvit7.workers.dev/mcp` with the unpacked dev extension in the same Chrome profile. See [MCP relay setup and troubleshooting](apps/mcp-server/README.md). Production uses a separate Worker and extension credentials. Check the repository's package scripts for other build and extension-development commands.
 
 ## Roadmap
 

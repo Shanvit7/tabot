@@ -1,0 +1,20 @@
+name = "tabot-mcp-dev"
+main = "src/index.ts"
+compatibility_date = "2026-09-20"
+
+[vars]
+MCP_PUBLIC_URL = "https://tabot-mcp-dev.shanvit7.workers.dev/mcp"
+
+[durable_objects]
+bindings = [
+	{ name = "TABOT_INSTALLATION", class_name = "TabotInstallation" },
+	{ name = "TABOT_AUTH", class_name = "TabotAuth" },
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TabotInstallation"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TabotAuth"]

@@ -13,6 +13,7 @@ import {
 	findSimilarContextsCore,
 	findSimilarMemoriesCore,
 	jaccardIndex,
+	searchContextsCore,
 	summarizeContextCore,
 } from "../recall/retrieval.ts";
 
@@ -237,6 +238,44 @@ assert.equal(
 		timelineA,
 		timelineB,
 		"scenario 12: timeline rebuild consistency",
+	);
+}
+
+// --- searchContextsCore (§4.2 — free-text context search) ---
+{
+	const contexts = [
+		ctx(["github.com", "openai.com"], 1),
+		ctx(["docs.python.org"], 2),
+		ctx(["news.ycombinator.com"], 3),
+	];
+
+	// matching terms hit the intended context
+	const hit = searchContextsCore(contexts, "github openai");
+	assert.equal(hit.length, 1, "search: only the matching context is returned");
+	assert.equal(
+		hit[0].context.primaryDomain,
+		"github.com",
+		"search: correct context matched",
+	);
+	assert.deepEqual(
+		hit[0].matchedTerms.sort(),
+		["github", "openai"],
+		"search: all query terms matched",
+	);
+
+	// empty query falls back to most-recent-first
+	const recent = searchContextsCore(contexts, "");
+	assert.equal(recent.length, 3, "search: empty query returns all contexts");
+	assert.ok(
+		recent[0].context.startTimestamp >= recent[1].context.startTimestamp,
+		"search: empty query orders newest first",
+	);
+
+	// no match → empty
+	assert.equal(
+		searchContextsCore(contexts, "zzzznope").length,
+		0,
+		"search: unrelated query returns nothing",
 	);
 }
 

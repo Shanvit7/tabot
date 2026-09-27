@@ -1,0 +1,23 @@
+{
+	"name": "mcp-server",
+	"version": "0.2.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "node scripts/dev.mjs",
+		"dev:local": "wrangler dev",
+		"deploy": "wrangler deploy",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.30.0",
+		"hono": "^4.13.8",
+		"jose": "^6.2.12",
+		"zod": "^4.4.3"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^5.20260920.1",
+		"typescript": "^5.9.0",
+		"wrangler": "^4.135.0"
+	}
+}

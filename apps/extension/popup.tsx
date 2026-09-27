@@ -48,6 +48,9 @@ const DASHBOARD_URL =
 	process.env.PLASMO_PUBLIC_DASHBOARD_URL ??
 	"https://shanvit7.github.io/tabot/dashboard";
 
+// Where the user adds/opens the Tabot MCP connector in ChatGPT.
+const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
+
 // Same cap as the dashboard's Share Context chat body.
 const MAX_CHAT_CHARS = 300_000;
 
@@ -283,6 +286,10 @@ const IndexPopup = () => {
 
 	const openDashboard = () => {
 		chrome.tabs.create({ url: DASHBOARD_URL });
+	};
+
+	const openChatGpt = () => {
+		chrome.tabs.create({ url: CHATGPT_URL });
 	};
 
 	const toggleTracking = () => {
@@ -549,6 +556,22 @@ const IndexPopup = () => {
 				</div>
 			)}
 
+			{/* Connect — ChatGPT OAuth detects this Chrome installation (Phase 6). */}
+			<div className="card mt-3.25">
+				<div className="label text-lime-brand">Connect to ChatGPT</div>
+				<div className="mt-1 text-[11px] leading-[1.35]">
+					Add Tabot as a connector in ChatGPT, then click Connect. Tabot detects
+					this Chrome profile automatically; no code or Tabot account needed.
+				</div>
+				<button
+					type="button"
+					onClick={openChatGpt}
+					className="mt-2 cursor-pointer border-2 border-ink bg-lime-brand px-2.5 py-1.75 font-mono-brand text-[11px] font-extrabold uppercase shadow-hard-sm"
+				>
+					Connect ChatGPT →
+				</button>
+			</div>
+
 			{/* Footer */}
 			<div className="mt-3.25 flex items-center justify-between">
 				<button
@@ -559,7 +582,7 @@ const IndexPopup = () => {
 					Go to Dashboard →
 				</button>
 				<span className="text-[10px] leading-[1.3] text-ink/60">
-					Everything stays on this device.
+					Browsing events stay here; connected tools share derived context.
 				</span>
 			</div>
 		</div>

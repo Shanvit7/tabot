@@ -18,7 +18,7 @@ Chrome tab APIs + content script
   -> live browser-context snapshot
 ```
 
-All data remains local. There is no backend, authentication, cloud storage, remote ingestion, LLM, embeddings, vector database, productivity scoring, or semantic task inference.
+Raw browser events remain local. The optional ChatGPT integration uses a Cloudflare MCP/OAuth relay for connection and request routing; the extension executes context queries locally and sends sanitized, bounded derived results to ChatGPT on request. The relay persists OAuth/installation state, not browser history. There is no Tabot-hosted LLM, embeddings, vector database, productivity scoring, or semantic task inference. See [MCP relay setup and troubleshooting](../apps/mcp-server/README.md).
 
 ### Architectural principles
 
@@ -43,7 +43,7 @@ All data remains local. There is no backend, authentication, cloud storage, remo
 - **Rate shaping:** TanStack Pacer at the content-script boundary.
 - **Persistence:** Dexie 4.x over IndexedDB database `tabot_events`, `events` table.
 - **Graph substrate:** graphology.
-- **Backend:** none.
+- **Optional relay:** Hono + MCP SDK on Cloudflare Workers, Durable Objects for OAuth/installation state, authenticated WebSocket to the extension. No remote browser-history store.
 
 ```text
 tabot/
@@ -52,6 +52,7 @@ tabot/
 │   │   ├── background.ts                # event producer, SAB drain, Dexie, messaging
 │   │   ├── contents/tabot.ts            # page-level telemetry collection
 │   │   └── popup.tsx                    # aggregate pipeline statistics
+│   ├── mcp-server/                      # optional ChatGPT MCP/OAuth relay
 │   └── web/
 │       ├── src/routes/                  # landing + dashboard routes
 │       ├── src/lib/dashboard-data.ts    # extension transport + in-memory derivation
@@ -570,7 +571,7 @@ Do not add derived IndexedDB tables, full event-cache indexes, derived dashboard
 
 ## 13. Phase 7 Decision Gate
 
-Before adding any AI capability, evaluate representative real and constructed browsing scenarios:
+For the existing ChatGPT MCP integration and any future AI-facing changes, evaluate representative real and constructed browsing scenarios:
 
 1. session quality and explainable boundaries;
 2. episode and context coherence and separation;
@@ -583,9 +584,9 @@ The required decision is:
 
 > **Does sparse browser telemetry provide enough signal to represent useful user context?**
 
-If yes, identify the strongest evidence-grounded signals before preparing an agent consumer. If no, identify the minimum additional metadata required and why; do not expand collection simply because data is available.
+If yes, retain the strongest evidence-grounded signals in tool results. If no, identify the minimum additional metadata required and why; do not expand collection simply because data is available.
 
-A future Tabot agent must consume:
+The current ChatGPT integration consumes:
 
 ```text
 Current Browser Context + Relevant Browser Memories + Supporting Evidence
@@ -602,8 +603,8 @@ rather than raw event history.
 3. IndexedDB persists raw normalized events in batches; derived data is lazy and rebuildable.
 4. Dashboard and popup do not render raw event streams; they show aggregates plus derived views.
 5. Derived output never names a task, intent, or content meaning.
-6. There is no cloud/backend/authentication/multi-user path.
-7. No LLM, embeddings, semantic search, vector database, cross-device identity, content capture, predictive context, or automation is implemented.
+6. The optional Cloudflare relay authenticates ChatGPT requests and routes them to the user's live extension; it does not store raw events or derived browser history. There is no Tabot account, cloud sync, or multi-user history store.
+7. No Tabot-hosted LLM, embeddings, vector database, cross-device identity, content capture, predictive context, or automation is implemented. Local text search over derived contexts is available through MCP.
 8. Optional persistence caches, derived UI routes, and derived runtime messages require Phase 7 evidence first.
 
 ---
