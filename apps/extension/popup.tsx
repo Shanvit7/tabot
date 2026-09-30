@@ -13,6 +13,8 @@ import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import {
 	buildExportJsonl,
 	CLI_TARGET_DEFS,
+	chatGptContextUrl,
+	contextPrompt,
 	createEmptyStats,
 	derive,
 	exportFilename,
@@ -44,17 +46,16 @@ const fetchStatsHelper = (
 	);
 };
 
-const DASHBOARD_URL =
-	process.env.PLASMO_PUBLIC_DASHBOARD_URL ??
-	"https://shanvit7.github.io/tabot/dashboard";
+const HOME_URL =
+	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
 
 // Where the user adds/opens the Tabot MCP connector in ChatGPT.
 const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
 
-// Same cap as the dashboard's Share Context chat body.
+// Cap for manual context sharing.
 const MAX_CHAT_CHARS = 300_000;
 
-// Dashboard-identical share targets — defs from @tabot/shared, icons attached
+// Share targets from @tabot/shared, icons attached
 // here so the popup renders the same icon buttons as the web app.
 const WEB_ICONS: Record<string, ComponentType<{ size?: number }>> = {
 	ChatGPT: OpenAIMono,
@@ -225,6 +226,7 @@ const IndexPopup = () => {
 	);
 	const [dexieCount, setDexieCount] = useState<number | null>(null);
 	const [events, setEvents] = useState<StoredTabEvent[]>([]);
+	const [readyContextId, setReadyContextId] = useState<string | null>(null);
 	const [trackingEnabled, setTrackingEnabled] = useState(true);
 	const [sharing, setSharing] = useState(false);
 	const [shareStatus, setShareStatus] = useState<string | null>(null);
@@ -235,7 +237,7 @@ const IndexPopup = () => {
 	} | null>(null);
 
 	// Stats refresh fast (lastProcessedAt, droppedEvents stay live); derived
-	// layers (sessions / contexts / top site) refresh slower like the dashboard.
+	// layers (sessions / contexts / top site) refresh slower than counters.
 	useEffect(() => {
 		chrome.runtime.sendMessage(
 			{ type: "GET_TRACKING" },
@@ -263,11 +265,22 @@ const IndexPopup = () => {
 		return () => clearInterval(id);
 	}, []);
 
+	useEffect(() => {
+		void chrome.storage.local
+			.get("tabot_context_notification")
+			.then((stored) => {
+				const id = stored.tabot_context_notification?.contextId;
+				if (typeof id === "string") setReadyContextId(id);
+			})
+			.catch(() => {});
+	}, []);
+
 	const derived = useMemo(
 		() => (events.length > 0 ? derive(events) : null),
 		[events],
 	);
 	const currentCtx = derived?.live?.currentContext ?? null;
+	const readyContext = derived?.contexts.find((c) => c.id === readyContextId);
 	const live = derived?.live ?? null;
 	const stretches = derived?.sessions.length ?? 0;
 	const domainsVisited = useMemo(() => {
@@ -284,12 +297,23 @@ const IndexPopup = () => {
 		return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 	}, [derived]);
 
-	const openDashboard = () => {
-		chrome.tabs.create({ url: DASHBOARD_URL });
+	const openHome = () => {
+		chrome.tabs.create({ url: HOME_URL });
 	};
 
 	const openChatGpt = () => {
 		chrome.tabs.create({ url: CHATGPT_URL });
+	};
+
+	const askAboutContext = async () => {
+		if (!readyContext) return;
+		const copied = await copyText(contextPrompt(readyContext.id));
+		chrome.tabs.create({ url: chatGptContextUrl(readyContext.id) });
+		setShareStatus(
+			copied
+				? "Prompt copied as backup. Review it in ChatGPT and send when ready."
+				: "ChatGPT opened. Ask it to get this Tabot context by ID.",
+		);
 	};
 
 	const toggleTracking = () => {
@@ -359,7 +383,7 @@ const IndexPopup = () => {
 		setShareStatus(
 			copied
 				? `${target.name} command copied — paste into your terminal`
-				: "Couldn't copy — use the dashboard's Share Context tab instead.",
+				: "Couldn't copy — use Home's export option instead.",
 		);
 		setTimeout(() => setShareStatus(null), 4000);
 	};
@@ -405,6 +429,32 @@ const IndexPopup = () => {
 					{trackingEnabled ? "PAUSE" : "RESUME"}
 				</button>
 			</div>
+
+			{readyContext && (
+				<section
+					className="mb-3.25 border-2 border-ink bg-white p-4 shadow-hard"
+					aria-label="Context ready"
+				>
+					<h2 className="text-[18px] font-extrabold leading-tight">
+						Context ready
+					</h2>
+					<p className="mt-1 break-all text-[12px] leading-[1.4]">
+						You visited {readyContext.domains.length} sites over{" "}
+						{formatDuration(readyContext.duration)}. Tabot has context for AI to
+						explore this thread.
+					</p>
+					<p className="mt-1.5 break-all font-mono-brand text-[10px] text-ink/70">
+						{readyContext.primaryDomain} · ID: {readyContext.id}
+					</p>
+					<button
+						type="button"
+						onClick={askAboutContext}
+						className="mt-3 cursor-pointer border-2 border-ink bg-ink px-3 py-2 font-mono-brand text-[11px] font-extrabold uppercase text-lime-brand shadow-hard-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+					>
+						Ask ChatGPT →
+					</button>
+				</section>
+			)}
 
 			{!hasShareable && (
 				<div className="card">
@@ -575,11 +625,11 @@ const IndexPopup = () => {
 			{/* Footer */}
 			<div className="mt-3.25 flex items-center justify-between">
 				<button
-					onClick={openDashboard}
+					onClick={openHome}
 					type="button"
 					className="cursor-pointer border-2 border-ink bg-white px-2.5 py-1.75 font-mono-brand text-[11px] font-extrabold uppercase shadow-hard-sm"
 				>
-					Go to Dashboard →
+					Go to Home →
 				</button>
 				<span className="text-[10px] leading-[1.3] text-ink/60">
 					Browsing events stay here; connected tools share derived context.

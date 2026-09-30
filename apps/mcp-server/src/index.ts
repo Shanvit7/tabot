@@ -14,6 +14,7 @@ import {
 } from "./lib/oauth";
 import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./lib/tools";
 import {
+	getContextInputSchema,
 	getCurrentContextInputSchema,
 	getMemoryInputSchema,
 	getRecentContextInputSchema,
@@ -73,7 +74,7 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 			annotations: READ_ONLY_ANNOTATIONS,
 			inputSchema: searchContextInputSchema,
 		},
-		({ query }) => call(TOOL_NAMES.SEARCH_CONTEXT, { query }),
+		({ query, hours }) => call(TOOL_NAMES.SEARCH_CONTEXT, { query, hours }),
 	);
 
 	server.registerTool(
@@ -96,6 +97,17 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 			inputSchema: getCurrentContextInputSchema,
 		},
 		() => call(TOOL_NAMES.GET_CURRENT_CONTEXT, {}),
+	);
+
+	server.registerTool(
+		TOOL_NAMES.GET_CONTEXT,
+		{
+			title: "Specific Tabot browser context",
+			description: TOOL_DESCRIPTIONS.GET_CONTEXT,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: getContextInputSchema,
+		},
+		({ id }) => call(TOOL_NAMES.GET_CONTEXT, { id }),
 	);
 
 	server.registerTool(
@@ -200,7 +212,7 @@ const isAllowedRedirectUri = (uri: string): boolean => {
 	}
 };
 
-// --- Installation registration (plan §5, §4B) -------------------------------
+// --- Installation registration ----------------------------------------------
 // Issues an opaque installation ID plus a server-signed token. The ID alone is
 // never a credential; only a valid signed token is accepted on the relay.
 app.post("/installations", async (c) => {
@@ -524,7 +536,7 @@ app.post("/revoke", async (c) => {
 	return c.body(null, 200);
 });
 
-// --- Extension relay WebSocket (plan §4C, §6) -------------------------------
+// --- Extension relay WebSocket ----------------------------------------------
 app.get("/relay", async (c) => {
 	if (c.req.header("Upgrade") !== "websocket") {
 		return c.text("Expected WebSocket upgrade", 426);
@@ -563,7 +575,7 @@ app.post("/relay/:installationId/ping", async (c) => {
 	});
 });
 
-// --- MCP endpoint (plan §4A, §19) -------------------------------------------
+// --- MCP endpoint -----------------------------------------------------------
 // Requires an OAuth access token (Phase 6). The token's installation binding is
 // authoritative — no client-supplied installation ID is ever trusted.
 const unauthorizedMcp = (origin: string): Response =>

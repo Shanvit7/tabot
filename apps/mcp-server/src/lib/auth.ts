@@ -7,7 +7,7 @@ const keyFor = (secret: string): Uint8Array => encoder.encode(secret);
 
 /**
  * Mint a signed installation token. The installation ID is only authoritative
- * inside a server-signed token — an ID alone is never a credential (plan §4B, §19).
+ * inside a server-signed token — an ID alone is never a credential.
  */
 export const signInstallationToken = (
 	secret: string,

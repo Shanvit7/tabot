@@ -12,10 +12,14 @@ import {
 	contextSignature,
 	findSimilarContextsCore,
 	findSimilarMemoriesCore,
+	isAiReadyContext,
 	jaccardIndex,
+	nextNotifiableContext,
+	readyContextsInRange,
 	searchContextsCore,
 	summarizeContextCore,
 } from "../recall/retrieval.ts";
+import { chatGptContextUrl } from "../share/targets.ts";
 
 const NOW = 1_700_000_000_000; // fixed reference
 const DAY = 24 * 60 * 60 * 1000;
@@ -53,6 +57,62 @@ const ctx = (
 		primaryDomain: domainList[0]?.domain ?? "",
 	};
 };
+
+// AI-ready: duration + events + independent evidence; thin contexts stay discoverable by id only.
+{
+	const strong = ctx(["docs.com", "github.com"], 1);
+	assert.equal(isAiReadyContext(strong), true);
+	assert.equal(isAiReadyContext({ ...strong, totalEventCount: 9 }), false);
+	assert.equal(isAiReadyContext({ ...strong, duration: 9 * 60_000 }), false);
+	assert.equal(
+		isAiReadyContext({
+			...strong,
+			domains: strong.domains.slice(0, 1),
+			sessionCount: 1,
+			totalInteractionCount: 4,
+		}),
+		false,
+	);
+	assert.equal(
+		isAiReadyContext({
+			...strong,
+			domains: strong.domains.slice(0, 1),
+			sessionCount: 1,
+			totalInteractionCount: 5,
+		}),
+		true,
+	);
+	const thin = { ...strong, id: "thin", totalEventCount: 9 };
+	assert.deepEqual(
+		readyContextsInRange([strong, thin], strong.endTimestamp, NOW),
+		[strong],
+		"inclusive overlap + readiness",
+	);
+	assert.deepEqual(
+		readyContextsInRange([strong], strong.endTimestamp + 1, NOW),
+		[],
+		"no out-of-window leak",
+	);
+}
+
+// Notifications: only fresh, finished, unseen AI-ready contexts; latest wins.
+{
+	const ready = ctx(["docs.com", "github.com"], 0.05); // ended 12m ago
+	const completed = ctx(["docs.com", "github.com"], 0.1); // ended 84m ago
+	const thin = { ...ctx(["docs.com"], 0.08), totalEventCount: 9 };
+	const old = ctx(["docs.com", "github.com"], 2);
+	assert.equal(
+		nextNotifiableContext([ready, completed, thin, old], 0, NOW)?.id,
+		completed.id,
+	);
+	assert.equal(
+		nextNotifiableContext([completed], completed.endTimestamp, NOW),
+		undefined,
+	);
+	assert.equal(nextNotifiableContext([old], 0, NOW), undefined);
+	const prompt = new URL(chatGptContextUrl(completed.id)).searchParams.get("q");
+	assert.ok(prompt?.includes(`get_context with id "${completed.id}"`));
+}
 
 // --- jaccardIndex (§8.3) ---
 

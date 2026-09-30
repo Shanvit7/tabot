@@ -159,9 +159,40 @@ Single-occurrence patterns require 500 events. Generic single-site activity such
 
 ## Local Dashboard
 
-`apps/web/src/routes/dashboard.tsx` has Overview, Activity, Memories, and Export views. It asks the extension for `GET_STATS`, `GET_COUNTS`, and `GET_EVENTS`, then derives dashboard views in browser memory using shared pure functions. It does not send data to a server. Separately, the optional extension relay answers four authenticated MCP tools (`search_context`, `get_recent_context`, `get_current_context`, `get_memory`) by computing and sanitizing local context before returning it to ChatGPT; the dashboard does not use the relay.
+`apps/web/src/routes/home.tsx` leads with observed context connections and exact-ID handoff. `/activities` shows recorded activity over time; `/memories` shows recurring patterns. Home includes a collapsed manual export. The web UI requests `GET_STATS` and `GET_EVENTS` from the extension and derives views locally with shared pure functions. It does not send history to a server. The optional ChatGPT relay is independent of Home.
 
 The dashboard must run at an origin allowed by extension `externally_connectable`. Production permits `https://shanvit7.github.io/*`; local development permits `http://localhost:3000/*`. The Chrome Web Store assigns one stable extension ID. Set it as GitHub Actions variable `TABOT_EXTENSION_ID`; deploy passes it to `VITE_TABOT_EXTENSION_ID`, so installed users connect automatically
+
+## Optional ChatGPT MCP integration
+
+The extension owns browser context, the Hono/Cloudflare Worker owns authentication and routing, and ChatGPT owns reasoning. The Worker is independently deployable from the dashboard. The current endpoints are `https://tabot-mcp.shanvit7.workers.dev/mcp` (production) and `https://tabot-mcp-dev.shanvit7.workers.dev/mcp` (development); the extension connects to the matching Worker origin, not `/mcp`. The originally proposed `mcp.tabot.ai` custom domain is **not configured**: this Cloudflare account has no DNS zone, so dev uses a separately deployed Worker rather than a named tunnel. See [MCP setup and troubleshooting](../apps/mcp-server/README.md) for dev commands, secrets, tunnel alternatives, and connection instructions.
+
+### Authorization and installation binding
+
+On first startup the extension registers a random installation ID and server-signed credential, stored in `chrome.storage.local`. The ID alone grants no access. Credentials are scoped by relay origin so the dev and production installations stay separate; reconnect reads existing credentials after service-worker or Chrome restarts rather than silently registering a replacement. An invalid or expired saved credential fails to reconnect and needs explicit repair.
+
+ChatGPT is the OAuth client; Tabot does not receive the user's ChatGPT account identity or require a Tabot account. OAuth discovery, dynamic client registration, authorization-code + PKCE (S256), token refresh, and revocation live on the Worker. During **same-Chrome-profile** consent, the Worker creates a short-lived, single-use authorization transaction bound to client, redirect URI, PKCE challenge, and state. Its consent page contacts the configured Tabot extension through `chrome.runtime.sendMessage`; the extension authenticates approval directly to the Worker, without exposing its credential to page JavaScript. Only then does the Worker issue an authorization code and bind the grant to that installation. Without the extension enabled in the authorizing profile, connection cannot complete; there is no account login, pairing code, QR, or cross-device fallback. The published extension ID and `externally_connectable` origin must match the deployed Worker (and the unpacked dev ID and dev origin must match for development).
+
+A single auth Durable Object persists client registrations, short-lived consent transactions and codes, and hashed access/refresh tokens bound to an installation; it stores no browser context. Access tokens authorize `/mcp`; the token's installation binding, **not** a caller-supplied installation ID, selects the destination. Installation credentials authenticate the outbound extension WebSocket. One installation Durable Object owns that live socket and only in-flight request state; it uses hibernation-compatible heartbeat responses. It never writes tool results or browser history to storage.
+
+### Tool execution and privacy boundary
+
+An authenticated MCP call travels `ChatGPT → /mcp → installation Durable Object → extension WebSocket → local Dexie/query → sanitizeDerived → bounded result → ChatGPT`. The four read-only tools are:
+
+| Tool | Local result |
+| --- | --- |
+| `search_context(query)` | Search recent derived contexts for a topic. |
+| `get_recent_context(hours)` | Contexts from a bounded time window (1–168 hours). |
+| `get_current_context()` | Most recent meaningful context, if any. |
+| `get_memory(id)` | A derived recurring pattern and evidence, if found. |
+
+Tool descriptions distinguish observed activity from inferred intent. The extension reuses shared derivation/search and sanitization, then projects compact context or memory fields (IDs, time/duration, domains, counts, observations); it does **not** stream raw events, full URLs, page content, or the local database. Sanitized results **do leave the device** for ChatGPT on request. The Worker forwards them without persisting browser history or tool results. Do not log browsing payloads, raw URLs, page titles, memory text, or full responses; keep operational logging to status, latency, and request correlation where needed.
+
+### Connection lifecycle and limits
+
+The extension sends correlated request/response messages over an authenticated outbound WebSocket, heartbeats every 25 seconds, and retries interrupted connections with bounded exponential backoff. A request to an offline installation returns a clear error; a live request has a 10-second timeout, and disconnects fail pending calls. Server tool schemas bound query and memory-ID length and recent-context hours; extension queries and results have additional limits, and the installation Durable Object rejects oversized response frames. Presence and pending requests are ephemeral; Chrome must be open with the extension connected to answer a tool call. `/health` verifies the Worker is reachable, **not** the extension or ChatGPT tool discovery. For connection verification and Refresh after server changes, follow the [relay README](../apps/mcp-server/README.md).
+
+This integration does not add other AI providers, a native MCP server, user accounts, cloud history/embedding storage, task inference, custom MCP UI, or cross-device pairing. Those were excluded from the initial milestone, not hidden capabilities.
 
 ## Checks
 

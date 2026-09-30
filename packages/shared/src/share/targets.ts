@@ -16,6 +16,12 @@ export type CliTargetDef = AiTargetDef & { cmd: string };
 const prefillUrl = (base: string, param: string, value: string): string =>
 	`${base}${base.includes("?") ? "&" : "?"}${param}=${encodeURIComponent(value)}`;
 
+export const contextPrompt = (id: string): string =>
+	`Use my connected Tabot tool get_context with id "${id}". Explain what the observed browsing activity shows, distinguish facts from inference, and suggest useful next steps. Do not request my full browser history.`;
+
+export const chatGptContextUrl = (id: string): string =>
+	prefillUrl("https://chatgpt.com/", "q", contextPrompt(id));
+
 export const WEB_TARGET_DEFS: WebTargetDef[] = [
 	{
 		name: "ChatGPT",

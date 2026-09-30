@@ -3,23 +3,24 @@
 import {
 	type BrowserContext,
 	createEventsDb,
+	getContextById,
 	getContexts,
-	getCurrentContext,
 	getMemoryById,
-	getRecentContexts,
+	isAiReadyContext,
 	logger,
 	type Memory,
+	readyContextsInRange,
 	sanitizeDerived,
 	searchContextsCore,
 	summarizeContextCore,
 } from "@tabot/shared";
 
 /**
- * Extension ↔ relay connection (plan §4C, §6, §14).
+ * Extension ↔ relay connection.
  *
  * Owns: installation identity, authenticated WebSocket, heartbeat, exponential
  * backoff reconnect, request/response correlation, and the local context query
- * handlers (plan §7, §9). Context results are sanitized here before responding.
+ * handlers. Context results are sanitized here before responding.
  */
 
 // Production target. Local development overrides this in .env.development.
@@ -39,14 +40,14 @@ const HEARTBEAT_MS = 25_000;
 const BACKOFF_MIN_MS = 1_000;
 const BACKOFF_MAX_MS = 60_000;
 
-/** Relay method names — must match mcp-server lib/tools.ts (plan §7). */
+/** Relay method names — must match mcp-server lib/tools.ts. */
 const SEARCH_CONTEXT_METHOD = "search_context";
 const GET_RECENT_CONTEXT_METHOD = "get_recent_context";
 const GET_CURRENT_CONTEXT_METHOD = "get_current_context";
+const GET_CONTEXT_METHOD = "get_context";
 const GET_MEMORY_METHOD = "get_memory";
 const SEARCH_RESULT_LIMIT = 8;
 const RECENT_RESULT_LIMIT = 20;
-const RECENT_CONTEXT_SCAN = 500; // bounded read (plan §11)
 const MAX_HOURS = 168; // 7 days — keep in step with mcp-server lib/tools.ts
 
 interface Credentials {
@@ -140,14 +141,14 @@ const send = (message: unknown) => {
 		socket.send(JSON.stringify(message));
 };
 
-// --- Local context execution (plan §9) -------------------------------------
+// --- Local context execution -----------------------------------------------
 // Runs inside the extension against the local Dexie store, then passes the
-// result through the privacy boundary before it leaves the device (plan §10).
+// result through the privacy boundary before it leaves the device.
 let dbPromise: ReturnType<typeof createEventsDb> | null = null;
 const getDb = () => (dbPromise ??= createEventsDb());
 
 // The privacy boundary, applied once: derived contexts in → externally-safe
-// copy out. Only concise fields are returned (plan §11) — no raw telemetry.
+// copy out. Only concise fields are returned — no raw telemetry.
 const sanitizeContexts = async (
 	contexts: BrowserContext[],
 ): Promise<BrowserContext[]> =>
@@ -171,6 +172,7 @@ const projectContext = (c: BrowserContext) => ({
 	sessionCount: c.sessionCount,
 	sites: c.domains.map((d) => d.domain),
 	summary: summarizeContextCore(c).observation,
+	aiReady: isAiReadyContext(c),
 });
 
 const searchContext = async (params: unknown) => {
@@ -178,7 +180,22 @@ const searchContext = async (params: unknown) => {
 		typeof (params as { query?: unknown } | null)?.query === "string"
 			? ((params as { query: string }).query ?? "").trim()
 			: "";
-	const contexts = await getRecentContexts(await getDb(), RECENT_CONTEXT_SCAN);
+	const rawHours = (params as { hours?: unknown } | null)?.hours;
+	const since =
+		typeof rawHours === "number" &&
+		Number.isInteger(rawHours) &&
+		rawHours >= 1 &&
+		rawHours <= MAX_HOURS
+			? Date.now() - rawHours * 3_600_000
+			: undefined;
+	const now = Date.now();
+	// ponytail: full local derivation preserves episode-based IDs for get_context(id);
+	// index stable contexts only if profiling shows relay timeout on large histories.
+	const contexts = readyContextsInRange(
+		await getContexts(await getDb()),
+		since,
+		now,
+	);
 	const matches = searchContextsCore(contexts, query, SEARCH_RESULT_LIMIT);
 	const sanitized = await sanitizeContexts(matches.map((m) => m.context));
 	return {
@@ -195,14 +212,14 @@ const getRecentContext = async (params: unknown) => {
 			? Math.min(Math.max(Math.trunc(raw), 1), MAX_HOURS)
 			: 24;
 	const now = Date.now();
-	const contexts = await getContexts(
-		await getDb(),
+	// Derive before filtering: slicing source events changes episode boundaries and ids.
+	const contexts = await getContexts(await getDb());
+	const selected = readyContextsInRange(
+		contexts,
 		now - hours * 3_600_000,
 		now,
-	);
-	const sanitized = await sanitizeContexts(
-		contexts.slice(-RECENT_RESULT_LIMIT),
-	);
+	).slice(-RECENT_RESULT_LIMIT);
+	const sanitized = await sanitizeContexts(selected);
 	return {
 		hours,
 		count: sanitized.length,
@@ -211,7 +228,21 @@ const getRecentContext = async (params: unknown) => {
 };
 
 const currentContext = async () => {
-	const context = await getCurrentContext(await getDb());
+	const contexts = await getContexts(await getDb());
+	const now = Date.now();
+	const context = readyContextsInRange(contexts, now - 24 * 3_600_000, now).at(
+		-1,
+	);
+	if (!context) return { found: false, context: null };
+	const [sanitized] = await sanitizeContexts([context]);
+	return { found: true, context: projectContext(sanitized) };
+};
+
+const getContext = async (params: unknown) => {
+	const id = (params as { id?: unknown } | null)?.id;
+	if (typeof id !== "string" || !id.trim() || id.length > 256)
+		return { found: false, context: null };
+	const context = await getContextById(await getDb(), id);
 	if (!context) return { found: false, context: null };
 	const [sanitized] = await sanitizeContexts([context]);
 	return { found: true, context: projectContext(sanitized) };
@@ -256,6 +287,7 @@ const handlers: Record<string, (params: unknown) => Promise<unknown>> = {
 	[SEARCH_CONTEXT_METHOD]: searchContext,
 	[GET_RECENT_CONTEXT_METHOD]: getRecentContext,
 	[GET_CURRENT_CONTEXT_METHOD]: currentContext,
+	[GET_CONTEXT_METHOD]: getContext,
 	[GET_MEMORY_METHOD]: getMemory,
 };
 

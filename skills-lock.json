@@ -25,6 +25,12 @@
 			"skillPath": "skills/seo/technical/core-web-vitals/SKILL.md",
 			"computedHash": "1c9f63ecac9d021e73ad135c5e22746925615ca22e71fe42800387981e778d8b"
 		},
+		"frontend-design-ui-ux": {
+			"source": "ulpi-io/skills",
+			"sourceType": "github",
+			"skillPath": "frontend-design-ui-ux/SKILL.md",
+			"computedHash": "8eae75d294447eac5fab6c8a31141d8ff74777ea1b7bc25aef93c93ed6e10e71"
+		},
 		"impeccable": {
 			"source": "pbakaus/impeccable",
 			"sourceType": "github",
@@ -54,6 +60,12 @@
 			"sourceType": "github",
 			"skillPath": "skills/remotion-render/SKILL.md",
 			"computedHash": "21aa72294b9675d7831d837d90223429a236b5315dd812cb8a4259c3dcc73ef0"
+		},
+		"tanstack-charts": {
+			"source": "dobroslavradosavljevic/skills",
+			"sourceType": "github",
+			"skillPath": "skills/tanstack-charts/SKILL.md",
+			"computedHash": "c9f48655141504be6dd2143341a9c8bf5ef1f3fe7dd04b53f0671bd6b440b9fa"
 		},
 		"tanstack-start": {
 			"source": "tanstack-skills/tanstack-skills",

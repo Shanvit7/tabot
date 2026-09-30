@@ -1,0 +1,89 @@
+/* Operational surfaces only. Public landing retains its existing design. */
+.work-shell {
+	--work-canvas: #fff;
+	--work-surface: #f5f8f4;
+	--work-raised: #e9eee8;
+	--work-ink: #15251b;
+	--work-muted: #476151;
+	--work-line: #d2ddd2;
+	--work-accent: #bfff00;
+	min-height: 100vh;
+	background: var(--work-canvas);
+	color: var(--work-ink);
+}
+.work-shell ::selection {
+	background: var(--work-accent);
+	color: var(--work-ink);
+}
+.work-shell :is(a, button, input, summary):focus-visible {
+	outline: 2px solid var(--work-ink);
+	outline-offset: 3px;
+	box-shadow: 0 0 0 5px var(--work-accent);
+}
+.work-shell a {
+	text-underline-offset: 3px;
+}
+/* The search field is one control: the pill turning lime is the focus ring,
+   so the inner input and clear button must not draw their own. */
+.work-shell .work-search-field :is(input, button):focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+.work-shell .ts-chart-host:focus-visible {
+	outline: 2px solid var(--work-accent);
+	outline-offset: -2px;
+}
+.work-shell .work-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 44px;
+	padding: 10px 16px;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 600;
+	background: var(--work-ink);
+	color: #fff;
+	transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.work-shell .work-button:hover {
+	background: #304939;
+}
+.work-shell .work-button:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+.work-shell .work-button--quiet {
+	background: var(--work-surface);
+	color: var(--work-ink);
+}
+.work-shell .work-button--quiet:hover {
+	background: var(--work-raised);
+}
+.work-shell .work-rule {
+	border-color: var(--work-line);
+}
+.work-shell .work-meta {
+	color: var(--work-muted);
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 12px;
+	line-height: 1.5;
+}
+.work-shell .work-field {
+	min-height: 44px;
+	border: 1px solid var(--work-muted);
+	border-radius: 4px;
+	padding: 8px 12px;
+	background: #fff;
+	color: var(--work-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+	.work-shell .work-button {
+		transition: none;
+	}
+}
+@media (forced-colors: active) {
+	.work-shell .ts-chart-host {
+		forced-color-adjust: auto;
+	}
+}

@@ -104,6 +104,10 @@
 	--secondary-foreground: var(--lime);
 	--muted: #f5f5f5;
 	--muted-foreground: #666666;
+	--popover: var(--white);
+	--popover-foreground: var(--black);
+	--accent: #eef4ea;
+	--accent-foreground: var(--black);
 	--destructive: #ff0000;
 	--destructive-foreground: var(--white);
 	--border: var(--black);
@@ -121,8 +125,10 @@
 }
 
 /* ── Base ── */
-* {
-	border-color: var(--black);
+@layer base {
+	* {
+		border-color: var(--black);
+	}
 }
 
 body {

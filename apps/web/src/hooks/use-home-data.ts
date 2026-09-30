@@ -1,8 +1,8 @@
 import type { StatsSnapshot, StoredTabEvent } from "@tabot/shared";
 import { useEffect, useMemo, useState } from "react";
-import { derive, fetchEvents, fetchStats } from "~/lib/dashboard-data";
+import { derive, fetchEvents, fetchStats } from "~/lib/home-data";
 
-export const useDashboardData = () => {
+export const useHomeData = () => {
 	const [stats, setStats] = useState<StatsSnapshot | null>(null);
 	const [events, setEvents] = useState<StoredTabEvent[] | null>(null);
 	const [initialized, setInitialized] = useState(false);

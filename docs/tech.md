@@ -55,7 +55,7 @@ tabot/
 │   ├── mcp-server/                      # optional ChatGPT MCP/OAuth relay
 │   └── web/
 │       ├── src/routes/                  # landing + dashboard routes
-│       ├── src/lib/dashboard-data.ts    # extension transport + in-memory derivation
+│       ├── src/lib/home-data.ts    # extension transport + in-memory derivation
 │       └── src/components/              # landing, dashboard, and UI components
 ├── packages/shared/src/
 │   ├── events.ts, buffer.ts, protocol.ts, metadata.ts, db.ts, logger.ts

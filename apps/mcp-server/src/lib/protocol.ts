@@ -8,7 +8,7 @@ export const ERROR_CODES = {
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 
-/** Relay → extension request (plan §6). */
+/** Relay → extension request. */
 export interface ServerRequest {
 	type: "request";
 	requestId: string;
@@ -16,7 +16,7 @@ export interface ServerRequest {
 	params: unknown;
 }
 
-/** Extension → relay response (plan §6). Exactly one of result/error. */
+/** Extension → relay response. Exactly one of result/error. */
 export interface ClientResponse {
 	type: "response";
 	requestId: string;
@@ -24,7 +24,7 @@ export interface ClientResponse {
 	error?: { code: string; message: string };
 }
 
-/** Thrown inside the relay so routes can map failures to clean errors (plan §13). */
+/** Thrown inside the relay so routes can map failures to clean errors. */
 export class RelayError extends Error {
 	readonly code: ErrorCode;
 

@@ -104,6 +104,14 @@ as technically possible.
 
 # 3. P0 --- AI-Ready Context
 
+### Retrieval slice (implemented locally; notification UX still pending)
+
+- Readiness is a deterministic evidence gate: at least 10 minutes, 10 events, and either two sites, two sessions, or five interactions. This is a discovery threshold, not a claim about user intent; adjust against real browsing samples before enabling notifications.
+- Search, recent, and current MCP discovery return AI-ready derived contexts only, with stable context IDs and concise sanitized summaries. `get_context(id)` retrieves one selected context, including a thin context explicitly requested by ID. `get_memory(id)` remains targeted.
+- `get_recent_context(hours)` filters *completed* contexts by time overlap, then caps output at 20; `search_context(query, hours?)` optionally limits the search window and caps output at 8. Missing context = empty result, never fallback to all history.
+- ChatGPT prompt example: “Find contexts about Tabot in the last 24 hours, then get context `<id>` and help me decide next steps.” A context ID comes from a search/recent result or dashboard. Existing **Download Context** is a separate manual JSONL export for users, not the MCP retrieval path; downloading does not automatically upload anything to ChatGPT.
+- Notification slice implemented: a 15-minute Chrome alarm looks for AI-ready contexts that ended 30 minutes ago or more (so IDs have settled), formed since notifications were enabled, and are no older than 24 hours. At most one notification every six hours; no startup reminder, historical backfill, raw upload, or notification from MCP calls. Readiness thresholds and wording still need real-browsing validation before release. Memory-only alerts and startup reminders remain pending.
+
 The important state is not merely:
 
 ``` text
@@ -172,19 +180,18 @@ A new context was formed.
 [Give to ChatGPT]
 ```
 
-Another possible state:
+Chosen notification interface (example 2; evidence-only wording):
 
 ``` text
-🧠 Context ready
+Context ready
 
-You've been researching
-"AI browser context"
-
-Tabot has enough context for AI
-to understand this thread.
+2 sites · 42 min of browsing context.
+Tabot has enough context for AI to explore this thread.
 
 [Ask ChatGPT]
 ```
+
+Clicking notification opens that context on dashboard; the button opens ChatGPT with a prompt to retrieve its exact context ID. Popup repeats the scoped CTA. If ChatGPT is not connected, user must connect first. ChatGPT prefill still needs live verification.
 
 ### Important
 

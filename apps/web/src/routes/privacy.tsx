@@ -47,9 +47,8 @@ const Privacy = () => (
 					<h2 className="text-2xl font-semibold text-[#eff5e7]">Sharing</h2>
 					<p className="mt-3">
 						Tabot does not sell, transfer, or share browser activity with third
-						parties. When you open the Tabot dashboard, it reads activity
-						directly from the extension on your device; it is not sent to a
-						Tabot server.
+						parties. When you open Tabot Home, it reads activity directly from
+						the extension on your device; it is not sent to a Tabot server.
 					</p>
 				</section>
 

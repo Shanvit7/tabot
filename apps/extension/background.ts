@@ -1,15 +1,19 @@
 /// <reference types="chrome" />
 
+import notificationIcon from "data-base64:~assets/icon-128.png";
 import {
 	bulkInsertEvents,
+	chatGptContextUrl,
 	countEvents,
 	createBuffer,
 	createEmptyStats,
 	createEventsDb,
 	getAllEvents,
+	getContexts,
 	getMeta,
 	LIFECYCLE_KINDS,
 	logger,
+	nextNotifiableContext,
 	POPUP_SOURCE,
 	pushEvent,
 	removeMeta,
@@ -57,6 +61,17 @@ const TYPE_NAMES: TabEventType[] = [
 ];
 
 const TRACKING_KEY = "tabot_tracking_enabled";
+const NOTIFICATION_KEY = "tabot_context_notification";
+const NOTIFICATION_ID = "tabot-context-ready";
+const NOTIFICATION_ALARM = "tabot-context-check";
+const HOME_URL =
+	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
+interface NotificationState {
+	lastEnd: number;
+	lastNotifiedAt: number;
+	contextId?: string;
+}
+
 const latestStats: StatsSnapshot = createEmptyStats(capacity);
 let droppedEvents = 0;
 let drainScheduled = false;
@@ -372,7 +387,7 @@ const isRelayAuthorizationPage = (url: string | undefined): boolean => {
 	}
 };
 
-// externally_connectable dashboard + OAuth consent page — only the relay's
+// externally_connectable Home + OAuth consent page — only the relay's
 // origin can ask this extension to approve an authorization transaction.
 if (chrome.runtime.onMessageExternal) {
 	chrome.runtime.onMessageExternal.addListener(
@@ -435,5 +450,92 @@ if (chrome.runtime.onMessageExternal) {
 		},
 	);
 }
+
+// First run seeds a high-water mark: never surprise existing users with
+// notifications for historical contexts. Only future, completed contexts count.
+void chrome.storage.local
+	.get(NOTIFICATION_KEY)
+	.then((stored) => {
+		if (!stored[NOTIFICATION_KEY])
+			return chrome.storage.local.set({
+				[NOTIFICATION_KEY]: { lastEnd: Date.now(), lastNotifiedAt: 0 },
+			});
+	})
+	.catch((error) => logger.warn("notification init failed", { error }));
+void chrome.alarms
+	.get(NOTIFICATION_ALARM)
+	.then((alarm) => {
+		if (!alarm)
+			return chrome.alarms.create(NOTIFICATION_ALARM, { periodInMinutes: 15 });
+	})
+	.catch((error) => logger.warn("notification alarm failed", { error }));
+
+let notificationCheckRunning = false;
+chrome.alarms.onAlarm.addListener((alarm) => {
+	if (alarm.name !== NOTIFICATION_ALARM || notificationCheckRunning) return;
+	notificationCheckRunning = true;
+	void (async () => {
+		try {
+			await trackingReady;
+			if (!trackingEnabled) return;
+			const stored = await chrome.storage.local.get(NOTIFICATION_KEY);
+			const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
+			if (!state) return;
+			const now = Date.now();
+			if (now - state.lastNotifiedAt < 6 * 3_600_000) return;
+			const context = nextNotifiableContext(
+				await getContexts(await getDb()),
+				state.lastEnd,
+				now,
+			);
+			if (!context) return;
+			await chrome.notifications.create(NOTIFICATION_ID, {
+				type: "basic",
+				iconUrl: notificationIcon,
+				title: "Context ready",
+				message: `${context.domains.length} sites · ${Math.round(context.duration / 60_000)} min of browsing context. Tabot has enough context for AI to explore this thread.`,
+				buttons: [{ title: "Ask ChatGPT" }],
+			});
+			await chrome.storage.local.set({
+				[NOTIFICATION_KEY]: {
+					lastEnd: context.endTimestamp,
+					lastNotifiedAt: now,
+					contextId: context.id,
+				},
+			});
+		} catch (error) {
+			logger.warn("context notification failed", { error });
+		} finally {
+			notificationCheckRunning = false;
+		}
+	})();
+});
+
+chrome.notifications.onClicked.addListener((id) => {
+	if (id !== NOTIFICATION_ID) return;
+	void chrome.storage.local
+		.get(NOTIFICATION_KEY)
+		.then((stored) => {
+			const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
+			if (state?.contextId) {
+				const url = new URL(HOME_URL);
+				url.searchParams.set("context", state.contextId);
+				return chrome.tabs.create({ url: url.toString() });
+			}
+		})
+		.catch((error) => logger.warn("open context failed", { error }));
+});
+
+chrome.notifications.onButtonClicked.addListener((id, buttonIndex) => {
+	if (id !== NOTIFICATION_ID || buttonIndex !== 0) return;
+	void chrome.storage.local
+		.get(NOTIFICATION_KEY)
+		.then((stored) => {
+			const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
+			if (state?.contextId)
+				return chrome.tabs.create({ url: chatGptContextUrl(state.contextId) });
+		})
+		.catch((error) => logger.warn("open ChatGPT failed", { error }));
+});
 
 startRelay();

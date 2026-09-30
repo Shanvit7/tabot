@@ -70,7 +70,7 @@ export const GetStarted = () => {
 					</h2>
 					<p className="mt-8 max-w-xl text-lg leading-8 text-[#244d39] sm:text-xl">
 						Install Tabot, browse normally, then review your own activity from
-						one local dashboard.
+						one local home.
 					</p>
 				</div>
 				<div className="max-w-sm border-2 border-black bg-[#f5f6f0] p-6 shadow-hard-lg sm:p-7">
@@ -82,7 +82,7 @@ export const GetStarted = () => {
 					</p>
 					{installed ? (
 						<Button asChild className="mt-7 w-full" variant="secondary">
-							<a href="/dashboard">Open dashboard</a>
+							<a href="/home">Open Home</a>
 						</Button>
 					) : chromeWebStoreUrl ? (
 						<Button asChild className="mt-7 w-full" variant="secondary">

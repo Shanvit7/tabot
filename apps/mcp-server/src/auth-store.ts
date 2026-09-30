@@ -75,7 +75,7 @@ const now = () => Date.now();
  * short-lived browser-bridge authorization transactions. Strongly consistent by
  * construction — a code or transaction can only be consumed once.
  *
- * Only identifiers live here: no browsing context, ever (plan §12, §19).
+ * Only identifiers live here: no browsing context, ever.
  */
 export class TabotAuth extends DurableObject {
 	// ponytail: expired rows are pruned lazily on read; add storage.setAlarm for

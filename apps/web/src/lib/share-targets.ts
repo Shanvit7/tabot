@@ -12,7 +12,7 @@ import {
 import { CLI_TARGET_DEFS, WEB_TARGET_DEFS } from "@tabot/shared";
 import type { ComponentType } from "react";
 
-// Lazy-loaded from the dashboard route (Share Context tab only) so @lobehub/icons
+// Kept separate from Home so @lobehub/icons
 // stays out of the critical path. Name/prompt/url definitions live icon-free in
 // @tabot/shared (shared with the extension popup) — icons are attached here.
 

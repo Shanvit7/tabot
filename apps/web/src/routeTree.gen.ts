@@ -11,7 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivitiesRouteImport } from './routes/activities'
-import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as HomeRouteImport } from './routes/home'
 import { Route as MemoriesRouteImport } from './routes/memories'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 
@@ -25,9 +25,9 @@ const ActivitiesRoute = ActivitiesRouteImport.update({
   path: '/activities',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MemoriesRoute = MemoriesRouteImport.update({
@@ -44,14 +44,14 @@ const PrivacyRoute = PrivacyRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
-  '/dashboard': typeof DashboardRoute
+  '/home': typeof HomeRoute
   '/memories': typeof MemoriesRoute
   '/privacy': typeof PrivacyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
-  '/dashboard': typeof DashboardRoute
+  '/home': typeof HomeRoute
   '/memories': typeof MemoriesRoute
   '/privacy': typeof PrivacyRoute
 }
@@ -59,22 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
-  '/dashboard': typeof DashboardRoute
+  '/home': typeof HomeRoute
   '/memories': typeof MemoriesRoute
   '/privacy': typeof PrivacyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activities' | '/dashboard' | '/memories' | '/privacy'
+  fullPaths: '/' | '/activities' | '/home' | '/memories' | '/privacy'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activities' | '/dashboard' | '/memories' | '/privacy'
-  id: '__root__' | '/' | '/activities' | '/dashboard' | '/memories' | '/privacy'
+  to: '/' | '/activities' | '/home' | '/memories' | '/privacy'
+  id: '__root__' | '/' | '/activities' | '/home' | '/memories' | '/privacy'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActivitiesRoute: typeof ActivitiesRoute
-  DashboardRoute: typeof DashboardRoute
+  HomeRoute: typeof HomeRoute
   MemoriesRoute: typeof MemoriesRoute
   PrivacyRoute: typeof PrivacyRoute
 }
@@ -95,11 +95,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ActivitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/memories': {
@@ -122,7 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivitiesRoute: ActivitiesRoute,
-  DashboardRoute: DashboardRoute,
+  HomeRoute: HomeRoute,
   MemoriesRoute: MemoriesRoute,
   PrivacyRoute: PrivacyRoute,
 }

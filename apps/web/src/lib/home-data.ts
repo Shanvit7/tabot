@@ -58,11 +58,19 @@ export const fetchStats = (): Promise<StatsSnapshot | null> =>
 		);
 	});
 
-export type StatsRange = "today" | "7d" | "30d" | "all";
+export type StatsRange = "5m" | "1h" | "6h" | "today" | "7d" | "30d" | "all";
+
+const ROLLING_HOURS: Partial<Record<StatsRange, number>> = {
+	"5m": 5 / 60,
+	"1h": 1,
+	"6h": 6,
+};
 
 export const rangeStart = (r: StatsRange): number => {
 	if (r === "all") return 0;
 	const d = new Date();
+	const hours = ROLLING_HOURS[r];
+	if (hours) return Date.now() - hours * 60 * 60 * 1000;
 	if (r === "today") d.setHours(0, 0, 0, 0);
 	else d.setDate(d.getDate() - (r === "7d" ? 7 : 30));
 	return d.getTime();
@@ -77,7 +85,7 @@ export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 
 // --- Export (Part C of docs/export-spec.md) ---
 // Derivation + JSONL building live in @tabot/shared (shared with the extension
-// popup "Share Context"); this module re-exports them for the dashboard route.
+// popup "Share Context"); this module re-exports them for the Home route.
 
 export {
 	buildExportJsonl,
@@ -104,15 +112,6 @@ export const downloadFile = (
 };
 
 // --- Shared formatters ---
-
-// `msAgo` is a duration in ms since the event happened (not a timestamp).
-export const formatAgo = (msAgo: number): string => {
-	if (!msAgo) return "never";
-	const d = Math.round(msAgo / 1000);
-	if (d < 2) return "just now";
-	if (d < 60) return `${d}s ago`;
-	return `${Math.round(d / 60)}m ago`;
-};
 
 export const formatDuration = (ms: number): string => {
 	const s = Math.round(ms / 1000);

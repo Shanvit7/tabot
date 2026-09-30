@@ -13,9 +13,9 @@ interface PendingRequest {
 }
 
 /**
- * One Durable Object per logical Tabot installation (plan §12). Owns the live
- * extension WebSocket, routes correlated requests to it, and never stores
- * browsing context — only in-flight request state (plan §19).
+ * One Durable Object per logical Tabot installation. Owns the live extension
+ * WebSocket, routes correlated requests to it, and never stores browsing
+ * context — only in-flight request state.
  */
 export class TabotInstallation implements DurableObject {
 	private readonly state: DurableObjectState;
@@ -23,7 +23,7 @@ export class TabotInstallation implements DurableObject {
 
 	constructor(state: DurableObjectState, _env: unknown) {
 		this.state = state;
-		// Heartbeats answered without waking the object (plan §12 hibernation).
+		// Heartbeats answered without waking the object.
 		this.state.setWebSocketAutoResponse(
 			new WebSocketRequestResponsePair("ping", "pong"),
 		);
@@ -96,7 +96,7 @@ export class TabotInstallation implements DurableObject {
 		}
 	}
 
-	/** Send a request to the extension and await the correlated response (plan §6). */
+	/** Send a request to the extension and await the correlated response. */
 	dispatch(method: string, params: unknown): Promise<unknown> {
 		const socket = this.state.getWebSockets()[0];
 		if (!socket) {

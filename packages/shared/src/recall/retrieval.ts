@@ -123,6 +123,44 @@ export const findSimilarMemoriesCore = (
 	return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 };
 
+// AI-ready means enough observed evidence to be useful, not inferred intent.
+// Keep this pure: the same decision applies to search, recent, and current.
+export const isAiReadyContext = (context: BrowserContext): boolean =>
+	context.duration >= 10 * 60_000 &&
+	context.totalEventCount >= 10 &&
+	(context.domains.length >= 2 ||
+		context.sessionCount >= 2 ||
+		context.totalInteractionCount >= 5);
+
+export const readyContextsInRange = (
+	contexts: BrowserContext[],
+	from?: number,
+	to?: number,
+): BrowserContext[] =>
+	contexts.filter(
+		(c) =>
+			isAiReadyContext(c) &&
+			(from === undefined || c.endTimestamp >= from) &&
+			(to === undefined || c.startTimestamp <= to),
+	);
+
+// Wait past the context merge gap before treating its ID as final. Never
+// notify about old history, still-active threads, or thin contexts.
+export const nextNotifiableContext = (
+	contexts: BrowserContext[],
+	lastEnd: number,
+	now = Date.now(),
+): BrowserContext | undefined =>
+	contexts
+		.filter(
+			(c) =>
+				isAiReadyContext(c) &&
+				c.endTimestamp > lastEnd &&
+				c.endTimestamp <= now - 30 * 60_000 &&
+				c.endTimestamp >= now - 24 * 3_600_000,
+		)
+		.sort((a, b) => b.endTimestamp - a.endTimestamp)[0];
+
 // --- Free-text context search (MCP `search_context`) ---
 // Pure core: score contexts against query tokens by domain/sequence match. No
 // db, no LLM — callers supply a bounded context list (getRecentContexts).

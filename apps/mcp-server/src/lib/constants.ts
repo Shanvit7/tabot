@@ -2,16 +2,16 @@ export const VERSION = "0.2.0";
 
 export const NAME = "tabot-mcp";
 
-/** Bounded request timeout for extension round-trips (plan §13). */
+/** Bounded request timeout for extension round-trips. */
 export const REQUEST_TIMEOUT_MS = 10_000;
 
-/** Bounded message size — reject oversized extension frames (plan §6, §19). */
+/** Bounded message size — reject oversized extension frames. */
 export const MAX_MESSAGE_CHARS = 64_000;
 
 /** Installation token lifetime. Long-lived; refresh flow is a later phase. */
 export const INSTALLATION_TOKEN_TTL = "365d";
 
-// --- OAuth 2.1 authorization server (plan §4B, §19) -------------------------
+// --- OAuth 2.1 authorization server ----------------------------------------
 
 /** Access token lifetime — short, refreshed by the client. */
 export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60; // 1h
