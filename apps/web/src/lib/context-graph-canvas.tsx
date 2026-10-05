@@ -1,6 +1,6 @@
 import type { ForceGraphMethods } from "react-force-graph-2d";
 import ForceGraph2D from "react-force-graph-2d";
-import type { GraphNode } from "~/lib/context-graph-data";
+import { faviconImage, type GraphNode } from "~/lib/context-graph-data";
 
 const INK = "#e8f3e8";
 const SITE = "#6f9c81";
@@ -9,7 +9,10 @@ const LABEL = "#a9c6b1";
 const LINK = "110,170,135";
 
 const RADIUS = { context: 7, memory: 5.5, site: 3.5 } as const;
-const radiusOf = (node: GraphNode) => RADIUS[node.kind];
+// A site showing its real favicon needs enough pixels to be recognisable.
+const SITE_ICON_RADIUS = 6;
+const radiusOf = (node: GraphNode) =>
+	node.kind === "site" && node.favicon ? SITE_ICON_RADIUS : RADIUS[node.kind];
 const rgba = (hex: string, alpha: number) => {
 	const n = hex.replace("#", "");
 	const [r, g, b] = [0, 2, 4].map((i) =>
@@ -109,14 +112,31 @@ export const GraphCanvas = ({
 		ctx.arc(node.x, node.y, halo, 0, Math.PI * 2);
 		ctx.fill();
 
-		ctx.beginPath();
-		ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-		ctx.fillStyle = lit ? rgba(color, pulse) : rgba(color, 0.2);
-		ctx.fill();
-		if (node.kind !== "site") {
-			ctx.lineWidth = 1.5 / scale;
-			ctx.strokeStyle = "rgba(11,19,16,0.85)";
-			ctx.stroke();
+		const icon =
+			node.kind === "site" && lit ? faviconImage(node.favicon) : null;
+		if (icon) {
+			ctx.save();
+			ctx.beginPath();
+			ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+			ctx.fillStyle = "#0b1310";
+			ctx.fill();
+			if (typeof ctx.roundRect === "function") {
+				ctx.beginPath();
+				ctx.roundRect(node.x - r, node.y - r, r * 2, r * 2, r * 0.4);
+				ctx.clip();
+			}
+			ctx.drawImage(icon, node.x - r, node.y - r, r * 2, r * 2);
+			ctx.restore();
+		} else {
+			ctx.beginPath();
+			ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+			ctx.fillStyle = lit ? rgba(color, pulse) : rgba(color, 0.2);
+			ctx.fill();
+			if (node.kind !== "site") {
+				ctx.lineWidth = 1.5 / scale;
+				ctx.strokeStyle = "rgba(11,19,16,0.85)";
+				ctx.stroke();
+			}
 		}
 
 		if (active) {
@@ -189,6 +209,10 @@ export const GraphCanvas = ({
 				d3AlphaMin={0}
 				d3AlphaDecay={0.06}
 				d3VelocityDecay={0.5}
+				// force-graph stops repainting once the simulation cools (cooldownTime
+				// default 15s). Without this, an icon that finishes loading after that
+				// point is never drawn — the canvas just shows its last frame.
+				autoPauseRedraw={false}
 				onNodeHover={(node) => onHover(node?.id ?? null)}
 				onNodeClick={(node) => onSelect(node.id)}
 				onBackgroundClick={() => onSelect(null)}

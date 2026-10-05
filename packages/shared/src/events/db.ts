@@ -9,6 +9,7 @@ export interface StoredTabEvent {
 	windowId: number;
 	timestamp: number;
 	url?: string;
+	favicon?: string;
 	metadata?: TabEventMetadata;
 }
 
@@ -24,6 +25,7 @@ export const storedTabEventSchema = {
 		windowId: { type: "number" },
 		timestamp: { type: "number", minimum: 0 },
 		url: { type: "string", maxLength: 2048 },
+		favicon: { type: "string", maxLength: 2048 },
 		metadata: {
 			type: "object",
 			properties: {

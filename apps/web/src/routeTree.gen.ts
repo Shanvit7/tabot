@@ -12,8 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivitiesRouteImport } from './routes/activities'
 import { Route as HomeRouteImport } from './routes/home'
-import { Route as MemoriesRouteImport } from './routes/memories'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as RecurringPatternsRouteImport } from './routes/recurring-patterns'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -30,14 +30,14 @@ const HomeRoute = HomeRouteImport.update({
   path: '/home',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MemoriesRoute = MemoriesRouteImport.update({
-  id: '/memories',
-  path: '/memories',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecurringPatternsRoute = RecurringPatternsRouteImport.update({
+  id: '/recurring-patterns',
+  path: '/recurring-patterns',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -45,38 +45,44 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
   '/home': typeof HomeRoute
-  '/memories': typeof MemoriesRoute
   '/privacy': typeof PrivacyRoute
+  '/recurring-patterns': typeof RecurringPatternsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
   '/home': typeof HomeRoute
-  '/memories': typeof MemoriesRoute
   '/privacy': typeof PrivacyRoute
+  '/recurring-patterns': typeof RecurringPatternsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
   '/home': typeof HomeRoute
-  '/memories': typeof MemoriesRoute
   '/privacy': typeof PrivacyRoute
+  '/recurring-patterns': typeof RecurringPatternsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activities' | '/home' | '/memories' | '/privacy'
+  fullPaths: '/' | '/activities' | '/home' | '/privacy' | '/recurring-patterns'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activities' | '/home' | '/memories' | '/privacy'
-  id: '__root__' | '/' | '/activities' | '/home' | '/memories' | '/privacy'
+  to: '/' | '/activities' | '/home' | '/privacy' | '/recurring-patterns'
+  id:
+    | '__root__'
+    | '/'
+    | '/activities'
+    | '/home'
+    | '/privacy'
+    | '/recurring-patterns'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActivitiesRoute: typeof ActivitiesRoute
   HomeRoute: typeof HomeRoute
-  MemoriesRoute: typeof MemoriesRoute
   PrivacyRoute: typeof PrivacyRoute
+  RecurringPatternsRoute: typeof RecurringPatternsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -102,18 +108,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HomeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/memories': {
-      id: '/memories'
-      path: '/memories'
-      fullPath: '/memories'
-      preLoaderRoute: typeof MemoriesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recurring-patterns': {
+      id: '/recurring-patterns'
+      path: '/recurring-patterns'
+      fullPath: '/recurring-patterns'
+      preLoaderRoute: typeof RecurringPatternsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -123,8 +129,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivitiesRoute: ActivitiesRoute,
   HomeRoute: HomeRoute,
-  MemoriesRoute: MemoriesRoute,
   PrivacyRoute: PrivacyRoute,
+  RecurringPatternsRoute: RecurringPatternsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

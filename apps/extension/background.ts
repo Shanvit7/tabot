@@ -165,7 +165,11 @@ const processBatch = (): number => {
 	if (docs.length) {
 		const enriched: StoredTabEvent[] = docs.map((d) => {
 			const meta = getMeta(d.tabId);
-			return meta?.url ? { ...d, url: meta.url } : d;
+			if (!meta) return d;
+			const next = { ...d };
+			if (meta.url) next.url = meta.url;
+			if (meta.favicon) next.favicon = meta.favicon;
+			return next;
 		});
 		getDb()
 			.then((db) => bulkInsertEvents(db, enriched))
@@ -233,6 +237,7 @@ chrome.tabs.onCreated.addListener((tab) => {
 	push("TAB_CREATED", tab.id, tab.windowId);
 	if (tab.url) updateMeta(tab.id, { url: tab.url });
 	if (tab.title) updateMeta(tab.id, { title: tab.title });
+	if (tab.favIconUrl) updateMeta(tab.id, { favicon: tab.favIconUrl });
 });
 
 chrome.tabs.onActivated.addListener((info) => {
@@ -246,6 +251,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 	push("TAB_UPDATED", tabId, tab.windowId);
 	if (changeInfo.url) updateMeta(tabId, { url: changeInfo.url });
 	if (changeInfo.title) updateMeta(tabId, { title: changeInfo.title });
+	if (changeInfo.favIconUrl)
+		updateMeta(tabId, { favicon: changeInfo.favIconUrl });
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {

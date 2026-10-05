@@ -4,7 +4,7 @@ import { ExportDisclosure } from "~/components/export-disclosure";
 import { HomeShell } from "~/components/home-shell";
 import { Loading } from "~/components/ui/work-panels";
 import { useHomeData } from "~/hooks/use-home-data";
-import { GRAPH_LIMITS } from "~/lib/context-graph-data";
+import { GRAPH_LIMITS, originOf } from "~/lib/context-graph-data";
 import { rangeStart, type StatsRange } from "~/lib/home-data";
 
 const ContextGraph = lazy(() =>
@@ -34,7 +34,7 @@ const dayEnd = (value: string) =>
 		: Number.POSITIVE_INFINITY;
 
 const Home = () => {
-	const { derived, hasExtension, initialized } = useHomeData();
+	const { derived, events, hasExtension, initialized } = useHomeData();
 	const [range, setRange] = useState<RangeKey>("today");
 	const [query, setQuery] = useState("");
 	const [from, setFrom] = useState("");
@@ -44,6 +44,17 @@ const Home = () => {
 		"context",
 	);
 	const contexts = useMemo(() => derived?.contexts ?? [], [derived]);
+	// Favicons the extension captured from the tab win over the derived
+	// /favicon.ico: many sites serve an SVG icon or none at all at that path.
+	const favicons = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const event of events ?? []) {
+			if (!event.favicon || !event.url) continue;
+			const origin = originOf(event.url);
+			if (origin) map.set(origin, event.favicon);
+		}
+		return map;
+	}, [events]);
 	const shown = useMemo(() => {
 		const start = range === "custom" ? dayStart(from) : rangeStart(range);
 		const end = range === "custom" ? dayEnd(to) : Number.POSITIVE_INFINITY;
@@ -219,6 +230,7 @@ const Home = () => {
 										contexts={shown}
 										memories={derived?.memories ?? []}
 										limits={limits}
+										favicons={favicons}
 										initialSelectedId={requested?.id}
 										query={query}
 									/>
@@ -244,8 +256,8 @@ const Home = () => {
 				<Link to="/activities" className="underline">
 					Everything you did
 				</Link>
-				<Link to="/memories" className="underline">
-					Habits Tabot spotted
+				<Link to="/recurring-patterns" className="underline">
+					Recurring patterns
 				</Link>
 			</div>
 			<ExportDisclosure derived={derived} />

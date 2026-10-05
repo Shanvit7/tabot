@@ -32,8 +32,8 @@ export const HomeShell = ({ children }: { children: React.ReactNode }) => {
 						{(
 							[
 								{ to: "/home", label: "Home" },
-								{ to: "/activities", label: "Activity" },
-								{ to: "/memories", label: "Memories" },
+								{ to: "/activities", label: "Activities" },
+								{ to: "/recurring-patterns", label: "Recurring patterns" },
 							] as const
 						).map(({ to, label }) => (
 							<Link

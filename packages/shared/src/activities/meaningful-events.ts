@@ -20,6 +20,7 @@ export interface DerivedEvent {
 	windowId: number;
 	timestamp: number; // first raw timestamp of the folded group
 	url?: string;
+	favicon?: string; // visual identity only: origin favicon captured from the tab
 	ref?: ActivityRef; // present when the event carries a URL
 	sources: string[]; // raw event ids folded in (provenance, keeps collapsed events traceable)
 }
@@ -90,6 +91,7 @@ export const deriveMeaningfulEvents = (
 			windowId: e.windowId,
 			timestamp: e.timestamp,
 			url: e.url,
+			favicon: e.favicon,
 			ref: activityRef(e.url),
 			sources: [e.id],
 		});

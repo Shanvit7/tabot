@@ -2,10 +2,12 @@ import { strict as assert } from "node:assert";
 import {
 	ago,
 	contextTitle,
+	faviconOf,
 	graphData,
 	humanDuration,
 	matchesQuery,
 	memoryTitle,
+	originOf,
 	prettySite,
 } from "./context-graph-data.ts";
 
@@ -103,4 +105,53 @@ assert.equal(
 		"place",
 	),
 	true,
+);
+
+// Favicon: derived locally from a real origin, never via a third-party service.
+// Internal pages and scheme-less domains get no icon (the canvas draws a dot).
+assert.equal(faviconOf("https://github.com"), "https://github.com/favicon.ico");
+assert.equal(
+	faviconOf("http://localhost:3000"),
+	"http://localhost:3000/favicon.ico",
+);
+assert.equal(
+	faviconOf("https://github.com/"),
+	"https://github.com/favicon.ico",
+);
+assert.equal(faviconOf("chrome://newtab"), undefined);
+assert.equal(faviconOf("chrome-extension://abc/options.html"), undefined);
+assert.equal(faviconOf("site-one.test"), undefined);
+const originGraph = graphData(
+	[
+		{
+			id: "1",
+			endTimestamp: 1,
+			primaryDomain: "https://github.com",
+			domains: [{ domain: "https://github.com" }],
+		},
+	],
+	[],
+);
+assert.equal(
+	originGraph.nodes.find((node) => node.kind === "site")?.favicon,
+	"https://github.com/favicon.ico",
+);
+// A favicon captured from the tab beats the derived /favicon.ico guess.
+assert.equal(originOf("https://github.com/a/b?c=1"), "https://github.com");
+assert.equal(originOf("not a url"), undefined);
+assert.equal(
+	graphData(
+		[
+			{
+				id: "1",
+				endTimestamp: 1,
+				primaryDomain: "https://github.com",
+				domains: [{ domain: "https://github.com" }],
+			},
+		],
+		[],
+		undefined,
+		new Map([["https://github.com", "https://github.com/icon.svg"]]),
+	).nodes.find((node) => node.kind === "site")?.favicon,
+	"https://github.com/icon.svg",
 );

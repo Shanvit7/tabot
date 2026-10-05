@@ -31,12 +31,14 @@ export const ContextGraph = ({
 	contexts,
 	memories,
 	limits,
+	favicons,
 	initialSelectedId,
 	query = "",
 }: {
 	contexts: BrowserContext[];
 	memories: Memory[];
 	limits?: GraphLimits;
+	favicons?: Map<string, string>;
 	initialSelectedId?: string;
 	query?: string;
 }) => {
@@ -52,8 +54,8 @@ export const ContextGraph = ({
 	);
 
 	const graph = useMemo(
-		() => graphData(contexts, memories, limits),
-		[contexts, memories, limits],
+		() => graphData(contexts, memories, limits, favicons),
+		[contexts, memories, limits, favicons],
 	);
 	const searching = query.trim().length > 1;
 	const hits = useMemo(

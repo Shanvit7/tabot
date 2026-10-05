@@ -42,6 +42,7 @@ export type ContextNode = NodeBase & {
 export type SiteNode = NodeBase & {
 	kind: "site";
 	domain: string;
+	favicon?: string;
 	contextCount: number;
 	eventCount: number;
 	sessionCount: number;
@@ -51,6 +52,38 @@ export type SiteNode = NodeBase & {
 };
 export type MemoryNode = NodeBase & { kind: "memory"; memory: Memory };
 export type GraphNode = ContextNode | SiteNode | MemoryNode;
+
+// The origin (scheme + host) of a URL, or undefined if it does not parse.
+export const originOf = (url: string): string | undefined => {
+	try {
+		return new URL(url).origin;
+	} catch {
+		return undefined;
+	}
+};
+
+// A site's own /favicon.ico, derived locally from the origin. No third-party
+// favicon service: the domain you visited never leaves the device for an icon.
+// chrome:// and chrome-extension:// pages have no fetchable icon.
+export const faviconOf = (origin: string): string | undefined => {
+	const bare = origin.replace(/\/+$/, "");
+	return /^https?:\/\//.test(bare) ? `${bare}/favicon.ico` : undefined;
+};
+
+// Module-level image cache: fetched once per session. A pending or failed load
+// is remembered as null so a broken icon falls back to a dot instead of being
+// re-requested on every animation frame.
+const iconCache = new Map<string, HTMLImageElement | null>();
+export const faviconImage = (url?: string): HTMLImageElement | null => {
+	if (!url) return null;
+	if (iconCache.has(url)) return iconCache.get(url) ?? null;
+	iconCache.set(url, null);
+	const image = new Image();
+	image.onload = () => iconCache.set(url, image);
+	image.onerror = () => iconCache.set(url, null);
+	image.src = url;
+	return null;
+};
 
 // Typo-tolerant subsequence match: "lnkdn" finds "Linkedin", "gh" finds "Github".
 const fuzzy = (haystack: string, query: string): boolean => {
@@ -153,6 +186,8 @@ export const graphData = (
 	contexts: BrowserContext[],
 	memories: Memory[],
 	limits: GraphLimits = { contexts: 5, sites: 7, memories: 2 },
+	// origin → favicon captured from the tab, when the extension recorded one.
+	favicons?: Map<string, string>,
 ) => {
 	const recent = contexts
 		.toSorted((a, b) => b.endTimestamp - a.endTimestamp)
@@ -221,6 +256,7 @@ export const graphData = (
 			label: prettySite(site.domain),
 			kind: "site",
 			...site,
+			favicon: favicons?.get(site.domain) ?? faviconOf(site.domain),
 			firstSeen: Number.isFinite(site.firstSeen) ? site.firstSeen : 0,
 		});
 	matching.forEach((memory, index) => {
