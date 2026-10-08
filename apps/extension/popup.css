@@ -1,32 +1,93 @@
 @import "tailwindcss";
+@source "./popup.tsx";
 
 @theme {
+	--color-canvas: #fff;
+	--color-surface: #f5f8f4;
+	--color-raised: #e9eee8;
+	--color-ink: #15251b;
+	--color-muted: #476151;
+	--color-line: #d2ddd2;
 	--color-lime-brand: #bfff00;
-	--color-ink: #000000;
-	--color-orange-brand: #ff6b2c;
-	--color-pink-brand: #ff8fd8;
+	--color-trace: #0b1310;
+	--color-trace-raised: #101d15;
+	--color-trace-text: #e8f3e8;
+	--color-trace-muted: #8fae95;
+	--color-trace-site: #6f9c81;
+	--color-trace-line: #476151;
+}
 
-	--font-sans-brand: "IBM Plex Sans", sans-serif;
-	--font-mono-brand: "IBM Plex Mono", monospace;
+@layer base {
+	body {
+		@apply m-0 w-100 max-w-full bg-canvas;
+		max-height: 600px;
+		overflow: hidden;
+	}
+	::selection {
+		@apply bg-lime-brand text-ink;
+	}
+}
 
-	--shadow-hard: 4px 4px 0px #000000;
-	--shadow-hard-sm: 2px 2px 0px #000000;
+@keyframes observing-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.55;
+	}
 }
 
 @layer components {
-	.card {
-		@apply border-2 border-ink bg-white px-[12px] py-[11px] shadow-hard-sm;
+	.popup-shell main {
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-muted) transparent;
 	}
-
-	.label {
-		@apply font-mono-brand text-[10px] font-bold tracking-[0.07em] uppercase;
+	.popup-shell main:focus-visible {
+		outline: 2px solid var(--color-muted);
+		outline-offset: -2px;
 	}
-
-	.share-btn {
-		@apply inline-flex w-full items-center justify-center gap-[6px] border-2 border-lime-brand bg-white px-[9px] py-[7px] font-mono-brand text-[10px] font-bold text-ink uppercase shadow-hard-sm disabled:cursor-wait disabled:opacity-60;
+	.popup-observing {
+		animation: observing-pulse 2s ease-in-out infinite;
 	}
+	.popup-shell button {
+		@apply cursor-pointer transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50;
+	}
+	.popup-shell button:focus-visible,
+	.popup-shell a:focus-visible,
+	.popup-sites summary:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 3px;
+		box-shadow: 0 0 0 5px var(--color-lime-brand);
+	}
+	.popup-sites summary {
+		list-style: none;
+	}
+	.popup-sites summary::-webkit-details-marker {
+		display: none;
+	}
+	.popup-sites summary:hover {
+		@apply bg-trace-raised;
+	}
+	.popup-sites[open] summary svg {
+		transform: rotate(180deg);
+	}
+	.popup-primary {
+		@apply bg-ink text-canvas hover:bg-muted active:bg-ink;
+	}
+	.popup-quiet {
+		@apply min-h-11 rounded-md bg-surface font-medium text-ink hover:bg-raised active:bg-line;
+	}
+	.popup-row {
+		@apply rounded-md hover:bg-surface active:bg-raised;
+	}
+}
 
-	.cli-btn {
-		@apply inline-flex items-center gap-[6px] border-2 border-white/70 bg-transparent px-[9px] py-[7px] font-mono-brand text-[10px] font-bold text-white uppercase disabled:cursor-wait disabled:opacity-60;
+@media (prefers-reduced-motion: reduce) {
+	.popup-observing {
+		animation: none;
+	}
+	.popup-shell button {
+		transition: none;
 	}
 }

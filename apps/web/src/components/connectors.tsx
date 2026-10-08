@@ -45,13 +45,13 @@ export const Connectors = () => {
 					>
 						<span className="flex flex-col items-center gap-2 text-[15px] font-medium sm:flex-row">
 							<OpenAIMono className="size-5 shrink-0" aria-hidden="true" />
-							ChatGPT
+							{connected ? "ChatGPT" : "Connect ChatGPT"}
 						</span>
 						<span role="status" className="text-center text-[13px] leading-5">
 							{connected === true
 								? "Connected"
 								: connected === false
-									? "Connect"
+									? ""
 									: connected === undefined
 										? "Checking…"
 										: "Status unknown"}
