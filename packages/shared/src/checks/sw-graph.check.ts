@@ -236,6 +236,10 @@ const crossWindow = (): StoredTabEvent[] => [
 	ev(T0 + 50_000, "SW_WINDOW_FOCUS", 0, 100, undefined, {
 		previousWindowId: 101,
 	}),
+	// Navigation in w101 is foreground only after focusing w101 again.
+	ev(T0 + 60_000, "SW_WINDOW_FOCUS", 0, 101, undefined, {
+		previousWindowId: 100,
+	}),
 	ev(T0 + 65_000, "NAVIGATION", 2, 101, "https://github.com/org/repo"),
 ];
 const { anchors: cwAnchors, graph: cwGraph } = build(crossWindow());

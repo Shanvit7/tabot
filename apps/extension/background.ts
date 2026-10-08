@@ -23,8 +23,10 @@ import {
 	type TabEventType,
 	updateMeta,
 } from "@tabot/shared";
+import { isForegroundTab, startForegroundTracking } from "./foreground";
 import {
 	approveAuthorizationTransaction,
+	getAssistantConnection,
 	getRelayStatus,
 	startRelay,
 } from "./relay";
@@ -212,14 +214,27 @@ const push = async (
 	tabId: number,
 	windowId: number,
 	metadata?: TabEventMetadata,
+	timestamp = Date.now(),
 ) => {
 	await trackingReady;
 	if (!trackingEnabled) return false;
+	if (
+		[
+			"TAB_ACTIVATED",
+			"NAVIGATION",
+			"PAGE_VISIBLE",
+			"SCROLL",
+			"CLICK",
+			"KEY_ACTIVITY",
+		].includes(type) &&
+		!(await isForegroundTab(tabId))
+	)
+		return false;
 	const ok = pushEvent(control, events, capacity, {
 		type,
 		tabId,
 		windowId,
-		timestamp: Date.now(),
+		timestamp,
 		metadata,
 	});
 	if (!ok) {
@@ -241,8 +256,13 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 chrome.tabs.onActivated.addListener((info) => {
-	lastFocusedWindow = info.windowId ?? lastFocusedWindow;
-	push("TAB_ACTIVATED", info.tabId, info.windowId);
+	void (async () => {
+		if (!(await isForegroundTab(info.tabId))) return;
+		lastFocusedWindow = info.windowId;
+		const tab = await chrome.tabs.get(info.tabId);
+		updateMeta(info.tabId, { url: tab.url, favicon: tab.favIconUrl });
+		await push("TAB_ACTIVATED", info.tabId, info.windowId);
+	})().catch((error) => logger.warn("tab activation failed", { error }));
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -282,6 +302,11 @@ if (chrome.windows?.onFocusChanged) {
 	});
 }
 
+const sampleForeground = startForegroundTracking(async (type, state) => {
+	updateMeta(state.tabId, { url: state.url, favicon: state.favicon });
+	return push(type, state.tabId, state.windowId, undefined, state.timestamp);
+});
+
 // --- retired SW signals: NO producers. Historical rows still decode ---
 // (SW_POPUP_OPEN, SW_TRACKING_TOGGLE, SW_DOWNLOAD, SW_LIFECYCLE were removed
 // from the production telemetry path. The tracking state still lives in
@@ -302,14 +327,29 @@ const getMergedStats = (): StatsSnapshot => {
 	};
 };
 
+const respondAssistantConnection = (
+	sendResponse: (response: unknown) => void,
+) => {
+	void (async () => {
+		try {
+			sendResponse(await getAssistantConnection());
+		} catch {
+			sendResponse(null); // Unknown is not disconnected.
+		}
+	})();
+};
+
 // --- Content-script page events (spec §5: never write SAB directly, background is single producer) ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.type === "SET_TRACKING") {
-		trackingEnabled = message.enabled === true;
-		chrome.storage.local
-			.set({ [TRACKING_KEY]: trackingEnabled })
-			.then(() => sendResponse({ enabled: trackingEnabled }))
-			.catch(() => sendResponse({ enabled: trackingEnabled }));
+		void (async () => {
+			await trackingReady;
+			if (message.enabled !== true) await sampleForeground(false);
+			trackingEnabled = message.enabled === true;
+			await chrome.storage.local.set({ [TRACKING_KEY]: trackingEnabled });
+			if (trackingEnabled) await sampleForeground();
+			sendResponse({ enabled: trackingEnabled });
+		})().catch(() => sendResponse({ enabled: trackingEnabled }));
 		return true;
 	}
 
@@ -334,6 +374,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			push(t, tabId, windowId, message.metadata);
 		}
 		return false;
+	}
+
+	if (message?.type === "GET_ASSISTANT_CONNECTION") {
+		respondAssistantConnection(sendResponse);
+		return true;
 	}
 
 	if (message?.type === "GET_RELAY_STATUS") {
@@ -414,6 +459,11 @@ if (chrome.runtime.onMessageExternal) {
 						sendResponse({ ok: false });
 					}
 				})();
+				return true;
+			}
+
+			if (message?.type === "GET_ASSISTANT_CONNECTION") {
+				respondAssistantConnection(sendResponse);
 				return true;
 			}
 

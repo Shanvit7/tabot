@@ -7,6 +7,10 @@ import {
 	useSyncExternalStore,
 } from "react";
 import type { ForceGraphMethods } from "react-force-graph-2d";
+import { ContextDetail } from "~/components/context-graph/context-detail";
+import { Hint } from "~/components/context-graph/hint";
+import { MemoryDetail } from "~/components/context-graph/memory-detail";
+import { SiteDetail } from "~/components/context-graph/site-detail";
 import {
 	GraphCanvas,
 	type PositionedLink,
@@ -18,12 +22,6 @@ import {
 	graphData,
 	matchesQuery,
 } from "~/lib/context-graph-data";
-import {
-	ContextDetail,
-	Hint,
-	MemoryDetail,
-	SiteDetail,
-} from "~/lib/context-graph-panels";
 
 const subscribeToNothing = () => () => {};
 
@@ -33,6 +31,7 @@ export const ContextGraph = ({
 	limits,
 	favicons,
 	initialSelectedId,
+	assistantConnected,
 	query = "",
 }: {
 	contexts: BrowserContext[];
@@ -40,6 +39,7 @@ export const ContextGraph = ({
 	limits?: GraphLimits;
 	favicons?: Map<string, string>;
 	initialSelectedId?: string;
+	assistantConnected: boolean;
 	query?: string;
 }) => {
 	const [selectedId, setSelectedId] = useState<string | null>(
@@ -54,8 +54,8 @@ export const ContextGraph = ({
 	);
 
 	const graph = useMemo(
-		() => graphData(contexts, memories, limits, favicons),
-		[contexts, memories, limits, favicons],
+		() => graphData(contexts, memories, limits, favicons, initialSelectedId),
+		[contexts, memories, limits, favicons, initialSelectedId],
 	);
 	const searching = query.trim().length > 1;
 	const hits = useMemo(
@@ -201,16 +201,22 @@ export const ContextGraph = ({
 				node={node}
 				memories={memories}
 				contexts={contexts}
+				assistantConnected={assistantConnected}
 				onClose={() => setSelectedId(null)}
 			/>
 		) : node.kind === "site" ? (
 			<SiteDetail
 				node={node}
 				contexts={contexts}
+				assistantConnected={assistantConnected}
 				onClose={() => setSelectedId(null)}
 			/>
 		) : (
-			<MemoryDetail memory={node.memory} onClose={() => setSelectedId(null)} />
+			<MemoryDetail
+				memory={node.memory}
+				assistantConnected={assistantConnected}
+				onClose={() => setSelectedId(null)}
+			/>
 		);
 
 	return (
@@ -244,7 +250,7 @@ export const ContextGraph = ({
 					/>
 				)}
 			</div>
-			<aside className="lg:w-80 lg:shrink-0" aria-live="polite">
+			<aside className="min-w-0 lg:w-80 lg:shrink-0" aria-live="polite">
 				{selected && mounted ? detailFor(selected) : <Hint />}
 			</aside>
 		</div>

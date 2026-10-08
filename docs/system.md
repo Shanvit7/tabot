@@ -32,7 +32,7 @@ The content script and Chrome APIs collect these signals:
 | `TAB_UPDATED` | `chrome.tabs.onUpdated` | tab and window IDs |
 | `TAB_REMOVED` | `chrome.tabs.onRemoved` | tab ID; window ID is `0` sentinel |
 | `NAVIGATION` | `chrome.webNavigation.onCommitted`, main frame | tab ID and URL sidecar |
-| `PAGE_VISIBLE`, `PAGE_HIDDEN` | `visibilitychange` | event only |
+| `PAGE_VISIBLE`, `PAGE_HIDDEN` | page visibility plus foreground/idle sampling | event only |
 | `SCROLL` | viewport and discovered nested scroll containers | scroll offset |
 | `CLICK` | document click | client coordinates |
 | `KEY_ACTIVITY` | document keydown | event only |
@@ -41,6 +41,10 @@ The content script and Chrome APIs collect these signals:
 `SCROLL` and `KEY_ACTIVITY` are throttled to 150 ms by TanStack Pacer before messaging the background worker. Key values, text, form values, DOM, screenshots, and page content are never recorded.
 
 Content scripts send `TABOT_PAGE_EVENT` messages. They never touch shared memory. Background service worker is sole producer and owns tab URL/title metadata in an in-memory sidecar.
+
+Foreground capture checks the selected tab in the focused, non-minimized window, with a 30-second alarm sample and immediate focus/tab/idle samples. Idle (60 seconds without system input) or lock ends attention. The last sample is stored in `chrome.storage.session`; delayed samples after sleep close at the last observation, not wake time. Only foreground navigation and interactions enter the behavioral capture path.
+
+Derived `duration` means foreground milliseconds; `wallDuration` means elapsed coverage. Episodes may group multiple sessions, but their duration never includes intervening gaps. Historical events are re-derived locally, conservatively when focus/visibility samples are missing. No database migration is needed. Re-export old downloads to get schema 9 durations.
 
 The extension also observes one service-worker-level signal (`SW_WINDOW_FOCUS`, see [SW telemetry](#service-worker-telemetry-phase-2-outcome)); four experimental SW signals (popup open, tracking toggle, download, lifecycle) were retired in the Phase 2 final reduction.
 
@@ -61,11 +65,11 @@ Why it exists: `tabs.onActivated` fires only when the active *tab* changes. Focu
 
 What it is allowed to do (enforced by code, not convention):
 
-- **Never a session boundary.** `sessionize` skips it entirely (like diagnostic events) — it cannot open, extend, merge, or split a session. A focus-only trace yields **0 sessions**.
+- **Never activity itself.** A focus row cannot open a session or reset its inactivity clock. A focus-only trace yields **0 sessions**. Schema 9 uses its state to reject background-window activity and stop foreground dwell; removing false evidence may change derived boundaries.
 - **No episode-boundary score boost.** The episode scorer has no SW terms; focus evidence is a causal record, not a scoring input.
 - **Graph continuity evidence only.** `applyFocusContinuity` decorates an *existing* same-session edge with a strengthened weight when a causal focus sandwich is present (departure window w→x, return x→w chained by `previousWindowId`). Chains involving `previousWindowId === -1` (browser focus loss/regain) are excluded. Evidence requires behavioral anchors on both sides — it can never create a node, edge, or episode, only strengthen an existing trajectory.
 
-Net measured effect on real browsing: SW telemetry adds **zero** sessions, episodes, contexts, or memories; the only delta is graph evidence counts where cross-window continuity genuinely occurred.
+Historical Phase 2 result, before schema 9 foreground filtering: SW telemetry added **zero** sessions, episodes, contexts, or memories; only graph evidence counts changed where cross-window continuity genuinely occurred.
 
 ### Retired signals (historical rows only)
 

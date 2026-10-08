@@ -217,7 +217,7 @@ export const summarizeContextCore = (
 	const domainList = [...context.domains]
 		.sort((a, b) => b.eventCount - a.eventCount)
 		.map((d) => d.domain);
-	const duration = context.endTimestamp - context.startTimestamp;
+	const duration = context.duration;
 	const eventDensity = duration > 0 ? context.totalEventCount / duration : 0;
 
 	return {

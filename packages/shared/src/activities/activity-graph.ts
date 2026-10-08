@@ -25,6 +25,7 @@ import {
 	mergeTinyEpisodes,
 	rightSidePersistence,
 } from "./episode-boundary";
+import { activeDuration } from "./foreground";
 import { deriveMeaningfulEvents } from "./meaningful-events";
 
 // --- Node: ActivityAnchor (§5) ---
@@ -32,7 +33,9 @@ import { deriveMeaningfulEvents } from "./meaningful-events";
 export interface ActivityAnchor {
 	id: string;
 	startAt: number;
-	endAt: number;
+	endAt: number; // last observed event; segmentation evidence
+	activeEndAt?: number; // dwell ends at next foreground page switch
+	duration?: number; // foreground time owned by this anchor
 	sessionId: string;
 	tabId: number;
 	windowId: number;
@@ -75,7 +78,8 @@ export interface ActivityEpisode {
 	anchorIds: string[];
 	startTimestamp: number;
 	endTimestamp: number;
-	duration: number;
+	duration: number; // summed foreground time, excludes gaps
+	wallDuration?: number;
 	sessionIds: string[];
 	domains: string[];
 	totalEventCount: number;
@@ -163,6 +167,7 @@ export const buildActivityAnchors = (sessions: Session[]): ActivityAnchor[] => {
 				id: `a-${++anchorSeq}`,
 				startAt: session.startTimestamp,
 				endAt: session.endTimestamp,
+				duration: session.duration,
 				sessionId: session.id,
 				tabId: activeTab?.tabId ?? 0,
 				windowId: session.activeWindowId,
@@ -210,6 +215,14 @@ export const buildActivityAnchors = (sessions: Session[]): ActivityAnchor[] => {
 			if (!current || (pageChanged && !noIdentity) || inactivityBoundary) {
 				if (current) {
 					current.endAt = lastTs;
+					current.activeEndAt = inactivityBoundary ? lastTs : event.timestamp;
+					current.duration = session.activeSpans
+						? activeDuration(
+								session.activeSpans,
+								current.startAt,
+								current.activeEndAt,
+							)
+						: current.endAt - current.startAt;
 					anchors.push(current);
 				}
 				current = {
@@ -239,6 +252,9 @@ export const buildActivityAnchors = (sessions: Session[]): ActivityAnchor[] => {
 
 		if (current) {
 			current.endAt = lastTs;
+			current.duration = session.activeSpans
+				? activeDuration(session.activeSpans, current.startAt, current.endAt)
+				: current.endAt - current.startAt;
 			anchors.push(current);
 		}
 	}
@@ -416,8 +432,13 @@ export const extractActivityEpisodes = (
 			id: `ep-${++epSeq}`,
 			anchorIds: list.map((a) => a.id),
 			startTimestamp: first.startAt,
-			endTimestamp: last.endAt,
-			duration: last.endAt - first.startAt,
+			endTimestamp: last.activeEndAt ?? last.endAt,
+			duration: list.reduce(
+				(sum, anchor) =>
+					sum + (anchor.duration ?? anchor.endAt - anchor.startAt),
+				0,
+			),
+			wallDuration: (last.activeEndAt ?? last.endAt) - first.startAt,
 			sessionIds,
 			domains,
 			totalEventCount: list.reduce((s, a) => s + a.eventCount, 0),

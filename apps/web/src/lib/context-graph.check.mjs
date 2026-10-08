@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import {
 	ago,
+	browsingTrail,
 	contextTitle,
 	faviconOf,
 	graphData,
@@ -34,6 +35,35 @@ assert.deepEqual(edges, [
 	{ source: "m:recurrence", target: "c:1", kind: "pattern" },
 ]);
 assert.equal(graphData([], []).nodes.length, 0);
+
+// Deep links retain their period inside a capped map, without exceeding the cap.
+const capped = { contexts: 1, sites: 7, memories: 2 };
+assert.equal(graphData(contexts, memories, capped).nodes[0].id, "c:2");
+const pinned = graphData(contexts, memories, capped, undefined, "c:1");
+assert.deepEqual(
+	pinned.nodes.flatMap((node) => (node.kind === "context" ? [node.id] : [])),
+	["c:1"],
+);
+assert.ok(
+	pinned.edges.some(
+		(edge) => edge.source === "m:recurrence" && edge.target === "c:1",
+	),
+);
+assert.equal(
+	graphData(contexts, memories, capped, undefined, "c:missing").nodes[0].id,
+	"c:2",
+);
+assert.equal(graphData([], [], capped, undefined, "c:missing").nodes.length, 0);
+
+const trail = browsingTrail(["a", "b", "a"]);
+assert.deepEqual(trail, [
+	{ origin: "a", key: "a:1" },
+	{ origin: "b", key: "b:1" },
+	{ origin: "a", key: "a:2" },
+]);
+assert.equal(new Set(trail.map((step) => step.key)).size, trail.length);
+assert.deepEqual(browsingTrail(["c", "a", "b", "a"]).slice(1), trail);
+assert.deepEqual(browsingTrail([]), []);
 
 // Human-facing labels: schemes, www and browser-internal pages never reach the UI.
 assert.equal(prettySite("https://www.linkedin.com/feed"), "Linkedin");

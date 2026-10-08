@@ -1,3 +1,4 @@
+import { AskChatGpt } from "~/components/context-graph/assistant-cta";
 import {
 	type connectedTo,
 	type FlowNode,
@@ -13,6 +14,8 @@ export const PlaceCard = ({
 	totalMs,
 	activeDays,
 	connections,
+	assistantHref,
+	assistantConnected,
 }: {
 	node: FlowNode;
 	rank: number;
@@ -20,6 +23,8 @@ export const PlaceCard = ({
 	totalMs: number;
 	activeDays: number;
 	connections: ReturnType<typeof connectedTo>;
+	assistantHref: string;
+	assistantConnected: boolean;
 }) => {
 	const peak = Math.max(1, ...connections.map((c) => c.count));
 	const nextUp = connections.find((c) => c.outgoing);
@@ -49,8 +54,8 @@ export const PlaceCard = ({
 				{timeLabel(node.activeMs)}
 			</p>
 			<p className="mt-1.5 text-xs text-[#8fae95]">
-				{shareLabel(node.activeMs, totalMs)} of your browsing time · #{rank} of{" "}
-				{total} places
+				Estimated time · {shareLabel(node.activeMs, totalMs)} of your browsing
+				time · #{rank} of {total} places
 			</p>
 			<div className="mt-3">
 				<Bar
@@ -124,6 +129,14 @@ export const PlaceCard = ({
 					))}
 				</ul>
 			)}
+			<AskChatGpt
+				href={assistantHref}
+				connected={assistantConnected}
+				label="Ask ChatGPT about this place"
+			/>
+			<p className="mt-2 text-xs leading-5 text-[#8fae95]">
+				Shares this period’s site-level estimates, not page URLs or raw history.
+			</p>
 		</div>
 	);
 };

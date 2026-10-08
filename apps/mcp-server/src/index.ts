@@ -14,10 +14,12 @@ import {
 } from "./lib/oauth";
 import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./lib/tools";
 import {
+	getActivityMetricsInputSchema,
 	getContextInputSchema,
 	getCurrentContextInputSchema,
 	getMemoryInputSchema,
 	getRecentContextInputSchema,
+	listRecurringPatternsInputSchema,
 	searchContextInputSchema,
 } from "./schema";
 
@@ -111,6 +113,17 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 	);
 
 	server.registerTool(
+		TOOL_NAMES.LIST_RECURRING_PATTERNS,
+		{
+			title: "Tabot recurring patterns",
+			description: TOOL_DESCRIPTIONS.LIST_RECURRING_PATTERNS,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: listRecurringPatternsInputSchema,
+		},
+		(params) => call(TOOL_NAMES.LIST_RECURRING_PATTERNS, params),
+	);
+
+	server.registerTool(
 		TOOL_NAMES.GET_MEMORY,
 		{
 			title: "Tabot memory",
@@ -119,6 +132,17 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 			inputSchema: getMemoryInputSchema,
 		},
 		({ id }) => call(TOOL_NAMES.GET_MEMORY, { id }),
+	);
+
+	server.registerTool(
+		TOOL_NAMES.GET_ACTIVITY_METRICS,
+		{
+			title: "Tabot activity metrics",
+			description: TOOL_DESCRIPTIONS.GET_ACTIVITY_METRICS,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: getActivityMetricsInputSchema,
+		},
+		(params) => call(TOOL_NAMES.GET_ACTIVITY_METRICS, params),
 	);
 
 	return server;
@@ -221,6 +245,21 @@ app.post("/installations", async (c) => {
 	const installationId = crypto.randomUUID();
 	const token = await signInstallationToken(secret, installationId);
 	return c.json({ installationId, token });
+});
+
+// Authorization state is separate from relay availability. Only this installation
+// can inspect its grants; no credentials or account identifiers reach the dashboard.
+app.get("/connection", async (c) => {
+	c.header("Cache-Control", "no-store");
+	const secret = c.env.TABOT_AUTH_SECRET;
+	if (!secret) return c.text("Server not configured", 500);
+	const header = c.req.header("Authorization") ?? "";
+	const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+	const installationId = await verifyInstallationToken(secret, token);
+	if (!installationId) return c.text("Unauthorized", 401);
+	return c.json({
+		connected: await authStub(c.env).hasAssistantConnection(installationId),
+	});
 });
 
 // --- OAuth discovery (RFC 9728 + RFC 8414) ----------------------------------

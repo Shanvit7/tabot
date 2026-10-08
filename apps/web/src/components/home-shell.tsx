@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { EMAIL } from "~/lib/constants";
 import "~/styles/work.css";
 
 export const HomeShell = ({ children }: { children: React.ReactNode }) => {
@@ -55,11 +56,31 @@ export const HomeShell = ({ children }: { children: React.ReactNode }) => {
 				{children}
 			</main>
 			<footer className="border-t work-rule px-4 py-6 text-center text-xs text-[#476151]">
-				Browser activity stays local. Connected tools receive selected context
-				when you ask.{" "}
-				<Link to="/privacy" className="underline">
-					Privacy
-				</Link>
+				<p>
+					Browser activity stays local. Connected tools receive selected data
+					only when you ask.
+				</p>
+				<nav
+					aria-label="Footer navigation"
+					className="mt-2 flex flex-wrap items-center justify-center gap-x-4"
+				>
+					<Link
+						to="/privacy"
+						className="inline-flex min-h-11 items-center rounded-sm px-2 underline hover:text-(--work-ink)"
+					>
+						Privacy
+					</Link>
+					<p>
+						Any feedback or complaints? Reach out to{" "}
+						<a
+							href={`mailto:${EMAIL}?subject=Hey%20Tabot%2C%20let%27s%20talk`}
+							className="inline-flex min-h-11 select-all items-center rounded-sm underline hover:text-(--work-ink)"
+						>
+							{EMAIL}
+						</a>
+						.
+					</p>
+				</nav>
 			</footer>
 		</div>
 	);

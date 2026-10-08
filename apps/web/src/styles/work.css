@@ -82,6 +82,69 @@
 		transition: none;
 	}
 }
+/* A tiny browsing card hops between checkpoints, never implying real progress. */
+.graph-loader-marker {
+	transform: translate(32px, 112px);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.graph-loader-marker {
+		animation: graph-loader-hop 4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+	}
+	.graph-loader-checkpoint {
+		animation: graph-loader-collect 4s linear infinite;
+	}
+	.graph-loader-checkpoint:nth-child(2) {
+		animation-delay: 0.8s;
+	}
+	.graph-loader-checkpoint:nth-child(3) {
+		animation-delay: 1.6s;
+	}
+	.graph-loader-checkpoint:nth-child(4) {
+		animation-delay: 2.4s;
+	}
+	.graph-loader-checkpoint:nth-child(5) {
+		animation-delay: 3.2s;
+	}
+	.graph-loader[data-animate="false"]
+		:is(.graph-loader-marker, .graph-loader-checkpoint) {
+		animation-play-state: paused;
+	}
+}
+@keyframes graph-loader-hop {
+	0%,
+	96%,
+	100% {
+		transform: translate(32px, 112px);
+	}
+	16%,
+	20% {
+		transform: translate(92px, 48px);
+	}
+	36%,
+	40% {
+		transform: translate(164px, 104px);
+	}
+	56%,
+	60% {
+		transform: translate(236px, 48px);
+	}
+	76%,
+	80% {
+		transform: translate(284px, 112px);
+	}
+}
+@keyframes graph-loader-collect {
+	0%,
+	12% {
+		fill: #bfff00;
+		stroke: #bfff00;
+	}
+	22%,
+	100% {
+		fill: #101d15;
+		stroke: #6f9c81;
+	}
+}
 @media (forced-colors: active) {
 	.work-shell .ts-chart-host {
 		forced-color-adjust: auto;

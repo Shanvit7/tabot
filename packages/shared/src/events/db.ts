@@ -106,6 +106,14 @@ export const countEvents = async (db: TabotDatabase): Promise<number> => {
 	}
 };
 
+/** Indexed local range read; end is exclusive, matching activity metrics. */
+export const getEventsBetween = async (
+	db: TabotDatabase,
+	from: number,
+	to: number,
+): Promise<StoredTabEvent[]> =>
+	db.events.where("timestamp").between(from, to, true, false).toArray();
+
 export const getAllEvents = async (
 	db: TabotDatabase,
 ): Promise<StoredTabEvent[]> => {

@@ -237,7 +237,9 @@ interface Session {
   id: string; // `${startTimestamp}-${endTimestamp}-${activeTabId}`
   startTimestamp: number;
   endTimestamp: number;
-  duration: number;
+  duration: number; // foreground milliseconds
+  wallDuration?: number; // elapsed milliseconds, including gaps
+  activeSpans?: { start: number; end: number }[];
   eventCount: number;
   tabs: TabParticipation[];
   domains: DomainParticipation[];
@@ -249,6 +251,18 @@ interface Session {
   activeWindowId: number;
 }
 ```
+
+### Foreground time (derivation schema 9)
+
+`foregroundEvents` is shared by session and transition derivation. It excludes background-tab activity, tab creation/removal, and redundant title/loading updates. A genuine URL change on the foreground tab remains evidence. Browser focus loss suppresses activity until focus returns; a selected tab in an unfocused window is not foreground.
+
+Capture samples the selected tab in the focused, non-minimized window every 30 seconds using `chrome.alarms`. Focus/tab/idle transitions also trigger samples. `chrome.idle` stops sampling after 60 seconds without system input or on lock. The last observation lives in `chrome.storage.session`, surviving service-worker restarts. A sample delayed more than 90 seconds closes the previous span at its last observation, never at wake time. No page text or input values are collected.
+
+`duration` in sessions, episodes, and contexts is foreground time, summed from non-overlapping observed intervals. Hidden/idle time and gaps between sessions are excluded even when one episode groups several sessions. `wallDuration` retains elapsed coverage, not time spent. Each page owns foreground dwell until the next page switch, without changing the last-event timestamps used by trajectory scoring.
+
+Historical rows are re-derived locally; no IndexedDB migration or deletion is needed. Old traces lack periodic samples and sometimes focus/visibility evidence: duration remains an estimate, never extrapolated to now or across event gaps of five minutes or longer. Existing downloaded exports must be generated again to receive corrected durations; missing historical attention cannot be reconstructed exactly.
+
+Checks: `pnpm --filter @tabot/shared check:foreground` and `pnpm --filter extension check:foreground`.
 
 ### Boundaries and thresholds
 
@@ -638,12 +652,12 @@ Retired types are **deterministically** ignored — classification is hardcoded,
 ### `SW_WINDOW_FOCUS` semantics
 
 - Source: `chrome.windows.onFocusChanged`; requires `windows` permission. `windowId = -1` is the no-window sentinel; `previousWindowId` goes in SAB slot 3.
-- **Session layer:** `sessionize` skips it entirely. It cannot open, extend, merge, or split a session; it never updates activity clocks; a focus-only trace yields 0 sessions.
+- **Session layer:** a focus row cannot itself open a session or reset its inactivity clock; a focus-only trace yields 0 sessions. The foreground prefilter uses focus state to reject activity in unfocused windows and close observed dwell. Correcting previously admitted background activity can change derived sessions; focus regain alone never proves continued work.
 - **Meaningful events:** classified contextual; never forms a transition (no URL).
 - **Graph layer:** `applyFocusContinuity` (in `sw-graph.ts`) may only **decorate an existing same-session edge** with a strengthened weight when a causal focus sandwich is present (departure w→x, return x→w chained via `previousWindowId` inside the anchor span). Chains where `previousWindowId === -1`/`WINDOW_ID_NONE` are excluded (focus loss/regain is not an excursion return). SW adds zero nodes/edges/counts.
 - **Episode layer:** no SW terms in the boundary scorer — no focus boost; evidence is a causal record only.
 
-Measured on real browsing: SW telemetry adds **0** sessions, anchors, graph edges, episodes, contexts, memories; only graph evidence counts change where genuine cross-window continuity occurred. Cost (from `sw-cost.check.ts`): SW ratio far under the 30% acceptance ceiling; SW derivation cost within measurement noise.
+Historical Phase 2 measurement (before schema 9 foreground filtering): SW telemetry added **0** sessions, anchors, graph edges, episodes, contexts, memories; only graph evidence counts changed where genuine cross-window continuity occurred. Cost (from `sw-cost.check.ts`): SW ratio far under the 30% acceptance ceiling; SW derivation cost within measurement noise.
 
 ### SW checks
 
@@ -658,7 +672,7 @@ pnpm --filter shared run swValidation   # encode -> decode roundtrip, noise-boun
 pnpm --filter shared run swRealReport   # real trace: Phase 1 vs Phase 2 report (needs trace.json)
 ```
 
-Schema/encode detail survives in `docs/sw-schema.md`. The Step 11 report's episode-merge claims were superseded: the corrected final semantics is that focus changes **no** session or episode boundary.
+Schema/encode detail survives in `docs/sw-schema.md`. Focus adds no behavioral events or scoring boost; schema 9 additionally uses its browser state to exclude background evidence.
 
 ---
 

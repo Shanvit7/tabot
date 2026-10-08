@@ -9,25 +9,20 @@ export const useHomeData = () => {
 
 	useEffect(() => {
 		let alive = true;
-		let firstDone = false;
-		const markFirst = () => {
-			if (firstDone) return;
-			firstDone = true;
-			if (alive) setInitialized(true);
-		};
 		const pollStats = async () => {
 			const next = await fetchStats();
 			if (alive && next) setStats(next);
-			markFirst();
 		};
 		const pollEvents = async () => {
 			const next = await fetchEvents();
-			if (alive && next && next.length > 0) setEvents(next);
-			markFirst();
+			if (alive && next !== null) setEvents(next);
 		};
 
-		pollStats();
-		pollEvents();
+		const initialize = async () => {
+			await Promise.all([pollStats(), pollEvents()]);
+			if (alive) setInitialized(true);
+		};
+		void initialize();
 		const statsInterval = setInterval(pollStats, 1000);
 		const eventsInterval = setInterval(pollEvents, 5000);
 		return () => {
@@ -37,10 +32,12 @@ export const useHomeData = () => {
 		};
 	}, []);
 
+	const hasExtension = stats !== null || events !== null;
 	return {
 		derived: useMemo(() => (events ? derive(events) : null), [events]),
 		events,
-		hasExtension: stats !== null,
-		initialized,
+		hasExtension,
+		// A failed read is not an empty history. Keep loading until a snapshot arrives.
+		initialized: initialized && (!hasExtension || events !== null),
 	};
 };

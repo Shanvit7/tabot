@@ -33,7 +33,7 @@
 			},
 			{
 				"files": [
-					"src/routes/home.tsx",
+					"src/components/home-page.tsx",
 					"src/components/landing/browser-context-film.tsx"
 				],
 				"rules": ["react-doctor/no-giant-component"]

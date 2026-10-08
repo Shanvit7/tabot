@@ -25,6 +25,7 @@ const getExtId = (): string | undefined => configuredExtensionId || undefined;
 const send = (
 	msg: Record<string, unknown>,
 	cb: (res: unknown) => void,
+	timeoutMs = 800,
 ): void => {
 	const s = chromeSend();
 	let done = false;
@@ -40,21 +41,43 @@ const send = (
 		return;
 	}
 	const extId = getExtId();
-	if (extId)
-		(s as (a: string, b: unknown, c: (r: unknown) => void) => void)(
-			extId,
-			msg,
-			finish,
-		);
-	else (s as (a: unknown, b: (r: unknown) => void) => void)(msg, finish);
+	try {
+		if (extId)
+			(s as (a: string, b: unknown, c: (r: unknown) => void) => void)(
+				extId,
+				msg,
+				finish,
+			);
+		else (s as (a: unknown, b: (r: unknown) => void) => void)(msg, finish);
+	} catch {
+		finish(null);
+	}
 	// timeout fallback: if the extension never responds, resolve with null once
-	setTimeout(() => finish(null), 800);
+	setTimeout(() => finish(null), timeoutMs);
 };
 
 export const fetchStats = (): Promise<StatsSnapshot | null> =>
 	new Promise((resolve) => {
 		send({ type: "GET_STATS" }, (res) =>
 			resolve((res as StatsSnapshot) || null),
+		);
+	});
+
+export const fetchAssistantConnection = (): Promise<boolean | null> =>
+	new Promise((resolve) => {
+		send(
+			{ type: "GET_ASSISTANT_CONNECTION" },
+			(res) => {
+				resolve(
+					res &&
+						typeof res === "object" &&
+						"connected" in res &&
+						typeof res.connected === "boolean"
+						? res.connected
+						: null,
+				);
+			},
+			6_000,
 		);
 	});
 
@@ -79,7 +102,7 @@ export const rangeStart = (r: StatsRange): number => {
 export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 	new Promise((resolve) => {
 		send({ type: "GET_EVENTS" }, (res) => {
-			resolve((res as StoredTabEvent[]) || null);
+			resolve(Array.isArray(res) ? res : null);
 		});
 	});
 

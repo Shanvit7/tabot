@@ -1,5 +1,10 @@
 # extension
 
+## Unreleased
+
+- Count only foreground browsing time. Background refreshes, hidden tabs, idle/lock, and sleep no longer extend active duration. Episode/context duration sums active time across sessions; elapsed coverage is separately exposed as `wallDuration`.
+- Add the `idle` permission to stop attention sampling when the device is idle or locked. Existing local history is re-derived without a database migration; re-export old downloads for corrected, conservatively estimated durations.
+
 ## 0.1.3
 
 ### Patch Changes

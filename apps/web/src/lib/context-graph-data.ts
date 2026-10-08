@@ -133,6 +133,16 @@ export const contextTitle = (context: BrowserContext): string => {
 };
 
 // A pattern is named after the places it tends to happen in.
+// Repeated origins need an identity per visit, independent of other sites' positions.
+export const browsingTrail = (origins: string[]) => {
+	const visits = new Map<string, number>();
+	return origins.map((origin) => {
+		const visit = (visits.get(origin) ?? 0) + 1;
+		visits.set(origin, visit);
+		return { origin, key: `${origin}:${visit}` };
+	});
+};
+
 export const memoryTitle = (memory: Memory): string => {
 	const [first, second] = (memory.fingerprint?.domains ?? []).map((entry) =>
 		prettySite(entry.domain),
@@ -176,7 +186,7 @@ export const GRAPH_LIMITS: Record<string, GraphLimits> = {
 
 type SiteStat = Omit<SiteNode, "id" | "label" | "kind">;
 
-const clockOf = (ms: number) =>
+export const clock = (ms: number) =>
 	new Date(ms).toLocaleTimeString(undefined, {
 		hour: "numeric",
 		minute: "2-digit",
@@ -188,9 +198,16 @@ export const graphData = (
 	limits: GraphLimits = { contexts: 5, sites: 7, memories: 2 },
 	// origin → favicon captured from the tab, when the extension recorded one.
 	favicons?: Map<string, string>,
+	pinnedNodeId?: string,
 ) => {
+	// Keep a deep-linked period visible even when it falls outside the node cap.
 	const recent = contexts
-		.toSorted((a, b) => b.endTimestamp - a.endTimestamp)
+		.toSorted(
+			(a, b) =>
+				Number(`c:${b.id}` === pinnedNodeId) -
+					Number(`c:${a.id}` === pinnedNodeId) ||
+				b.endTimestamp - a.endTimestamp,
+		)
 		.slice(0, limits.contexts);
 	const sites = new Map<string, SiteStat>();
 	for (const context of recent)
@@ -235,7 +252,7 @@ export const graphData = (
 		);
 		nodes.push({
 			id: `c:${context.id}`,
-			label: clockOf(context.endTimestamp),
+			label: clock(context.endTimestamp),
 			kind: "context",
 			context,
 			places: places.length,

@@ -14,7 +14,7 @@ const Privacy = () => (
 				Privacy policy
 			</h1>
 			<p className="mt-4 text-sm text-[#8ca493]">
-				Last updated: August 30, 2026
+				Last updated: October 7, 2026
 			</p>
 
 			<div className="mt-12 space-y-10 text-base leading-7 text-[#c2d1c7]">
@@ -36,19 +36,29 @@ const Privacy = () => (
 						Storage and use
 					</h2>
 					<p className="mt-3">
-						This activity stays in storage on your device. Tabot uses it only to
-						show your local activity timeline and let you export your own data.
-						Tabot has no account system, analytics, advertising, or
-						Tabot-operated server that receives this activity.
+						Raw browser activity stays in storage on your device. Tabot uses it
+						to build your local timeline, browsing estimates, and exports. An
+						optional assistant connection stores authorization and connection
+						state on Tabot’s relay, not your browser history.
 					</p>
 				</section>
 
 				<section>
 					<h2 className="text-2xl font-semibold text-[#eff5e7]">Sharing</h2>
 					<p className="mt-3">
-						Tabot does not sell, transfer, or share browser activity with third
-						parties. When you open Tabot Home, it reads activity directly from
-						the extension on your device; it is not sent to a Tabot server.
+						Tabot does not sell browser activity. The dashboard reads directly
+						from the extension on your device. Data leaves your device only when
+						you export it or authorize an assistant connection. Through that
+						connection, an assistant can request sanitized derived context,
+						recurring-pattern summaries and supporting occurrence
+						timestamps/site sequences, or site-level metrics for a time range,
+						such as estimated browsing time, visits, active days, and moves
+						between sites. The relay forwards these results without storing
+						browser history. Metrics and pattern occurrence evidence exclude raw
+						events, page paths, query strings, credentials, and favicons. Site
+						origins, including subdomains, remain visible to the connected
+						assistant; they are not anonymized. Exports and assistant responses
+						are subject to the recipient’s privacy and retention policies.
 					</p>
 				</section>
 
@@ -92,7 +102,7 @@ export const Route = createFileRoute("/privacy")({
 			{
 				name: "description",
 				content:
-					"What Tabot records, where it is stored, and why nothing leaves your device. Tabot is local-first: no accounts, no cloud, no third-party sharing.",
+					"What Tabot records, local storage, and optional user-authorized sharing of derived context, recurring patterns and activity metrics.",
 			},
 			{ property: "og:url", content: siteUrl("privacy/") },
 			{ property: "og:title", content: "Privacy Policy | Tabot" },

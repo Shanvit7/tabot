@@ -1,4 +1,4 @@
-import { Compass, Flame, Repeat, Timer } from "lucide-react";
+import { Clock3, Compass, Flame, Repeat, Timer } from "lucide-react";
 import { StatTile } from "~/components/activity-stat-tile";
 import type { ActivityStats } from "~/lib/activity-flow-stats";
 import { prettySite } from "~/lib/context-graph-data";
@@ -10,18 +10,34 @@ const hourLabel = (hour: number) =>
 		hour12: true,
 	});
 
-export const GamifiedStats = ({ stats }: { stats: ActivityStats }) => (
+export const GamifiedStats = ({
+	stats,
+	totalMs,
+	periodLabel,
+	isToday,
+}: {
+	stats: ActivityStats;
+	totalMs: number;
+	periodLabel: string;
+	isToday: boolean;
+}) => (
 	<section aria-label="What this stretch of browsing looked like">
 		<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 			<StatTile
-				icon={Flame}
+				icon={isToday ? Clock3 : Flame}
 				value={
-					stats.streakDays > 0
-						? `${stats.streakDays} ${stats.streakDays === 1 ? "day" : "days"}`
-						: "—"
+					isToday
+						? formatDuration(totalMs)
+						: stats.streakDays > 0
+							? `${stats.streakDays} ${stats.streakDays === 1 ? "day" : "days"}`
+							: "—"
 				}
-				label="Active streak"
-				detail={`${stats.activeDays} active day${stats.activeDays === 1 ? "" : "s"} this stretch`}
+				label={isToday ? "Browsing time" : "Active streak"}
+				detail={
+					isToday
+						? "estimated for this period"
+						: `${stats.activeDays} active day${stats.activeDays === 1 ? "" : "s"} this stretch`
+				}
 			/>
 			<StatTile
 				icon={Timer}
@@ -48,7 +64,8 @@ export const GamifiedStats = ({ stats }: { stats: ActivityStats }) => (
 		</div>
 		{stats.busiestHour !== null && (
 			<p className="mt-4 text-xs text-[#476151]">
-				You browse most around {hourLabel(stats.busiestHour)}.
+				{periodLabel}: most recorded activity was around{" "}
+				{hourLabel(stats.busiestHour)}.
 			</p>
 		)}
 	</section>

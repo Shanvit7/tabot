@@ -1,3 +1,4 @@
+import { activityMetricsPrompt, chatGptPromptUrl } from "@tabot/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ForceGraphMethods } from "react-force-graph-2d";
 import ForceGraph2D from "react-force-graph-2d";
@@ -30,7 +31,13 @@ const idOf = (end: string | CanvasNode): string =>
 const radiusOf = (node: CanvasNode) =>
 	Math.min(18, Math.max(5.5, Math.sqrt(Math.max(1, node.events)) * 2.2));
 
-export const ActivityFlowGraph = ({ flow }: { flow: ActivityFlow }) => {
+export const ActivityFlowGraph = ({
+	flow,
+	assistantConnected,
+}: {
+	flow: ActivityFlow;
+	assistantConnected: boolean;
+}) => {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const sizeRef = useRef<HTMLDivElement | null>(null);
 	const [width, setWidth] = useState(0);
@@ -58,7 +65,8 @@ export const ActivityFlowGraph = ({ flow }: { flow: ActivityFlow }) => {
 		[flow],
 	);
 	const focus = useMemo(() => {
-		if (!selectedId) return null;
+		if (!selectedId || !flow.nodes.some((node) => node.id === selectedId))
+			return null;
 		const ids = new Set([selectedId]);
 		for (const link of flow.links) {
 			if (link.source === selectedId) ids.add(link.target);
@@ -205,23 +213,44 @@ export const ActivityFlowGraph = ({ flow }: { flow: ActivityFlow }) => {
 					Drag to explore · scroll to zoom · click a place
 				</p>
 			</div>
-			<aside className="lg:w-72 lg:shrink-0" aria-live="polite">
-				{selected ? (
-					<PlaceCard
-						node={selected}
-						rank={flow.nodes.findIndex((node) => node.id === selected.id) + 1}
-						total={flow.nodes.length}
-						totalMs={flow.totalMs}
-						activeDays={flow.stats.activeDays}
-						connections={connections}
-					/>
-				) : (
-					<Leaderboard
-						nodes={flow.nodes.slice(0, 5)}
-						totalMs={flow.totalMs}
-						onPick={setSelectedId}
-					/>
-				)}
+			<aside className="lg:w-72 lg:shrink-0">
+				<label className="mb-3 block text-sm text-[#a9c6b1]">
+					Explore a place
+					<select
+						value={selected?.id ?? ""}
+						onChange={(event) => setSelectedId(event.target.value || null)}
+						className="mt-2 min-h-11 w-full rounded-lg border border-[#2f4738] bg-[#101c16] px-3 text-sm text-[#e8f3e8]"
+					>
+						<option value="">Overview</option>
+						{flow.nodes.map((node) => (
+							<option key={node.id} value={node.id}>
+								{node.label} — {node.id}
+							</option>
+						))}
+					</select>
+				</label>
+				<div aria-live="polite">
+					{selected ? (
+						<PlaceCard
+							node={selected}
+							rank={flow.nodes.findIndex((node) => node.id === selected.id) + 1}
+							total={flow.nodes.length}
+							totalMs={flow.totalMs}
+							activeDays={flow.stats.activeDays}
+							connections={connections}
+							assistantHref={chatGptPromptUrl(
+								activityMetricsPrompt(flow.from, flow.to, selected.id),
+							)}
+							assistantConnected={assistantConnected}
+						/>
+					) : (
+						<Leaderboard
+							nodes={flow.nodes.slice(0, 5)}
+							totalMs={flow.totalMs}
+							onPick={setSelectedId}
+						/>
+					)}
+				</div>
 			</aside>
 		</div>
 	);

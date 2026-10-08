@@ -10,6 +10,8 @@
 		"./share/targets": "./src/share/targets.ts"
 	},
 	"scripts": {
+		"check:activityMetrics": "node --import ./resolve-hook.mjs src/checks/activity-metrics.check.ts",
+		"check:foreground": "node --import ./resolve-hook.mjs src/checks/foreground.check.ts",
 		"check:sessions": "node --import ./resolve-hook.mjs src/checks/sessions.check.ts",
 		"check:contexts": "node --import ./resolve-hook.mjs src/checks/contexts.check.ts",
 		"check:memories": "node --import ./resolve-hook.mjs src/checks/memories.check.ts",

@@ -204,6 +204,22 @@ export class TabotAuth extends DurableObject {
 		});
 	}
 
+	/** Read existing grants too, so connections made before this status endpoint work. */
+	async hasAssistantConnection(installationId: string): Promise<boolean> {
+		// ponytail: scans OAuth token records; add an installation index if auth-store size grows.
+		for (const prefix of ["refresh:", "access:"]) {
+			const records = await this.ctx.storage.list<TokenRecord>({ prefix });
+			for (const record of records.values()) {
+				if (
+					record.installationId === installationId &&
+					record.expiresAt > now()
+				)
+					return true;
+			}
+		}
+		return false;
+	}
+
 	async revokeToken(token: string): Promise<void> {
 		const hash = await sha256Base64Url(token);
 		await this.ctx.storage.delete(`access:${hash}`);

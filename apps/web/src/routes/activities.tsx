@@ -1,13 +1,22 @@
+import { activityMetricsPrompt, chatGptPromptUrl } from "@tabot/shared";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { GamifiedStats } from "~/components/activity-gamified-stats";
 import { WeekStrip } from "~/components/activity-week-strip";
+import { AskChatGpt } from "~/components/context-graph/assistant-cta";
 import { HomeShell } from "~/components/home-shell";
-import { Loading } from "~/components/ui/work-panels";
+import { GraphLoading } from "~/components/ui/work-panels";
+import { useExtensionRedirect } from "~/hooks/use-extension-redirect";
 import { useHomeData } from "~/hooks/use-home-data";
-import { ActivityFlowGraph } from "~/lib/activity-flow";
 import { buildActivityFlow } from "~/lib/activity-flow-data";
 import { rangeStart } from "~/lib/home-data";
+import { useAssistantConnection } from "~/providers/assistant-connection";
+
+const ActivityFlowGraph = lazy(() =>
+	import("~/lib/activity-flow").then((module) => ({
+		default: module.ActivityFlowGraph,
+	})),
+);
 
 const periods = ["today", "7d", "30d", "all"] as const;
 type Period = (typeof periods)[number];
@@ -21,13 +30,21 @@ const periodLabel: Record<Period, string> = {
 
 const Activities = () => {
 	const { events, initialized, hasExtension } = useHomeData();
+	const redirecting = useExtensionRedirect({ hasExtension, initialized });
+	const assistantConnected = useAssistantConnection();
 	const [period, setPeriod] = useState<Period>("7d");
 	const flow = useMemo(
 		() =>
 			events?.length ? buildActivityFlow(events, rangeStart(period)) : null,
 		[events, period],
 	);
-	if (!initialized) return <Loading />;
+	if (!initialized || redirecting) {
+		return (
+			<HomeShell>
+				<GraphLoading />
+			</HomeShell>
+		);
+	}
 	return (
 		<HomeShell>
 			<header className="mb-8">
@@ -39,15 +56,6 @@ const Activities = () => {
 					switch tabs, and places are the sites you visited.
 				</p>
 			</header>
-			{!hasExtension && (
-				<p
-					role="alert"
-					className="mb-6 rounded-lg bg-[#fff2da] p-4 text-sm text-[#80500f]"
-				>
-					Extension not detected. Load Tabot in this Chrome profile, then
-					reload.
-				</p>
-			)}
 			<div className="flex flex-wrap items-center justify-between gap-4">
 				<fieldset className="flex flex-wrap gap-2">
 					<legend className="sr-only">Activity period</legend>
@@ -68,17 +76,47 @@ const Activities = () => {
 			{flow?.nodes.length ? (
 				<>
 					<div className="mt-6">
-						<GamifiedStats stats={flow.stats} />
+						<GamifiedStats
+							stats={flow.stats}
+							totalMs={flow.totalMs}
+							isToday={period === "today"}
+							periodLabel={
+								period === "7d" || period === "30d"
+									? `Last ${periodLabel[period]}`
+									: periodLabel[period]
+							}
+						/>
 					</div>
 					<section className="mt-8" aria-labelledby="flow-heading">
-						<h2
-							id="flow-heading"
-							className="text-sm font-medium text-[#476151]"
-						>
-							Where your browsing flows
-						</h2>
+						<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+							<div>
+								<h2
+									id="flow-heading"
+									className="text-sm font-medium text-[#476151]"
+								>
+									Where your browsing flows
+								</h2>
+								<p className="mt-2 text-sm text-[#476151]">
+									Ask about this period, or pick a place for its estimates.
+								</p>
+							</div>
+							<div className="w-full sm:w-auto">
+								<AskChatGpt
+									href={chatGptPromptUrl(
+										activityMetricsPrompt(flow.from, flow.to),
+									)}
+									connected={assistantConnected === true}
+									label="Ask ChatGPT about this period"
+								/>
+							</div>
+						</div>
 						<div className="mt-4 rounded-xl bg-[#0b1310] p-4 sm:p-6">
-							<ActivityFlowGraph flow={flow} />
+							<Suspense fallback={<GraphLoading />}>
+								<ActivityFlowGraph
+									flow={flow}
+									assistantConnected={assistantConnected === true}
+								/>
+							</Suspense>
 							<p className="mt-4 text-xs text-[#8fae95]">
 								{flow.nodes.length} place{flow.nodes.length === 1 ? "" : "s"}{" "}
 								and {flow.links.length} move{flow.links.length === 1 ? "" : "s"}{" "}
@@ -88,9 +126,26 @@ const Activities = () => {
 					</section>
 				</>
 			) : (
-				<p className="mt-8 text-sm text-[#476151]">
-					No activity recorded for this period.
-				</p>
+				<div className="mt-8">
+					<GraphLoading
+						title="No activity here yet"
+						message={
+							period === "all"
+								? "Browse normally. Your activity will appear here."
+								: "Try All time, or browse normally to add your next dot."
+						}
+					>
+						{period !== "all" && (
+							<button
+								type="button"
+								onClick={() => setPeriod("all")}
+								className="min-h-11 rounded-lg bg-[#bfff00] px-4 text-sm font-semibold text-[#15251b]"
+							>
+								Show all time
+							</button>
+						)}
+					</GraphLoading>
+				</div>
 			)}
 		</HomeShell>
 	);

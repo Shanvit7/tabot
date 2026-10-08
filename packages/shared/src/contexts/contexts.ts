@@ -30,7 +30,8 @@ export interface BrowserContext {
 	id: string; // `${firstSessionId}-${lastSessionId}`
 	startTimestamp: number;
 	endTimestamp: number;
-	duration: number; // wall clock, includes gaps
+	duration: number; // summed foreground time, excludes gaps
+	wallDuration?: number;
 	sessionIds: string[];
 	sessionCount: number;
 	domains: ContextDomain[];
@@ -337,7 +338,8 @@ const finalizeContextFromEpisodes = (
 		id: contextId(first.id, last.id),
 		startTimestamp: first.startTimestamp,
 		endTimestamp: last.endTimestamp,
-		duration: last.endTimestamp - first.startTimestamp,
+		duration: episodes.reduce((sum, episode) => sum + episode.duration, 0),
+		wallDuration: last.endTimestamp - first.startTimestamp,
 		sessionIds: sessions.map((s) => s.id),
 		sessionCount: sessions.length,
 		domains: domainList,
