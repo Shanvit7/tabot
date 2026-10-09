@@ -4,15 +4,18 @@ import notificationIcon from "data-base64:~assets/icon-128.png";
 import {
 	bulkInsertEvents,
 	chatGptContextUrl,
+	chatGptPromptUrl,
 	countEvents,
 	createBuffer,
 	createEmptyStats,
 	createEventsDb,
 	getAllEvents,
 	getContexts,
+	getMemories,
 	getMeta,
 	LIFECYCLE_KINDS,
 	logger,
+	memoryPrompt,
 	nextNotifiableContext,
 	POPUP_SOURCE,
 	pushEvent,
@@ -24,6 +27,10 @@ import {
 	updateMeta,
 } from "@tabot/shared";
 import { isForegroundTab, startForegroundTracking } from "./foreground";
+import {
+	isNotifiableEpisode,
+	nextNotifiableMemory,
+} from "./notification-model";
 import {
 	approveAuthorizationTransaction,
 	getAssistantConnection,
@@ -68,10 +75,15 @@ const NOTIFICATION_ID = "tabot-context-ready";
 const NOTIFICATION_ALARM = "tabot-context-check";
 const HOME_URL =
 	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
+const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
 interface NotificationState {
 	lastEnd: number;
 	lastNotifiedAt: number;
+	lastMemorySeen?: number;
 	contextId?: string;
+	memoryId?: string;
+	kind?: "context" | "episode" | "memory";
+	chatGptConnected?: boolean;
 }
 
 const latestStats: StatsSnapshot = createEmptyStats(capacity);
@@ -508,15 +520,21 @@ if (chrome.runtime.onMessageExternal) {
 	);
 }
 
-// First run seeds a high-water mark: never surprise existing users with
-// notifications for historical contexts. Only future, completed contexts count.
+// First run seeds high-water marks so existing contexts and memories never
+// trigger historical notifications. Only future, completed evidence counts.
 void chrome.storage.local
 	.get(NOTIFICATION_KEY)
 	.then((stored) => {
-		if (!stored[NOTIFICATION_KEY])
+		if (!stored[NOTIFICATION_KEY]) {
+			const now = Date.now();
 			return chrome.storage.local.set({
-				[NOTIFICATION_KEY]: { lastEnd: Date.now(), lastNotifiedAt: 0 },
+				[NOTIFICATION_KEY]: {
+					lastEnd: now,
+					lastMemorySeen: now,
+					lastNotifiedAt: 0,
+				},
 			});
+		}
 	})
 	.catch((error) => logger.warn("notification init failed", { error }));
 void chrome.alarms
@@ -528,44 +546,93 @@ void chrome.alarms
 	.catch((error) => logger.warn("notification alarm failed", { error }));
 
 let notificationCheckRunning = false;
-chrome.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name !== NOTIFICATION_ALARM || notificationCheckRunning) return;
+const checkNotifications = async () => {
+	if (notificationCheckRunning) return;
 	notificationCheckRunning = true;
-	void (async () => {
-		try {
-			await trackingReady;
-			if (!trackingEnabled) return;
-			const stored = await chrome.storage.local.get(NOTIFICATION_KEY);
-			const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
-			if (!state) return;
-			const now = Date.now();
-			if (now - state.lastNotifiedAt < 6 * 3_600_000) return;
-			const context = nextNotifiableContext(
-				await getContexts(await getDb()),
-				state.lastEnd,
-				now,
-			);
-			if (!context) return;
-			await chrome.notifications.create(NOTIFICATION_ID, {
-				type: "basic",
-				iconUrl: notificationIcon,
-				title: "Context ready",
-				message: `${context.domains.length} sites · ${Math.round(context.duration / 60_000)} min of browsing context. Tabot has enough context for AI to explore this thread.`,
-				buttons: [{ title: "Ask ChatGPT" }],
-			});
-			await chrome.storage.local.set({
-				[NOTIFICATION_KEY]: {
-					lastEnd: context.endTimestamp,
-					lastNotifiedAt: now,
-					contextId: context.id,
-				},
-			});
-		} catch (error) {
-			logger.warn("context notification failed", { error });
-		} finally {
-			notificationCheckRunning = false;
-		}
-	})();
+	try {
+		await trackingReady;
+		if (!trackingEnabled) return;
+		const stored = await chrome.storage.local.get(NOTIFICATION_KEY);
+		const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
+		if (!state) return;
+		const now = Date.now();
+		if (now - state.lastNotifiedAt < 6 * 3_600_000) return;
+		const db = await getDb();
+		const [contexts, memories] = await Promise.all([
+			getContexts(db),
+			getMemories(db),
+		]);
+		const context = nextNotifiableContext(contexts, state.lastEnd, now);
+		const memory = nextNotifiableMemory(
+			memories,
+			state.lastMemorySeen ?? state.lastEnd,
+			now,
+		);
+		if (!context && !memory) return;
+
+		const notifyMemory =
+			memory !== undefined &&
+			(!context || memory.lastSeen >= context.endTimestamp);
+		const selectedContext = notifyMemory
+			? contexts.find((item) => item.id === memory.lastContextId)
+			: context;
+		if (!selectedContext) return;
+		const episode = selectedContext.episodes
+			?.filter(
+				(item) =>
+					isNotifiableEpisode(item) &&
+					item.endTimestamp <= now - 30 * 60_000 &&
+					item.endTimestamp >= now - 24 * 3_600_000,
+			)
+			.toSorted((a, b) => b.endTimestamp - a.endTimestamp)[0];
+		const kind = notifyMemory ? "memory" : episode ? "episode" : "context";
+		const connected = await getAssistantConnection()
+			.then((result) => result.connected)
+			.catch(() => false);
+		const title =
+			kind === "memory"
+				? "A browsing pattern is repeating"
+				: kind === "episode"
+					? "Activity worth a look"
+					: "Activity summary ready";
+		const message =
+			kind === "memory"
+				? `Similar activity appeared ${memory.evidence.occurrenceCount} times across separate periods. Ask ChatGPT what repeats.`
+				: `${(episode ?? selectedContext).domains.length} sites · ${Math.round((episode ?? selectedContext).duration / 60_000)} min. Ask ChatGPT to explore this thread.`;
+		await chrome.notifications.create(NOTIFICATION_ID, {
+			type: "basic",
+			iconUrl: notificationIcon,
+			title,
+			message,
+			buttons: [{ title: connected ? "Ask ChatGPT" : "Connect ChatGPT" }],
+		});
+		await chrome.storage.local.set({
+			[NOTIFICATION_KEY]: {
+				...state,
+				lastEnd: Math.max(state.lastEnd, selectedContext.endTimestamp),
+				lastMemorySeen: notifyMemory
+					? memory.lastSeen
+					: (state.lastMemorySeen ?? state.lastEnd),
+				lastNotifiedAt: now,
+				contextId: selectedContext.id,
+				memoryId: notifyMemory ? memory.id : undefined,
+				kind,
+				chatGptConnected: connected,
+			},
+		});
+	} catch (error) {
+		logger.warn("context notification failed", { error });
+	} finally {
+		notificationCheckRunning = false;
+	}
+};
+
+chrome.runtime.onStartup.addListener(() => {
+	void checkNotifications();
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+	if (alarm.name !== NOTIFICATION_ALARM) return;
+	void checkNotifications();
 });
 
 chrome.notifications.onClicked.addListener((id) => {
@@ -589,7 +656,14 @@ chrome.notifications.onButtonClicked.addListener((id, buttonIndex) => {
 		.get(NOTIFICATION_KEY)
 		.then((stored) => {
 			const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
-			if (state?.contextId)
+			if (!state) return;
+			if (state.chatGptConnected !== true)
+				return chrome.tabs.create({ url: CHATGPT_URL });
+			if (state.kind === "memory" && state.memoryId)
+				return chrome.tabs.create({
+					url: chatGptPromptUrl(memoryPrompt(state.memoryId)),
+				});
+			if (state.contextId)
 				return chrome.tabs.create({ url: chatGptContextUrl(state.contextId) });
 		})
 		.catch((error) => logger.warn("open ChatGPT failed", { error }));

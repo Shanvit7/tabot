@@ -150,3 +150,78 @@
 		forced-color-adjust: auto;
 	}
 }
+
+/* Session recap inherits the selected-context panel's green/lime world. */
+.session-recap {
+	--session-bg: #101c16;
+	--session-raised: #1e3427;
+	--session-ink: #e8f3e8;
+	--session-muted: #a9c6b1;
+	--session-line: #34503e;
+	--session-accent: #bfff00;
+	color: var(--session-ink);
+	font-family: "IBM Plex Sans", sans-serif;
+	color-scheme: dark;
+	scrollbar-color: var(--session-muted) var(--session-bg);
+}
+.session-recap ::selection {
+	background: var(--session-accent);
+	color: var(--session-bg);
+}
+.session-recap :is(button, a, summary):focus-visible {
+	outline: 2px solid var(--session-accent);
+	outline-offset: 3px;
+	box-shadow: none;
+}
+.session-dialog {
+	width: 100%;
+	max-width: none;
+	height: 100dvh;
+	max-height: 100dvh;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: var(--session-bg);
+}
+html:has(.session-dialog[open]) {
+	overflow: hidden;
+}
+.session-dialog[open] {
+	display: flex;
+	flex-direction: column;
+}
+.session-dialog::backdrop {
+	background: rgb(4 12 8 / 76%);
+}
+.session-dialog > div {
+	scroll-padding-block: 16px;
+}
+.session-dialog > header {
+	padding-top: max(20px, env(safe-area-inset-top));
+}
+.session-dialog > footer {
+	padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+	.session-dialog {
+		width: min(840px, calc(100vw - 64px));
+		height: auto;
+		max-height: min(860px, calc(100dvh - 64px));
+		margin: auto;
+		border-radius: 16px;
+		box-shadow: 0 24px 80px rgb(0 0 0 / 40%);
+	}
+}
+@media (prefers-reduced-motion: no-preference) {
+	.session-dialog[open] {
+		animation: session-recap-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+}
+@keyframes session-recap-enter {
+	from {
+		transform: translateY(12px);
+	}
+	to {
+		transform: translateY(0);
+	}
+}

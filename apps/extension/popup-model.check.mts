@@ -39,7 +39,6 @@ const context = (
 const empty = derive([]);
 assert.equal(popupSummary(empty, null, now).featured, null);
 assert.equal(popupSummary(empty, null, now).updated, 0);
-assert.equal(popupSummary(empty, null, now).activities, 0);
 
 const ready = context("ready-id", now - 60_000);
 const thin = context("thin-id", now, 60_000);
@@ -53,11 +52,15 @@ assert.equal(
 	"ready context outranks latest thin thread",
 );
 assert.equal(summary.ready, true);
-assert.equal(
-	summary.updated,
-	1,
-	"only ready threads updated since previous visit",
+assert.equal(summary.updated, 1, "only AI-ready contexts count as new");
+const missedVisit = context("missed-visit-id", now - 48 * 60 * 60_000);
+const afterLongGap = popupSummary(
+	{ ...empty, contexts: [missedVisit] },
+	now - 72 * 60 * 60_000,
+	now,
 );
+assert.equal(afterLongGap.updated, 1, "unseen context survives a long gap");
+assert.equal(afterLongGap.featured?.id, "missed-visit-id");
 assert.deepEqual(
 	summary.recent.map((item) => item.id),
 	["thin-id", "older-id"],
@@ -114,9 +117,9 @@ const crossing = {
 	],
 };
 assert.equal(
-	popupSummary({ ...empty, sessions: [crossing] }, null, now).activities,
+	popupSummary({ ...empty, sessions: [crossing] }, null, now).sessions,
 	1,
-	"today excludes previous-day activity within a session",
+	"sessions ending today appear in today's count",
 );
 
 assert.equal(

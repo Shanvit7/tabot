@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"check:activityMetrics": "node --import ../../packages/shared/resolve-hook.mjs scripts/activity-metrics.check.mjs",
+		"check:activityMetrics": "node --import ../../packages/shared/resolve-hook.mjs --import ./scripts/tsx-hook.mjs scripts/activity-metrics.check.mjs",
 		"dev": "node scripts/dev.mjs",
 		"dev:local": "wrangler dev",
 		"deploy": "wrangler deploy",

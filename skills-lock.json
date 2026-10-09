@@ -31,6 +31,12 @@
 			"skillPath": "frontend-design-ui-ux/SKILL.md",
 			"computedHash": "8eae75d294447eac5fab6c8a31141d8ff74777ea1b7bc25aef93c93ed6e10e71"
 		},
+		"hono-react": {
+			"source": "yusukebe/skills",
+			"sourceType": "github",
+			"skillPath": "skills/hono-react/SKILL.md",
+			"computedHash": "1b8f5910d84469b1503991b120cce9a4e599316b382259495fa5f33f6f4ba3bd"
+		},
 		"impeccable": {
 			"source": "pbakaus/impeccable",
 			"sourceType": "github",
@@ -42,6 +48,12 @@
 			"sourceType": "github",
 			"skillPath": "skills/plasmo/SKILL.md",
 			"computedHash": "a8389a8b7266ce11634ce47cd5b8ee1806b00a82d5eac9623975324959a91ceb"
+		},
+		"react-call": {
+			"source": "desko27/react-call",
+			"sourceType": "github",
+			"skillPath": "skills/react-call/SKILL.md",
+			"computedHash": "81852b665736193af9d2fd420dbf1c5e9beffdf36f48c678b9985b3f3bd06ab5"
 		},
 		"remotion-best-practices": {
 			"source": "remotion-dev/skills",

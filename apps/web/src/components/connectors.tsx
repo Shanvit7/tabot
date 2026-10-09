@@ -1,19 +1,13 @@
 import ClaudeMono from "@lobehub/icons/es/Claude/components/Mono";
 import GeminiMono from "@lobehub/icons/es/Gemini/components/Mono";
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import { focusConnectorsHeading } from "~/components/connector-utils";
 import { useAssistantConnection } from "~/providers/assistant-connection";
 
 // Where the user adds the Tabot MCP connector in ChatGPT.
 const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
 const CTA_CLASS =
 	"flex min-h-16 flex-col items-center justify-center gap-1 rounded-[8px] border px-2 py-2";
-
-// Home waits for extension data before mounting this section; resolve the deep link then.
-export const focusConnectorsHeading = (heading: HTMLHeadingElement | null) => {
-	if (!heading || window.location.hash !== "#connectors-heading") return;
-	heading.scrollIntoView();
-	heading.focus({ preventScroll: true });
-};
 
 export const Connectors = () => {
 	const connected = useAssistantConnection();
@@ -34,7 +28,7 @@ export const Connectors = () => {
 					AI Assistants
 				</h2>
 				<p className="mt-1 text-[13px] leading-5 text-(--work-muted)">
-					Give your AI assistant context from what you&apos;re browsing.
+					Ask your AI assistant about your browsing activity.
 				</p>
 				<div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
 					<ChatGptTile

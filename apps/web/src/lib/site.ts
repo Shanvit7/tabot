@@ -12,4 +12,4 @@ export const siteUrl = (path = ""): string =>
 	`${SITE_URL}/${path.replace(/^\/+/, "")}`;
 
 export const SITE_DESCRIPTION =
-	"Tabot is a privacy-first Chrome extension that turns your browser activity into a private, portable work timeline. 100% local — no cloud, no account.";
+	"Tabot records the sites you visit in Chrome and shows how your browsing connects in an activity map.";

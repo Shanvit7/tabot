@@ -6,7 +6,11 @@ import { HomeShell } from "~/components/home-shell";
 import { GraphLoading } from "~/components/ui/work-panels";
 import { useExtensionRedirect } from "~/hooks/use-extension-redirect";
 import { useHomeData } from "~/hooks/use-home-data";
-import { GRAPH_LIMITS, originOf } from "~/lib/context-graph-data";
+import {
+	GRAPH_LIMITS,
+	originOf,
+	sessionSummaries,
+} from "~/lib/context-graph-data";
 import { rangeStart, type StatsRange } from "~/lib/home-data";
 import { useAssistantConnection } from "~/providers/assistant-connection";
 
@@ -45,6 +49,10 @@ export const Home = ({ requestedId }: { requestedId: string | null }) => {
 	const [from, setFrom] = useState("");
 	const [to, setTo] = useState("");
 	const contexts = useMemo(() => derived?.contexts ?? [], [derived]);
+	const sessions = useMemo(
+		() => sessionSummaries(derived?.sessions ?? [], contexts),
+		[derived, contexts],
+	);
 	// Favicons the extension captured from the tab win over the derived
 	// /favicon.ico: many sites serve an SVG icon or none at all at that path.
 	const favicons = useMemo(() => {
@@ -221,6 +229,7 @@ export const Home = ({ requestedId }: { requestedId: string | null }) => {
 									<ContextGraph
 										key={requested?.id ?? "default"}
 										contexts={shown}
+										sessions={sessions}
 										memories={derived?.memories ?? []}
 										limits={limits}
 										favicons={favicons}

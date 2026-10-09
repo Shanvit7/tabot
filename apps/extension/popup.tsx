@@ -1,6 +1,11 @@
 import logo from "data-base64:~assets/icon.png";
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
-import { derive, type StatsSnapshot, type StoredTabEvent } from "@tabot/shared";
+import {
+	chatGptContextUrl,
+	derive,
+	type StatsSnapshot,
+	type StoredTabEvent,
+} from "@tabot/shared";
 import {
 	ArrowRight,
 	ChevronDown,
@@ -11,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
+	contextDuration,
 	contextHomeUrl,
 	type PopupSummary,
 	parseAssistantConnection,
@@ -388,15 +394,94 @@ const IndexPopup = () => {
 								: "Tabot records the sites you visit and how you move between them."}
 						</p>
 
+						{!summary.ready && !paused && summary.sessions > 0 && (
+							<section
+								aria-label="Today's browsing progress"
+								role="status"
+								className="mt-4 rounded-lg border border-line bg-surface p-3"
+							>
+								<p className="text-xs text-muted">Today so far</p>
+								<p className="mt-0.5 text-sm font-medium">
+									{summary.sessions} browsing{" "}
+									{summary.sessions === 1 ? "session" : "sessions"}
+								</p>
+								<p className="mt-1 text-xs leading-5 text-muted">
+									Keep browsing normally. A summary appears once Tabot has
+									enough browsing to summarize.
+								</p>
+							</section>
+						)}
+
+						{summary.updated > 0 && featured && (
+							<section
+								aria-label="New activity since your last visit"
+								role="status"
+								className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3"
+							>
+								<div>
+									<p className="text-xs text-muted">Since your last visit</p>
+									<p className="mt-0.5 text-sm font-medium">
+										{summary.updated === 1
+											? "1 new activity summary"
+											: `${summary.updated} new activity summaries`}
+									</p>
+								</div>
+								<button
+									type="button"
+									onClick={() => openTabot(featured.id)}
+									className="popup-quiet flex min-h-11 shrink-0 items-center gap-2 border border-line bg-canvas px-3 text-xs font-medium"
+								>
+									Review
+									<Arrow />
+								</button>
+							</section>
+						)}
+
 						{featured ? (
 							<section
-								aria-label="Recent browser activity"
+								aria-label="Featured browser activity"
 								className="mt-5 rounded-xl bg-trace p-4 text-trace-text"
 							>
 								<h2 className="min-w-0 truncate text-base font-medium">
 									{siteLabel(featured.primaryDomain)}
 								</h2>
 								<ActivitySites context={featured} favicons={summary.favicons} />
+								{summary.ready && (
+									<div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-trace-line pt-3">
+										<div>
+											<p className="text-sm font-medium">
+												Activity summary ready
+											</p>
+											<p className="mt-0.5 text-xs leading-4 text-muted">
+												{featured.domains.length} sites ·{" "}
+												{contextDuration(featured.duration)}
+											</p>
+										</div>
+										{assistantConnected === true ? (
+											<a
+												href={chatGptContextUrl(featured.id)}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
+											>
+												Ask ChatGPT
+											</a>
+										) : assistantConnected === false ? (
+											<a
+												href={CHATGPT_URL}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
+											>
+												Connect ChatGPT
+											</a>
+										) : (
+											<span role="status" className="text-xs text-muted">
+												Checking ChatGPT…
+											</span>
+										)}
+									</div>
+								)}
 							</section>
 						) : (
 							<section

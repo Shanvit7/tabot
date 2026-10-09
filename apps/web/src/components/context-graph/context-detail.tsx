@@ -7,6 +7,7 @@ import { AskChatGpt } from "~/components/context-graph/assistant-cta";
 import { Panel } from "~/components/context-graph/panel";
 import { Places } from "~/components/context-graph/places";
 import { Remark } from "~/components/context-graph/remark";
+import { Sessions } from "~/components/context-graph/sessions";
 import {
 	clock,
 	contextTitle,
@@ -14,16 +15,19 @@ import {
 	humanDuration,
 	memoryTitle,
 	prettySite,
+	type SessionSummary,
 } from "~/lib/context-graph-data";
 
 export const ContextDetail = ({
 	node,
+	sessions,
 	memories,
 	contexts,
 	assistantConnected,
 	onClose,
 }: {
 	node: Extract<GraphNode, { kind: "context" }>;
+	sessions: SessionSummary[];
 	memories: Memory[];
 	contexts: BrowserContext[];
 	assistantConnected: boolean;
@@ -58,7 +62,7 @@ export const ContextDetail = ({
 
 	return (
 		<Panel
-			kicker="A stretch of browsing"
+			kicker="Activity summary"
 			title={contextTitle(context)}
 			onClose={onClose}
 		>
@@ -70,8 +74,8 @@ export const ContextDetail = ({
 				{shared === 0
 					? "Nothing here has come back yet — this one looks like a one-off."
 					: shared === node.places
-						? "Every place here shows up in another context of yours."
-						: `${shared} of these ${node.places} places show up in your other contexts.`}
+						? "Every place here shows up in another activity summary."
+						: `${shared} of these ${node.places} places show up in your other activity summaries.`}
 			</Remark>
 			<Places
 				items={sites.slice(0, 6).map((site) => ({
@@ -90,9 +94,10 @@ export const ContextDetail = ({
 			)}
 			{context.startTimestamp === first && (
 				<p className="mt-4 text-xs text-[#6f8f78]">
-					Earliest context Tabot still holds.
+					Earliest activity Tabot still has.
 				</p>
 			)}
+			<Sessions sessionIds={context.sessionIds} sessions={sessions} />
 			<AskChatGpt
 				href={chatGptContextUrl(context.id)}
 				connected={assistantConnected}

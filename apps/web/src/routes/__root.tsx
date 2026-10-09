@@ -6,6 +6,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { SessionInspector } from "~/components/context-graph/session-inspector";
 import { NotFound } from "~/components/not-found";
 import { SITE_DESCRIPTION, siteUrl } from "~/lib/site";
 import { AssistantConnectionProvider } from "~/providers/assistant-connection";
@@ -48,6 +49,7 @@ const RootLayout = () => {
 			<body>
 				<AssistantConnectionProvider>
 					<Outlet />
+					<SessionInspector />
 				</AssistantConnectionProvider>
 				{process.env.NODE_ENV === "development" && <ReactScan />}
 				<TanStackRouterDevtools position="bottom-right" />

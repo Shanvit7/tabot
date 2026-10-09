@@ -40,8 +40,8 @@ export const SiteDetail = ({
 		>
 			<p className="mt-2 text-sm leading-6 text-[#cfe4d4]">
 				{node.contextCount === 1
-					? "It showed up once in the contexts on screen."
-					: `It showed up in ${node.contextCount} of the contexts on screen.`}
+					? "It appears in one activity summary shown here."
+					: `It appears in ${node.contextCount} activity summaries shown here.`}
 			</p>
 			<Remark>
 				{node.contextCount >= 3

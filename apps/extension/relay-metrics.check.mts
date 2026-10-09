@@ -229,6 +229,10 @@ try {
 		JSON.stringify(discovery),
 		/alice@example\.com|private|secret|user:pw|chrome:\/\//,
 	);
+	assert.doesNotMatch(
+		JSON.stringify(discovery),
+		/activityCount|totalEventCount/,
+	);
 	const limited = (
 		await request<PatternList>({ limit: 1 }, "list_recurring_patterns")
 	).result;
@@ -272,6 +276,10 @@ try {
 	assert.doesNotMatch(
 		JSON.stringify(evidence),
 		/alice@example\.com|private|secret|user:pw|chrome:\/\//,
+	);
+	assert.doesNotMatch(
+		JSON.stringify(evidence),
+		/activityCount|totalEventCount/,
 	);
 	assert.equal(
 		JSON.stringify(patterns),

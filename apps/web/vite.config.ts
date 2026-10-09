@@ -40,6 +40,11 @@ export default defineConfig({
 		// the client pipeline (and the shim) handles node:module.
 		exclude: ["@openredaction/core", "@openredaction/core/lite"],
 	},
+	ssr: {
+		// @lobehub/icons ships extensionless ESM imports, which Node cannot resolve
+		// when the package is externalized during server rendering.
+		noExternal: ["@lobehub/icons"],
+	},
 	plugins: [
 		nodeModuleShim(),
 		tailwindcss(),

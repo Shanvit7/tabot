@@ -124,13 +124,28 @@ export const findSimilarMemoriesCore = (
 };
 
 // AI-ready means enough observed evidence to be useful, not inferred intent.
-// Keep this pure: the same decision applies to search, recent, and current.
+export const isAiReadyEvidence = (evidence: {
+	duration: number;
+	totalEventCount: number;
+	domainCount: number;
+	sessionCount: number;
+	totalInteractionCount: number;
+}): boolean =>
+	evidence.duration >= 10 * 60_000 &&
+	evidence.totalEventCount >= 10 &&
+	(evidence.domainCount >= 2 ||
+		evidence.sessionCount >= 2 ||
+		evidence.totalInteractionCount >= 5);
+
+// Keep the shared gate for contexts and activity episodes.
 export const isAiReadyContext = (context: BrowserContext): boolean =>
-	context.duration >= 10 * 60_000 &&
-	context.totalEventCount >= 10 &&
-	(context.domains.length >= 2 ||
-		context.sessionCount >= 2 ||
-		context.totalInteractionCount >= 5);
+	isAiReadyEvidence({
+		duration: context.duration,
+		totalEventCount: context.totalEventCount,
+		domainCount: context.domains.length,
+		sessionCount: context.sessionCount,
+		totalInteractionCount: context.totalInteractionCount,
+	});
 
 export const readyContextsInRange = (
 	contexts: BrowserContext[],

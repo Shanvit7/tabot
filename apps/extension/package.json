@@ -6,6 +6,7 @@
 	"private": true,
 	"scripts": {
 		"check:popup": "node --import ../../packages/shared/resolve-hook.mjs popup-model.check.mts",
+		"check:notifications": "node --import ../../packages/shared/resolve-hook.mjs notification-model.check.mts",
 		"check:metricsRelay": "node --experimental-test-module-mocks --import ../../packages/shared/resolve-hook.mjs relay-metrics.check.mts",
 		"check:foreground": "node --import ../../packages/shared/resolve-hook.mjs foreground.check.mts",
 		"predev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css",
@@ -32,6 +33,12 @@
 		"typescript": "^5.7.0"
 	},
 	"manifest": {
+		"cross_origin_opener_policy": {
+			"value": "same-origin"
+		},
+		"cross_origin_embedder_policy": {
+			"value": "require-corp"
+		},
 		"permissions": [
 			"storage",
 			"tabs",

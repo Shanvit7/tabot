@@ -3,6 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ForceGraphMethods } from "react-force-graph-2d";
 import ForceGraph2D from "react-force-graph-2d";
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "~/components/ui/select";
+import {
 	type ActivityFlow,
 	connectedTo,
 	type FlowLink,
@@ -23,6 +30,7 @@ const INK = "#e8f3e8";
 const SITE = "#6f9c81";
 const ACCENT = "#bfff00";
 const LINK = "110,170,135";
+const OVERVIEW_VALUE = "__overview__";
 
 const idOf = (end: string | CanvasNode): string =>
 	typeof end === "string" ? end : end.id;
@@ -214,21 +222,37 @@ export const ActivityFlowGraph = ({
 				</p>
 			</div>
 			<aside className="lg:w-72 lg:shrink-0">
-				<label className="mb-3 block text-sm text-[#a9c6b1]">
-					Explore a place
-					<select
-						value={selected?.id ?? ""}
-						onChange={(event) => setSelectedId(event.target.value || null)}
-						className="mt-2 min-h-11 w-full rounded-lg border border-[#2f4738] bg-[#101c16] px-3 text-sm text-[#e8f3e8]"
+				<div className="mb-3 text-sm text-[#a9c6b1]">
+					<label htmlFor="activity-place-select" className="mb-2 block">
+						Explore a place
+					</label>
+					<Select
+						value={selected?.id ?? OVERVIEW_VALUE}
+						onValueChange={(value) =>
+							setSelectedId(value === OVERVIEW_VALUE ? null : value)
+						}
 					>
-						<option value="">Overview</option>
-						{flow.nodes.map((node) => (
-							<option key={node.id} value={node.id}>
-								{node.label} — {node.id}
-							</option>
-						))}
-					</select>
-				</label>
+						<SelectTrigger
+							id="activity-place-select"
+							className="border-[#2f4738] bg-[#101c16] text-[#e8f3e8] hover:border-[#6f9c81] focus-visible:ring-[#bfff00] focus-visible:ring-offset-[#0b1310]"
+						>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value={OVERVIEW_VALUE}>Overview</SelectItem>
+							{flow.nodes.map((node) => (
+								<SelectItem
+									key={node.id}
+									value={node.id}
+									textValue={`${node.label} ${node.id}`}
+								>
+									{node.label}{" "}
+									<span className="text-[#a9c6b1]">— {node.id}</span>
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
 				<div aria-live="polite">
 					{selected ? (
 						<PlaceCard

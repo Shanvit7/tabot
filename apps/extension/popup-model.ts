@@ -11,7 +11,18 @@ export const popupSummary = (
 		.filter((context) => context.endTimestamp >= now - 24 * 60 * 60_000)
 		.toSorted((a, b) => b.endTimestamp - a.endTimestamp);
 	const ready = recent.filter(isAiReadyContext);
-	const featured = ready[0] ?? recent[0] ?? null;
+	const updated =
+		lastViewed === null
+			? []
+			: derived.contexts
+					.filter(
+						(context) =>
+							context.endTimestamp > lastViewed &&
+							context.endTimestamp <= now &&
+							isAiReadyContext(context),
+					)
+					.toSorted((a, b) => b.endTimestamp - a.endTimestamp);
+	const featured = updated[0] ?? ready[0] ?? recent[0] ?? null;
 	const sessions = derived.sessions.filter(
 		(session) => session.endTimestamp >= today.getTime(),
 	);
@@ -32,18 +43,7 @@ export const popupSummary = (
 		featured,
 		ready: !!featured && isAiReadyContext(featured),
 		recent: recent.filter((context) => context.id !== featured?.id).slice(0, 2),
-		updated:
-			lastViewed === null
-				? 0
-				: ready.filter((context) => context.endTimestamp > lastViewed).length,
-		activities: sessions.reduce(
-			(count, session) =>
-				count +
-				session.eventSequence.filter(
-					(event) => event.timestamp >= today.getTime(),
-				).length,
-			0,
-		),
+		updated: updated.length,
 		sessions: sessions.length,
 		patterns: patterns.length,
 	};

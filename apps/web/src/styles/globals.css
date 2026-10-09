@@ -78,6 +78,17 @@
 
 	/* Colors — map CSS vars to Tailwind */
 	--color-lime: var(--lime);
+	--color-landing-paper: #f5f6f0;
+	--color-landing-soft: #e9f4d6;
+	--color-landing-muted: #40584a;
+	/* Exact extension popup palette, scoped to its landing preview. */
+	--color-preview-ink: #15251b;
+	--color-preview-muted: #476151;
+	--color-preview-line: #d2ddd2;
+	--color-preview-surface: #f5f8f4;
+	--color-preview-trace: #0b1310;
+	--color-preview-raised: #101d15;
+	--color-preview-text: #e8f3e8;
 	--color-black: #000000;
 	--color-white: #ffffff;
 
@@ -221,7 +232,39 @@ body {
 	}
 }
 
+/* Marketing-only refinements; dashboard and popup keep their own UI language. */
+.landing-page ::selection {
+	background: var(--lime);
+	color: var(--black);
+}
+
+.landing-page [id] {
+	scroll-margin-top: 6rem;
+}
+
+.landing-page :is(a, button, summary):focus-visible {
+	outline: 3px solid currentColor;
+	outline-offset: 5px;
+}
+
+.landing-page summary::-webkit-details-marker {
+	display: none;
+}
+
+.landing-page :is(a, button) {
+	transition:
+		color 150ms,
+		background-color 150ms,
+		box-shadow 150ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
+	.landing-page :is(a, button) {
+		transition: none;
+		translate: none;
+		transform: none;
+	}
+
 	.loading-tab {
 		animation: none;
 	}

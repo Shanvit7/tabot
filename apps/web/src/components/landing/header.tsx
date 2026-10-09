@@ -1,50 +1,64 @@
-import SiGithub from "@icons-pack/react-simple-icons/icons/SiGithub";
+import { ArrowUpRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 
-const links = [
-	{ href: "#how-it-works", label: "How it works" },
-	{ href: "#privacy-first", label: "Privacy-first" },
-] as const;
-
-export const Header = () => (
-	<header className="sticky top-0 z-50 border-b-2 border-black bg-lime shadow-hard-sm">
+export const Header = ({
+	extensionInstalled,
+	isMobileDevice,
+}: {
+	extensionInstalled: boolean | null;
+	isMobileDevice: boolean;
+}) => (
+	<header className="sticky top-0 z-40 border-b-2 border-black bg-lime px-5 sm:px-10 lg:px-14">
 		<nav
 			aria-label="Main navigation"
-			className="flex items-center justify-between gap-5 px-6 py-3"
+			className="mx-auto flex max-w-6xl items-center justify-between gap-4 py-3"
 		>
 			<a
-				className="text-lg font-bold tracking-tight"
 				href={import.meta.env.BASE_URL}
+				aria-label="Tabot home"
+				className="flex min-h-11 items-center gap-2.5 text-lg font-semibold tracking-tight"
 			>
+				<img
+					src={`${import.meta.env.BASE_URL}logo.png`}
+					alt=""
+					width={32}
+					height={32}
+					className="size-8"
+				/>
 				TABOT
 			</a>
-			<div className="hidden items-center gap-7 pl-16 font-mono text-xs font-medium uppercase tracking-wider md:flex lg:pl-40">
-				{links.map((link) => (
-					<a
-						className="underline-offset-4 hover:underline"
-						href={link.href}
-						key={link.href}
-					>
-						{link.label}
-					</a>
-				))}
+			<div className="hidden items-center gap-7 text-sm font-medium md:flex">
+				<a
+					href="#how-it-works"
+					className="inline-flex min-h-11 items-center underline-offset-4 hover:underline"
+				>
+					How it works
+				</a>
+				<a
+					href="#privacy-first"
+					className="inline-flex min-h-11 items-center underline-offset-4 hover:underline"
+				>
+					Privacy
+				</a>
 			</div>
-			<div className="flex items-center gap-3">
-				<Button asChild size="sm" variant="outline">
+			{extensionInstalled !== null && !isMobileDevice && (
+				<Button
+					asChild
+					variant="secondary"
+					className="px-4 text-sm font-semibold normal-case tracking-normal"
+				>
 					<a
-						className="flex items-center gap-1.5"
-						href="https://github.com/Shanvit7/tabot"
-						rel="noopener"
-						target="_blank"
+						href={
+							extensionInstalled
+								? `${import.meta.env.BASE_URL}home`
+								: "#get-started"
+						}
 					>
-						<SiGithub size={14} />
-						Star on GitHub
+						{extensionInstalled ? "Open activity" : "Get Tabot"}{" "}
+						<ArrowUpRight aria-hidden="true" className="size-4" />
 					</a>
 				</Button>
-				<Button asChild size="sm" variant="secondary">
-					<a href="#get-started">Get started</a>
-				</Button>
-			</div>
+			)}
 		</nav>
 	</header>
 );

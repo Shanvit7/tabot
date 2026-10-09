@@ -24,7 +24,18 @@ registerHooks({
 		}
 	},
 });
-const { default: app } = await import("../src/index.ts");
+const [{ default: app }, { consentPage }] = await Promise.all([
+	import("../src/index.ts"),
+	import("../src/consent-page.tsx"),
+]);
+const consentHtml = consentPage({
+	clientName: "<img src=x onerror=alert(1)>",
+	extensionId: "test-extension",
+	transactionId: "test-transaction",
+}).toString();
+assert.match(consentHtml, /&lt;img/);
+assert.doesNotMatch(consentHtml, /<img src=x/);
+assert.match(consentHtml, /runtime\.sendMessage/);
 const from = Date.now() - 60_000;
 const to = from + 50_000;
 const events = [0, 1, 2].map((index) => ({
@@ -252,5 +263,5 @@ const failed = await call({ from, to });
 assert.equal(failed.body.result.isError, true);
 assert.match(failed.body.result.content[0].text, /offline/);
 console.log(
-	"HTTP MCP metrics + patterns passed: discovery, schemas, installation-bound auth, dispatch, evidence and offline results.",
+	"MCP checks passed: JSX consent rendering, escaped client name, metrics, patterns, auth, dispatch, and offline results.",
 );

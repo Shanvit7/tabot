@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 export const useIsMobile = () => {
 	const [isMobile, setIsMobile] = useState(false);
+	const [isMobileDevice, setIsMobileDevice] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
 
 	useEffect(() => {
@@ -12,6 +13,7 @@ export const useIsMobile = () => {
 			) ||
 			(navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 		const update = () => {
+			setIsMobileDevice(mobileDevice);
 			setIsMobile(mediaQuery.matches || mobileDevice);
 			setIsLoading(false);
 		};
@@ -21,5 +23,5 @@ export const useIsMobile = () => {
 		return () => mediaQuery.removeEventListener("change", update);
 	}, []);
 
-	return { isMobile, isLoading };
+	return { isMobile, isMobileDevice, isLoading };
 };

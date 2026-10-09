@@ -21,12 +21,14 @@ import {
 	type GraphNode,
 	graphData,
 	matchesQuery,
+	type SessionSummary,
 } from "~/lib/context-graph-data";
 
 const subscribeToNothing = () => () => {};
 
 export const ContextGraph = ({
 	contexts,
+	sessions,
 	memories,
 	limits,
 	favicons,
@@ -35,6 +37,7 @@ export const ContextGraph = ({
 	query = "",
 }: {
 	contexts: BrowserContext[];
+	sessions: SessionSummary[];
 	memories: Memory[];
 	limits?: GraphLimits;
 	favicons?: Map<string, string>;
@@ -199,6 +202,7 @@ export const ContextGraph = ({
 		node.kind === "context" ? (
 			<ContextDetail
 				node={node}
+				sessions={sessions}
 				memories={memories}
 				contexts={contexts}
 				assistantConnected={assistantConnected}

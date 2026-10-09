@@ -56,10 +56,12 @@ const send = (
 	setTimeout(() => finish(null), timeoutMs);
 };
 
-export const fetchStats = (): Promise<StatsSnapshot | null> =>
+export const fetchStats = (timeoutMs = 800): Promise<StatsSnapshot | null> =>
 	new Promise((resolve) => {
-		send({ type: "GET_STATS" }, (res) =>
-			resolve((res as StatsSnapshot) || null),
+		send(
+			{ type: "GET_STATS" },
+			(res) => resolve((res as StatsSnapshot) || null),
+			timeoutMs,
 		);
 	});
 

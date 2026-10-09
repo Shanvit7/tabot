@@ -1,4 +1,4 @@
-import type { BrowserContext, Memory } from "@tabot/shared";
+import type { BrowserContext, Memory, Session } from "@tabot/shared";
 
 type NodeBase = { id: string; label: string; kind: string };
 
@@ -130,6 +130,108 @@ export const contextTitle = (context: BrowserContext): string => {
 		(a, b) => (b.eventCount ?? 0) - (a.eventCount ?? 0),
 	)[0];
 	return prettySite(top.domain);
+};
+
+export type SessionSiteKind = "site" | "browser" | "extension" | "unknown";
+
+export const sessionSiteLabel = (
+	site: SessionSummary["domains"][number],
+): string => {
+	if (site.kind === "extension") return "Extension page";
+	if (site.kind === "browser") return prettySite(`chrome://${site.domain}`);
+	if (site.kind === "unknown") return "Unidentified source";
+	return site.domain.replace(/^www\./, "");
+};
+
+export type SessionSummary = Pick<
+	Session,
+	"id" | "startTimestamp" | "endTimestamp" | "duration" | "eventCount"
+> & {
+	domains: (Pick<
+		Session["domains"][number],
+		"domain" | "eventCount" | "firstSeen" | "lastSeen"
+	> & { kind: SessionSiteKind })[];
+	contexts: { id: string; title: string }[];
+	tabCount: number;
+};
+
+// Project aggregate evidence only; event sequences, page URLs and tab IDs never reach the inspector.
+export const sessionSummaries = (
+	sessions: Session[],
+	contexts: BrowserContext[],
+): SessionSummary[] => {
+	const bySession = new Map<string, SessionSummary["contexts"]>();
+	for (const context of contexts) {
+		for (const id of context.sessionIds) {
+			const links = bySession.get(id) ?? [];
+			links.push({ id: context.id, title: contextTitle(context) });
+			bySession.set(id, links);
+		}
+	}
+	return sessions.map(
+		({
+			id,
+			startTimestamp,
+			endTimestamp,
+			duration,
+			eventCount,
+			domains,
+			eventSequence,
+			tabs,
+		}) => {
+			// Session domains discard schemes. Recover source kinds here, never by guessing
+			// extension IDs in the UI; only the aggregate kind leaves this projection.
+			const kinds = new Map<string, SessionSiteKind>();
+			for (const event of eventSequence ?? []) {
+				if (!event.url) continue;
+				try {
+					const url = new URL(event.url);
+					const kind =
+						url.protocol === "chrome-extension:"
+							? "extension"
+							: url.protocol === "chrome:"
+								? "browser"
+								: /^https?:$/.test(url.protocol)
+									? "site"
+									: "unknown";
+					const previous = kinds.get(url.hostname);
+					kinds.set(
+						url.hostname,
+						previous && previous !== kind ? "unknown" : kind,
+					);
+				} catch {
+					// Malformed URLs already aggregate as unknown in session derivation.
+				}
+			}
+			return {
+				id,
+				startTimestamp,
+				endTimestamp,
+				duration,
+				eventCount,
+				domains: domains
+					.map<SessionSummary["domains"][number]>(
+						({ domain, eventCount, firstSeen, lastSeen }) => ({
+							domain,
+							eventCount,
+							firstSeen,
+							lastSeen,
+							kind:
+								kinds.get(domain) ??
+								(domain.includes(".") || domain === "localhost"
+									? "site"
+									: "unknown"),
+						}),
+					)
+					.toSorted(
+						(a, b) =>
+							a.firstSeen - b.firstSeen || a.domain.localeCompare(b.domain),
+					),
+				contexts: bySession.get(id) ?? [],
+				tabCount: tabs?.length ?? 0,
+			};
+		},
+	);
 };
 
 // A pattern is named after the places it tends to happen in.

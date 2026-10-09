@@ -513,7 +513,8 @@ try {
 		{ buildActivityFlow, connectedTo },
 		{ PlaceCard },
 		{ AskChatGpt },
-		{ Connectors, focusConnectorsHeading },
+		{ Connectors },
+		{ focusConnectorsHeading },
 		{
 			buildActivityMetrics,
 			activityMetricsResponse,
@@ -525,6 +526,7 @@ try {
 		server.ssrLoadModule("/src/lib/place-card.tsx"),
 		server.ssrLoadModule("/src/components/context-graph/assistant-cta.tsx"),
 		server.ssrLoadModule("/src/components/connectors.tsx"),
+		server.ssrLoadModule("/src/components/connector-utils.ts"),
 		server.ssrLoadModule(
 			`/@fs${fileURLToPath(new URL("../../../../packages/shared/src/index.ts", import.meta.url))}`,
 		),

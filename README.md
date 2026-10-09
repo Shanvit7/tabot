@@ -8,63 +8,38 @@
   </p>
 </p>
 
-> Thinking across tabs
+> Your browsing day, made visible.
 
-Tabot is a privacy-first work-memory layer for people who do their work in a browser — founders, operators, researchers, marketers, designers, support teams, and developers. It turns local browser activity into structured, portable context you own, so you, an AI assistant, or any future tool can pick work up without rebuilding it from scratch.
+Tabot is a Chrome extension and dashboard that turns your browsing activity into a visual map you can explore. See which sites you visited, how your browsing moved between them, and what patterns keep showing up.
 
-**Open source · Privacy-first · MIT**
+**Open source · Private by design · MIT**
 
 ---
 
-## Why
+## Your activity, easier to follow
 
-Digital work happens across tabs. A researcher follows sources. An operator moves from inbox to document to dashboard. Browser history can answer:
+A workday can move from email to a document, a search, and a dozen other sites. Browser history gives you a list; Tabot lays those visits out so you can follow your day.
 
-> What pages did I visit?
-
-It cannot reliably answer:
-
-> What work was this part of, and where did I leave off?
-
-Tabot uses sequence and relationships between browser activity to preserve evidence of that work. It does not claim to read your mind or decide what your work meant. It gives you — or an AI you choose — enough context to pick it up later.
+Explore a visual map of the sites you visited and the paths between them. Look back over time and notice which sites or routes keep reappearing. Tabot shows recorded activity—not what you were thinking, what a visit meant, or whether the work was productive.
 
 ## How it works
 
-```text
-Browser events
-     ↓
-Sessions
-     ↓
-Activity anchors
-     ↓
-Temporal graph
-     ↓
-Activity episodes
-     ↓
-Contexts
-     ↓
-Behavioral memories
-```
+1. **Browse in Chrome.** The extension records visited sites and browser activity signals on your device.
+2. **Explore your activity.** Open the dashboard to see your browsing as a map and timeline, then follow site connections and recurring patterns.
 
-The graph is evidence for relationships between activity. Chronological order remains the constraint for activity segmentation, and the derived layers are rebuildable from the underlying telemetry.
+## Privacy and your data
 
-## Bring your own AI
+Your browsing record stays on your device for local review. Tabot does not need an account or cloud history sync. When you ask ChatGPT about your activity, its Tabot plugin can request selected results from your extension, such as browsing-context details or site and activity counts. Tabot's online MCP connection service passes requests and results between ChatGPT and the extension; it does not save browsing history or tool results in its application storage. ChatGPT receives the requested results and handles them under OpenAI's data policies.
 
-Tabot does not own the intelligence layer. It is context infrastructure for anyone whose work happens in a browser. Connect the optional ChatGPT MCP integration to query locally-derived context, use exported data with other tools, or use no AI at all. The current live integration supports ChatGPT; other providers can use exports.
+Tabot does not record page contents, typed text, passwords, or form values. Even site names and timestamps can be sensitive, so treat any activity data you share or export as personal.
 
-**your data → your context → your choice of AI**
+## ChatGPT integration
 
-## Privacy-first
+When connected, ChatGPT's Tabot plugin can request selected, sanitized results from the extension—for example, browsing contexts, recurring-pattern details, or activity metrics. The extension reads and prepares each result locally; raw event history is not sent to the online MCP connection service. You can explore your activity in the dashboard without this connection.
 
-The core telemetry and derivation run locally. There is no Tabot cloud required for the core pipeline, and you control when data is exported. Before an export is downloaded or shared, local PII redaction runs on supported text fields to help prevent accidental personal-information leaks. If you connect ChatGPT, Tabot's relay holds connection/authentication state and forwards **sanitized, derived context** from your live extension when ChatGPT calls a tool; raw event history is not uploaded to the relay. That context leaves your device and is shared with ChatGPT.
+## Keep a copy
 
-Browser telemetry is sensitive. Even without page contents, URLs, domains, timestamps, and activity patterns can reveal a lot about someone. Treat exports as personal data.
-
-## Export
-
-The canonical export is **JSONL with a manifest**. The manifest describes the export and its schema/derivation versions; the remaining lines contain the canonical event and derived records, preserving provenance through IDs.
-
-The export is intended to be human inspectable, scriptable, reproducible, portable, and usable by AI agents. The exact schema is documented in the repository's export specification and may evolve while Tabot is in active development.
+You can download a JSONL copy for your own review or audit. It includes a manifest and records with their IDs and provenance. Export is a secondary way to keep or inspect your data; the dashboard is where you explore your activity.
 
 ## What Tabot can and cannot know
 
@@ -86,11 +61,7 @@ It cannot reliably know:
 
 Those are inferences for downstream analysis, not facts recorded by Tabot.
 
-## Privacy
-
-Tabot is intended to work from browser activity signals rather than indiscriminately capturing page contents, passwords, or typed text. The exact telemetry available depends on the browser APIs used by the extension. Because telemetry can still be sensitive, privacy is treated as a product constraint rather than an afterthought.
-
-## Get started
+## Run the project
 
 Typical development commands:
 
@@ -101,7 +72,7 @@ pnpm --filter mcp-server typecheck
 pnpm --filter shared check:retrieval
 ```
 
-For the ChatGPT developer connection, use the **full** MCP URL `https://tabot-mcp-dev.shanvit7.workers.dev/mcp` with the unpacked dev extension in the same Chrome profile. See [MCP relay setup and troubleshooting](apps/mcp-server/README.md). Production uses a separate Worker and extension credentials. Check the repository's package scripts for other build and extension-development commands.
+To develop or test the ChatGPT connection, follow [MCP relay setup and troubleshooting](apps/mcp-server/README.md). The connection requires the extension and ChatGPT to use the same Chrome profile. Check package scripts for other build and extension-development commands.
 
 ## Roadmap
 
@@ -111,7 +82,7 @@ The near-term focus is deliberately narrow:
 - improve the usefulness of derived context;
 - evaluate AI inference against real examples;
 - explore additional browser lifecycle signals where they solve a demonstrated limitation;
-- make the export increasingly useful to external AI agents and local models.
+- make activity easier to explore and understand.
 
 ## Contributing
 

@@ -1,90 +1,117 @@
-import { Player } from "@remotion/player";
-import { motion, useReducedMotion } from "framer-motion";
-import { BrowserContextFilm } from "~/components/landing/browser-context-film";
+import { ArrowRight, Check, Share2 } from "lucide-react";
+import { useState } from "react";
+import { AnimationPreview } from "~/components/landing/animation-preview";
 import { Button } from "~/components/ui/button";
 
-// Above-the-fold reveal runs as a CSS animation, not framer-motion. A JS-driven
-// `initial` state resets the prerendered text to opacity 0 on hydration, which
-// pushed LCP out by the hydration time + animation. CSS starts at first paint,
-// so the hero paints immediately and the reveal is free. Classes stay as whole
-// literals (no template-built names) so Tailwind actually emits them.
-const REVEAL =
-	"animate-in fade-in slide-in-from-bottom-4 fill-mode-both duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none";
-// The h1 is the LCP element: slide it without the opacity fade so it paints at
-// full opacity on the first frame instead of when a fade completes.
-const REVEAL_LCP =
-	"animate-in slide-in-from-bottom-4 fill-mode-both duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none";
+export const Hero = ({
+	extensionInstalled,
+	isMobileDevice,
+}: {
+	extensionInstalled: boolean | null;
+	isMobileDevice: boolean;
+}) => {
+	const [shareMessage, setShareMessage] = useState("");
 
-export const Hero = () => {
-	const reduceMotion = useReducedMotion();
+	const shareDesktopLink = async () => {
+		setShareMessage("");
+		const landingUrl = new URL(
+			import.meta.env.BASE_URL,
+			window.location.origin,
+		);
+
+		if (navigator.share) {
+			try {
+				await navigator.share({
+					title: "Tabot — Your browsing, in one place",
+					text: "Open Tabot in desktop Chrome to install and explore your activity map.",
+					url: landingUrl.href,
+				});
+				setShareMessage(
+					"Link shared. Open it in desktop Chrome to install Tabot.",
+				);
+				return;
+			} catch (error) {
+				if (error instanceof DOMException && error.name === "AbortError")
+					return;
+			}
+		}
+
+		try {
+			await navigator.clipboard.writeText(landingUrl.href);
+			setShareMessage(
+				"Link copied. Open it in desktop Chrome to install Tabot.",
+			);
+		} catch {
+			setShareMessage(
+				"Couldn’t share or copy. Bookmark this page and open it in desktop Chrome.",
+			);
+		}
+	};
 
 	return (
-		<section className="relative overflow-hidden bg-[#f5f6f0] px-6 pb-14 pt-18 text-[#12221d] sm:px-10 sm:pb-20 sm:pt-24 lg:px-14 lg:pt-28">
-			<div className="absolute inset-x-0 top-0 h-px bg-[#d9ddd0]" />
-			<div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[minmax(0,0.94fr)_minmax(460px,1.06fr)] lg:gap-16">
-				<div className="max-w-2xl">
-					<h1
-						className={`max-w-xl text-[clamp(2.75rem,5vw,5.5rem)] font-semibold leading-[0.92] tracking-[-0.03em] text-[#12221d] text-balance ${REVEAL_LCP}`}
-					>
-						Your browser history was never built for work
+		<section className="border-b-2 border-black bg-landing-paper px-5 py-12 sm:px-10 sm:py-16 lg:px-14">
+			<div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-20">
+				<div className="min-w-0">
+					<h1 className="max-w-xl text-[clamp(2rem,4vw,3.25rem)] font-semibold leading-[1.12] tracking-[-0.025em]">
+						Where did your
+						<br />
+						browsing take you?
 					</h1>
-					<p
-						className={`mt-7 max-w-lg text-lg leading-8 text-[#4a5a52] sm:text-xl delay-100 ${REVEAL}`}
-					>
-						Tabot turns browser activity into private, portable context — so
-						you, your AI, and every tool you use can pick work up without
-						starting over.
+					<p className="mt-5 max-w-lg text-base leading-7 text-landing-muted">
+						Tabot records the sites you visit and shows how you move between
+						them. Look back at your day in one activity map.
 					</p>
-					<div
-						className={`mt-10 flex flex-wrap items-center gap-x-6 gap-y-4 delay-200 ${REVEAL}`}
-					>
-						<Button asChild size="lg">
-							<a href="#get-started">Get started</a>
-						</Button>
-						<a
-							className="font-mono text-xs font-bold uppercase tracking-wider underline-offset-4 hover:underline"
-							href="#how-it-works"
-						>
-							Learn How it works
-						</a>
-					</div>
-					<div
-						className={`mt-11 flex flex-wrap gap-x-6 gap-y-3 border-t border-[#d9ddd0] pt-5 text-sm font-medium text-[#52635a] delay-300 ${REVEAL}`}
-					>
-						<span>Runs locally</span>
-						<span>Open source</span>
-						<span>Your data stays yours</span>
-						<span>Built for browser work</span>
-					</div>
+					{isMobileDevice ? (
+						<div className="mt-6 max-w-lg border-t-2 border-black pt-4">
+							<p className="font-semibold">Pick this up on your computer.</p>
+							<p className="mt-1 text-sm leading-6 text-landing-muted">
+								Tabot runs in desktop Chrome. Send this page to yourself, then
+								open it there to install and explore your activity map.
+							</p>
+							<Button
+								className="mt-4 text-sm font-semibold normal-case tracking-normal"
+								type="button"
+								variant="secondary"
+								onClick={() => void shareDesktopLink()}
+							>
+								{shareMessage ? (
+									<Check aria-hidden="true" className="size-4" />
+								) : (
+									<Share2 aria-hidden="true" className="size-4" />
+								)}
+								Send link to my computer
+							</Button>
+							<p role="status" className="mt-2 text-sm text-landing-muted">
+								{shareMessage}
+							</p>
+						</div>
+					) : (
+						<div className="mt-6 flex flex-wrap items-center gap-4">
+							<Button
+								asChild
+								className="text-sm font-semibold normal-case tracking-normal"
+							>
+								<a
+									href={
+										extensionInstalled === true
+											? `${import.meta.env.BASE_URL}home`
+											: extensionInstalled === false
+												? "#get-started"
+												: "#how-it-works"
+									}
+								>
+									{extensionInstalled === true
+										? "Open today's activity"
+										: extensionInstalled === false
+											? "Get Tabot for Chrome"
+											: "See how Tabot works"}{" "}
+									<ArrowRight aria-hidden="true" className="size-5" />
+								</a>
+							</Button>
+						</div>
+					)}
 				</div>
-
-				<motion.div
-					animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-					className="relative"
-					initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 24 }}
-					transition={{ delay: 0.18, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-				>
-					<div className="overflow-hidden rounded-[20px] bg-[#0c151f] shadow-[0_24px_55px_rgba(18,34,29,0.2)] ring-1 ring-[#2b3c47]">
-						<Player
-							acknowledgeRemotionLicense
-							aria-label="Tabot preserving work context from browser activity"
-							autoPlay={!reduceMotion}
-							component={BrowserContextFilm}
-							compositionHeight={620}
-							compositionWidth={960}
-							controls={false}
-							durationInFrames={180}
-							fps={30}
-							loop
-							className="block"
-							// ponytail: Player reads width from the style prop (calculatePlayerSize), className is ignored — keep width here, do not Tailwind-ify
-							style={{ width: "100%" }}
-						/>
-					</div>
-					<p className="mt-4 text-center text-xs font-medium text-[#64736a]">
-						Your work context, preserved locally — for you or your AI.
-					</p>
-				</motion.div>
+				<AnimationPreview />
 			</div>
 		</section>
 	);

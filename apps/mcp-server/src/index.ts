@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { DEFAULT_SCOPES, type TabotAuth } from "./auth-store";
+import { consentPage } from "./consent-page";
 import { signInstallationToken, verifyInstallationToken } from "./lib/auth";
 import { AUTH_CODE_TTL_MS, NAME, VERSION } from "./lib/constants";
 import {
@@ -71,7 +72,7 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 	server.registerTool(
 		TOOL_NAMES.SEARCH_CONTEXT,
 		{
-			title: "Search Tabot browser context",
+			title: "Search Tabot activity",
 			description: TOOL_DESCRIPTIONS.SEARCH_CONTEXT,
 			annotations: READ_ONLY_ANNOTATIONS,
 			inputSchema: searchContextInputSchema,
@@ -82,7 +83,7 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 	server.registerTool(
 		TOOL_NAMES.GET_RECENT_CONTEXT,
 		{
-			title: "Recent Tabot browser context",
+			title: "Recent Tabot activity summaries",
 			description: TOOL_DESCRIPTIONS.GET_RECENT_CONTEXT,
 			annotations: READ_ONLY_ANNOTATIONS,
 			inputSchema: getRecentContextInputSchema,
@@ -93,7 +94,7 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 	server.registerTool(
 		TOOL_NAMES.GET_CURRENT_CONTEXT,
 		{
-			title: "Current Tabot browser context",
+			title: "Current Tabot activity summary",
 			description: TOOL_DESCRIPTIONS.GET_CURRENT_CONTEXT,
 			annotations: READ_ONLY_ANNOTATIONS,
 			inputSchema: getCurrentContextInputSchema,
@@ -104,7 +105,7 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 	server.registerTool(
 		TOOL_NAMES.GET_CONTEXT,
 		{
-			title: "Specific Tabot browser context",
+			title: "Specific Tabot activity summary",
 			description: TOOL_DESCRIPTIONS.GET_CONTEXT,
 			annotations: READ_ONLY_ANNOTATIONS,
 			inputSchema: getContextInputSchema,
@@ -212,13 +213,6 @@ const oauthError = (
 	status = 400,
 ): Response =>
 	Response.json({ error, error_description: description }, { status });
-
-const escapeHtml = (value: string): string =>
-	value
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;");
 
 /** Redirect URIs must be HTTPS, or loopback HTTP for local development. */
 const isAllowedRedirectUri = (uri: string): boolean => {
@@ -370,56 +364,6 @@ const validateAuthorizeRequest = async (
 };
 
 // --- Authorization endpoint + extension-bridge consent page -----------------
-const consentPage = ({
-	clientName,
-	extensionId,
-	transactionId,
-}: {
-	clientName: string;
-	extensionId: string;
-	transactionId: string;
-}): string => `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Connect Tabot</title></head>
-<body data-extension-id="${escapeHtml(extensionId)}" data-transaction-id="${escapeHtml(transactionId)}" style="font-family:system-ui,sans-serif;max-width:26rem;margin:4rem auto;padding:0 1rem;color:#111">
-<h1 style="font-size:1.25rem">Connect Tabot to ${escapeHtml(clientName)}</h1>
-<p style="color:#444">Connects this Chrome profile’s Tabot extension to ${escapeHtml(clientName)}. Tabot keeps browser context on this device.</p>
-<p id="status" role="status" style="color:#444">Ready to connect Tabot in this browser.</p>
-<form id="authorize" method="post" action="/authorize">
-<input type="hidden" name="transaction" value="${escapeHtml(transactionId)}">
-<button id="connect" type="button" style="margin-top:1rem;width:100%;padding:.7rem;font-size:1rem;background:#111;color:#fff;border:0;border-radius:.4rem;cursor:pointer">Connect Tabot</button>
-</form>
-<script>
-const body = document.body;
-const button = document.getElementById("connect");
-const status = document.getElementById("status");
-const form = document.getElementById("authorize");
-const fail = (message) => {
-  button.disabled = false;
-  status.textContent = message;
-  status.style.color = "#b00020";
-};
-button.addEventListener("click", () => {
-  const runtime = globalThis.chrome && globalThis.chrome.runtime;
-  if (!runtime || !runtime.sendMessage) {
-    fail("Tabot is not available in this Chrome profile. Install or enable Tabot, then try again.");
-    return;
-  }
-  button.disabled = true;
-  status.textContent = "Connecting Tabot…";
-  runtime.sendMessage(body.dataset.extensionId, {
-    type: "TABOT_APPROVE_AUTHORIZATION",
-    transactionId: body.dataset.transactionId,
-  }, (response) => {
-    if (runtime.lastError || !response || response.ok !== true) {
-      fail("Tabot could not connect in this Chrome profile. Enable Tabot, then try again.");
-      return;
-    }
-    form.requestSubmit();
-  });
-});
-</script></body></html>`;
-
 app.get("/authorize", async (c) => {
 	const params = new URL(c.req.url).searchParams;
 	const result = await validateAuthorizeRequest(c.env, params);

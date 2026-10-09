@@ -138,6 +138,7 @@ export {
 	getPreviousContext,
 	getRecentActivity,
 	isAiReadyContext,
+	isAiReadyEvidence,
 	isDomainNovel,
 	isSignatureRecurrent,
 	jaccardIndex,
