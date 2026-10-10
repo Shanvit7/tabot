@@ -1,4 +1,4 @@
-# Tabot
+# <img src="assets/logo.png" alt="" width="36" /> Tabot
 
 **Thinking across tabs.**
 
