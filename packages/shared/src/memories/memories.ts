@@ -617,7 +617,7 @@ const buildObservation = (
 
 export const getMemories = async (
 	db: TabotDatabase,
-	limit = MEMORY_THRESHOLDS.MEMORY_MAX_MEMORIES,
+	limit: number = MEMORY_THRESHOLDS.MEMORY_MAX_MEMORIES,
 ): Promise<Memory[]> => {
 	const contexts = await getRecentContexts(db, 500); // bounded read
 	const memories = buildMemories(contexts);

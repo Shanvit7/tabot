@@ -9,6 +9,7 @@ export interface StoredTabEvent {
 	windowId: number;
 	timestamp: number;
 	url?: string;
+	favicon?: string;
 	metadata?: TabEventMetadata;
 }
 
@@ -24,6 +25,7 @@ export const storedTabEventSchema = {
 		windowId: { type: "number" },
 		timestamp: { type: "number", minimum: 0 },
 		url: { type: "string", maxLength: 2048 },
+		favicon: { type: "string", maxLength: 2048 },
 		metadata: {
 			type: "object",
 			properties: {
@@ -103,6 +105,14 @@ export const countEvents = async (db: TabotDatabase): Promise<number> => {
 		throw err;
 	}
 };
+
+/** Indexed local range read; end is exclusive, matching activity metrics. */
+export const getEventsBetween = async (
+	db: TabotDatabase,
+	from: number,
+	to: number,
+): Promise<StoredTabEvent[]> =>
+	db.events.where("timestamp").between(from, to, true, false).toArray();
 
 export const getAllEvents = async (
 	db: TabotDatabase,

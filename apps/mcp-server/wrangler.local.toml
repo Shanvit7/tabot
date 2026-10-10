@@ -1,0 +1,30 @@
+name = "tabot-mcp-local"
+main = "src/index.ts"
+compatibility_date = "2026-09-20"
+
+[vars]
+MCP_PUBLIC_URL = "http://localhost:8787/mcp"
+
+[durable_objects]
+bindings = [
+	{ name = "TABOT_INSTALLATION", class_name = "TabotInstallation" },
+	{ name = "TABOT_AUTH", class_name = "TabotAuth" },
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TabotInstallation"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TabotAuth"]
+
+[[ratelimits]]
+name = "TABOT_PUBLIC_RATE_LIMITER"
+namespace_id = "1003001"
+simple = { limit = 20, period = 60 }
+
+[[ratelimits]]
+name = "TABOT_API_RATE_LIMITER"
+namespace_id = "1003002"
+simple = { limit = 120, period = 60 }

@@ -1,8 +1,8 @@
 # Agents — Coding Conventions
 
-This file documents the conventions and domain context for **Tabot** — a Chrome extension + web dashboard for collecting and processing browser activity events at high volume.
+This file documents the conventions and domain context for **Tabot** — a Chrome extension, web dashboard, and optional ChatGPT MCP relay for browser context.
 
-**The product is an engineering prototype.** V1 proves the event pipeline works: Chrome Extension → SharedArrayBuffer + Atomics → Web Worker → Dexie (IndexedDB) → TanStack Start dashboard. No AI, no auth, no cloud backend.
+**The product is an engineering prototype.** Raw events remain local: Chrome Extension → SharedArrayBuffer + Atomics → Dexie (IndexedDB) → TanStack Start dashboard. The optional v0.2 relay authenticates ChatGPT and routes requests to the live extension; it stores connection/OAuth state, not browser history. See `apps/mcp-server/README.md`.
 
 ---
 
@@ -14,10 +14,11 @@ This file documents the conventions and domain context for **Tabot** — a Chrom
 
 ## 🏗️ Project Overview
 
-This is a **pnpm monorepo** with two apps and a shared package:
+This is a **pnpm monorepo** with three apps and a shared package:
 
 - `apps/extension/` — Plasmo Chrome extension (captures browser events)
 - `apps/web/` — TanStack Start dashboard (displays aggregated stats)
+- `apps/mcp-server/` — Cloudflare MCP/OAuth relay for optional ChatGPT connection
 - `packages/shared/` — Shared types and utilities
 
 ### Architecture
@@ -28,12 +29,14 @@ Chrome Extension (Plasmo)
   → SharedArrayBuffer + Atomics (ring buffer)
   → Web Worker (aggregation + batching)
   → Dexie (IndexedDB) (local persistence)
-  → TanStack Start dashboard (visualization)
+  ├→ TanStack Start dashboard (visualization)
+  └→ optional extension WebSocket ↔ MCP relay ↔ ChatGPT (sanitized derived context only)
 ```
 
 ### Key Files
 
-- `docs/setup.md` — Full architecture docs, event model, V1 spec
+- `docs/tech.md` and `docs/system.md` — Local pipeline architecture
+- `apps/mcp-server/README.md` — MCP relay setup and ChatGPT connection
 - `apps/web/src/routes/` — Dashboard pages
 - `apps/web/src/components/ui/` — BoldKit UI components
 - `apps/web/src/styles/globals.css` — Theme + BoldKit utilities
@@ -118,5 +121,5 @@ Chrome Extension (Plasmo)
 - ❌ No deep relative imports like `../../types` (use `~/types` instead)
 - ❌ No double equals (`==`)
 - ❌ No raw event objects in UI components — only aggregated stats
-- ❌ No cloud storage or backend APIs in V1 — everything stays local
+- ❌ No raw browser-history uploads to the MCP relay — only sanitized derived context leaves the device on authorized tool calls
 - ❌ No inline `style` props for static styling — use Tailwind `className` (dynamic runtime values are the only exception)

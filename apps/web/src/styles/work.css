@@ -1,0 +1,227 @@
+/* Operational surfaces only. Public landing retains its existing design. */
+.work-shell {
+	--work-canvas: #fff;
+	--work-surface: #f5f8f4;
+	--work-raised: #e9eee8;
+	--work-ink: #15251b;
+	--work-muted: #476151;
+	--work-line: #d2ddd2;
+	--work-accent: #bfff00;
+	min-height: 100vh;
+	background: var(--work-canvas);
+	color: var(--work-ink);
+}
+.work-shell ::selection {
+	background: var(--work-accent);
+	color: var(--work-ink);
+}
+.work-shell :is(a, button, input, summary):focus-visible {
+	outline: 2px solid var(--work-ink);
+	outline-offset: 3px;
+	box-shadow: 0 0 0 5px var(--work-accent);
+}
+.work-shell a {
+	text-underline-offset: 3px;
+}
+/* The search field is one control: the pill turning lime is the focus ring,
+   so the inner input and clear button must not draw their own. */
+.work-shell .work-search-field :is(input, button):focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+.work-shell .ts-chart-host:focus-visible {
+	outline: 2px solid var(--work-accent);
+	outline-offset: -2px;
+}
+.work-shell .work-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 44px;
+	padding: 10px 16px;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 600;
+	background: var(--work-ink);
+	color: #fff;
+	transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.work-shell .work-button:hover {
+	background: #304939;
+}
+.work-shell .work-button:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+.work-shell .work-button--quiet {
+	background: var(--work-surface);
+	color: var(--work-ink);
+}
+.work-shell .work-button--quiet:hover {
+	background: var(--work-raised);
+}
+.work-shell .work-rule {
+	border-color: var(--work-line);
+}
+.work-shell .work-meta {
+	color: var(--work-muted);
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 12px;
+	line-height: 1.5;
+}
+.work-shell .work-field {
+	min-height: 44px;
+	border: 1px solid var(--work-muted);
+	border-radius: 4px;
+	padding: 8px 12px;
+	background: #fff;
+	color: var(--work-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+	.work-shell .work-button {
+		transition: none;
+	}
+}
+/* A tiny browsing card hops between checkpoints, never implying real progress. */
+.graph-loader-marker {
+	transform: translate(32px, 112px);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.graph-loader-marker {
+		animation: graph-loader-hop 4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+	}
+	.graph-loader-checkpoint {
+		animation: graph-loader-collect 4s linear infinite;
+	}
+	.graph-loader-checkpoint:nth-child(2) {
+		animation-delay: 0.8s;
+	}
+	.graph-loader-checkpoint:nth-child(3) {
+		animation-delay: 1.6s;
+	}
+	.graph-loader-checkpoint:nth-child(4) {
+		animation-delay: 2.4s;
+	}
+	.graph-loader-checkpoint:nth-child(5) {
+		animation-delay: 3.2s;
+	}
+	.graph-loader[data-animate="false"]
+		:is(.graph-loader-marker, .graph-loader-checkpoint) {
+		animation-play-state: paused;
+	}
+}
+@keyframes graph-loader-hop {
+	0%,
+	96%,
+	100% {
+		transform: translate(32px, 112px);
+	}
+	16%,
+	20% {
+		transform: translate(92px, 48px);
+	}
+	36%,
+	40% {
+		transform: translate(164px, 104px);
+	}
+	56%,
+	60% {
+		transform: translate(236px, 48px);
+	}
+	76%,
+	80% {
+		transform: translate(284px, 112px);
+	}
+}
+@keyframes graph-loader-collect {
+	0%,
+	12% {
+		fill: #bfff00;
+		stroke: #bfff00;
+	}
+	22%,
+	100% {
+		fill: #101d15;
+		stroke: #6f9c81;
+	}
+}
+@media (forced-colors: active) {
+	.work-shell .ts-chart-host {
+		forced-color-adjust: auto;
+	}
+}
+
+/* Session recap inherits the selected-context panel's green/lime world. */
+.session-recap {
+	--session-bg: #101c16;
+	--session-raised: #1e3427;
+	--session-ink: #e8f3e8;
+	--session-muted: #a9c6b1;
+	--session-line: #34503e;
+	--session-accent: #bfff00;
+	color: var(--session-ink);
+	font-family: "IBM Plex Sans", sans-serif;
+	color-scheme: dark;
+	scrollbar-color: var(--session-muted) var(--session-bg);
+}
+.session-recap ::selection {
+	background: var(--session-accent);
+	color: var(--session-bg);
+}
+.session-recap :is(button, a, summary):focus-visible {
+	outline: 2px solid var(--session-accent);
+	outline-offset: 3px;
+	box-shadow: none;
+}
+.session-dialog {
+	width: 100%;
+	max-width: none;
+	height: 100dvh;
+	max-height: 100dvh;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: var(--session-bg);
+}
+html:has(.session-dialog[open]) {
+	overflow: hidden;
+}
+.session-dialog[open] {
+	display: flex;
+	flex-direction: column;
+}
+.session-dialog::backdrop {
+	background: rgb(4 12 8 / 76%);
+}
+.session-dialog > div {
+	scroll-padding-block: 16px;
+}
+.session-dialog > header {
+	padding-top: max(20px, env(safe-area-inset-top));
+}
+.session-dialog > footer {
+	padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+	.session-dialog {
+		width: min(840px, calc(100vw - 64px));
+		height: auto;
+		max-height: min(860px, calc(100dvh - 64px));
+		margin: auto;
+		border-radius: 16px;
+		box-shadow: 0 24px 80px rgb(0 0 0 / 40%);
+	}
+}
+@media (prefers-reduced-motion: no-preference) {
+	.session-dialog[open] {
+		animation: session-recap-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+}
+@keyframes session-recap-enter {
+	from {
+		transform: translateY(12px);
+	}
+	to {
+		transform: translateY(0);
+	}
+}

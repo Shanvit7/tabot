@@ -1,0 +1,17 @@
+{
+	"include": ["src/**/*.ts", "src/**/*.tsx"],
+	"compilerOptions": {
+		"strict": true,
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"lib": ["ES2024"],
+		"types": ["@cloudflare/workers-types"],
+		"target": "ES2024",
+		"jsx": "react-jsx",
+		"jsxImportSource": "hono/jsx",
+		"isolatedModules": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"noEmit": true
+	}
+}

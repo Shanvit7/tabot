@@ -146,35 +146,22 @@ export const EXPORT_THRESHOLDS = {
 	},
 } as const;
 
-// --- Export range filter (overlap semantics) ---
-// from/to are inclusive epoch-ms bounds; undefined = unbounded.
-const overlaps = (
-	start: number,
-	end: number,
-	from?: number,
-	to?: number,
-): boolean =>
-	(from === undefined || end >= from) && (to === undefined || start <= to);
-
+// --- Export range filter ---
+// Inclusive epoch-ms bounds; rebuild every layer from selected events so nested
+// evidence, patterns and live context cannot retain activity outside the range.
 export const filterDerived = (
 	d: Derived,
 	from?: number,
 	to?: number,
 ): Derived => {
 	if (from === undefined && to === undefined) return d;
-	const events = d.events.filter((e) =>
-		overlaps(e.timestamp, e.timestamp, from, to),
+	return derive(
+		d.events.filter(
+			(event) =>
+				(from === undefined || event.timestamp >= from) &&
+				(to === undefined || event.timestamp <= to),
+		),
 	);
-	const sessions = d.sessions.filter((s) =>
-		overlaps(s.startTimestamp, s.endTimestamp, from, to),
-	);
-	const contexts = d.contexts.filter((c) =>
-		overlaps(c.startTimestamp, c.endTimestamp, from, to),
-	);
-	const memories = d.memories.filter((m) =>
-		overlaps(m.startTimestamp, m.endTimestamp, from, to),
-	);
-	return { events, sessions, contexts, memories, live: d.live };
 };
 
 export const buildExportJsonl = (d: Derived): string => {
@@ -222,9 +209,16 @@ export const buildExportJsonl = (d: Derived): string => {
 			format: "tabot-export",
 			version: 1,
 			exportedAt: new Date().toISOString(),
-			source: "tabot-web@0.1.0",
+			source: "tabot-web@0.2.0",
 			telemetrySchemaVersion: 1,
-			derivationSchemaVersion: 8,
+			derivationSchemaVersion: 9,
+			durationSemantics: {
+				duration: "foreground-ms; excludes hidden, idle and unobserved gaps",
+				wallDuration:
+					"elapsed-ms between first and last evidence; not active time",
+				legacy:
+					"estimated from foreground events; no extrapolation across gaps >= 5 minutes",
+			},
 			graph: {
 				enabled: true,
 				nodeGranularity: "activity-anchor",

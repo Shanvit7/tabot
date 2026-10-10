@@ -8,3 +8,6 @@ allowBuilds:
   lmdb: true
   msgpackr-extract: true
   sharp: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@cloudflare/workers-types@5.20260920.1'

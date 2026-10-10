@@ -1,4 +1,13 @@
 export {
+	type ActivityStats,
+	computeActivityStats,
+	computePlaceStats,
+	dayKeyOf,
+	type PlaceStats,
+	type RefSample,
+	type WeekDay,
+} from "./activities/activity-stats";
+export {
 	type ActivityRef,
 	type ActivityTransition,
 	activityRef,
@@ -6,6 +15,14 @@ export {
 	deriveMeaningfulEvents,
 	deriveTransitions,
 } from "./activities/meaningful-events";
+export {
+	type ActivityMetricsInput,
+	activityMetricsResponse,
+	buildActivityMetrics,
+	type MetricSite,
+	type MetricTransition,
+	parseActivityMetricsInput,
+} from "./activities/metrics";
 export {
 	type BrowserContext,
 	buildContexts,
@@ -42,6 +59,7 @@ export {
 	countEvents,
 	createEventsDb,
 	getAllEvents,
+	getEventsBetween,
 	type StoredTabEvent,
 	storedTabEventSchema,
 } from "./events/db";
@@ -100,6 +118,7 @@ export {
 } from "./recall/live-context";
 export {
 	annotateTimelineCore,
+	type ContextSearchResult,
 	type ContextSummary,
 	contextSignature,
 	type DomainHistoryReport,
@@ -118,13 +137,18 @@ export {
 	getMemoryHistoryForDomain,
 	getPreviousContext,
 	getRecentActivity,
+	isAiReadyContext,
+	isAiReadyEvidence,
 	isDomainNovel,
 	isSignatureRecurrent,
 	jaccardIndex,
+	nextNotifiableContext,
 	type RecurrenceReport,
+	readyContextsInRange,
 	reportRecurrence,
 	type SimilarContextResult,
 	type SimilarMemoryResult,
+	searchContextsCore,
 	summarizeContext,
 	summarizeContextCore,
 	type TimelineEntry,
@@ -150,8 +174,15 @@ export {
 } from "./share/export";
 export {
 	type AiTargetDef,
+	activityMetricsPrompt,
 	CLI_TARGET_DEFS,
 	type CliTargetDef,
+	chatGptContextUrl,
+	chatGptPromptUrl,
+	contextPrompt,
+	memoryPrompt,
+	recurringPatternsPrompt,
+	sitePrompt,
 	WEB_TARGET_DEFS,
 	type WebTargetDef,
 } from "./share/targets";

@@ -11,9 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivitiesRouteImport } from './routes/activities'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as MemoriesRouteImport } from './routes/memories'
+import { Route as ExtensionNotConnectedRouteImport } from './routes/extension-not-connected'
+import { Route as HomeRouteImport } from './routes/home'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as RecurringPatternsRouteImport } from './routes/recurring-patterns'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -25,14 +26,14 @@ const ActivitiesRoute = ActivitiesRouteImport.update({
   path: '/activities',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const ExtensionNotConnectedRoute = ExtensionNotConnectedRouteImport.update({
+  id: '/extension-not-connected',
+  path: '/extension-not-connected',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MemoriesRoute = MemoriesRouteImport.update({
-  id: '/memories',
-  path: '/memories',
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -40,43 +41,71 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecurringPatternsRoute = RecurringPatternsRouteImport.update({
+  id: '/recurring-patterns',
+  path: '/recurring-patterns',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
-  '/dashboard': typeof DashboardRoute
-  '/memories': typeof MemoriesRoute
+  '/extension-not-connected': typeof ExtensionNotConnectedRoute
+  '/home': typeof HomeRoute
   '/privacy': typeof PrivacyRoute
+  '/recurring-patterns': typeof RecurringPatternsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
-  '/dashboard': typeof DashboardRoute
-  '/memories': typeof MemoriesRoute
+  '/extension-not-connected': typeof ExtensionNotConnectedRoute
+  '/home': typeof HomeRoute
   '/privacy': typeof PrivacyRoute
+  '/recurring-patterns': typeof RecurringPatternsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/activities': typeof ActivitiesRoute
-  '/dashboard': typeof DashboardRoute
-  '/memories': typeof MemoriesRoute
+  '/extension-not-connected': typeof ExtensionNotConnectedRoute
+  '/home': typeof HomeRoute
   '/privacy': typeof PrivacyRoute
+  '/recurring-patterns': typeof RecurringPatternsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activities' | '/dashboard' | '/memories' | '/privacy'
+  fullPaths:
+    | '/'
+    | '/activities'
+    | '/extension-not-connected'
+    | '/home'
+    | '/privacy'
+    | '/recurring-patterns'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activities' | '/dashboard' | '/memories' | '/privacy'
-  id: '__root__' | '/' | '/activities' | '/dashboard' | '/memories' | '/privacy'
+  to:
+    | '/'
+    | '/activities'
+    | '/extension-not-connected'
+    | '/home'
+    | '/privacy'
+    | '/recurring-patterns'
+  id:
+    | '__root__'
+    | '/'
+    | '/activities'
+    | '/extension-not-connected'
+    | '/home'
+    | '/privacy'
+    | '/recurring-patterns'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActivitiesRoute: typeof ActivitiesRoute
-  DashboardRoute: typeof DashboardRoute
-  MemoriesRoute: typeof MemoriesRoute
+  ExtensionNotConnectedRoute: typeof ExtensionNotConnectedRoute
+  HomeRoute: typeof HomeRoute
   PrivacyRoute: typeof PrivacyRoute
+  RecurringPatternsRoute: typeof RecurringPatternsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -95,18 +124,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ActivitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
+    '/extension-not-connected': {
+      id: '/extension-not-connected'
+      path: '/extension-not-connected'
+      fullPath: '/extension-not-connected'
+      preLoaderRoute: typeof ExtensionNotConnectedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/memories': {
-      id: '/memories'
-      path: '/memories'
-      fullPath: '/memories'
-      preLoaderRoute: typeof MemoriesRouteImport
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -116,15 +145,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/recurring-patterns': {
+      id: '/recurring-patterns'
+      path: '/recurring-patterns'
+      fullPath: '/recurring-patterns'
+      preLoaderRoute: typeof RecurringPatternsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivitiesRoute: ActivitiesRoute,
-  DashboardRoute: DashboardRoute,
-  MemoriesRoute: MemoriesRoute,
+  ExtensionNotConnectedRoute: ExtensionNotConnectedRoute,
+  HomeRoute: HomeRoute,
   PrivacyRoute: PrivacyRoute,
+  RecurringPatternsRoute: RecurringPatternsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

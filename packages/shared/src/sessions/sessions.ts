@@ -2,7 +2,12 @@
 // Phase 2 Layer 1 — Events → Sessions (docs/tech.md)
 // Pure derivation layer: raw events in, Session[] out. No persistence, no LLM.
 
-import { isDiagnostic } from "../activities/sw-semantics";
+import {
+	type ActiveSpan,
+	activeDuration,
+	activeSpans,
+	foregroundEvents,
+} from "../activities/foreground";
 import type { StoredTabEvent, TabotDatabase } from "../events/db";
 import type { TabEventType } from "../events/events";
 
@@ -26,7 +31,9 @@ export interface Session {
 	id: string;
 	startTimestamp: number;
 	endTimestamp: number;
-	duration: number;
+	duration: number; // foreground time, not elapsed wall time
+	wallDuration?: number;
+	activeSpans?: ActiveSpan[];
 	eventCount: number;
 	tabs: TabParticipation[];
 	domains: DomainParticipation[];
@@ -82,7 +89,8 @@ const openSession = (event: StoredTabEvent): Session => ({
 export const sessionize = (events: StoredTabEvent[]): Session[] => {
 	if (events.length === 0) return [];
 
-	const sorted = [...events].sort((a, b) => a.timestamp - b.timestamp);
+	const sorted = foregroundEvents(events);
+	const spans = activeSpans(events);
 
 	const sessions: Session[] = [];
 	const tabLastEvent = new Map<number, number>();
@@ -95,13 +103,6 @@ export const sessionize = (events: StoredTabEvent[]): Session[] => {
 	let prevEvent: StoredTabEvent | null = null;
 
 	for (const event of sorted) {
-		// Step 7 — a diagnostic SW event (e.g. SW_LIFECYCLE) is engineering-only:
-		// it is invisible to derivation and can't create a session boundary.
-		// Without this guard, suspend/startup events fragment one session into
-		// many (Step 7 evidence: 7 vs 2). Raw events still persist; derivation
-		// simply doesn't treat lifecycle as behavior.
-		if (isDiagnostic(event.type)) continue;
-
 		// Step 10 correction — SW_WINDOW_FOCUS is CONTEXT, never session
 		// authority. A focus transition must not reset the inactivity timer,
 		// prevent a session from ending, open a session, or bridge a gap:
@@ -112,7 +113,7 @@ export const sessionize = (events: StoredTabEvent[]): Session[] => {
 		// telemetry only — navigation, tab activation, visibility, clicks,
 		// key activity, scroll. Focus causality survives as GRAPH edge
 		// evidence (sw-graph.ts applyFocusContinuity), never as a session
-		// decision. Phase 1 and Phase 2 sessions are therefore identical.
+		// decision. Foreground filtering above rejects unfocused activity.
 		if (event.type === "SW_WINDOW_FOCUS") continue;
 
 		let shouldStartNew = current === null;
@@ -139,9 +140,11 @@ export const sessionize = (events: StoredTabEvent[]): Session[] => {
 			// same tab (not an activation of a different tab). Phase 3 (5.1): an
 			// activation — either leaving a long-idle tab or returning to one — is
 			// a tab switch (excursion), not a session boundary. Only a same-tab
-			// non-activation event after 10m of silence on that tab is genuine.
+			// non-presence event after 10m of silence on that tab is genuine.
+			// Foreground samples may precede onActivated when returning to a tab.
 			const sameTabInactive =
 				event.type !== "TAB_ACTIVATED" &&
+				event.type !== "PAGE_VISIBLE" &&
 				tabLastEvent.has(event.tabId) &&
 				event.timestamp - (tabLastEvent.get(event.tabId) as number) >=
 					SESSION_THRESHOLDS.TAB_ABSENCE_THRESHOLD;
@@ -168,6 +171,7 @@ export const sessionize = (events: StoredTabEvent[]): Session[] => {
 					tabParticipation,
 					domainParticipation,
 					windowCounts,
+					spans,
 				),
 			);
 			current = null;
@@ -240,6 +244,7 @@ export const sessionize = (events: StoredTabEvent[]): Session[] => {
 				tabParticipation,
 				domainParticipation,
 				windowCounts,
+				spans,
 			),
 		);
 	}
@@ -252,8 +257,23 @@ const finalizeSession = (
 	tabParticipation: Map<number, TabParticipation>,
 	domainParticipation: Map<string, DomainParticipation>,
 	windowCounts: Map<number, number>,
+	spans: ActiveSpan[],
 ): Session => {
-	session.duration = session.endTimestamp - session.startTimestamp;
+	session.wallDuration = session.endTimestamp - session.startTimestamp;
+	session.activeSpans = spans
+		.filter(
+			(span) =>
+				span.end > session.startTimestamp && span.start < session.endTimestamp,
+		)
+		.map((span) => ({
+			start: Math.max(span.start, session.startTimestamp),
+			end: Math.min(span.end, session.endTimestamp),
+		}));
+	session.duration = activeDuration(
+		session.activeSpans,
+		session.startTimestamp,
+		session.endTimestamp,
+	);
 	session.tabs = Array.from(tabParticipation.values());
 	session.domains = Array.from(domainParticipation.values());
 

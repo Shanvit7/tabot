@@ -18,8 +18,9 @@
 			{
 				"files": [
 					"src/components/landing/privacy-first.tsx",
-					"src/components/ui/dashboard-panels.tsx",
-					"src/lib/dashboard-charts.tsx"
+					"src/components/ui/work-panels.tsx",
+					"src/lib/work-charts.tsx",
+					"src/lib/context-graph-panels.tsx"
 				],
 				"rules": ["react-doctor/no-multi-comp"]
 			},
@@ -32,17 +33,21 @@
 			},
 			{
 				"files": [
-					"src/routes/dashboard.tsx",
+					"src/components/home-page.tsx",
 					"src/components/landing/browser-context-film.tsx"
 				],
 				"rules": ["react-doctor/no-giant-component"]
 			},
 			{
-				"files": [
-					"src/components/ui/button.tsx",
-					"src/lib/dashboard-charts.tsx"
-				],
+				"files": ["src/components/ui/button.tsx", "src/lib/work-charts.tsx"],
 				"rules": ["react-doctor/only-export-components"]
+			},
+			{
+				"files": [
+					"src/components/ui/command.tsx",
+					"src/components/ui/popover.tsx"
+				],
+				"rules": ["react-doctor/no-multi-comp"]
 			}
 		]
 	}

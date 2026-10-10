@@ -3,6 +3,7 @@
 export interface TabMeta {
 	url?: string;
 	title?: string;
+	favicon?: string;
 	lastSeen: number;
 }
 

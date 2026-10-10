@@ -123,13 +123,116 @@ export const findSimilarMemoriesCore = (
 	return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 };
 
+// AI-ready means enough observed evidence to be useful, not inferred intent.
+export const isAiReadyEvidence = (evidence: {
+	duration: number;
+	totalEventCount: number;
+	domainCount: number;
+	sessionCount: number;
+	totalInteractionCount: number;
+}): boolean =>
+	evidence.duration >= 10 * 60_000 &&
+	evidence.totalEventCount >= 10 &&
+	(evidence.domainCount >= 2 ||
+		evidence.sessionCount >= 2 ||
+		evidence.totalInteractionCount >= 5);
+
+// Keep the shared gate for contexts and activity episodes.
+export const isAiReadyContext = (context: BrowserContext): boolean =>
+	isAiReadyEvidence({
+		duration: context.duration,
+		totalEventCount: context.totalEventCount,
+		domainCount: context.domains.length,
+		sessionCount: context.sessionCount,
+		totalInteractionCount: context.totalInteractionCount,
+	});
+
+export const readyContextsInRange = (
+	contexts: BrowserContext[],
+	from?: number,
+	to?: number,
+): BrowserContext[] =>
+	contexts.filter(
+		(c) =>
+			isAiReadyContext(c) &&
+			(from === undefined || c.endTimestamp >= from) &&
+			(to === undefined || c.startTimestamp <= to),
+	);
+
+// Wait past the context merge gap before treating its ID as final. Never
+// notify about old history, still-active threads, or thin contexts.
+export const nextNotifiableContext = (
+	contexts: BrowserContext[],
+	lastEnd: number,
+	now = Date.now(),
+): BrowserContext | undefined =>
+	contexts
+		.filter(
+			(c) =>
+				isAiReadyContext(c) &&
+				c.endTimestamp > lastEnd &&
+				c.endTimestamp <= now - 30 * 60_000 &&
+				c.endTimestamp >= now - 24 * 3_600_000,
+		)
+		.sort((a, b) => b.endTimestamp - a.endTimestamp)[0];
+
+// --- Free-text context search (MCP `search_context`) ---
+// Pure core: score contexts against query tokens by domain/sequence match. No
+// db, no LLM — callers supply a bounded context list (getRecentContexts).
+export interface ContextSearchResult {
+	context: BrowserContext;
+	score: number; // matched terms / total terms [0, 1]
+	matchedTerms: string[];
+}
+
+export const searchContextsCore = (
+	contexts: BrowserContext[],
+	query: string,
+	limit = 8,
+): ContextSearchResult[] => {
+	const terms = query
+		.toLowerCase()
+		.split(/\s+/)
+		.filter((t) => t.length >= 2);
+	if (terms.length === 0) {
+		return [...contexts]
+			.sort((a, b) => b.startTimestamp - a.startTimestamp)
+			.slice(0, limit)
+			.map((context) => ({ context, score: 0, matchedTerms: [] }));
+	}
+	const results: ContextSearchResult[] = [];
+	for (const context of contexts) {
+		const haystack = [
+			context.primaryDomain,
+			...context.domains.map((d) => d.domain),
+			...(context.sequence ?? []),
+		]
+			.join(" ")
+			.toLowerCase();
+		const matchedTerms = terms.filter((t) => haystack.includes(t));
+		if (matchedTerms.length === 0) continue;
+		results.push({
+			context,
+			score: matchedTerms.length / terms.length,
+			matchedTerms,
+		});
+	}
+	return results
+		.sort(
+			(a, b) =>
+				b.score - a.score ||
+				b.context.startTimestamp - a.context.startTimestamp,
+		)
+		.slice(0, limit);
+};
+
 export const summarizeContextCore = (
 	context: BrowserContext,
 ): ContextSummary => {
 	const domainList = [...context.domains]
 		.sort((a, b) => b.eventCount - a.eventCount)
 		.map((d) => d.domain);
-	const duration = context.endTimestamp - context.startTimestamp;
+	const duration = context.duration;
 	const eventDensity = duration > 0 ? context.totalEventCount / duration : 0;
 
 	return {

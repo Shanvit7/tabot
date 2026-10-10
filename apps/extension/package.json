@@ -5,8 +5,13 @@
 	"version": "0.1.3",
 	"private": true,
 	"scripts": {
+		"check:popup": "node --import ../../packages/shared/resolve-hook.mjs popup-model.check.mts",
+		"check:notifications": "node --import ../../packages/shared/resolve-hook.mjs notification-model.check.mts",
+		"check:metricsRelay": "node --experimental-test-module-mocks --import ../../packages/shared/resolve-hook.mjs relay-metrics.check.mts",
+		"check:foreground": "node --import ../../packages/shared/resolve-hook.mjs foreground.check.mts",
 		"predev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css",
-		"dev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css --watch & plasmo dev",
+		"dev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css --watch=always & plasmo dev",
+		"dev:preview": "PLASMO_PUBLIC_NOTIFICATION_PREVIEW=1 pnpm dev",
 		"prebuild": "tailwindcss -i ./popup.css -o ./popup.tailwind.css --minify",
 		"build": "plasmo build",
 		"package": "plasmo package"
@@ -15,6 +20,7 @@
 		"@lobehub/icons": "^5.16.0",
 		"@tabot/shared": "workspace:*",
 		"@tanstack/pacer": "^0.22.0",
+		"lucide-react": "0.562.0",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0"
 	},
@@ -28,19 +34,31 @@
 		"typescript": "^5.7.0"
 	},
 	"manifest": {
+		"version": "0.2.0",
+		"cross_origin_opener_policy": {
+			"value": "same-origin"
+		},
+		"cross_origin_embedder_policy": {
+			"value": "require-corp"
+		},
 		"permissions": [
 			"storage",
 			"tabs",
 			"webNavigation",
-			"windows"
+			"windows",
+			"idle",
+			"alarms",
+			"notifications"
 		],
 		"host_permissions": [
 			"<all_urls>"
 		],
 		"externally_connectable": {
 			"matches": [
-				"http://localhost:3000/*",
-				"https://shanvit7.github.io/*"
+				"http://localhost/*",
+				"https://shanvit7.github.io/*",
+				"https://tabot-mcp.shanvit7.workers.dev/*",
+				"https://tabot-mcp-dev.shanvit7.workers.dev/*"
 			]
 		}
 	}

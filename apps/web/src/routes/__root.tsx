@@ -6,8 +6,10 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { SessionInspector } from "~/components/context-graph/session-inspector";
 import { NotFound } from "~/components/not-found";
 import { SITE_DESCRIPTION, siteUrl } from "~/lib/site";
+import { AssistantConnectionProvider } from "~/providers/assistant-connection";
 import ReactScan from "~/providers/react-scan";
 // Side-effect import (not `?url` + a manual <link>) so the router owns this
 // stylesheet and the prerender step can inline it — otherwise it stays a
@@ -45,7 +47,10 @@ const RootLayout = () => {
 				<HeadContent />
 			</head>
 			<body>
-				<Outlet />
+				<AssistantConnectionProvider>
+					<Outlet />
+					<SessionInspector />
+				</AssistantConnectionProvider>
 				{process.env.NODE_ENV === "development" && <ReactScan />}
 				<TanStackRouterDevtools position="bottom-right" />
 				<Scripts />

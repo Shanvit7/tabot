@@ -10,9 +10,11 @@ import { registerHooks } from "node:module";
 registerHooks({
 	resolve(specifier, context, nextResolve) {
 		if (specifier.startsWith("./") || specifier.startsWith("../")) {
-			try {
-				return nextResolve(`${specifier}.ts`, context);
-			} catch {}
+			for (const extension of [".ts", ".tsx"]) {
+				try {
+					return nextResolve(`${specifier}${extension}`, context);
+				} catch {}
+			}
 		}
 		return nextResolve(specifier, context);
 	},

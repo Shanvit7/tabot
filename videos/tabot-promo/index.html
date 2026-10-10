@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=1920, height=1080" />
+	<title>Tabot — Thinking across tabs</title>
+	<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+	<style>
+		@font-face { font-family: 'Plex'; src: url('assets/fonts/ibm-plex-sans-var.woff2') format('woff2'); font-weight: 100 900; }
+		* { box-sizing: border-box; }
+		html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #f4f6f0; }
+		body { font-family: 'Plex', sans-serif; color: #15251b; }
+		#root { position: relative; width: 100%; height: 100%; overflow: hidden; }
+		.scene { position: absolute; inset: 0; overflow: hidden; }
+		.ground { position: absolute; inset: 0; background: #f4f6f0; }
+		.dark .ground { background: #101811; }
+		.dark { color: #f4f6f0; }
+		.lime .ground { background: #bfff00; }
+		.content { position: absolute; inset: 0; }
+		.brand { position: absolute; left: 100px; top: 66px; display: flex; gap: 18px; align-items: center; font-size: 38px; font-weight: 700; }
+		.brand img { width: 58px; height: 60px; object-fit: contain; }
+		.copy { position: absolute; left: 110px; top: 318px; width: 1120px; }
+		h1, h2, p { margin: 0; }
+		h1, h2 { font-size: 108px; line-height: 1.05; font-weight: 650; letter-spacing: -5px; }
+		h1 span, h2 span { display: block; }
+		.accent { color: #bfff00; }
+		.sub { margin-top: 30px; font-size: 36px; line-height: 1.35; color: #49614f; }
+		.dark .sub { color: #c7d5c7; }
+		.label { margin-bottom: 28px; font-size: 23px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; }
+		.rule { position: absolute; bottom: 0; left: 0; width: 100%; height: 16px; background: #bfff00; }
+		#intro .copy { width: 1560px; top: 325px; }
+		#intro h1 { font-size: 130px; }
+		#product .copy { width: 820px; top: 340px; }
+		#product h2 { font-size: 96px; }
+		.popup { position: absolute; left: 1190px; top: 94px; width: 570px; height: 842px; background: white; border: 3px solid #15251b; box-shadow: 16px 16px 0 #bfff00; }
+		.popup img { width: 100%; height: 100%; object-fit: contain; display: block; }
+		.product-second { position: absolute; left: 110px; top: 340px; width: 870px; }
+		#assistant .copy { top: 188px; width: 1650px; }
+		#assistant h2 { font-size: 96px; }
+		.connector { position: absolute; left: 110px; top: 564px; width: 1680px; height: 436px; border: 3px solid #15251b; background: white; box-shadow: 14px 14px 0 #15251b; }
+		.connector img { display: block; width: 100%; height: 100%; object-fit: contain; }
+		#privacy .copy { width: 1650px; top: 335px; }
+		#outro .brand { top: 215px; left: 110px; font-size: 54px; }
+		#outro .copy { top: 370px; width: 1720px; }
+		#outro h2 { font-size: 126px; }
+		.credit { position: absolute; left: 110px; bottom: 35px; font-size: 21px; color: #354528; }
+	</style>
+</head>
+<body>
+	<div id="root" data-composition-id="tabot-promo" data-width="1920" data-height="1080" data-duration="30">
+		<audio id="music" src=".media/audio/bgm/bgm_001.mp3" data-start="0" data-duration="30" data-media-start="8" data-track-index="10" data-volume="0.8" data-automation="{&quot;version&quot;:1,&quot;lanes&quot;:[{&quot;target&quot;:&quot;volume&quot;,&quot;points&quot;:[{&quot;t&quot;:0,&quot;v&quot;:0},{&quot;t&quot;:0.25,&quot;v&quot;:0.8},{&quot;t&quot;:28.8,&quot;v&quot;:0.8},{&quot;t&quot;:30,&quot;v&quot;:0}]}]}">
+			<track kind="captions" src="assets/music-captions.vtt" srclang="en" label="Music" />
+		</audio>
+
+		<section id="intro" class="scene clip dark" data-start="0" data-duration="4.4" data-track-index="0">
+			<div class="ground"></div>
+			<div class="content">
+				<div class="brand"><img src="assets/tabot-mark.png" alt="" />Tabot</div>
+				<div class="copy"><h1><span>Too many tabs.</span><span class="accent">Lost the thread?</span></h1></div>
+				<div class="rule"></div>
+			</div>
+		</section>
+
+		<section id="product" class="scene clip" data-start="4" data-duration="10.4" data-track-index="1">
+			<div class="ground"></div>
+			<div class="content">
+				<div class="brand"><img src="assets/tabot-mark.png" alt="" />Tabot</div>
+				<div class="copy product-first"><div class="label">Meet Tabot</div><h2><span>Your activity.</span><span>Across tabs.</span></h2><p class="sub">Keep browsing. Keep the thread.</p></div>
+				<div class="product-second"><div class="label">A clearer picture</div><h2><span>See where</span><span>you’ve been.</span></h2><p class="sub">Pick up where you left off.</p></div>
+				<div class="popup"><img src="assets/ui-popup.png" alt="Actual Tabot extension interface" /></div>
+				<div class="rule"></div>
+			</div>
+		</section>
+
+		<section id="assistant" class="scene clip lime" data-start="14" data-duration="7.4" data-track-index="2">
+			<div class="ground"></div>
+			<div class="content">
+				<div class="brand"><img src="assets/tabot-mark.png" alt="" />Tabot</div>
+				<div class="copy"><div class="label">Want another perspective?</div><h2>Connect ChatGPT.</h2><p class="sub">Ask about your browsing. Pick up the thread.</p></div>
+				<div class="connector"><img src="assets/connect-chatgpt.png" alt="Actual Tabot interface for connecting ChatGPT and choosing what to share" /></div>
+			</div>
+		</section>
+
+		<section id="privacy" class="scene clip dark" data-start="21" data-duration="4.4" data-track-index="3">
+			<div class="ground"></div>
+			<div class="content">
+				<div class="brand"><img src="assets/tabot-mark.png" alt="" />Tabot</div>
+				<div class="copy"><h2><span>On your device,</span><span class="accent">secure sharing with AI.</span></h2><p class="sub">Never lose your chain of tabs anymore.</p></div>
+				<div class="rule"></div>
+			</div>
+		</section>
+
+		<section id="outro" class="scene clip lime" data-start="25" data-duration="5" data-track-index="4">
+			<div class="ground"></div>
+			<div class="content">
+				<div class="brand"><img src="assets/tabot-mark.png" alt="" />Tabot</div>
+				<div class="copy"><h2><span>Thinking</span><span>across tabs.</span></h2><p class="sub">Find your way back. Move forward.</p></div>
+				<p class="credit">Music: “Funkorama” — Kevin MacLeod · incompetech.com · CC BY 4.0 · trimmed / faded</p>
+			</div>
+		</section>
+	</div>
+	<script>
+		const tl = gsap.timeline({ paused: true });
+		const enter = (selector, at) => tl.fromTo(selector, { opacity: 0, y: 35 }, { opacity: 1, y: 0, duration: 0.65, ease: 'power3.out' }, at);
+		enter('#intro .brand', 0);
+		tl.fromTo('#intro h1 span', { opacity: 0, y: 65 }, { opacity: 1, y: 0, duration: 0.65, stagger: 0.28, ease: 'power3.out' }, 0.15);
+		tl.to('#intro .content', { opacity: 0, y: -20, duration: 0.35 }, 3.8);
+		enter('#product .brand', 4.1);
+		enter('.product-first', 4.15);
+		tl.fromTo('.popup', { opacity: 0, x: 100, rotation: 2 }, { opacity: 1, x: 0, rotation: 0, duration: 0.85, ease: 'power3.out' }, 4.35);
+		tl.to('.product-first', { opacity: 0, y: -28, duration: 0.35, ease: 'power2.in' }, 8.7);
+		enter('.product-second', 9.05);
+		tl.to('#product .content', { opacity: 0, y: -25, duration: 0.35 }, 13.8);
+		enter('#assistant .brand', 14.1);
+		enter('#assistant .copy', 14.15);
+		tl.fromTo('.connector', { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out' }, 14.5);
+		tl.to('#assistant .content', { opacity: 0, y: -20, duration: 0.35 }, 20.8);
+		enter('#privacy .brand', 21.1);
+		tl.fromTo('#privacy h2 span', { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.65, stagger: 0.25, ease: 'power3.out' }, 21.15);
+		enter('#privacy .sub', 21.75);
+		tl.to('#privacy .content', { opacity: 0, y: -20, duration: 0.35 }, 24.8);
+		enter('#outro .brand', 25.1);
+		tl.fromTo('#outro h2 span', { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.7, stagger: 0.23, ease: 'power3.out' }, 25.35);
+		enter('#outro .sub', 26.2);
+		enter('#outro .credit', 26.5);
+		window.__timelines = window.__timelines || {};
+		window.__timelines['tabot-promo'] = tl;
+	</script>
+</body>
+</html>

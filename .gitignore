@@ -60,3 +60,7 @@ pnpm-debug.log*
 .sentry-build-plugin
 package-lock.json
 yarn.lock
+
+# Wrangler local dev state
+.wrangler
+.dev.vars

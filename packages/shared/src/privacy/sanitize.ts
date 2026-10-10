@@ -153,11 +153,16 @@ const redactUrlTail = async (
 
 // --- per-type sanitizers ---
 
+// favicon is visual-only and never leaves the device: strip before any export
 const sanitizeEvent = async (
 	event: StoredTabEvent,
 	run: RedactionRun,
-): Promise<StoredTabEvent> =>
-	event.url ? { ...event, url: await redactUrl(event.url, run) } : event;
+): Promise<StoredTabEvent> => {
+	const next = { ...event };
+	delete next.favicon;
+	if (next.url) next.url = await redactUrl(next.url, run);
+	return next;
+};
 
 // ActivityRef carries the raw URL twice (exactUrl + pathname); origin is
 // scheme+host and stays.

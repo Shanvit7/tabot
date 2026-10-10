@@ -4,6 +4,7 @@
 // Combines the derived layer (current context, related contexts/memories) with the
 // event stream (active tab/window, current URL, recent navigations). No LLM, no persistence.
 
+import { foregroundEvents } from "../activities/foreground";
 import type { BrowserContext } from "../contexts/contexts";
 import type { StoredTabEvent, TabotDatabase } from "../events/db";
 import {
@@ -17,9 +18,9 @@ import {
 export interface LiveBrowserContext {
 	// Current state
 	currentContext?: BrowserContext; // most recent context (undefined if no contexts yet)
-	activeTabId: number; // from last TAB_ACTIVATED event
-	activeWindowId: number; // from last TAB_ACTIVATED event
-	currentUrl?: string; // from last NAVIGATION event
+	activeTabId: number; // latest foreground evidence; 0 when hidden/unfocused
+	activeWindowId: number;
+	currentUrl?: string; // latest URL on foreground tab
 
 	// Activity signals
 	interactionIntensity: number; // events/min in current context (0 if no context)
@@ -59,18 +60,23 @@ export const buildLiveContext = (params: {
 		navigationLimit = 10,
 	} = params;
 
-	// Active tab/window from last TAB_ACTIVATED
-	const lastActivated = events
-		.filter((e) => e.type === "TAB_ACTIVATED")
-		.sort((a, b) => b.timestamp - a.timestamp)[0];
-	const activeTabId = lastActivated?.tabId ?? 0;
-	const activeWindowId = lastActivated?.windowId ?? 0;
-
-	// Current URL from last NAVIGATION
-	const lastNavigation = events
-		.filter((e) => e.type === "NAVIGATION" && e.url)
-		.sort((a, b) => b.timestamp - a.timestamp)[0];
-	const currentUrl = lastNavigation?.url;
+	const foreground = foregroundEvents(events);
+	const latest = foreground[foreground.length - 1];
+	const hidden =
+		latest?.type === "PAGE_HIDDEN" || latest?.type === "SW_WINDOW_FOCUS";
+	const lastActivated = foreground.findLast(
+		(e) => e.type === "TAB_ACTIVATED" || e.type === "PAGE_VISIBLE",
+	);
+	const activeTabId = hidden ? 0 : (latest?.tabId ?? 0);
+	const activeWindowId = hidden
+		? 0
+		: latest?.windowId ||
+			(lastActivated?.tabId === activeTabId ? lastActivated.windowId : 0);
+	const currentUrl = hidden
+		? undefined
+		: foreground.findLast(
+				(e) => e.url && (activeTabId === 0 || e.tabId === activeTabId),
+			)?.url;
 
 	// Interaction intensity (events/min)
 	const interactionIntensity =
@@ -79,7 +85,7 @@ export const buildLiveContext = (params: {
 			: 0;
 
 	// Recent navigations (newest first, bounded)
-	const recentNavigations = events
+	const recentNavigations = foreground
 		.filter((e) => e.type === "NAVIGATION" && e.url)
 		.sort((a, b) => b.timestamp - a.timestamp)
 		.slice(0, navigationLimit)

@@ -1,98 +1,49 @@
-import { useEffect, useState } from "react";
+import { ArrowUpRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 
 const chromeWebStoreUrl = import.meta.env.VITE_CHROME_WEB_STORE_URL?.trim();
 
-interface ChromePort {
-	disconnect?: () => void;
-	onDisconnect?: (() => void) | null;
-}
-
-interface ExternalChrome {
-	runtime?: {
-		connect?: (name: string) => ChromePort;
-		lastError?: string;
-	};
-}
-
-// Externally-connectable handshake: chrome.runtime.connect succeeds only when
-// the Tabot extension is installed and lists this origin in its manifest.
-const isTabotInstalled = () =>
-	new Promise<boolean>((resolve) => {
-		const chrome = (globalThis as { chrome?: ExternalChrome }).chrome;
-		if (!chrome?.runtime?.connect) {
-			resolve(false);
-			return;
-		}
-		try {
-			const port = chrome.runtime.connect("tabot");
-			const timer = setTimeout(() => {
-				port.disconnect?.();
-				resolve(true);
-			}, 200);
-			port.onDisconnect = () => {
-				clearTimeout(timer);
-				resolve(Boolean(chrome.runtime?.lastError) === false);
-			};
-		} catch {
-			resolve(false);
-		}
-	});
-
-export const GetStarted = () => {
-	const [installed, setInstalled] = useState<boolean | null>(null);
-
-	useEffect(() => {
-		let disposed = false;
-		isTabotInstalled().then((result) => {
-			if (!disposed) {
-				setInstalled(result);
-			}
-		});
-		return () => {
-			disposed = true;
-		};
-	}, []);
-
-	return (
-		<section
-			className="border-y-2 border-black bg-lime px-6 py-20 text-black sm:px-10 sm:py-28 lg:px-14"
-			id="get-started"
-		>
-			<div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-20">
-				<div className="max-w-3xl">
-					<h2 className="text-[clamp(2.75rem,5.5vw,5.5rem)] font-semibold leading-[0.88] tracking-[-0.03em] text-balance">
-						Keep and share context. Lose{" "}
-						<span className="inline-block bg-black px-[0.14em] text-lime shadow-hard-sm">
-							less
-						</span>{" "}
-						momentum.
-					</h2>
-					<p className="mt-8 max-w-xl text-lg leading-8 text-[#244d39] sm:text-xl">
-						Install Tabot, browse normally, then review your own activity from
-						one local dashboard.
-					</p>
-				</div>
-				<div className="max-w-sm border-2 border-black bg-[#f5f6f0] p-6 shadow-hard-lg sm:p-7">
-					<p className="font-mono text-xs font-bold uppercase tracking-[0.12em]">
-						Chrome extension
-					</p>
-					<p className="mt-4 text-xl font-semibold leading-tight tracking-[-0.03em]">
-						Your browser activity stays on your device.
-					</p>
-					{installed ? (
-						<Button asChild className="mt-7 w-full" variant="secondary">
-							<a href="/dashboard">Open dashboard</a>
-						</Button>
-					) : chromeWebStoreUrl ? (
-						<Button asChild className="mt-7 w-full" variant="secondary">
-							<a href={chromeWebStoreUrl} rel="noopener" target="_blank">
-								Add to Chrome
-							</a>
-						</Button>
-					) : null}
-				</div>
+export const GetStarted = () => (
+	<section
+		id="get-started"
+		className="border-b-2 border-black bg-lime px-5 py-12 sm:px-10 sm:py-16 lg:px-14"
+	>
+		<div className="mx-auto grid max-w-6xl items-start gap-10 lg:grid-cols-[1fr_0.8fr] lg:gap-20">
+			<div>
+				<h2 className="max-w-xl text-[clamp(2rem,3.5vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.02em]">
+					Start with Chrome.
+				</h2>
+				<p className="mt-4 max-w-lg text-lg leading-8">
+					Tabot records the sites you visit and shows how you move between them.
+				</p>
 			</div>
-		</section>
-	);
-};
+			<div className="border-2 border-black bg-white p-6 shadow-hard sm:p-7">
+				<h3 className="text-xl font-semibold tracking-tight">
+					Add Tabot to Chrome
+				</h3>
+				<Button
+					asChild
+					variant="secondary"
+					className="mt-6 w-full px-4 text-base font-semibold normal-case tracking-normal"
+				>
+					<a
+						href={
+							chromeWebStoreUrl || "https://github.com/Shanvit7/tabot#readme"
+						}
+						rel="noopener noreferrer"
+						target="_blank"
+					>
+						{chromeWebStoreUrl ? "Add to Chrome" : "View setup on GitHub"}
+						<ArrowUpRight aria-hidden="true" className="size-5 shrink-0" />
+						<span className="sr-only"> (opens in a new tab)</span>
+					</a>
+				</Button>
+				{!chromeWebStoreUrl && (
+					<p className="mt-4 text-base leading-7 text-landing-muted">
+						Setup instructions are available in the project repository.
+					</p>
+				)}
+			</div>
+		</div>
+	</section>
+);

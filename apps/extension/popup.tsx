@@ -1,567 +1,665 @@
 import logo from "data-base64:~assets/icon.png";
-import ClaudeColor from "@lobehub/icons/es/Claude/components/Color";
-// Deep component imports: the per-brand index re-exports Avatar/Combine which pull
-// features/ → @lobehub/ui → vfile (not resolvable by Parcel). Mono/Color are pure SVG.
-import ClaudeCodeColor from "@lobehub/icons/es/ClaudeCode/components/Color";
-import CodexColor from "@lobehub/icons/es/Codex/components/Color";
-import DeepSeekColor from "@lobehub/icons/es/DeepSeek/components/Color";
-import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
-import GeminiCLIColor from "@lobehub/icons/es/GeminiCLI/components/Color";
-import GrokMono from "@lobehub/icons/es/Grok/components/Mono";
-import OllamaMono from "@lobehub/icons/es/Ollama/components/Mono";
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import {
-	buildExportJsonl,
-	CLI_TARGET_DEFS,
-	createEmptyStats,
+	chatGptContextUrl,
 	derive,
-	exportFilename,
 	type StatsSnapshot,
 	type StoredTabEvent,
-	sanitizeDerived,
-	WEB_TARGET_DEFS,
 } from "@tabot/shared";
-import type { ComponentType, Dispatch, SetStateAction } from "react";
-import { useEffect, useMemo, useState } from "react";
+import {
+	ChevronDown,
+	ChevronRight,
+	Globe,
+	History,
+	Pause,
+	Play,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+	contextDuration,
+	contextHomeUrl,
+	type PopupSummary,
+	parseAssistantConnection,
+	popupSummary,
+	siteFavicon,
+	siteLabel,
+} from "~/popup-model";
 import "./popup.tailwind.css";
 
-const fetchStatsHelper = (
-	setStats: Dispatch<SetStateAction<StatsSnapshot>>,
-	setDexieCount: Dispatch<SetStateAction<number | null>>,
-) => {
-	chrome.runtime.sendMessage(
-		{ type: "GET_STATS" },
-		(response: StatsSnapshot | undefined) => {
-			if (response) setStats(response);
-		},
-	);
-	chrome.runtime.sendMessage(
-		{ type: "GET_COUNTS" },
-		(res: { dexieCount?: number; rxdbCount?: number } | undefined) => {
-			const n = res?.dexieCount ?? res?.rxdbCount;
-			if (typeof n === "number") setDexieCount(n);
-		},
-	);
-};
+const HOME_URL =
+	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
+const LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
+const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
+const NOTIFICATION_PREVIEWS = [
+	{
+		title: "Activity summary ready",
+		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
+		button: "Connect ChatGPT",
+	},
+	{
+		title: "Activity summary ready",
+		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
+		button: "Ask ChatGPT",
+	},
+	{
+		title: "Activity worth a look",
+		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
+		button: "Connect ChatGPT",
+	},
+	{
+		title: "Activity worth a look",
+		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
+		button: "Ask ChatGPT",
+	},
+	{
+		title: "A browsing pattern is repeating",
+		message:
+			"Similar activity appeared 4 times across separate periods. Ask ChatGPT what repeats.",
+		button: "Connect ChatGPT",
+	},
+	{
+		title: "A browsing pattern is repeating",
+		message:
+			"Similar activity appeared 4 times across separate periods. Ask ChatGPT what repeats.",
+		button: "Ask ChatGPT",
+	},
+] as const;
 
-const DASHBOARD_URL =
-	process.env.PLASMO_PUBLIC_DASHBOARD_URL ??
-	"https://shanvit7.github.io/tabot/dashboard";
-
-// Same cap as the dashboard's Share Context chat body.
-const MAX_CHAT_CHARS = 300_000;
-
-// Dashboard-identical share targets — defs from @tabot/shared, icons attached
-// here so the popup renders the same icon buttons as the web app.
-const WEB_ICONS: Record<string, ComponentType<{ size?: number }>> = {
-	ChatGPT: OpenAIMono,
-	Grok: GrokMono,
-	Claude: ClaudeColor,
-	DeepSeek: DeepSeekColor,
-	Gemini: GeminiColor,
-};
-const CLI_ICONS: Record<string, ComponentType<{ size?: number }>> = {
-	"Claude Code": ClaudeCodeColor,
-	Codex: CodexColor,
-	"Gemini CLI": GeminiCLIColor,
-	Ollama: OllamaMono,
-};
-
-interface ShareTarget {
-	name: string;
-	icon: ComponentType<{ size?: number }>;
-}
-interface WebButton extends ShareTarget {
-	url: string;
-	prompt: string;
-}
-interface CliButton extends ShareTarget {
-	cmd: string;
-}
-
-const webTargets: WebButton[] = WEB_TARGET_DEFS.map((t) => ({
-	...t,
-	icon: WEB_ICONS[t.name],
-}));
-const cliTargets: CliButton[] = CLI_TARGET_DEFS.map((t) => ({
-	...t,
-	icon: CLI_ICONS[t.name],
-}));
-
-const TargetButton = ({
-	label,
-	Icon,
-	onClick,
-	disabled,
-	className = "",
-}: {
-	label: string;
-	Icon: ComponentType<{ size?: number }>;
-	onClick: () => void;
-	disabled?: boolean;
-	className?: string;
-}) => (
-	<button
-		type="button"
-		disabled={disabled}
-		onClick={onClick}
-		className={`share-btn ${className}`}
-	>
-		<Icon size={14} />
-		{label}
-	</button>
+const Arrow = () => (
+	<ChevronRight
+		aria-hidden="true"
+		strokeWidth={1.5}
+		className="size-4 shrink-0"
+	/>
 );
 
-// Export period presets — Today is the default: share keeps to the current day.
-const PERIODS = [
-	{ id: "today", label: "Today" },
-	{ id: "7d", label: "Last 7 days" },
-	{ id: "all", label: "All time" },
-] as const;
-type PeriodId = (typeof PERIODS)[number]["id"];
-
-// Is ts inside the selected period? Today = local calendar day.
-const inPeriod = (ts: number, period: PeriodId): boolean => {
-	if (period === "all") return true;
-	const d = new Date(ts);
-	if (period === "7d") return ts >= Date.now() - 7 * 86_400_000;
-	const now = new Date();
+const SiteIcon = ({
+	domain,
+	favicons,
+}: {
+	domain: string;
+	favicons: PopupSummary["favicons"];
+}) => {
+	const src = siteFavicon(domain, favicons);
+	const [failedSrc, setFailedSrc] = useState<string | null>(null);
 	return (
-		d.getFullYear() === now.getFullYear() &&
-		d.getMonth() === now.getMonth() &&
-		d.getDate() === now.getDate()
+		<span
+			aria-hidden="true"
+			className="flex size-6 shrink-0 items-center justify-center rounded-md bg-canvas text-muted"
+		>
+			{src && failedSrc !== src ? (
+				<img
+					src={src}
+					alt=""
+					width={16}
+					height={16}
+					referrerPolicy="no-referrer"
+					onError={() => setFailedSrc(src)}
+					className="size-4 object-contain"
+				/>
+			) : (
+				<Globe aria-hidden="true" strokeWidth={1.5} className="size-4" />
+			)}
+		</span>
 	);
 };
 
-// Trigger a browser download of today's/period's events as a JSONL file.
-const downloadTextFile = (name: string, content: string) => {
-	const url = URL.createObjectURL(
-		new Blob([content], { type: "application/jsonl" }),
+const ActivitySites = ({
+	context,
+	favicons,
+}: {
+	context: NonNullable<PopupSummary["featured"]>;
+	favicons: PopupSummary["favicons"];
+}) => {
+	const allSites = context.domains.toSorted(
+		(a, b) => b.eventCount - a.eventCount,
 	);
-	const a = document.createElement("a");
-	a.href = url;
-	a.download = name;
-	a.click();
-	setTimeout(() => URL.revokeObjectURL(url), 10_000);
-};
-
-// ─── Download checkpoint ───
-// Content-hash of the last downloaded export, kept in localStorage (extension
-// origin — survives popup close, no manifest change). Same hash → same file
-// already downloaded → skip the repeat download, reuse the saved filename.
-const CHECKPOINT_KEY = "tabot-last-download";
-interface DownloadCheckpoint {
-	hash: string;
-	file: string;
-}
-
-// Two-lane 32-bit FNV-1a → 64-bit-ish equality hash (not crypto). Math.imul
-// keeps the multiply on proper 32-bit overflow — plain JS `*` loses low bits.
-const fnv1a32 = (str: string, seed: number): number => {
-	let h = seed;
-	for (let i = 0; i < str.length; i++) {
-		h ^= str.charCodeAt(i);
-		h = Math.imul(h, 0x01000193);
-	}
-	return h;
-};
-const hashBody = (body: string): string =>
-	`${fnv1a32(body, 0x811c9dc5).toString(16).padStart(8, "0")}${fnv1a32(
-		body,
-		0x01000193,
-	)
-		.toString(16)
-		.padStart(8, "0")}`;
-
-const readCheckpoint = (): DownloadCheckpoint | null => {
-	try {
-		const raw = localStorage.getItem(CHECKPOINT_KEY);
-		return raw ? (JSON.parse(raw) as DownloadCheckpoint) : null;
-	} catch {
-		return null;
-	}
-};
-const writeCheckpoint = (cp: DownloadCheckpoint) => {
-	try {
-		localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(cp));
-	} catch {
-		// Storage unavailable — just re-download next time, never skip incorrectly.
-	}
-};
-
-const copyText = async (text: string): Promise<boolean> => {
-	try {
-		await navigator.clipboard.writeText(text);
-		return true;
-	} catch {
-		const ta = document.createElement("textarea");
-		ta.value = text;
-		ta.style.position = "fixed";
-		ta.style.opacity = "0";
-		document.body.appendChild(ta);
-		ta.select();
-		const ok = document.execCommand("copy");
-		ta.remove();
-		return ok;
-	}
-};
-
-const formatDuration = (ms: number): string => {
-	if (!ms || ms < 0) return "0s";
-	const s = Math.round(ms / 1000);
-	if (s < 60) return `${s}s`;
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ${s % 60}s`;
-	const h = Math.floor(m / 60);
-	return `${h}h ${m % 60}m`;
+	const sites = allSites.slice(0, 3);
+	return (
+		<div>
+			<div className="relative mt-4 grid grid-cols-[minmax(0,1fr)_56px] items-center gap-6">
+				<svg
+					aria-hidden="true"
+					viewBox="0 0 100 100"
+					preserveAspectRatio="none"
+					className="pointer-events-none absolute inset-0 h-full w-full text-trace-line"
+				>
+					{sites.map((site, index) => {
+						const y = ((index + 0.5) / sites.length) * 100;
+						return (
+							<path
+								key={site.domain}
+								d={`M60 ${y} C76 ${y} 70 50 90 50`}
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="0.5"
+							/>
+						);
+					})}
+				</svg>
+				<ul
+					aria-label="Sites in this activity"
+					className="relative min-w-0 space-y-2"
+				>
+					{sites.map((site) => (
+						<li
+							key={site.domain}
+							className="flex h-10 min-w-0 items-center gap-2 rounded-md bg-trace-raised px-2 text-xs text-trace-text"
+						>
+							<SiteIcon domain={site.domain} favicons={favicons} />
+							<span className="min-w-0 truncate">{siteLabel(site.domain)}</span>
+						</li>
+					))}
+				</ul>
+				<div className="relative flex size-14 flex-col items-center justify-center gap-1 rounded-xl border border-trace-line bg-trace-raised text-trace-text">
+					<History
+						aria-hidden="true"
+						strokeWidth={1.5}
+						className="size-5 shrink-0 text-lime-brand"
+					/>
+					<span className="text-xs font-medium">Activity</span>
+				</div>
+			</div>
+			<details className="popup-sites mt-2">
+				<summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-md px-1 text-xs text-trace-text">
+					<span>View all sites</span>
+					<ChevronDown
+						aria-hidden="true"
+						strokeWidth={1.5}
+						className="size-4 shrink-0"
+					/>
+				</summary>
+				<ul
+					aria-label="All sites in this activity"
+					className="space-y-2 rounded-md bg-trace-raised p-2"
+				>
+					{allSites.map((site) => (
+						<li
+							key={site.domain}
+							className="flex min-w-0 items-center gap-2 text-xs leading-5 text-trace-text"
+						>
+							<SiteIcon domain={site.domain} favicons={favicons} />
+							<span className="min-w-0 wrap-anywhere">
+								{siteLabel(site.domain)}
+							</span>
+						</li>
+					))}
+				</ul>
+			</details>
+		</div>
+	);
 };
 
 const IndexPopup = () => {
-	const [stats, setStats] = useState<StatsSnapshot>(() =>
-		createEmptyStats(10_000),
+	const [summary, setSummary] = useState<PopupSummary | null>(null);
+	const [tracking, setTracking] = useState<boolean | null>(null);
+	const [assistantConnected, setAssistantConnected] = useState<boolean | null>(
+		null,
 	);
-	const [dexieCount, setDexieCount] = useState<number | null>(null);
-	const [events, setEvents] = useState<StoredTabEvent[]>([]);
-	const [trackingEnabled, setTrackingEnabled] = useState(true);
-	const [sharing, setSharing] = useState(false);
-	const [shareStatus, setShareStatus] = useState<string | null>(null);
-	const [period, setPeriod] = useState<PeriodId>("today");
-	const [pendingTarget, setPendingTarget] = useState<{
-		name: string;
-		file: string;
-	} | null>(null);
+	const [toggling, setToggling] = useState(false);
+	const [dropped, setDropped] = useState(0);
+	const [error, setError] = useState<string | null>(null);
+	const [attempt, setAttempt] = useState(0);
+	const [notificationPreview, setNotificationPreview] = useState<number | null>(
+		null,
+	);
+	const previousVisit = useRef<Promise<number | null> | null>(null);
 
-	// Stats refresh fast (lastProcessedAt, droppedEvents stay live); derived
-	// layers (sessions / contexts / top site) refresh slower like the dashboard.
 	useEffect(() => {
-		chrome.runtime.sendMessage(
-			{ type: "GET_TRACKING" },
-			(response: { enabled?: boolean } | undefined) => {
-				if (typeof response?.enabled === "boolean")
-					setTrackingEnabled(response.enabled);
-			},
-		);
-		const run = () => fetchStatsHelper(setStats, setDexieCount);
-		run();
-		const id = setInterval(run, 1000);
-		return () => clearInterval(id);
+		if (
+			process.env.NODE_ENV !== "development" ||
+			process.env.PLASMO_PUBLIC_NOTIFICATION_PREVIEW !== "1"
+		)
+			return;
+		let active = true;
+		void chrome.storage.local
+			.get("tabot_notification_preview_index")
+			.then((stored) => {
+				if (!active) return;
+				const index = stored.tabot_notification_preview_index;
+				setNotificationPreview(Number.isInteger(index) ? index : 0);
+			});
+		return () => {
+			active = false;
+		};
 	}, []);
 
 	useEffect(() => {
-		const pollEvents = () =>
-			chrome.runtime.sendMessage(
-				{ type: "GET_EVENTS" },
-				(res: StoredTabEvent[] | undefined) => {
-					if (Array.isArray(res)) setEvents(res);
-				},
-			);
-		pollEvents();
-		const id = setInterval(pollEvents, 5000);
-		return () => clearInterval(id);
-	}, []);
+		let active = true;
+		let timer: ReturnType<typeof setTimeout>;
+		if (attempt > 0) setError(null);
+		const refreshAssistantConnection = async () => {
+			let connected: boolean | null = null;
+			try {
+				connected = parseAssistantConnection(
+					await chrome.runtime.sendMessage({
+						type: "GET_ASSISTANT_CONNECTION",
+					}),
+				);
+			} catch {
+				// An unavailable relay is unknown, not disconnected.
+			}
+			if (active) setAssistantConnected(connected);
+		};
+		const start = async () => {
+			previousVisit.current ??= (async () => {
+				try {
+					const stored = await chrome.storage.local.get(LAST_VIEWED_KEY);
+					const value = stored[LAST_VIEWED_KEY];
+					return typeof value === "number" &&
+						Number.isFinite(value) &&
+						value > 0 &&
+						value <= Date.now()
+						? value
+						: null;
+				} catch {
+					// Context still works without a saved visit; do not invent an unread count.
+					return null;
+				}
+			})();
+			const lastViewed = await previousVisit.current;
+			const refresh = async () => {
+				// Optional network check must not delay loading local activity.
+				void refreshAssistantConnection();
+				try {
+					const [events, status, stats] = await Promise.all([
+						chrome.runtime.sendMessage({ type: "GET_EVENTS" }) as Promise<
+							StoredTabEvent[]
+						>,
+						chrome.runtime.sendMessage({ type: "GET_TRACKING" }) as Promise<{
+							enabled: boolean;
+						}>,
+						chrome.runtime.sendMessage({
+							type: "GET_STATS",
+						}) as Promise<StatsSnapshot>,
+					]);
+					if (!active) return;
+					if (
+						!Array.isArray(events) ||
+						typeof status?.enabled !== "boolean" ||
+						!stats
+					)
+						throw new Error("Unavailable");
+					const now = Date.now();
+					// Keep full derivation so context IDs match dashboard; never derive a sliced export.
+					setSummary(popupSummary(derive(events), lastViewed, now));
+					setTracking(status.enabled);
+					setDropped(stats.droppedEvents);
+					setError(null);
+					try {
+						await chrome.storage.local.set({ [LAST_VIEWED_KEY]: now });
+					} catch {
+						// Visit tracking is optional; capture and context remain unaffected.
+					}
+				} catch {
+					if (active) setError("Could not load your activity. Try again.");
+				} finally {
+					if (active) timer = setTimeout(refresh, 10_000);
+				}
+			};
+			if (active) await refresh();
+		};
+		void start();
+		return () => {
+			active = false;
+			clearTimeout(timer);
+		};
+	}, [attempt]);
 
-	const derived = useMemo(
-		() => (events.length > 0 ? derive(events) : null),
-		[events],
-	);
-	const currentCtx = derived?.live?.currentContext ?? null;
-	const live = derived?.live ?? null;
-	const stretches = derived?.sessions.length ?? 0;
-	const domainsVisited = useMemo(() => {
-		const set = new Set<string>();
-		for (const sess of derived?.sessions ?? [])
-			for (const d of sess.domains) set.add(d.domain);
-		return set.size;
-	}, [derived]);
-	const topSite = useMemo(() => {
-		const counts = new Map<string, number>();
-		for (const sess of derived?.sessions ?? [])
-			for (const d of sess.domains)
-				counts.set(d.domain, (counts.get(d.domain) ?? 0) + d.eventCount);
-		return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-	}, [derived]);
-
-	const openDashboard = () => {
-		chrome.tabs.create({ url: DASHBOARD_URL });
-	};
-
-	const toggleTracking = () => {
-		const enabled = !trackingEnabled;
-		setTrackingEnabled(enabled);
-		chrome.runtime.sendMessage(
-			{ type: "SET_TRACKING", enabled },
-			(response: { enabled?: boolean } | undefined) => {
-				if (typeof response?.enabled === "boolean")
-					setTrackingEnabled(response.enabled);
-			},
-		);
-	};
-
-	const shareContext = async (target: WebButton) => {
-		if (sharing) return;
-		setSharing(true);
+	const toggleTracking = async () => {
+		if (tracking === null || toggling) return;
+		setToggling(true);
 		try {
-			if (events.length === 0) {
-				setShareStatus("Nothing to share yet — browse around first.");
-				return;
-			}
-			const scoped = events.filter((e) => inPeriod(e.timestamp, period));
-			if (scoped.length === 0) {
-				setShareStatus(
-					period === "today"
-						? "Nothing from today yet — keep browsing, then share."
-						: "Nothing in this period — pick a wider one.",
-				);
-				return;
-			}
-			let body = buildExportJsonl(await sanitizeDerived(derive(scoped)));
-			if (body.length > MAX_CHAT_CHARS) {
-				body = `${body.slice(0, MAX_CHAT_CHARS)}…\n[truncated ${(
-					body.length - MAX_CHAT_CHARS
-				).toLocaleString()} chars]`;
-			}
-			const hash = hashBody(body);
-			const saved = readCheckpoint();
-			const alreadySaved = saved?.hash === hash;
-			const file = exportFilename(scoped, "jsonl");
-			if (alreadySaved) {
-				// Same content on disk — don't re-trigger the download.
-				setPendingTarget({ name: target.name, file: saved.file });
-				setShareStatus(
-					`You already have ${saved.file} — nothing new since. Open ${target.name} and upload it.`,
-				);
-			} else {
-				downloadTextFile(file, body);
-				writeCheckpoint({ hash, file });
-				// Label swap + hint: the download lands, user uploads it on the target UI.
-				setPendingTarget({ name: target.name, file });
-				setShareStatus(
-					`Saved ${file} — open ${target.name} and drop the file in.`,
-				);
-			}
-			window.open(target.url, "_blank", "noopener");
+			const response = await chrome.runtime.sendMessage({
+				type: "SET_TRACKING",
+				enabled: !tracking,
+			});
+			if (
+				typeof response?.enabled !== "boolean" ||
+				response.enabled === tracking
+			)
+				throw new Error("Not saved");
+			setTracking(response.enabled);
 		} catch {
-			setShareStatus("Couldn't load your activity — try again.");
+			setError("Could not save your preference. Try again.");
 		} finally {
-			setSharing(false);
+			setToggling(false);
 		}
 	};
 
-	const shareCli = async (target: CliButton) => {
-		const copied = await copyText(target.cmd);
-		setShareStatus(
-			copied
-				? `${target.name} command copied — paste into your terminal`
-				: "Couldn't copy — use the dashboard's Share Context tab instead.",
-		);
-		setTimeout(() => setShareStatus(null), 4000);
+	const openTabot = async (contextId?: string) => {
+		try {
+			await chrome.tabs.create({ url: contextHomeUrl(HOME_URL, contextId) });
+			window.close();
+		} catch {
+			setError("Could not open Tabot. Try again.");
+		}
 	};
 
-	const formatTime = (ts: number): string => {
-		if (!ts) return "Waiting for your first moment";
-		const diff = Math.round((Date.now() - ts) / 1000);
-		if (diff < 2) return "Picking up your activity now";
-		if (diff < 60) return `Last moment ${diff}s ago`;
-		if (diff < 3600) return `Last moment ${Math.round(diff / 60)}m ago`;
-		return `Last moment ${Math.round(diff / 3600)}h ago`;
-	};
-
-	const totalSaved = dexieCount ?? stats.totalEvents;
-	const hasShareable = (derived?.events?.length ?? 0) > 0;
-	const lastWeb = webTargets.length % 2 === 1 ? webTargets.length - 1 : -1;
-
+	const featured = summary?.featured;
+	const paused = tracking === false;
+	const TrackingIcon = paused ? Play : Pause;
 	return (
-		<div className="box-border w-115 border-2 border-ink bg-lime-brand p-3.5 font-sans-brand text-ink">
-			{/* Header */}
-			<div className="mb-3.25 flex items-center justify-between">
+		<div className="popup-shell flex max-h-150 w-100 max-w-full flex-col overflow-hidden bg-canvas font-sans text-ink">
+			<header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
 				<div className="flex items-center gap-2.5">
 					<img
 						src={logo}
-						alt="Tabot"
-						className="h-9.5 w-9.5 border-2 border-ink bg-white object-cover"
+						alt=""
+						width={32}
+						height={32}
+						className="size-8 rounded-lg"
 					/>
-					<div>
-						<div className="text-[20px] font-extrabold leading-none">Tabot</div>
-						<div className="mt-1 font-mono-brand text-[11px]">
-							Thinking across tabs.
+					<span className="text-lg font-semibold tracking-tight">Tabot</span>
+				</div>
+				<div className="flex items-center gap-2">
+					<span
+						className={`flex h-11 w-26 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium ${paused || tracking === null ? "bg-surface text-muted" : "bg-trace text-trace-text"}`}
+					>
+						<span
+							aria-hidden="true"
+							className={`size-2 shrink-0 rounded-full ${paused || tracking === null ? "bg-muted" : "popup-observing bg-lime-brand"}`}
+						/>
+						{tracking === null ? "Loading" : paused ? "Paused" : "Observing"}
+					</span>
+					<button
+						type="button"
+						onClick={toggleTracking}
+						disabled={tracking === null || toggling}
+						aria-pressed={paused}
+						aria-label={paused ? "Resume observing" : "Pause observing"}
+						className="popup-quiet flex h-11 w-26 shrink-0 items-center justify-center gap-1.5 border border-line px-2 text-xs"
+					>
+						<TrackingIcon
+							aria-hidden="true"
+							strokeWidth={1.5}
+							className="size-3.5 shrink-0"
+						/>
+						{toggling ? "Updating…" : paused ? "Resume" : "Pause"}
+					</button>
+				</div>
+			</header>
+
+			<main
+				className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-4"
+				// biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users need to focus the popup's only scroll region.
+				tabIndex={0}
+				aria-label="Browser activity"
+				aria-busy={!summary && !error}
+			>
+				{notificationPreview !== null && (
+					<aside
+						aria-label={`Notification preview ${notificationPreview + 1} of ${NOTIFICATION_PREVIEWS.length}`}
+						className="mb-4 rounded-xl border border-line bg-surface p-4 shadow-lg"
+					>
+						<div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+							<span
+								aria-hidden="true"
+								className="size-1.5 animate-pulse rounded-full bg-lime-brand"
+							/>
+							Auto preview · every 15 seconds
 						</div>
-					</div>
-				</div>
-				<button
-					onClick={toggleTracking}
-					type="button"
-					aria-pressed={trackingEnabled}
-					className={`cursor-pointer border-2 border-ink px-1.75 py-1.25 font-mono-brand text-[10px] font-bold shadow-hard-sm ${
-						trackingEnabled ? "bg-ink text-lime-brand" : "bg-white text-ink"
-					}`}
-				>
-					{trackingEnabled ? "PAUSE" : "RESUME"}
-				</button>
-			</div>
-
-			{!hasShareable && (
-				<div className="card">
-					<div className="label">Nothing to share</div>
-					<div className="mt-1.25 text-[13px] text-ink/60">
-						Browse around first — your moments appear here.
-					</div>
-				</div>
-			)}
-
-			{/* Share Context — the primary reason to open the popup */}
-			{hasShareable && (
-				<div className="border-2 border-ink bg-ink px-4 pb-3.5 pt-3.75 text-white shadow-hard">
-					<div className="flex items-center justify-between">
-						<div className="label text-lime-brand">Share your context</div>
-						{shareStatus && (
-							<div className="max-w-[55%] text-right text-[10px] leading-[1.3] text-white">
-								{shareStatus}
+						<div className="flex items-start gap-3">
+							<img
+								src={logo}
+								alt=""
+								width={32}
+								height={32}
+								className="size-8 rounded-lg"
+							/>
+							<div className="min-w-0 flex-1">
+								<p className="text-sm font-semibold">
+									{NOTIFICATION_PREVIEWS[notificationPreview].title}
+								</p>
+								<p className="mt-1 text-xs leading-5 text-muted">
+									{NOTIFICATION_PREVIEWS[notificationPreview].message}
+								</p>
 							</div>
+							<button
+								type="button"
+								onClick={() => setNotificationPreview(null)}
+								aria-label="Dismiss preview"
+								className="popup-row px-2 text-xs"
+							>
+								×
+							</button>
+						</div>
+						<div className="mt-3 flex justify-end">
+							<span className="flex items-center gap-1.5 rounded-md border border-line bg-canvas px-3 py-2 text-xs">
+								<OpenAIMono aria-hidden="true" className="size-3.5" />
+								{NOTIFICATION_PREVIEWS[notificationPreview].button}
+							</span>
+						</div>
+					</aside>
+				)}
+				{assistantConnected === false && (
+					<aside
+						aria-label="ChatGPT connection"
+						className="mb-4 flex items-center gap-3 rounded-lg border border-line bg-surface p-3"
+					>
+						<OpenAIMono
+							aria-hidden="true"
+							className="size-5 shrink-0 text-ink"
+						/>
+						<div className="min-w-0 flex-1">
+							<p className="text-sm font-medium">Connect ChatGPT</p>
+							<p className="mt-0.5 text-xs leading-4 text-muted">
+								Ask about your browsing.
+							</p>
+						</div>
+						<a
+							href={CHATGPT_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="popup-quiet flex min-h-11 shrink-0 items-center justify-center border border-line bg-canvas px-3 text-xs no-underline"
+						>
+							Connect
+							<span className="sr-only"> ChatGPT (opens in a new tab)</span>
+						</a>
+					</aside>
+				)}
+				{error && (
+					<div
+						role="alert"
+						className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-surface p-3 text-sm"
+					>
+						<p>{error}</p>
+						<button
+							type="button"
+							onClick={() => setAttempt((value) => value + 1)}
+							className="popup-quiet shrink-0 px-3"
+						>
+							Retry
+						</button>
+					</div>
+				)}
+				{!summary ? (
+					<section className="min-h-64">
+						<h1 className="text-2xl font-semibold tracking-tight">
+							Loading your activity.
+						</h1>
+						<p role="status" className="mt-2 text-sm leading-6 text-muted">
+							{error
+								? "Your recorded activity is still on this device."
+								: "Reading your browser activity from this device…"}
+						</p>
+					</section>
+				) : (
+					<>
+						<h1 className="text-2xl font-semibold leading-tight tracking-tight text-balance">
+							{paused ? "Tabot is paused." : "Your activity across tabs."}
+						</h1>
+						<p className="mt-2 text-sm leading-6 text-muted">
+							{paused
+								? "New browser activity is not being recorded. You can still review and share earlier activity."
+								: "Tabot records the sites you visit and how you move between them."}
+						</p>
+
+						{!summary.ready && !paused && summary.sessions > 0 && (
+							<section
+								aria-label="Today's browsing progress"
+								role="status"
+								className="mt-4 rounded-lg border border-line bg-surface p-3"
+							>
+								<p className="text-xs text-muted">Today so far</p>
+								<p className="mt-0.5 text-sm font-medium">
+									{summary.sessions} browsing{" "}
+									{summary.sessions === 1 ? "session" : "sessions"}
+								</p>
+								<p className="mt-1 text-xs leading-5 text-muted">
+									Keep browsing normally. A summary appears once Tabot has
+									enough browsing to summarize.
+								</p>
+							</section>
 						)}
-					</div>
-					<p className="mt-1.25 text-[11px] leading-[1.4] text-white/80">
-						Shares today's activity — pick a period, then download and drop the
-						file into the AI you choose.
-					</p>
-					{/* Period selector — Today by default */}
-					<div className="mt-2">
-						<div className="label text-[9px] text-lime-brand">Period</div>
-						<div className="mt-1.5 flex gap-1.5">
-							{PERIODS.map((p) => (
-								<button
-									key={p.id}
-									type="button"
-									onClick={() => setPeriod(p.id)}
-									className={`cursor-pointer border-2 border-ink px-2 py-1 text-[10px] font-bold ${
-										p.id === period
-											? "bg-lime-brand text-ink"
-											: "bg-white text-ink/70"
-									}`}
-								>
-									{p.label}
-								</button>
-							))}
-						</div>
-					</div>
-					<div className="mt-2.5">
-						<div className="label text-[9px] text-lime-brand">Web</div>
-						<div className="mt-1.5 grid grid-cols-2 gap-1.5">
-							{webTargets.map((t, i) => (
-								<TargetButton
-									key={t.name}
-									label={
-										pendingTarget?.name === t.name
-											? `Upload on ${t.name} ↗`
-											: t.name
-									}
-									Icon={t.icon}
-									disabled={sharing}
-									onClick={() => shareContext(t)}
-									className={i === lastWeb ? "col-span-2" : ""}
-								/>
-							))}
-						</div>
-					</div>
-					<div className="mt-2.5">
-						<div className="label text-[9px] text-lime-brand">CLI & apps</div>
-						<div className="mt-1.5 flex flex-wrap gap-1.5">
-							{cliTargets.map((t) => (
-								<button
-									key={t.name}
-									type="button"
-									onClick={() => shareCli(t)}
-									className="cli-btn"
-								>
-									<t.icon size={14} />
-									{t.name}
-								</button>
-							))}
-						</div>
-					</div>
-				</div>
-			)}
 
-			{/* Current focus — live context insight */}
-			{hasShareable && (
-				<div className="card mt-3.25">
-					<div className="label">On now</div>
-					{currentCtx ? (
-						<>
-							<div className="mt-1.25 break-all text-[19px] font-extrabold leading-[1.1]">
-								{currentCtx.primaryDomain}
-							</div>
-							<div className="mt-1 text-[11px] font-bold">
-								{formatDuration(currentCtx.duration)}
-								{live && live.interactionIntensity > 0
-									? ` · ${live.interactionIntensity.toFixed(1)} actions/min`
-									: ""}
-							</div>
-						</>
-					) : (
-						<div className="mt-1.25 text-[13px] text-ink/60">
-							Nothing on yet — browse around first.
-						</div>
+						{summary.updated > 0 && featured && (
+							<section
+								aria-label="New activity since your last visit"
+								role="status"
+								className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3"
+							>
+								<div>
+									<p className="text-xs text-muted">Since your last visit</p>
+									<p className="mt-0.5 text-sm font-medium">
+										{summary.updated === 1
+											? "1 new activity summary"
+											: `${summary.updated} new activity summaries`}
+									</p>
+								</div>
+								<button
+									type="button"
+									onClick={() => openTabot(featured.id)}
+									className="popup-quiet flex min-h-11 shrink-0 items-center gap-2 border border-line bg-canvas px-3 text-xs font-medium"
+								>
+									Review
+									<Arrow />
+								</button>
+							</section>
+						)}
+
+						{featured ? (
+							<section
+								aria-label="Featured browser activity"
+								className="mt-5 rounded-xl bg-trace p-4 text-trace-text"
+							>
+								<h2 className="min-w-0 truncate text-base font-medium">
+									{siteLabel(featured.primaryDomain)}
+								</h2>
+								<ActivitySites context={featured} favicons={summary.favicons} />
+								{summary.ready && (
+									<div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-trace-line pt-3">
+										<div>
+											<p className="text-sm font-medium">
+												Activity summary ready
+											</p>
+											<p className="mt-0.5 text-xs leading-4 text-muted">
+												{featured.domains.length} sites ·{" "}
+												{contextDuration(featured.duration)}
+											</p>
+										</div>
+										{assistantConnected === true ? (
+											<a
+												href={chatGptContextUrl(featured.id)}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
+											>
+												Ask ChatGPT
+											</a>
+										) : assistantConnected === false ? (
+											<a
+												href={CHATGPT_URL}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
+											>
+												Connect ChatGPT
+											</a>
+										) : (
+											<span role="status" className="text-xs text-muted">
+												Checking ChatGPT…
+											</span>
+										)}
+									</div>
+								)}
+							</section>
+						) : (
+							<section
+								aria-label="Getting started"
+								className="mt-5 rounded-xl bg-surface p-5"
+							>
+								<h2 className="text-base font-medium">
+									No recent activity to show.
+								</h2>
+								<p className="mt-2 text-sm leading-6 text-muted">
+									{paused
+										? "Choose Resume whenever you’re ready."
+										: "Browse as usual. The connections between your visits will appear here."}
+								</p>
+							</section>
+						)}
+
+						{summary.recent.length > 0 && (
+							<section aria-labelledby="recent-heading" className="mt-5">
+								<h2 id="recent-heading" className="text-sm font-medium">
+									Earlier activity
+								</h2>
+								<ul className="mt-2 divide-y divide-line">
+									{summary.recent.map((context) => (
+										<li key={context.id}>
+											<button
+												type="button"
+												onClick={() => openTabot(context.id)}
+												className="popup-row flex min-h-14 w-full items-center justify-between gap-3 py-2 text-left"
+											>
+												<SiteIcon
+													domain={context.primaryDomain}
+													favicons={summary.favicons}
+												/>
+												<span className="min-w-0 flex-1">
+													<span className="line-clamp-2 text-sm font-medium wrap-anywhere">
+														{siteLabel(context.primaryDomain)}
+													</span>
+												</span>
+												<Arrow />
+											</button>
+										</li>
+									))}
+								</ul>
+							</section>
+						)}
+					</>
+				)}
+				{dropped > 0 && (
+					<p role="status" className="mt-4 text-xs leading-5 text-muted">
+						Some browser activity could not be recorded. Your earlier activity
+						is still available.
+					</p>
+				)}
+			</main>
+			<footer className="shrink-0 border-t border-line px-5 py-3">
+				<button
+					type="button"
+					onClick={() => openTabot(featured?.id)}
+					className="popup-primary flex min-h-11 w-full items-center justify-between rounded-lg px-4 text-sm font-semibold"
+				>
+					{featured ? "Review activity" : "Open Tabot"}
+					<Arrow />
+				</button>
+				<div className="mt-2 flex min-h-11 items-center justify-between gap-3 text-xs text-muted">
+					<span>Stays on this device. Choose what to share.</span>
+					{featured && (
+						<button
+							type="button"
+							onClick={() => openTabot()}
+							className="popup-row min-h-11 shrink-0 px-1 font-medium"
+						>
+							Open Tabot
+						</button>
 					)}
 				</div>
-			)}
-
-			{/* Insight stats — derived, not raw counters */}
-			{hasShareable && (
-				<div className="mt-3.25 grid grid-cols-2 gap-2">
-					<div className="card">
-						<div className="label">Moments saved</div>
-						<div className="mt-1 text-[26px] font-extrabold leading-none tabular-nums">
-							{totalSaved.toLocaleString()}
-						</div>
-						<div className="mt-1 text-[11px]">
-							{formatTime(stats.lastProcessedAt)}
-						</div>
-					</div>
-					<div className="card">
-						<div className="label">Browsing stretches</div>
-						<div className="mt-1 text-[26px] font-extrabold leading-none tabular-nums">
-							{stretches.toLocaleString()}
-						</div>
-						<div className="mt-1 text-[11px]">
-							A stretch starts after you browse
-						</div>
-					</div>
-					<div className="card">
-						<div className="label">Sites visited</div>
-						<div className="mt-1 text-[26px] font-extrabold leading-none tabular-nums">
-							{domainsVisited.toLocaleString()}
-						</div>
-						<div className="mt-1 text-[11px]">Different places you went</div>
-					</div>
-					<div className="card col-span-2 flex items-center gap-2 bg-orange-brand">
-						<span className="text-[18px] font-extrabold leading-none">
-							{topSite ?? "—"}
-						</span>
-						<span className="text-[12px] font-bold">most visited</span>
-					</div>
-				</div>
-			)}
-
-			{stats.droppedEvents > 0 && (
-				<div className="mt-3.25 border-2 border-ink bg-pink-brand px-2.5 py-2 text-[11px] leading-[1.35]">
-					A few moments could not be saved (
-					{stats.droppedEvents.toLocaleString()}).
-				</div>
-			)}
-
-			{/* Footer */}
-			<div className="mt-3.25 flex items-center justify-between">
-				<button
-					onClick={openDashboard}
-					type="button"
-					className="cursor-pointer border-2 border-ink bg-white px-2.5 py-1.75 font-mono-brand text-[11px] font-extrabold uppercase shadow-hard-sm"
-				>
-					Go to Dashboard →
-				</button>
-				<span className="text-[10px] leading-[1.3] text-ink/60">
-					Everything stays on this device.
-				</span>
-			</div>
+			</footer>
 		</div>
 	);
 };

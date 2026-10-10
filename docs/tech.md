@@ -1,6 +1,6 @@
 # Tabot Technical Specification
 
-> **Single source of truth for Tabot's technical architecture and deterministic browser-context layer.** This document supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`). Companion walkthrough: [`system.md`](./system.md).
+> **Technical source of truth for Tabot's architecture and deterministic derived layer.** Supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`) and incorporates the former v0.2 product plan with [`system.md`](./system.md). Audited against working-tree code, including staged changes, on 2026-10-09. Implementation, deployment and live acceptance are separate statuses. Release gaps and acceptance are documented below and in the companion walkthrough.
 
 ---
 
@@ -18,32 +18,32 @@ Chrome tab APIs + content script
   -> live browser-context snapshot
 ```
 
-All data remains local. There is no backend, authentication, cloud storage, remote ingestion, LLM, embeddings, vector database, productivity scoring, or semantic task inference.
+Raw browser events remain local. The ChatGPT integration uses Tabot’s online MCP/OAuth connection service for authorization and request routing; the extension runs each tool against its local data and returns a sanitized, bounded result (such as a browser context, recurring-pattern evidence, or activity metrics) to ChatGPT when requested. The service stores OAuth/installation state, not browser history or tool results. There is no Tabot-hosted LLM, embeddings, vector database, productivity scoring, or semantic task inference. See [MCP relay setup and troubleshooting](../apps/mcp-server/README.md).
 
 ### Architectural principles
 
 1. **Raw events are immutable source data.** Every derived object is disposable and rebuildable.
 2. **No semantic claims from sparse telemetry.** The system may report domains, timestamps, counts, overlaps, recurrences, and similarity scores; it must not assert what a user was doing.
 3. **No new telemetry for the derived layer.** Use the existing event stream until Phase 7 evaluates whether it is sufficient.
-4. **Deterministic and bounded.** Same input produces the same output, and all derived/retrieval reads have practical caps.
+4. **Deterministic, with bounded results.** Same input and supplied clock produce the same output. Result counts/payloads have caps, but several local derivations scan the full retained event store; output bounds are not input-cost bounds.
 5. **Evidence first.** Derived values retain IDs, domains, timestamps, counts, similarity, staleness, and recurrence data that support them.
 
 ### Privacy boundary
 
-`KEY_ACTIVITY` records only that a key-activity occurrence happened. Tabot never records typed text, key values, characters, input values, passwords, DOM snapshots, page content, or browsing data outside local IndexedDB.
+`KEY_ACTIVITY` records only that activity happened, never typed text, key values, characters or form/input values. Tabot does not capture password fields, DOM snapshots or page content. Raw URL sidecars can contain paths/query values and remain local; authorized tool results and user-controlled downloads are separate privacy boundaries. Sanitized derived results **do leave the device** when requested through ChatGPT (§16); “local-first” does not mean no network traffic or no sharing.
 
 ---
 
 ## 2. Stack and Repository
 
 - **Extension:** Plasmo, Manifest V3, Chrome target, background service worker.
-- **Dashboard:** TanStack Start (SPA mode), React 19, Tailwind, TanStack Charts, BoldKit UI.
+- **Dashboard:** TanStack Start + Vite/Nitro, React 19, Tailwind and local UI components; `react-force-graph-2d` for activity maps and `react-call` for session inspection. Marketing routes are prerendered; browser data is fetched/derived client-side. TanStack Charts is not a current package dependency.
 - **Language/package manager:** TypeScript (ESNext, bundler resolution), pnpm workspaces.
 - **Concurrency:** `SharedArrayBuffer` and `Atomics` using `Int32Array`.
 - **Rate shaping:** TanStack Pacer at the content-script boundary.
 - **Persistence:** Dexie 4.x over IndexedDB database `tabot_events`, `events` table.
 - **Graph substrate:** graphology.
-- **Backend:** none.
+- **Optional relay:** Hono + MCP SDK on Cloudflare Workers, Durable Objects for OAuth/installation state, authenticated WebSocket to the extension. No remote browser-history store.
 
 ```text
 tabot/
@@ -51,17 +51,24 @@ tabot/
 │   ├── extension/
 │   │   ├── background.ts                # event producer, SAB drain, Dexie, messaging
 │   │   ├── contents/tabot.ts            # page-level telemetry collection
-│   │   └── popup.tsx                    # aggregate pipeline statistics
+│   │   ├── popup.tsx                    # activity recap, progress, new-summary CTA
+│   │   ├── popup-model.ts, notification-model.ts
+│   │   ├── foreground.ts               # focused/idle-aware sampling
+│   │   └── relay.ts                    # authenticated WebSocket + local tool handlers
+│   ├── mcp-server/                      # optional ChatGPT MCP/OAuth relay
 │   └── web/
 │       ├── src/routes/                  # landing + dashboard routes
-│       ├── src/lib/dashboard-data.ts    # extension transport + in-memory derivation
+│       ├── src/lib/home-data.ts         # extension transport + in-memory derivation
 │       └── src/components/              # landing, dashboard, and UI components
 ├── packages/shared/src/
-│   ├── events.ts, buffer.ts, protocol.ts, metadata.ts, db.ts, logger.ts
-│   ├── sessions.ts, meaningful-events.ts, activity-graph.ts, episode-boundary.ts
-│   ├── sw-semantics.ts, sw-graph.ts          # SW telemetry layer (Phase 2)
-│   ├── contexts.ts, memories.ts, retrieval.ts, live-context.ts
-│   └── *.check.ts                       # runnable derivation checks
+│   ├── events/                         # buffer, protocol, metadata, Dexie, event registry
+│   ├── sessions/                       # sessionization
+│   ├── activities/                     # anchors, episodes, foreground, metrics, SW semantics
+│   ├── contexts/, memories/, recall/    # derivation, retrieval and live snapshot
+│   ├── privacy/                        # fail-closed local PII sanitizer
+│   ├── share/                          # export and scoped assistant prompts
+│   ├── lib/                            # shared logging/utilities
+│   └── checks/                         # runnable deterministic checks
 └── docs/
     ├── tech.md                          # this document
     └── system.md                        # walkthrough of flow, algorithms, and graph
@@ -125,7 +132,8 @@ interface StoredTabEvent {
   windowId: number;
   timestamp: number; // Date.now() at capture
   url?: string;      // in-memory tab metadata enrichment at drain time
-  metadata?: { x?: number; y?: number; scrollY?: number };
+  favicon?: string;  // local visual sidecar; stripped by sanitized export/tool projections
+  metadata?: { x?: number; y?: number; scrollY?: number; previousWindowId?: number; enabled?: boolean; state?: number };
 }
 ```
 
@@ -141,7 +149,7 @@ interface StoredTabEvent {
 
 ### Metrics and UI boundary
 
-The popup and dashboard consume only aggregate `StatsSnapshot` values, not raw events:
+`StatsSnapshot` is an internal engineering/transport-health contract. Popup and dashboard also fetch persisted events for local derivation; presentational components do not render the raw stream. Raw event totals must not appear as user-facing activity/action/visit counts, per [PRODUCT.md](../PRODUCT.md).
 
 ```ts
 interface StatsSnapshot {
@@ -156,7 +164,7 @@ interface StatsSnapshot {
 }
 ```
 
-The UI also obtains the authoritative persisted count through `db.events.count()`. It must show dropped events and buffer occupancy/peak, not only processed totals. The dashboard may additionally fetch raw events for in-browser derivation, but it never renders the raw stream.
+`GET_COUNTS` obtains the authoritative persisted count through `db.events.count()` for internal diagnostics. Current popup uses a plain recording-loss message when `droppedEvents > 0`; it does not present pipeline-counter panels or buffer occupancy/peak as primary product UI. Sites, observed time, sessions and recurrence are the product-facing evidence.
 
 ---
 
@@ -223,7 +231,7 @@ All layers use **lazy derivation**. No sessions, contexts, memories, retrieval, 
 
 - No LLM, semantic search, embeddings, vector database, user-intent inference, cross-device correlation, content semantics, or application identity beyond domains.
 - New algorithms must remain pure at their core and expose a minimal Dexie adapter around that core.
-- The current 500-context / 50-memory bounds are deliberate. Add persistence caches only after measurement proves lazy derivation insufficient.
+- Recent-context helpers cap selected sessions at 500; memory database adapters use up to 500 resulting contexts and default to 50 returned memories. Pure `derive()`/`buildMemories()` and full-context lookup are not globally capped to those counts. These caps do not prevent full event-store scans. Add persistence caches only after measurement demonstrates a need.
 
 ---
 
@@ -236,7 +244,9 @@ interface Session {
   id: string; // `${startTimestamp}-${endTimestamp}-${activeTabId}`
   startTimestamp: number;
   endTimestamp: number;
-  duration: number;
+  duration: number; // foreground milliseconds
+  wallDuration?: number; // elapsed milliseconds, including gaps
+  activeSpans?: { start: number; end: number }[];
   eventCount: number;
   tabs: TabParticipation[];
   domains: DomainParticipation[];
@@ -248,6 +258,18 @@ interface Session {
   activeWindowId: number;
 }
 ```
+
+### Foreground time (derivation schema 9)
+
+`foregroundEvents` is shared by session and transition derivation. It excludes background-tab activity, tab creation/removal, and redundant title/loading updates. A genuine URL change on the foreground tab remains evidence. Browser focus loss suppresses activity until focus returns; a selected tab in an unfocused window is not foreground.
+
+Capture samples the selected tab in the focused, non-minimized window every 30 seconds using `chrome.alarms`. Focus/tab/idle transitions also trigger samples. `chrome.idle` stops sampling after 60 seconds without system input or on lock. The last observation lives in `chrome.storage.session`, surviving service-worker restarts. A sample delayed more than 90 seconds closes the previous span at its last observation, never at wake time. No page text or input values are collected.
+
+`duration` in sessions, episodes, and contexts is foreground time, summed from non-overlapping observed intervals. Hidden/idle time and gaps between sessions are excluded even when one episode groups several sessions. `wallDuration` retains elapsed coverage, not time spent. Each page owns foreground dwell until the next page switch, without changing the last-event timestamps used by trajectory scoring.
+
+Historical rows are re-derived locally; no IndexedDB migration or deletion is needed. Old traces lack periodic samples and sometimes focus/visibility evidence: duration remains an estimate, never extrapolated to now or across event gaps of five minutes or longer. Existing downloaded exports must be generated again to receive corrected durations; missing historical attention cannot be reconstructed exactly.
+
+Checks: `pnpm --filter @tabot/shared check:foreground` and `pnpm --filter extension check:foreground`.
 
 ### Boundaries and thresholds
 
@@ -425,7 +447,7 @@ Similarity combines token-level ordered-sequence edit distance, domain Jaccard, 
 | recurrence minimum gap | `30 minutes` |
 | legacy signature domain cap | `6` |
 | stale after | `7 days` |
-| returned memory cap | `50` |
+| default `getMemories` result cap | `50`; explicit limit may differ, pure `buildMemories` is uncapped |
 
 Recurrence requires separate temporal occurrences at least 30 minutes apart; temporally-adjacent fragments of one visit fold into a single occurrence. Generic single-site activity (Google, ChatGPT, YouTube, new-tab) never qualifies. `strength = recurrenceEvidence × similarityConfidence × recencyFactor`. Stale memories are not deleted; consumers receive staleness and decide how to rank it. `observation` is an evidence summary (e.g. "Recurring sequence: github.com → slack.com, observed in 3 separate activity periods"); `inference` is always `null`.
 
@@ -438,7 +460,7 @@ getMemoryById(db, id): Promise<Memory | undefined>
 getMemoriesBySignature(db, signature): Promise<Memory[]>
 ```
 
-Memory APIs derive from no more than 500 recent contexts and return strength-ordered results.
+Memory database APIs derive from up to 500 recent contexts built from up to 500 recent sessions and return strength-ordered results. `getRecentSessions` sessionizes the full stored event array before slicing, so this is a candidate/result bound, not an indexed bounded event read.
 
 ---
 
@@ -480,9 +502,9 @@ Only values greater than zero are returned, results sort descending by similarit
 
 ### Evidence signals, not confidence claims
 
-Consumers receive similarity, memory strength, staleness, context event density, and session count. They decide what those signals mean. Thin contexts, stale memories, and weak partial overlap are never hidden or turned into an intent claim.
+Consumers receive similarity, memory strength, staleness, context event density, and session count. They decide what those signals mean. Local retrieval helpers do not convert thin contexts, stale memories or weak overlap into intent claims. The separate MCP discovery layer hides non-AI-ready contexts; explicit `get_context(id)` can still retrieve one (§16).
 
-Retrieval derives at most 500 contexts and 50 memories. Similarity is consequently `O(500 * averageDomains)`, acceptable until measurement proves otherwise.
+Individual similarity helpers typically compare selected recent-context/memory candidates; their comparison cost is linear in candidates times average domains. Full history reads and derivation precede several adapters. MCP context discovery/lookup derives the full history before selecting results, while memory adapters use the recent-session/context caps above. Do not describe all retrieval as a bounded 500-context database read.
 
 ---
 
@@ -524,7 +546,7 @@ getLiveInteractionIntensity(db): Promise<number>
 getLiveNavigationSequence(db, limit = 10): Promise<string[]>
 ```
 
-`buildLiveContext` is the pure core. The database adapter gets the current context, all persisted events, and top-three related contexts/memories, then passes them into that pure core. No live-context table, real-time stream, or dashboard route is introduced before Phase 7 validates the snapshot's usefulness.
+`buildLiveContext` is the pure core. The database adapter gets the current context, all persisted events, and top-three related contexts/memories, then passes them into that pure core. No live-context table or dedicated live-snapshot route exists. The snapshot is already included in local `derive()`/export; the shipped dashboard has separate derived activity/pattern routes. MCP `get_current_context` projects the latest ready context, not the entire `LiveBrowserContext` object.
 
 ---
 
@@ -534,19 +556,30 @@ Each derivation core is deterministic and has a runnable Node assert check:
 
 ```bash
 pnpm lint
-pnpm --filter shared check:sessions
-pnpm --filter shared check:meaningfulEvents
-pnpm --filter shared check:activityGraph
-pnpm --filter shared check:contexts
-pnpm --filter shared check:stabilization
-pnpm --filter shared check:memories
-pnpm --filter shared check:retrieval
-pnpm --filter shared check:liveContext
-pnpm --filter shared check:pipeline
-pnpm --filter shared check:v5regression
-pnpm --filter shared check:bufferRoundtrip
-pnpm --filter shared run swSemantics swDerivation swGraph swEpisodes
-pnpm --filter shared run swFirstSignal swCost swValidation
+pnpm --filter @tabot/shared check:sessions
+pnpm --filter @tabot/shared check:meaningfulEvents
+pnpm --filter @tabot/shared check:activityGraph
+pnpm --filter @tabot/shared check:contexts
+pnpm --filter @tabot/shared check:stabilization
+pnpm --filter @tabot/shared check:memories
+pnpm --filter @tabot/shared check:retrieval
+pnpm --filter @tabot/shared check:privacy
+pnpm --filter @tabot/shared check:activityMetrics
+pnpm --filter @tabot/shared check:liveContext
+pnpm --filter @tabot/shared check:pipeline
+pnpm --filter @tabot/shared check:v5regression
+pnpm --filter @tabot/shared check:bufferRoundtrip
+pnpm --filter @tabot/shared run swSemantics
+pnpm --filter @tabot/shared run swDerivation
+pnpm --filter @tabot/shared run swGraph
+pnpm --filter @tabot/shared run swEpisodes
+pnpm --filter @tabot/shared run swFirstSignal
+pnpm --filter @tabot/shared run swCost
+pnpm --filter @tabot/shared run swValidation
+pnpm --filter extension check:popup
+pnpm --filter extension check:notifications
+pnpm --filter extension check:metricsRelay
+pnpm --filter mcp-server check:activityMetrics
 pnpm --filter extension build
 pnpm --filter web build
 ```
@@ -564,13 +597,13 @@ The check scripts exercise the respective pure functions and rebuild consistency
 
 ### Deferred only after measurement
 
-Do not add derived IndexedDB tables, full event-cache indexes, derived dashboard routes, popup messages, semantic enrichment, or new telemetry merely for convenience. Add them only if Phase 7 demonstrates a concrete need.
+Do not add derived IndexedDB tables, event caches/indexes, semantic enrichment or additional telemetry merely for convenience. Existing dashboard routes, popup messages and assistant handlers are already implemented; the evidence gate is a requirement for expanding capabilities, not a claim that those surfaces are absent.
 
 ---
 
 ## 13. Phase 7 Decision Gate
 
-Before adding any AI capability, evaluate representative real and constructed browsing scenarios:
+For the existing ChatGPT MCP integration and any future AI-facing changes, evaluate representative real and constructed browsing scenarios:
 
 1. session quality and explainable boundaries;
 2. episode and context coherence and separation;
@@ -583,15 +616,9 @@ The required decision is:
 
 > **Does sparse browser telemetry provide enough signal to represent useful user context?**
 
-If yes, identify the strongest evidence-grounded signals before preparing an agent consumer. If no, identify the minimum additional metadata required and why; do not expand collection simply because data is available.
+If yes, retain the strongest evidence-grounded signals in tool results. If no, identify the minimum additional metadata required and why; do not expand collection simply because data is available.
 
-A future Tabot agent must consume:
-
-```text
-Current Browser Context + Relevant Browser Memories + Supporting Evidence
-```
-
-rather than raw event history.
+The current ChatGPT integration serves requested, sanitized activity summaries, bounded recurring-pattern evidence and origin-only metrics (§16), not raw history or the whole live snapshot. Sessions are inspectable locally but have no dedicated MCP tool. Source inspection and deterministic checks do not establish representative real-browsing usefulness; this evaluation remains open.
 
 ---
 
@@ -602,9 +629,9 @@ rather than raw event history.
 3. IndexedDB persists raw normalized events in batches; derived data is lazy and rebuildable.
 4. Dashboard and popup do not render raw event streams; they show aggregates plus derived views.
 5. Derived output never names a task, intent, or content meaning.
-6. There is no cloud/backend/authentication/multi-user path.
-7. No LLM, embeddings, semantic search, vector database, cross-device identity, content capture, predictive context, or automation is implemented.
-8. Optional persistence caches, derived UI routes, and derived runtime messages require Phase 7 evidence first.
+6. The optional Cloudflare relay authenticates ChatGPT requests and routes them to the user's live extension; it does not store raw events or derived browser history. There is no Tabot account, cloud sync, or multi-user history store.
+7. No Tabot-hosted LLM, embeddings, vector database, cross-device identity, content capture, predictive context, or automation is implemented. Local text search over derived contexts is available through MCP.
+8. Additional persistence caches, collection or semantic capabilities require demonstrated need. Existing derived UI routes/runtime messages are current code, not deferred work.
 
 ---
 
@@ -637,33 +664,119 @@ Retired types are **deterministically** ignored — classification is hardcoded,
 ### `SW_WINDOW_FOCUS` semantics
 
 - Source: `chrome.windows.onFocusChanged`; requires `windows` permission. `windowId = -1` is the no-window sentinel; `previousWindowId` goes in SAB slot 3.
-- **Session layer:** `sessionize` skips it entirely. It cannot open, extend, merge, or split a session; it never updates activity clocks; a focus-only trace yields 0 sessions.
+- **Session layer:** a focus row cannot itself open a session or reset its inactivity clock; a focus-only trace yields 0 sessions. The foreground prefilter uses focus state to reject activity in unfocused windows and close observed dwell. Correcting previously admitted background activity can change derived sessions; focus regain alone never proves continued work.
 - **Meaningful events:** classified contextual; never forms a transition (no URL).
 - **Graph layer:** `applyFocusContinuity` (in `sw-graph.ts`) may only **decorate an existing same-session edge** with a strengthened weight when a causal focus sandwich is present (departure w→x, return x→w chained via `previousWindowId` inside the anchor span). Chains where `previousWindowId === -1`/`WINDOW_ID_NONE` are excluded (focus loss/regain is not an excursion return). SW adds zero nodes/edges/counts.
 - **Episode layer:** no SW terms in the boundary scorer — no focus boost; evidence is a causal record only.
 
-Measured on real browsing: SW telemetry adds **0** sessions, anchors, graph edges, episodes, contexts, memories; only graph evidence counts change where genuine cross-window continuity occurred. Cost (from `sw-cost.check.ts`): SW ratio far under the 30% acceptance ceiling; SW derivation cost within measurement noise.
+Historical Phase 2 measurement (before schema 9 foreground filtering): SW telemetry added **0** sessions, anchors, graph edges, episodes, contexts, memories; only graph evidence counts changed where genuine cross-window continuity occurred. Cost (from `sw-cost.check.ts`): SW ratio far under the 30% acceptance ceiling; SW derivation cost within measurement noise.
 
 ### SW checks
 
 ```bash
-pnpm --filter shared run swSemantics    # taxonomy + firewall classification
-pnpm --filter shared run swDerivation   # Pipeline A vs B: SW-invariance of derived layers
-pnpm --filter shared run swGraph        # focus-continuity evidence rules (-1 chains excluded)
-pnpm --filter shared run swEpisodes     # focus changes NO episode boundary; focus-only burst -> 0
-pnpm --filter shared run swFirstSignal  # per-signal decision audit
-pnpm --filter shared run swCost         # noise + storage + CPU vs Phase 1
-pnpm --filter shared run swValidation   # encode -> decode roundtrip, noise-bounded popup
-pnpm --filter shared run swRealReport   # real trace: Phase 1 vs Phase 2 report (needs trace.json)
+pnpm --filter @tabot/shared run swSemantics    # taxonomy + firewall classification
+pnpm --filter @tabot/shared run swDerivation   # Pipeline A vs B comparison
+pnpm --filter @tabot/shared run swGraph        # focus continuity (-1 chains excluded)
+pnpm --filter @tabot/shared run swEpisodes     # focus-only burst -> 0 sessions
+pnpm --filter @tabot/shared run swFirstSignal  # per-signal decision audit
+pnpm --filter @tabot/shared run swCost         # noise + storage + CPU
+pnpm --filter @tabot/shared run swValidation   # encode -> decode roundtrip
+pnpm --filter @tabot/shared run swRealReport   # requires a supplied real trace
 ```
 
-Schema/encode detail survives in `docs/sw-schema.md`. The Step 11 report's episode-merge claims were superseded: the corrected final semantics is that focus changes **no** session or episode boundary.
+Schema/encode detail survives in `docs/sw-schema.md`. Focus adds no behavioral events or scoring boost; schema 9 additionally uses its browser state to exclude background evidence.
 
 ---
 
-## 16. History
+## 16. ChatGPT MCP/OAuth Relay — Implemented Contract
+
+### Roles and configuration
+
+The extension owns raw browser records, local queries, derivation and safe result projection. The Cloudflare Worker owns OAuth and routing; ChatGPT owns reasoning. There is no Tabot-hosted AI, account system, remote history database or native companion.
+
+```text
+ChatGPT -- OAuth access token --> POST /mcp
+  -> token-bound installation Durable Object
+  -> authenticated outbound extension WebSocket
+  -> local Dexie / shared derivation / sanitization or aggregate projection
+  -> correlated bounded result -> ChatGPT
+```
+
+Production configuration targets `https://tabot-mcp.shanvit7.workers.dev/mcp`; development targets `https://tabot-mcp-dev.shanvit7.workers.dev/mcp`. Extension `PLASMO_PUBLIC_MCP_RELAY_URL` uses the matching origin, without `/mcp`; `PLASMO_PUBLIC_HOME_URL` controls dashboard links. `TABOT_AUTH_SECRET`, `TABOT_EXTENSION_ID` and dashboard `VITE_TABOT_EXTENSION_ID` must match their environment. `wrangler.toml` and `wrangler.dev.toml` use separate Workers/Durable Objects/secrets. These are configured targets, not evidence that production has the current source or seven discovered tools.
+
+`pnpm dev` invokes the MCP source watcher, which **deploys to the dev Worker on startup/change**; it is not a localhost tunnel or a harmless offline check. `dev:local` runs Wrangler locally and cannot serve ChatGPT without a public route. No custom `mcp.tabot.ai` domain/named tunnel is configured in the documented setup. Operational commands live in the [relay README](../apps/mcp-server/README.md); production deploy requires explicit approval.
+
+### Installation and OAuth
+
+- Background startup calls `startRelay()` even before ChatGPT consent. Missing credentials trigger unauthenticated `POST /installations`, issuing a random installation ID and signed **365-day** credential. Registration contains no browsing record; the ID alone is not authorization.
+- Credentials persist in `chrome.storage.local`, separately for dev/production. Saved invalid/expired credentials fail closed rather than silently replacing the installation. Automatic installation-credential renewal/repair UI is not implemented; rotation of this credential is different from OAuth refresh-token rotation.
+- Extension connects to `/relay`, passing the signed bearer credential as its WebSocket subprotocol, not a URL query parameter. One installation Durable Object retains one live socket and in-memory pending calls, not browser-history/tool-result storage.
+- Worker implements OAuth discovery, dynamic client registration, authorization-code + PKCE S256, token refresh and revocation. Registered redirects are HTTPS or loopback HTTP. Consent must run in the same Chrome profile as the configured extension.
+- A **5-minute**, single-use authorization transaction binds client, redirect, PKCE challenge, state and optional resource. The consent page sends `TABOT_APPROVE_AUTHORIZATION`; the extension proves its installation directly to the Worker. Page JavaScript never receives the installation credential. Only an approved transaction can issue a **5-minute**, single-use authorization code.
+- One auth Durable Object stores client registrations, hashed codes/access/refresh tokens and authorization transactions. Access lasts **1 hour**; refresh lasts **30 days** and rotates on use. Advertised scope is `tabot.context`. `/mcp` routes by verified token installation binding, never caller-provided installation ID.
+- Revocation deletes the presented token, not every sibling token/client registration. Revoking refresh does not automatically erase an already-issued access token; registrations have no expiry/self-service deletion. No cross-device pairing, account login or guaranteed complete connection erasure is provided.
+
+### Seven read-only tools
+
+Tool names are protocol contracts, not product labels. Every tool advertises `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: false`.
+
+| Tool / arguments | Implemented selection and limits |
+| --- | --- |
+| `search_context({ query, hours? })` | Query 1–200 characters; optional integer 1–168 hours. Local domain/sequence token-substring matching over ready contexts; maximum 8 results. No semantic/content search. |
+| `get_recent_context({ hours })` | Required integer 1–168 hours; time-overlapping ready contexts, maximum 20. Source is derived before range selection. |
+| `get_current_context({})` | Most recent ready context overlapping the last 24 hours; no real-time/task guarantee, missing returns `found: false`. |
+| `get_context({ id })` | ID 1–256 characters; one exact context, including non-ready. Missing returns `found: false`, never an unscoped history dump. |
+| `list_recurring_patterns({ limit? })` | Integer 1–20, default 10. Recurrent-only filtering before limiting; newest first. Up to 500 recent contexts from up to 500 recent sessions; scope/truncation reported. |
+| `get_memory({ id })` | ID 1–256 characters; one pattern from the recent-context scope, or `found: false`. Origin-only supporting occurrences and real `get_context` IDs. |
+| `get_activity_metrics({ from, to, origin? })` | Safe integer Unix milliseconds with `0 <= from < to <= now`; `[from,to)`, `from: 0` means retained history. Optional exact HTTP(S) origin, max 256 characters, with no credentials/path/query/fragment/trailing slash. Validated again locally. |
+
+Server is `apps/mcp-server/src/index.ts`; schemas/constants are in `src/schema/tools.schema.ts` and `src/lib/`; extension dispatch/projections are in `apps/extension/relay.ts`. Tools return one JSON text content block; relay failures become MCP `isError` results. `get_session` and `get_page_context` do not exist. Local `LiveBrowserContext` APIs are not directly exposed by MCP.
+
+Context IDs are derived, not durable database handles: changed source/algorithms and recent-memory scope can make a previously selected ID unavailable. Context discovery can include a still-growing ready summary; only notifications impose the settlement delay. Full-history lookup/discovery avoids IDs changed merely by slicing raw input, but still performs full local derivation and may exceed latency at scale. No pagination/cache/indexing guarantee is implied.
+
+### Result privacy, bounds and time semantics
+
+Context/memory paths call `sanitizeDerived` and allowlist projected fields. Metrics return structurally restricted HTTP(S) origins and aggregates without a raw-row export. Session/occurrence/visit counts are meaningful summaries; raw event/interaction totals remain internal and are absent from current external projections. Paths, queries, credentials, favicons, event sequences and page contents are not tool result fields. Origins/subdomains are intentionally visible, including potentially identifying enterprise hosts.
+
+Default PII protection uses local OpenRedaction with selected email, phone, credit-card and IBAN patterns. Known textual fields are rewritten in a copy; source events are untouched. Detector failure aborts the context/memory/export result rather than exposing unredacted data. This is covered-pattern protection, not universal names/username/password/token detection. Manual JSONL download can include sanitized event rows and URL structure and is **not equivalent to MCP projection**; it never uploads itself. Never log browsing payloads, raw URLs, page titles, memory text or full responses. Worker application storage does not retain tool results; Cloudflare/OpenAI processing remains a separate privacy boundary.
+
+| Result | Bounds |
+| --- | --- |
+| Context discovery | 8 search / 20 recent results; exact lookup selects one. Domain payload is not uniformly trimmed to a 60k budget. |
+| Pattern list/evidence | 60,000-character budget with truncation; observation max 2,000 characters, up to 20 recent occurrences, 20 domains, 50 origins per sequence, 100 overall supporting IDs and 20 per occurrence. |
+| Metrics | 60,000-character budget, up to 50 sites and 100 transition pairs; whole-period totals include omitted rows. Site filter applies after attribution and can find a site outside the unfiltered top 50. |
+| Relay | 64,000-character response-frame limit; 10-second correlated-request timeout; offline/disconnect errors rather than stored-history fallback. |
+
+Metric browsing time is estimated from consecutive observations, capped at **5 minutes per gap**, with no extrapolation after the last observation. Session/context duration uses foreground spans (§6); the two algorithms are not interchangeable attention measures. Fingerprint/occurrence sequences preserve derived first-occurrence ordering, not complete navigation replay; confidence is heuristic similarity, not probability of intent. Empty results mean no retained matching evidence, not proof of no activity/routines.
+
+### Lifecycle and verification boundary
+
+Extension heartbeats every **25 seconds**; reconnect doubles from **1 second** up to **60 seconds**, plus jitter. Chrome must remain open with the extension connected. `/health` proves Worker reachability only. `GET_ASSISTANT_CONNECTION` asks authenticated `/connection` for existing unexpired OAuth grants; no credential reaches dashboard JavaScript. **Connected does not prove a live relay socket, tool discovery or successful ChatGPT retrieval.** Unknown/checking/disconnected states remain distinct.
+
+After Worker tool/schema/auth changes, deploy the intended environment explicitly and refresh ChatGPT discovery. Existing access/refresh grants can still represent a connection to older deployed code. Non-technical UI currently links to the ChatGPT Plugins search page, while documented dev setup requires Developer mode/manual URL entry; production onboarding and actual prompt-prefill/selected-ID retrieval remain unverified.
+
+## 17. Readiness, Product Surfaces and Release Gate
+
+Readiness is deterministic: `duration >= 10 minutes` AND `totalEventCount >= 10` AND (`domainCount >= 2` OR `sessionCount >= 2` OR `totalInteractionCount >= 5`). Shared core is `isAiReadyEvidence`; context and episode wrappers reuse it. It gates MCP discovery and popup readiness, **not** exact-ID access or a claim that a topic/intent is known.
+
+Notifications in `background.ts` use a **15-minute Chrome alarm**, settled **30-minute**-old candidates, **24-hour** freshness, persisted context/memory high-water marks and **6-hour** cooldown. They are tracking-enabled only. First initialization seeds “seen” timestamps to now; no historical backfill. Selection compares ready contexts and newly seen recurrent memories; a qualifying episode inside the selected context can refine wording, not independently trigger notification. The selected summary/memory ID and connection state are saved with the notification. Click opens Home; button opens a scoped ChatGPT prompt or connection using that saved state. No dedicated Chrome startup reminder exists.
+
+Home maps and session inspection, Activities range/site metrics, recurring-pattern discovery/actions, popup new-summary counts and session-count progress are implemented. Inspector mounts one `react-call` root, projects aggregate session evidence, separates browser/extension sources and shows no event counters or technical footer. The explicit shared-gate readiness indicator on Home is **absent**. At least notification and relay fallback wording still needs alignment with PRODUCT.md’s **activity/activity summary** vocabulary. Use internal `context` names only for contracts, not UI labels.
+
+The old plan’s fake topic labels, event-count examples, new-memory popup counts and deterministic “first memory forming” progress are not implementation requirements. Local review remains primary and ChatGPT optional; no extra providers, centralized history, semantic inference, universal PII detector, native app or telemetry rewrite is needed. Preserve meaningful sparse re-engagement, honest empty states, privacy-first selected retrieval and evidence before interpretation.
+
+The extension's prepared manifest version is **0.2.0**; MCP package/protocol is **0.2.0**. The extension package baseline remains **0.1.3** until Changesets creates the Version Packages PR, which will apply the minor bump to **0.2.0**. Local builds do not prove a store release or live deployment; use the existing Changesets/release PR workflow and approve deployment explicitly.
+
+Release requires normal-user connection without MCP setup, real browsing/readiness/notification calibration, useful evidence-grounded ChatGPT results, production ID/origin/base-path/tool-version agreement, offline/restart/credential acceptance, remaining first-run notification guidance and a decision/implementation for startup reminder. See [system.md → status and acceptance](./system.md#v02-status-and-acceptance). Measure first useful activity → review → authorized assistant use → return, not raw collection volume. No implemented product-loop analytics is claimed.
+
+**Audit evidence:** seven existing non-UI logic/relay checks passed on 2026-10-09: shared retrieval, privacy and activity metrics; extension popup model, notification model and metrics relay; server activity-metrics/MCP checks. They use constructed/mocked data and do not validate production ChatGPT. No UI tests/previews/browser automation, live consent/retrieval, production deployment or complete release acceptance was performed during this audit. UI review belongs to the user.
+
+---
+
+## 18. History
 
 - `2026-08-22` - Consolidated initial collection, SAB, Dexie, and dashboard documentation into `tech.md`.
 - `2026-08-24` - Added the implemented deterministic derived layer: sessions, contexts, memories, retrieval, and live browser context; merged metrics into this document and retired split specification files.
 - `2026-08-28` - Rewrote the derived-layer sections to match the V6/V7 implementation: added the meaningful-event, activity-anchor, activity-graph, and episode stages; contexts are now built from episodes with trajectory-coherence segmentation; memories use behavioral fingerprints rather than exact domain signatures; sessions retain full event sequences; added a companion `system.md` walkthrough.
 - `2026-09-13` - Synthesized the Phase 2 SW experiment into §15 (KEEP WITH REDUCTION): `SW_WINDOW_FOCUS` retained as the only SW signal; popup/toggle/download/lifecycle retired to diagnostic; `downloads` permission dropped; retired `docs/sw-events.md`, `docs/sw-inventory.md`, `docs/sw-phase.md`, `docs/sw-step11-report.md` folded in here and `system.md`.
+- `2026-10-09` - Audited and absorbed the v0.2 product plan into this specification and `system.md`; documented all seven MCP tools, actual OAuth/relay/privacy/readiness contracts and current UI behavior. Corrected stale package paths, result-vs-read bounds and deferred-surface claims. Kept production/live acceptance and absent features separate from implementation; retired the standalone plan.

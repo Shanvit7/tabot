@@ -43,7 +43,7 @@ jobs:
       - name: Prepare Pages artifact
         run: |
           # SPA fallback for unknown deep links only. Real routes (/, /privacy,
-          # /dashboard) are prerendered to their own index.html by the build.
+          # /home) are prerendered to their own index.html by the build.
           cp apps/web/.output/public/index.html apps/web/.output/public/404.html
           touch apps/web/.output/public/.nojekyll
 

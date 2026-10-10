@@ -3,9 +3,9 @@
 // Pure derivation: StoredTabEvent[] in → DerivedEvent[] → ActivityTransition[] out.
 // Raw events untouched; no new telemetry; no graph library; no new dependencies.
 
-import { isDiagnostic } from "../activities/sw-semantics";
 import type { StoredTabEvent } from "../events/db";
 import type { TabEventType } from "../events/events";
+import { foregroundEvents } from "./foreground";
 
 export interface ActivityRef {
 	origin: string; // scheme + host ("" when URL unparseable)
@@ -20,6 +20,7 @@ export interface DerivedEvent {
 	windowId: number;
 	timestamp: number; // first raw timestamp of the folded group
 	url?: string;
+	favicon?: string; // visual identity only: origin favicon captured from the tab
 	ref?: ActivityRef; // present when the event carries a URL
 	sources: string[]; // raw event ids folded in (provenance, keeps collapsed events traceable)
 }
@@ -72,17 +73,11 @@ export const deriveMeaningfulEvents = (
 ): DerivedEvent[] => {
 	if (events.length === 0) return [];
 
-	const sorted = [...events].sort((a, b) => a.timestamp - b.timestamp);
+	const sorted = foregroundEvents(events);
 	const out: DerivedEvent[] = [];
 	const lastIdentity = new Map<number, string>();
 
 	for (const e of sorted) {
-		// FINAL taxonomy — diagnostic SW events (popup/toggle/download/lifecycle)
-		// never reach the behavioral meaningful stream. SW_WINDOW_FOCUS passes
-		// through (contextual) but carries no url → deriveTransitions needs a
-		// ref, so it forms no transition.
-		if (isDiagnostic(e.type)) continue;
-
 		const toDerived = (): DerivedEvent => ({
 			id: e.id,
 			type: e.type,
@@ -90,6 +85,7 @@ export const deriveMeaningfulEvents = (
 			windowId: e.windowId,
 			timestamp: e.timestamp,
 			url: e.url,
+			favicon: e.favicon,
 			ref: activityRef(e.url),
 			sources: [e.id],
 		});

@@ -1,42 +1,65 @@
-const useCases = [
-	"Personal AI",
-	"Browser activity",
-	"Activity analysis",
-	"Research tools",
-	"Custom agents",
-	"Workflow discovery",
-	"Local AI",
-	"Personal analytics",
-	"Experiments with context",
-] as const;
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import { Button } from "~/components/ui/button";
 
-export const UseCases = () => (
+export const ChatGPTIntegration = ({
+	extensionInstalled,
+	isMobileDevice,
+}: {
+	extensionInstalled: boolean | null;
+	isMobileDevice: boolean;
+}) => (
 	<section
-		className="bg-[#f5f6f0] px-6 py-20 text-[#12221d] sm:px-10 sm:py-28 lg:px-14"
-		id="oss"
+		id="chatgpt"
+		className="border-b-2 border-black bg-white px-5 py-12 sm:px-10 sm:py-16 lg:px-14"
 	>
-		<div className="mx-auto max-w-7xl">
-			<h2 className="max-w-3xl text-[clamp(2.8rem,5vw,4.6rem)] font-semibold leading-[0.92] tracking-[-0.04em]">
-				A browser context layer you can build on.
-			</h2>
-			<p className="mt-7 max-w-2xl text-lg leading-8 text-[#4a5a52]">
-				Tabot is an open foundation for applications that need private browser
-				context.
-			</p>
-			<div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-3">
-				{useCases.map((use) => (
-					<div
-						className="rounded-xl border border-[#d9ddd0] bg-lime/10 px-4 py-3 font-mono text-sm uppercase tracking-wide shadow-hard-sm"
-						key={use}
-					>
-						{use}
-					</div>
-				))}
+		<div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
+			<div>
+				<h2 className="max-w-lg text-[clamp(2rem,3.5vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.02em]">
+					Ask ChatGPT about your browsing.
+				</h2>
+				<p className="mt-4 max-w-lg text-lg leading-8 text-landing-muted">
+					Connect Tabot to ChatGPT to ask about sites you visited and patterns
+					in your activity.
+				</p>
 			</div>
-			<p className="mt-8 font-mono text-sm leading-6 text-[#244d39]">
-				Tabot doesn&apos;t decide what your data is for.{" "}
-				<span className="font-bold">You do.</span>
-			</p>
+			<div className="border-y border-black py-5">
+				<p className="text-lg leading-8">
+					Ask things like “Which sites did I visit most today?” or “What do I
+					keep coming back to?”
+				</p>
+				<p className="mt-3 text-base leading-7 text-landing-muted">
+					When you ask, ChatGPT requests selected activity details from your
+					extension. Tabot’s online connection service passes requests and
+					results; it does not store browsing history or tool results.
+				</p>
+				{extensionInstalled !== null && !isMobileDevice && (
+					<Button
+						asChild
+						variant="outline"
+						className="mt-5 text-base font-semibold normal-case tracking-normal"
+					>
+						<a
+							href={
+								extensionInstalled
+									? `${import.meta.env.BASE_URL}home#connectors-heading`
+									: "#get-started"
+							}
+						>
+							{extensionInstalled ? (
+								<>
+									Connect Tabot to{" "}
+									<span className="inline-flex items-center gap-1">
+										<OpenAIMono aria-hidden="true" className="size-4" />
+										ChatGPT
+									</span>
+								</>
+							) : (
+								"Get Tabot for Chrome"
+							)}
+						</a>
+					</Button>
+				)}
+			</div>
 		</div>
 	</section>
 );

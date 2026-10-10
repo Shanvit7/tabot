@@ -7,13 +7,18 @@ export const config: PlasmoCSConfig = {
 };
 
 // never capture key values, text, input contents — only that activity occurred
-const send = (type: string, metadata?: Record<string, number>) =>
-	chrome.runtime.sendMessage({
-		kind: "TABOT_PAGE_EVENT",
-		type,
-		timestamp: Date.now(),
-		metadata,
-	});
+const send = (type: string, metadata?: Record<string, number>) => {
+	if (type !== "PAGE_HIDDEN" && (document.hidden || !document.hasFocus()))
+		return;
+	void chrome.runtime
+		.sendMessage({
+			kind: "TABOT_PAGE_EVENT",
+			type,
+			timestamp: Date.now(),
+			metadata,
+		})
+		.catch(() => {}); // Extension may reload while this page stays open.
+};
 
 const scrollThrottler = new Throttler(
 	(scrollY: number) => send("SCROLL", { scrollY }),
@@ -25,10 +30,12 @@ const keyThrottler = new Throttler(() => send("KEY_ACTIVITY"), { wait: 150 });
 const scrollY = () =>
 	document.documentElement?.scrollTop ?? document.body?.scrollTop ?? 0;
 
-document.addEventListener("click", (e: MouseEvent) =>
-	send("CLICK", { x: e.clientX, y: e.clientY }),
-);
-document.addEventListener("keydown", () => keyThrottler.maybeExecute());
+document.addEventListener("click", (e: MouseEvent) => {
+	if (e.isTrusted) send("CLICK", { x: e.clientX, y: e.clientY });
+});
+document.addEventListener("keydown", (e) => {
+	if (e.isTrusted) keyThrottler.maybeExecute();
+});
 
 // scroll events do NOT bubble: they fire on the scrolling node only.
 // The viewport scrolls against `<html>`/`<body>` → listen on window. Nested
@@ -52,3 +59,4 @@ for (const el of document.querySelectorAll("*")) {
 document.addEventListener("visibilitychange", () => {
 	send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");
 });
+send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");

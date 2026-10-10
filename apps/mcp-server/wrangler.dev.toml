@@ -1,0 +1,40 @@
+name = "tabot-mcp-dev"
+main = "src/index.ts"
+compatibility_date = "2026-09-20"
+
+[vars]
+MCP_PUBLIC_URL = "https://tabot-mcp-dev.shanvit7.workers.dev/mcp"
+
+[durable_objects]
+bindings = [
+	{ name = "TABOT_INSTALLATION", class_name = "TabotInstallation" },
+	{ name = "TABOT_AUTH", class_name = "TabotAuth" },
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TabotInstallation"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TabotAuth"]
+
+[[ratelimits]]
+name = "TABOT_PUBLIC_RATE_LIMITER"
+namespace_id = "1002001"
+simple = { limit = 20, period = 60 }
+
+[[ratelimits]]
+name = "TABOT_API_RATE_LIMITER"
+namespace_id = "1002002"
+simple = { limit = 120, period = 60 }
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+redact_query_string = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true
