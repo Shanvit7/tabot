@@ -10,21 +10,21 @@ export const GetStarted = () => (
 	>
 		<div className="mx-auto grid max-w-6xl items-start gap-10 lg:grid-cols-[1fr_0.8fr] lg:gap-20">
 			<div>
-				<h2 className="max-w-xl text-[clamp(1.75rem,3vw,2.25rem)] font-semibold leading-[1.2] tracking-[-0.02em]">
+				<h2 className="max-w-xl text-[clamp(2rem,3.5vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.02em]">
 					Start with Chrome.
 				</h2>
-				<p className="mt-4 max-w-lg text-base leading-7">
+				<p className="mt-4 max-w-lg text-lg leading-8">
 					Tabot records the sites you visit and shows how you move between them.
 				</p>
 			</div>
 			<div className="border-2 border-black bg-white p-6 shadow-hard sm:p-7">
-				<h3 className="text-lg font-semibold tracking-tight">
+				<h3 className="text-xl font-semibold tracking-tight">
 					Add Tabot to Chrome
 				</h3>
 				<Button
 					asChild
 					variant="secondary"
-					className="mt-6 w-full px-4 text-sm font-semibold normal-case tracking-normal"
+					className="mt-6 w-full px-4 text-base font-semibold normal-case tracking-normal"
 				>
 					<a
 						href={
@@ -39,7 +39,7 @@ export const GetStarted = () => (
 					</a>
 				</Button>
 				{!chromeWebStoreUrl && (
-					<p className="mt-4 text-sm leading-6 text-landing-muted">
+					<p className="mt-4 text-base leading-7 text-landing-muted">
 						Setup instructions are available in the project repository.
 					</p>
 				)}

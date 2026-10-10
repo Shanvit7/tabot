@@ -25,6 +25,8 @@ h1{margin:0;font-size:clamp(1.125rem,3vw,1.5rem);line-height:1.15;letter-spacing
 .privacy-mark.no{color:#5b3825}
 .privacy p{margin:0}
 .privacy-note{margin-top:.65rem;padding-top:.6rem;border-top:1px solid #c5d0c2;font-size:.7rem;line-height:1.4;color:#263329}
+.privacy-note .privacy-link{color:#101510;font-weight:700;text-decoration:underline;text-decoration-color:#bfff00;text-decoration-thickness:2px;text-underline-offset:3px}
+.privacy-note .privacy-link:focus-visible{outline:2px solid #101510;outline-offset:2px}
 .privacy-footer{margin:.6rem 0 0;font-size:.7rem;line-height:1.4;color:#40584a;font-weight:700;padding-top:.5rem;text-align:center}
 form{margin-top:1rem}
 button{display:flex;align-items:center;justify-content:center;width:min(100%,22rem);min-height:3.5rem;margin-inline:auto;padding:.75rem 1rem;border:2px solid #bfff00;background:#101510;color:#bfff00;font-family:inherit;text-align:center;cursor:pointer;box-shadow:4px 4px 0 #bfff00;transition:transform 140ms ease,box-shadow 140ms ease}
@@ -159,6 +161,7 @@ export const consentPage = ({
 							<span class="cta-hint">Share activity when you ask</span>
 						</span>
 					</button>
+					<p id="status" role="status" aria-live="polite"></p>
 				</form>
 				<section class="privacy" aria-labelledby="privacy-heading">
 					<h2 id="privacy-heading">Privacy, at a glance</h2>
@@ -189,7 +192,16 @@ export const consentPage = ({
 					<p class="privacy-note">
 						<strong>PII redaction:</strong> emails, phones, cards, and IBANs in
 						shared text/URLs are redacted. Other identifiers may slip through;
-						site names/timing stay visible.
+						site names/timing stay visible.{" "}
+						<a
+							class="privacy-link"
+							href="https://shanvit7.github.io/tabot/privacy/#when-you-connect-chatgpt"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							Read how ChatGPT connects
+						</a>
+						.
 					</p>
 					<p class="privacy-footer">
 						This Plugin / MCP passes requests or results; stores no history or

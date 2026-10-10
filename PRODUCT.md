@@ -37,7 +37,7 @@ Tabot collects browser activity on the user's device, visualizes it as an explor
 - **Evidence first:** derived values retain IDs, domains, timestamps, counts, similarity, staleness, and recurrence data that support them. Evidence signals, not confidence claims.
 - **Event taxonomy:** `behavioral` / `contextual` / `diagnostic`. Diagnostic events never influence derivation. SW telemetry reduced in Phase 2 to a single contextual signal, `SW_WINDOW_FOCUS` — it is never a session boundary and only strengthens existing graph edges.
 - **Overflow:** a full ring buffer rejects the event and increments a visible `droppedEvents` counter.
-- **Status:** experimental, MIT, v0.1.x. Roadmap is deliberately narrow: stabilize telemetry/export format, improve activity summaries, evaluate AI inference against real examples.
+- **Status:** experimental, MIT; v0.2.0 release prepared, not deployed. Roadmap is deliberately narrow: stabilize telemetry/export format, improve activity summaries, evaluate AI inference against real examples.
 
 ## Brand Commitments
 

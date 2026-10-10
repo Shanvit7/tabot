@@ -209,7 +209,7 @@ export const buildExportJsonl = (d: Derived): string => {
 			format: "tabot-export",
 			version: 1,
 			exportedAt: new Date().toISOString(),
-			source: "tabot-web@0.1.0",
+			source: "tabot-web@0.2.0",
 			telemetrySchemaVersion: 1,
 			derivationSchemaVersion: 9,
 			durationSemantics: {

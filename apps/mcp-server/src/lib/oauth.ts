@@ -37,7 +37,11 @@ export const verifyPkce = async (
 	codeVerifier: string,
 	codeChallenge: string,
 ): Promise<boolean> => {
-	if (!codeVerifier || !codeChallenge) return false;
+	if (
+		!/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier) ||
+		!/^[A-Za-z0-9_-]{43}$/.test(codeChallenge)
+	)
+		return false;
 	return timingSafeEqual(await sha256Base64Url(codeVerifier), codeChallenge);
 };
 

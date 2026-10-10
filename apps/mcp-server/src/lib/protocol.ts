@@ -1,5 +1,6 @@
 export const ERROR_CODES = {
 	OFFLINE: "extension_offline",
+	BUSY: "extension_busy",
 	TIMEOUT: "extension_timeout",
 	DISCONNECTED: "extension_disconnected",
 	MALFORMED: "malformed_message",
@@ -43,12 +44,18 @@ export const parseClientMessage = (raw: string): ClientResponse | null => {
 	} catch {
 		return null;
 	}
-	if (typeof value !== "object" || value === null) return null;
+	if (typeof value !== "object" || value === null || Array.isArray(value))
+		return null;
 	const msg = value as Record<string, unknown>;
 	if (msg.type !== "response") return null;
-	if (typeof msg.requestId !== "string" || msg.requestId.length === 0)
+	if (
+		typeof msg.requestId !== "string" ||
+		msg.requestId.length === 0 ||
+		msg.requestId.length > 128
+	)
 		return null;
-	if (msg.error !== undefined) {
+	if (Object.hasOwn(msg, "result") === Object.hasOwn(msg, "error")) return null;
+	if (Object.hasOwn(msg, "error")) {
 		const err = msg.error as Record<string, unknown> | null;
 		if (
 			typeof err !== "object" ||

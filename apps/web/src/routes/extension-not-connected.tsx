@@ -42,7 +42,7 @@ const ExtensionNotConnected = () => {
 	if (!isMobile && hasExtension) return null;
 
 	return (
-		<main className="grid min-h-dvh place-items-center bg-[#f5f6f0] px-4 py-6 text-[#12221d] sm:px-8">
+		<main className="grid min-h-dvh place-items-center bg-landing-paper px-4 py-6 text-[#12221d] sm:px-8">
 			<div className="w-full min-w-0 max-w-4xl border-2 border-black bg-lime p-5 shadow-hard-xl sm:p-8">
 				{isMobile ? (
 					<MobileView chromeWebStoreUrl={chromeWebStoreUrl} />

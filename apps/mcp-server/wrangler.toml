@@ -27,5 +27,23 @@ new_sqlite_classes = ["TabotInstallation"]
 tag = "v2"
 new_sqlite_classes = ["TabotAuth"]
 
+# Separate account-level namespaces from the dev Worker's limits.
+[[ratelimits]]
+name = "TABOT_PUBLIC_RATE_LIMITER"
+namespace_id = "1001001"
+simple = { limit = 20, period = 60 }
+
+[[ratelimits]]
+name = "TABOT_API_RATE_LIMITER"
+namespace_id = "1001002"
+simple = { limit = 120, period = 60 }
+
 [observability]
 enabled = true
+head_sampling_rate = 1
+redact_query_string = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true

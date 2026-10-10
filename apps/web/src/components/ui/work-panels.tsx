@@ -40,6 +40,13 @@ export const GraphLoading = ({
 			data-animate="false"
 			className={`graph-loader flex flex-col items-center justify-center gap-5 rounded-lg bg-[#0b1310] px-4 py-10 text-center ${className}`}
 		>
+			<span className="inline-flex items-center gap-2 rounded-full border border-[#476151] px-3 py-1 text-[11px] font-semibold tracking-[0.14em] text-[#bfff00]">
+				<span
+					aria-hidden="true"
+					className="size-1.5 rounded-full bg-[#bfff00] motion-safe:animate-pulse"
+				/>
+				MAP IN PROGRESS
+			</span>
 			<svg
 				aria-hidden="true"
 				viewBox="0 0 320 160"
@@ -97,23 +104,11 @@ export const GraphLoading = ({
 };
 
 export const Loading = () => (
-	<main
-		className="min-h-screen bg-white px-4 pt-24 text-[#15251B]"
-		role="status"
-		aria-live="polite"
-	>
-		<div className="mx-auto max-w-290">
-			<img
-				src={`${import.meta.env.BASE_URL}logo.png`}
-				alt=""
-				className="size-10 rounded-md"
-			/>
-			<p className="mt-8 text-xl font-semibold">Loading your local activity…</p>
-			<div aria-hidden="true" className="mt-8 max-w-180 space-y-4">
-				<div className="h-12 rounded-lg bg-[#F5F8F4]" />
-				<div className="h-20 rounded-lg bg-[#F5F8F4]" />
-				<div className="h-20 rounded-lg bg-[#F5F8F4]" />
-			</div>
-		</div>
+	<main className="grid min-h-screen place-items-center bg-[#0b1310] px-4 py-8">
+		<GraphLoading
+			className="min-h-[70vh] w-full max-w-2xl border border-[#2f4738]"
+			title="Your trail is taking shape"
+			message="Connecting the places and patterns from your browsing."
+		/>
 	</main>
 );

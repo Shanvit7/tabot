@@ -52,24 +52,24 @@ export const Hero = ({
 		<section className="border-b-2 border-black bg-landing-paper px-5 py-12 sm:px-10 sm:py-16 lg:px-14">
 			<div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-20">
 				<div className="min-w-0">
-					<h1 className="max-w-xl text-[clamp(2rem,4vw,3.25rem)] font-semibold leading-[1.12] tracking-[-0.025em]">
-						Where did your
-						<br />
-						browsing take you?
+					<h1 className="max-w-xl text-[clamp(2.25rem,5vw,3.25rem)] font-semibold leading-[1.08] tracking-[-0.025em]">
+						Where did your browsing take you?
 					</h1>
-					<p className="mt-5 max-w-lg text-base leading-7 text-landing-muted">
+					<p className="mt-5 max-w-lg text-lg leading-8 text-landing-muted">
 						Tabot records the sites you visit and shows how you move between
 						them. Look back at your day in one activity map.
 					</p>
 					{isMobileDevice ? (
 						<div className="mt-6 max-w-lg border-t-2 border-black pt-4">
-							<p className="font-semibold">Pick this up on your computer.</p>
-							<p className="mt-1 text-sm leading-6 text-landing-muted">
+							<p className="text-lg font-semibold">
+								Pick this up on your computer.
+							</p>
+							<p className="mt-1 text-base leading-7 text-landing-muted">
 								Tabot runs in desktop Chrome. Send this page to yourself, then
 								open it there to install and explore your activity map.
 							</p>
 							<Button
-								className="mt-4 text-sm font-semibold normal-case tracking-normal"
+								className="mt-4 text-base font-semibold normal-case tracking-normal"
 								type="button"
 								variant="secondary"
 								onClick={() => void shareDesktopLink()}
@@ -81,7 +81,7 @@ export const Hero = ({
 								)}
 								Send link to my computer
 							</Button>
-							<p role="status" className="mt-2 text-sm text-landing-muted">
+							<p role="status" className="mt-2 text-base text-landing-muted">
 								{shareMessage}
 							</p>
 						</div>
@@ -89,7 +89,7 @@ export const Hero = ({
 						<div className="mt-6 flex flex-wrap items-center gap-4">
 							<Button
 								asChild
-								className="text-sm font-semibold normal-case tracking-normal"
+								className="text-base font-semibold normal-case tracking-normal"
 							>
 								<a
 									href={

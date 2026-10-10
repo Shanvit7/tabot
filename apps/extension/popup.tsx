@@ -7,8 +7,8 @@ import {
 	type StoredTabEvent,
 } from "@tabot/shared";
 import {
-	ArrowRight,
 	ChevronDown,
+	ChevronRight,
 	Globe,
 	History,
 	Pause,
@@ -66,7 +66,7 @@ const NOTIFICATION_PREVIEWS = [
 ] as const;
 
 const Arrow = () => (
-	<ArrowRight
+	<ChevronRight
 		aria-hidden="true"
 		strokeWidth={1.5}
 		className="size-4 shrink-0"
@@ -206,7 +206,11 @@ const IndexPopup = () => {
 	const previousVisit = useRef<Promise<number | null> | null>(null);
 
 	useEffect(() => {
-		if (process.env.NODE_ENV !== "development") return;
+		if (
+			process.env.NODE_ENV !== "development" ||
+			process.env.PLASMO_PUBLIC_NOTIFICATION_PREVIEW !== "1"
+		)
+			return;
 		let active = true;
 		void chrome.storage.local
 			.get("tabot_notification_preview_index")
@@ -643,21 +647,6 @@ const IndexPopup = () => {
 					{featured ? "Review activity" : "Open Tabot"}
 					<Arrow />
 				</button>
-				{process.env.NODE_ENV === "development" && (
-					<button
-						type="button"
-						onClick={() =>
-							setNotificationPreview((index) =>
-								index === null ? 0 : (index + 1) % NOTIFICATION_PREVIEWS.length,
-							)
-						}
-						className="popup-row min-h-11 w-full text-left text-xs text-muted"
-					>
-						{notificationPreview === null
-							? `Preview notification 1/${NOTIFICATION_PREVIEWS.length}`
-							: `Next notification ${((notificationPreview + 1) % NOTIFICATION_PREVIEWS.length) + 1}/${NOTIFICATION_PREVIEWS.length}`}
-					</button>
-				)}
 				<div className="mt-2 flex min-h-11 items-center justify-between gap-3 text-xs text-muted">
 					<span>Stays on this device. Choose what to share.</span>
 					{featured && (

@@ -1,6 +1,6 @@
 # Chrome Web Store — Tabot
 
-Draft permission/privacy update for the unreleased foreground-time fix and authorized activity-metrics and recurring-pattern tools. Last updated: October 8, 2026. Current package version: 0.1.3. No store submission or publication performed.
+Draft permission/privacy update for the 0.2.0 extension release, including foreground-time tracking and authorized activity-metrics and recurring-pattern tools. Last updated: October 10, 2026. Prepared manifest version: 0.2.0. No store submission or publication performed.
 
 ## Store listing
 

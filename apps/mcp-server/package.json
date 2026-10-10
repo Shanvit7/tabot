@@ -5,14 +5,18 @@
 	"type": "module",
 	"scripts": {
 		"check:activityMetrics": "node --import ../../packages/shared/resolve-hook.mjs --import ./scripts/tsx-hook.mjs scripts/activity-metrics.check.mjs",
+		"check:production": "node --import ../../packages/shared/resolve-hook.mjs --import ./scripts/tsx-hook.mjs scripts/production.check.mjs",
+		"deploy:check": "pnpm typecheck && pnpm check:production && pnpm check:activityMetrics && wrangler deploy --config wrangler.toml --dry-run",
 		"dev": "node scripts/dev.mjs",
-		"dev:local": "wrangler dev",
-		"deploy": "wrangler deploy",
+		"dev:local": "wrangler dev --config wrangler.local.toml --local --ip 127.0.0.1 --persist-to .wrangler/local-state",
+		"dev:inspector": "pnpm dlx @modelcontextprotocol/inspector@2.10.1",
+		"deploy": "pnpm typecheck && pnpm check:production && pnpm check:activityMetrics && wrangler deploy --config wrangler.toml",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.30.0",
+		"@modelcontextprotocol/sdk": "^1.32.1",
 		"hono": "^4.13.8",
+		"hono-rate-limiter": "^0.5.4",
 		"jose": "^6.2.12",
 		"zod": "^4.4.3"
 	},

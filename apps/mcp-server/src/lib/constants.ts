@@ -8,6 +8,11 @@ export const REQUEST_TIMEOUT_MS = 10_000;
 /** Bounded message size — reject oversized extension frames. */
 export const MAX_MESSAGE_CHARS = 64_000;
 
+export const MAX_PENDING_REQUESTS = 32;
+export const MAX_HTTP_BODY_BYTES = 16_384;
+export const AUTH_CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
+export const CLIENT_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
 /** Installation token lifetime. Long-lived; refresh flow is a later phase. */
 export const INSTALLATION_TOKEN_TTL = "365d";
 

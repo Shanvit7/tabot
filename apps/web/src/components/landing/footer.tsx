@@ -11,17 +11,17 @@ export const Footer = ({
 			<div>
 				<a
 					href={import.meta.env.BASE_URL}
-					className="inline-flex min-h-11 items-center text-lg font-semibold tracking-tight"
+					className="inline-flex min-h-11 items-center text-xl font-semibold tracking-tight"
 				>
 					TABOT
 				</a>
-				<p className="mt-2 max-w-sm text-sm leading-6 text-landing-muted">
-					Your browsing activity, kept on your device.
+				<p className="mt-2 max-w-sm text-base leading-7 text-landing-muted">
+					Thinking across Tabs · Version 0.2.0
 				</p>
 			</div>
 			<nav
 				aria-label="Footer navigation"
-				className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium"
+				className="flex flex-wrap gap-x-6 gap-y-2 text-base font-medium"
 			>
 				<a
 					href={`${import.meta.env.BASE_URL}privacy`}

@@ -51,7 +51,7 @@ const Activities = () => {
 				<h1 className="text-[32px] font-semibold tracking-tight sm:text-[40px]">
 					Activities
 				</h1>
-				<p className="mt-2 text-sm text-[#476151]">
+				<p className="mt-2 text-sm text-preview-muted">
 					Your browsing, in plain numbers — time is estimated from how you
 					switch tabs, and places are the sites you visited.
 				</p>
@@ -65,7 +65,7 @@ const Activities = () => {
 							type="button"
 							aria-pressed={period === option}
 							onClick={() => setPeriod(option)}
-							className={`min-h-11 rounded-md px-4 text-sm ${period === option ? "bg-[#e9eee8] font-semibold" : "hover:bg-[#f5f8f4]"}`}
+							className={`min-h-11 rounded-md px-4 text-sm ${period === option ? "bg-[#e9eee8] font-semibold" : "hover:bg-preview-surface"}`}
 						>
 							{periodLabel[option]}
 						</button>
@@ -92,11 +92,11 @@ const Activities = () => {
 							<div>
 								<h2
 									id="flow-heading"
-									className="text-sm font-medium text-[#476151]"
+									className="text-sm font-medium text-preview-muted"
 								>
 									Where your browsing flows
 								</h2>
-								<p className="mt-2 text-sm text-[#476151]">
+								<p className="mt-2 text-sm text-preview-muted">
 									Ask about this period, or pick a place for its estimates.
 								</p>
 							</div>
@@ -110,7 +110,7 @@ const Activities = () => {
 								/>
 							</div>
 						</div>
-						<div className="mt-4 rounded-xl bg-[#0b1310] p-4 sm:p-6">
+						<div className="mt-4 rounded-xl bg-preview-trace p-4 sm:p-6">
 							<Suspense fallback={<GraphLoading />}>
 								<ActivityFlowGraph
 									flow={flow}
@@ -139,7 +139,7 @@ const Activities = () => {
 							<button
 								type="button"
 								onClick={() => setPeriod("all")}
-								className="min-h-11 rounded-lg bg-[#bfff00] px-4 text-sm font-semibold text-[#15251b]"
+								className="min-h-11 rounded-lg bg-[#bfff00] px-4 text-sm font-semibold text-preview-ink"
 							>
 								Show all time
 							</button>

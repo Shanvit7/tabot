@@ -1,107 +1,44 @@
-<p align="center">
-  <img src="apps/web/public/logo.png" width="72" alt="Tabot logo" />
-  <h1 align="center">Tabot</h1>
-  <p align="center">
-    <a href="https://github.com/Shanvit7/tabot/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-062A23?style=flat-square" alt="License: MIT" /></a>
-    <img src="https://img.shields.io/badge/chrome_extension-062A23?style=flat-square" alt="Chrome extension" />
-    <img src="https://img.shields.io/badge/privacy_first-062A23?style=flat-square" alt="Privacy-first" />
-  </p>
-</p>
+# Tabot
 
-> Your browsing day, made visible.
+**Thinking across tabs.**
 
-Tabot is a Chrome extension and dashboard that turns your browsing activity into a visual map you can explore. See which sites you visited, how your browsing moved between them, and what patterns keep showing up.
+![Tabot demo: browsing activity, connected sites, and optional ChatGPT sharing](videos/tabot-promo/renders/tabot-30s.gif)
 
-**Open source · Private by design · MIT**
+[Watch with music](videos/tabot-promo/renders/tabot-30s.mp4)
 
----
+Tabot is a Chrome extension that helps you pick up where you left off, without retracing every tab.
 
-## Your activity, easier to follow
+- See which sites you visited and how you moved between them.
+- Find sites and browsing paths you keep returning to.
+- Connect ChatGPT to ask about your browsing activity.
 
-A workday can move from email to a document, a search, and a dozen other sites. Browser history gives you a list; Tabot lays those visits out so you can follow your day.
+## Privacy
 
-Explore a visual map of the sites you visited and the paths between them. Look back over time and notice which sites or routes keep reappearing. Tabot shows recorded activity—not what you were thinking, what a visit meant, or whether the work was productive.
+Your browsing record stays on your device. ChatGPT is optional and receives only requested, filtered results—not your raw browsing history. Tabot does not record page text, passwords, or what you type.
 
-## How it works
+## Run locally
 
-1. **Browse in Chrome.** The extension records visited sites and browser activity signals on your device.
-2. **Explore your activity.** Open the dashboard to see your browsing as a map and timeline, then follow site connections and recurring patterns.
-
-## Privacy and your data
-
-Your browsing record stays on your device for local review. Tabot does not need an account or cloud history sync. When you ask ChatGPT about your activity, its Tabot plugin can request selected results from your extension, such as browsing-context details or site and activity counts. Tabot's online MCP connection service passes requests and results between ChatGPT and the extension; it does not save browsing history or tool results in its application storage. ChatGPT receives the requested results and handles them under OpenAI's data policies.
-
-Tabot does not record page contents, typed text, passwords, or form values. Even site names and timestamps can be sensitive, so treat any activity data you share or export as personal.
-
-## ChatGPT integration
-
-When connected, ChatGPT's Tabot plugin can request selected, sanitized results from the extension—for example, browsing contexts, recurring-pattern details, or activity metrics. The extension reads and prepares each result locally; raw event history is not sent to the online MCP connection service. You can explore your activity in the dashboard without this connection.
-
-## Keep a copy
-
-You can download a JSONL copy for your own review or audit. It includes a manifest and records with their IDs and provenance. Export is a secondary way to keep or inspect your data; the dashboard is where you explore your activity.
-
-## What Tabot can and cannot know
-
-Tabot can preserve evidence such as:
-
-- where activity happened;
-- when it happened;
-- which browser activities were connected;
-- how activity moved between pages;
-- which patterns recurred.
-
-It cannot reliably know:
-
-- what you were thinking;
-- why you opened a page;
-- what you intended to accomplish;
-- whether an activity was productive;
-- the meaning of content it did not capture.
-
-Those are inferences for downstream analysis, not facts recorded by Tabot.
-
-## Run the project
-
-Typical development commands:
+Requires Node.js 22+ and pnpm. This is an early prototype.
 
 ```bash
 pnpm install
-pnpm lint
-pnpm --filter mcp-server typecheck
-pnpm --filter shared check:retrieval
+pnpm dev:extension
 ```
 
-To develop or test the ChatGPT connection, follow [MCP relay setup and troubleshooting](apps/mcp-server/README.md). The connection requires the extension and ChatGPT to use the same Chrome profile. Check package scripts for other build and extension-development commands.
+In Chrome, open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked**. Select `apps/extension/build/chrome-mv3-dev`, then copy the extension's ID.
 
-## Roadmap
+In another terminal, replace `YOUR_EXTENSION_ID` below with that ID:
 
-The near-term focus is deliberately narrow:
+```bash
+VITE_TABOT_EXTENSION_ID=YOUR_EXTENSION_ID pnpm dev:web
+```
 
-- stabilize the telemetry/export format;
-- improve the usefulness of derived context;
-- evaluate AI inference against real examples;
-- explore additional browser lifecycle signals where they solve a demonstrated limitation;
-- make activity easier to explore and understand.
+Open [localhost:3000](http://localhost:3000) in the same Chrome profile.
+
+For the optional ChatGPT connection, see [setup instructions](apps/mcp-server/README.md).
 
 ## Contributing
 
-The project is still early. Useful contributions include:
+Issues and pull requests welcome. Run `pnpm lint` before submitting code.
 
-- browser telemetry
-- privacy improvements
-- export/schema tooling
-- deterministic derivation tests
-- visualization
-- AI integrations
-- local-model integrations
-- analysis tooling
-- documentation
-
-For algorithmic changes, include a concrete failure case and a way to measure whether the change actually improves the result.
-
----
-
-## License
-
-MIT License. Copyright (c) 2026 Shanvit Shetty. See [`LICENSE`](LICENSE) for the full license text.
+[MIT license](LICENSE).

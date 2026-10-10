@@ -11,6 +11,7 @@
 		"check:foreground": "node --import ../../packages/shared/resolve-hook.mjs foreground.check.mts",
 		"predev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css",
 		"dev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css --watch=always & plasmo dev",
+		"dev:preview": "PLASMO_PUBLIC_NOTIFICATION_PREVIEW=1 pnpm dev",
 		"prebuild": "tailwindcss -i ./popup.css -o ./popup.tailwind.css --minify",
 		"build": "plasmo build",
 		"package": "plasmo package"
@@ -33,6 +34,7 @@
 		"typescript": "^5.7.0"
 	},
 	"manifest": {
+		"version": "0.2.0",
 		"cross_origin_opener_policy": {
 			"value": "same-origin"
 		},

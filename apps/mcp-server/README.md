@@ -8,7 +8,9 @@
 - Unpacked extension relay: `https://tabot-mcp-dev.shanvit7.workers.dev`
 - Production `tabot-mcp.shanvit7.workers.dev` is untouched.
 
-This is a remote deploy-on-change loop, **not a tunnel to localhost**. The Worker remains reachable when `pnpm dev` stops; the extension must still be running to serve requests. `pnpm --filter mcp-server dev:local` runs Wrangler locally at `localhost:8787` for isolated debugging, not ChatGPT access. Do not deploy to production just to test a local change. Because `wrangler dev` and `wrangler deploy` are distinct, a local server cannot serve ChatGPT unless its URL is publicly reachable; a `workers.dev` hostname comes from deployment, and `wrangler dev --remote` uses remote resources rather than replacing the deployed Worker.
+This is a remote deploy-on-change loop, **not a tunnel to localhost**. The Worker remains reachable when `pnpm dev` stops; the extension must still be running to serve requests. `pnpm --filter mcp-server dev:local` runs the isolated local config at `http://localhost:8787`; it uses local Durable Object state under `.wrangler/local-state` and never deploys. `pnpm --filter mcp-server dev:inspector` launches the official MCP Inspector UI. In Inspector, select **Streamable HTTP** and enter `http://localhost:8787/mcp`. Start both commands in separate terminals. The Inspector tests this server's actual MCP endpoint; tool calls need the unpacked extension connected to this same local Worker. Set the local extension relay URL to `http://localhost:8787` and make sure `.dev.vars` has the local installation secret and unpacked extension ID. For the local extension, run `PLASMO_PUBLIC_MCP_RELAY_URL=http://localhost:8787 pnpm --filter extension dev`; its default dev URL points to the remote dev Worker. The linked Hono v2 adapter requires `@modelcontextprotocol/server` v2, while this production service currently uses the stable v1 SDK. Inspector speaks MCP over HTTP, so it tests the real existing server without forcing a major SDK migration into the extension release.
+
+`pnpm dev` is different: it watches MCP source and deploys to the **remote dev Worker** below. Do not use it for offline local testing or deploy to production just to test a change. A local server cannot serve ChatGPT unless its URL is publicly reachable; `wrangler dev --remote` uses remote resources.
 
 **Local-execution alternative (named Cloudflare Tunnel).** `wrangler dev --tunnel --tunnel-name=<name>` gives a stable public hostname to a local dev server, but the hostname needs DNS in a Cloudflare-managed zone, so it is not available in this account. The setup would be: a zone plus `cloudflared tunnel create`, one `cloudflared tunnel route dns` record, ChatGPT pointed at `https://<host>/mcp`, `PLASMO_PUBLIC_MCP_RELAY_URL` set to the origin, and that origin added to the extension's `externally_connectable.matches`. Quick `*.trycloudflare.com` tunnels have random hostnames and are unsuitable for a persistent connector. Requests fail whenever the tunnel or laptop is offline.
 
@@ -61,7 +63,34 @@ On **Recurring patterns**, **Ask ChatGPT about recurring patterns** appears abov
 
 The existing extension, MCP and web `check:metricsRelay` / `check:activityMetrics` checks also cover pattern discovery, schemas, authorization, occurrence projection, response budgets, fail-closed privacy and connected-only overview actions. No browser automation or deployment is needed to run them. Reload the extension and deploy the updated Worker, then refresh the ChatGPT connection's tool list to discover the seventh tool. No production deployment is performed by these changes.
 
+## Production checks and logs
+
+```bash
+# Tests + production bundle dry-run. Does not deploy.
+pnpm --filter mcp-server deploy:check
+
+# Live production logs after an approved deployment.
+pnpm --filter mcp-server exec wrangler tail --config wrangler.toml
+```
+
+Stored logs: Cloudflare dashboard → **tabot-mcp → Observability → Logs**. Retention and quotas depend on your Cloudflare plan; no external log archive or alerts are configured.
+
+- `http_request`: route pattern, status, duration, request ID. Response header `X-Request-Id` links requests to logs.
+- `tool_call`: tool name, duration, outcome and relay error code—even when MCP returns HTTP 200.
+- `relay_connected`, `relay_disconnected`, `relay_error`, `relay_rejected`: connection lifecycle.
+- `auth_migration`, `auth_cleanup`: record counts, never record contents.
+
+Application logs exclude credentials, tool arguments/results, URLs and browser activity. Native invocation logs have query strings redacted. All requests are sampled; reduce sampling if volume warrants it.
+
+Rate limits use [hono-rate-limiter's native Cloudflare binding](https://honohub.dev/docs/rate-limiter/stores/cloudflare): 20 setup requests/minute and 120 API requests/minute per IP, **per Cloudflare location**, not a global DDoS quota. Limits live in Wrangler config; prod/dev use separate account-level namespace IDs. Keep those IDs unique across your other Workers. Rate-limited requests return 429 and `Retry-After: 60`. Request bodies are capped at 16 KiB; relay requests at 32 pending per installation.
+
+Auth state uses indexed SQLite in the existing auth Durable Object. Expired records are removed by scheduled alarms. Unused client registrations expire after 90 days; authenticated client use renews that window. New records are capped at 100,000; existing records are preserved during migration.
+
+**Existing grants:** old Durable Object KV records are copied in batches of 100, then removed from KV. Tokens without an audience are bound only to this Worker's configured `MCP_PUBLIC_URL`. Legacy grant revocation is preserved during backfill. Connection status may briefly be unknown while its index builds; it is never falsely reported disconnected. This storage conversion is one-way: rolling back to the old KV-only auth code requires clients to reconnect. Back up auth state before a production rollout if a rollback without reconnecting is required.
+
 ## Production deployment (explicit only)
+
+`deploy` runs typecheck and both MCP check scripts before uploading. Set secrets only when provisioning or deliberately rotating them: changing `TABOT_AUTH_SECRET` invalidates installed extension credentials. Never rotate it just to redeploy code.
 
 ```bash
 cd apps/mcp-server

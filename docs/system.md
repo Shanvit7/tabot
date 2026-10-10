@@ -228,7 +228,7 @@ Other providers, native MCP servers, accounts, cloud history/embeddings, task in
 
 `background.ts` installs a **15-minute alarm** and persists notification state in `chrome.storage.local`. It runs while tracking is enabled, selects a new ready context or newly seen recurrent memory, and can use a qualifying episode inside the selected context for wording. Episodes alone are not an independent source. Candidates must end at least **30 minutes** ago, be within **24 hours**, and exceed the high-water mark. At most one notification every **6 hours**. First-run marks start at current time, preventing historical backfill. The newest context/memory candidate wins; recurring-memory qualification does not independently apply the context readiness gate.
 
-A new meaningful insight opens the extension popup automatically; if Chrome cannot open the popup, the system notification is the fallback. At Chrome startup, an unread AI-ready summary can reopen the popup once per local day, only when no notification was sent in the previous six hours. Empty and already-viewed startup reminders are suppressed. The development build separately opens the popup every 15 seconds to cycle preview states. Clicks on the system-notification fallback open the associated summary on Home; its button uses connection state saved when created. MCP reads and derivation do not directly emit notifications.
+A new meaningful insight opens the extension popup automatically; if Chrome cannot open the popup, the system notification is the fallback. At Chrome startup, an unread AI-ready summary can reopen the popup once per local day, only when no notification was sent in the previous six hours. Empty and already-viewed startup reminders are suppressed. The opt-in development preview opens the popup every 15 seconds to cycle preview states; start it with `pnpm --filter extension dev:preview`. Plain `pnpm --filter extension dev` does not run the preview. Clicks on the system-notification fallback open the associated summary on Home; its button uses connection state saved when created. MCP reads and derivation do not directly emit notifications.
 
 ## v0.2 status and acceptance
 
@@ -242,7 +242,7 @@ A new meaningful insight opens the extension popup automatically; if Chrome cann
 | Notifications | Settlement, freshness, cooldown and selected-ID actions implemented. | Real-browsing calibration, sparse delivery, click/prefill/offline acceptance. Fallback title still says “Context ready”; align remaining copy with PRODUCT.md. |
 | First run | Honest empty guidance, local-observation copy and session progress exist. | Notification-expectation guidance and complete install-to-first-use acceptance; no fake ETA or “memory forming” promise. |
 | Startup reminder | Not implemented. | If retained for v0.2, reuse meaningful unseen candidates, high-water marks and cooldown; no empty or duplicate alarm/startup reminders. |
-| Release | Extension `0.1.3`; MCP package/protocol `0.2.0`. | Minor extension release through Changesets, notes, builds, user review and explicit deploy approval. Server version is not extension release completion. |
+| Release | Extension manifest `0.2.0` is prepared; MCP package/protocol is `0.2.0`. Neither is evidence of a live extension release. | Finish the Changesets release PR, user review and explicit deployment approval. |
 
 Manual/live acceptance, not source/checkmark inference:
 

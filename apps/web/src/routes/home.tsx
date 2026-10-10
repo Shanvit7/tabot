@@ -2,10 +2,10 @@ import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { Home } from "~/components/home-page";
 
 const HomeRoute = () => {
-	const href = useRouterState({ select: (state) => state.location.href });
-	const requestedId = new URL(href, "https://tabot.local").searchParams.get(
-		"context",
-	);
+	const search = useRouterState({
+		select: (state) => state.location.searchStr,
+	});
+	const requestedId = new URLSearchParams(search).get("context");
 	return <Home key={requestedId ?? "default"} requestedId={requestedId} />;
 };
 

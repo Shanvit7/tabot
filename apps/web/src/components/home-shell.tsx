@@ -70,6 +70,7 @@ export const HomeShell = ({ children }: { children: React.ReactNode }) => {
 					>
 						Privacy
 					</Link>
+					<span>Version 0.2.0</span>
 					<p>
 						Any feedback or complaints? Reach out to{" "}
 						<a

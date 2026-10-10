@@ -18,3 +18,23 @@ new_sqlite_classes = ["TabotInstallation"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["TabotAuth"]
+
+[[ratelimits]]
+name = "TABOT_PUBLIC_RATE_LIMITER"
+namespace_id = "1002001"
+simple = { limit = 20, period = 60 }
+
+[[ratelimits]]
+name = "TABOT_API_RATE_LIMITER"
+namespace_id = "1002002"
+simple = { limit = 120, period = 60 }
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+redact_query_string = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true

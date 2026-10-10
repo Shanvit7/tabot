@@ -14,20 +14,20 @@ export const ChatGPTIntegration = ({
 	>
 		<div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
 			<div>
-				<h2 className="max-w-lg text-[clamp(1.75rem,3vw,2.25rem)] font-semibold leading-[1.2] tracking-[-0.02em]">
+				<h2 className="max-w-lg text-[clamp(2rem,3.5vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.02em]">
 					Ask ChatGPT about your browsing.
 				</h2>
-				<p className="mt-4 max-w-lg text-base leading-7 text-landing-muted">
+				<p className="mt-4 max-w-lg text-lg leading-8 text-landing-muted">
 					Connect Tabot to ChatGPT to ask about sites you visited and patterns
 					in your activity.
 				</p>
 			</div>
 			<div className="border-y border-black py-5">
-				<p className="text-base leading-7">
+				<p className="text-lg leading-8">
 					Ask things like “Which sites did I visit most today?” or “What do I
 					keep coming back to?”
 				</p>
-				<p className="mt-3 text-sm leading-6 text-landing-muted">
+				<p className="mt-3 text-base leading-7 text-landing-muted">
 					When you ask, ChatGPT requests selected activity details from your
 					extension. Tabot’s online connection service passes requests and
 					results; it does not store browsing history or tool results.
@@ -36,7 +36,7 @@ export const ChatGPTIntegration = ({
 					<Button
 						asChild
 						variant="outline"
-						className="mt-5 text-sm font-semibold normal-case tracking-normal"
+						className="mt-5 text-base font-semibold normal-case tracking-normal"
 					>
 						<a
 							href={

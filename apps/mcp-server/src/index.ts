@@ -1,11 +1,20 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
+import { routePath } from "hono/route";
+import { rateLimiter } from "hono-rate-limiter";
 import { DEFAULT_SCOPES, type TabotAuth } from "./auth-store";
 import { consentPage } from "./consent-page";
 import { signInstallationToken, verifyInstallationToken } from "./lib/auth";
-import { AUTH_CODE_TTL_MS, NAME, VERSION } from "./lib/constants";
+import {
+	AUTH_CODE_TTL_MS,
+	MAX_HTTP_BODY_BYTES,
+	NAME,
+	VERSION,
+} from "./lib/constants";
+import { logEvent } from "./lib/log";
 import {
 	authorizationServerMetadata,
 	protectedResourceMetadata,
@@ -13,6 +22,7 @@ import {
 	randomToken,
 	sha256Base64Url,
 } from "./lib/oauth";
+import { ERROR_CODES, RelayError } from "./lib/protocol";
 import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./lib/tools";
 import {
 	getActivityMetricsInputSchema,
@@ -33,6 +43,8 @@ export interface Env {
 	TABOT_EXTENSION_ID?: string;
 	TABOT_INSTALLATION: DurableObjectNamespace;
 	TABOT_AUTH: DurableObjectNamespace<TabotAuth>;
+	TABOT_PUBLIC_RATE_LIMITER: RateLimit;
+	TABOT_API_RATE_LIMITER: RateLimit;
 }
 
 /** Send a tool call to the caller's live extension and await its correlated result. */
@@ -44,18 +56,35 @@ const READ_ONLY_ANNOTATIONS = {
 	destructiveHint: false,
 };
 
-const createMcpServer = (dispatch: ToolDispatch): McpServer => {
+const createMcpServer = (
+	dispatch: ToolDispatch,
+	requestId: string,
+): McpServer => {
 	const server = new McpServer({ name: NAME, version: VERSION });
 
 	// Shared wrapper: one try/catch for every tool, results JSON-stringified into
 	// a single text block, relay errors surfaced as `isError` tool errors.
 	const call = async (method: string, params: unknown) => {
+		const started = Date.now();
 		try {
 			const result = await dispatch(method, params);
+			logEvent("tool_call", {
+				requestId,
+				tool: method,
+				durationMs: Date.now() - started,
+				outcome: "ok",
+			});
 			return {
 				content: [{ type: "text" as const, text: JSON.stringify(result) }],
 			};
 		} catch (error) {
+			logEvent("tool_call", {
+				requestId,
+				tool: method,
+				durationMs: Date.now() - started,
+				outcome: "error",
+				code: error instanceof RelayError ? error.code : ERROR_CODES.INTERNAL,
+			});
 			return {
 				isError: true,
 				content: [
@@ -149,7 +178,43 @@ const createMcpServer = (dispatch: ToolDispatch): McpServer => {
 	return server;
 };
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
+
+app.use("*", async (c, next) => {
+	const requestId = crypto.randomUUID();
+	const started = Date.now();
+	c.set("requestId", requestId);
+	c.header("X-Request-Id", requestId);
+	c.header("Cache-Control", "no-store");
+	c.header("Pragma", "no-cache");
+	c.header("Content-Security-Policy", "frame-ancestors 'none'");
+	c.header("X-Frame-Options", "DENY");
+	c.header("X-Content-Type-Options", "nosniff");
+	c.header("Referrer-Policy", "no-referrer");
+	await next();
+	logEvent("http_request", {
+		requestId,
+		route: routePath(c),
+		status: c.res.status,
+		durationMs: Date.now() - started,
+	});
+});
+
+app.onError((error, c) => {
+	const capacity =
+		error.name === "AuthCapacityError" || error.name === "AuthMigrationError";
+	logEvent("request_error", {
+		requestId: c.get("requestId"),
+		code: capacity ? "auth_unavailable" : ERROR_CODES.INTERNAL,
+	});
+	return c.json(
+		{
+			error: "server_error",
+			error_description: "Tabot is temporarily unavailable.",
+		},
+		capacity ? 503 : 500,
+	);
+});
 
 app.use(
 	"*",
@@ -163,7 +228,43 @@ app.use(
 			"MCP-Protocol-Version",
 			"Last-Event-ID",
 		],
-		exposeHeaders: ["WWW-Authenticate", "Mcp-Session-Id"],
+		exposeHeaders: [
+			"WWW-Authenticate",
+			"Mcp-Session-Id",
+			"X-Request-Id",
+			"Retry-After",
+		],
+	}),
+);
+
+app.use("*", async (c, next) => {
+	if (c.req.url.length > 8192) return c.json({ error: "uri_too_long" }, 414);
+	await next();
+});
+// Native limits are per Cloudflare location, not a global abuse/WAF policy.
+app.use(
+	"*",
+	rateLimiter<{ Bindings: Env; Variables: { requestId: string } }>({
+		binding: (c) =>
+			["/register", "/installations", "/authorize"].includes(c.req.path)
+				? c.env.TABOT_PUBLIC_RATE_LIMITER
+				: c.env.TABOT_API_RATE_LIMITER,
+		keyGenerator: (c) => c.req.header("CF-Connecting-IP") ?? "local",
+		skip: (c) =>
+			c.req.method === "OPTIONS" ||
+			c.req.path === "/health" ||
+			c.req.path.startsWith("/.well-known/"),
+		handler: (c) => {
+			c.header("Retry-After", "60");
+			return c.json({ error: "rate_limited" }, 429);
+		},
+	}),
+);
+app.use(
+	"*",
+	bodyLimit({
+		maxSize: MAX_HTTP_BODY_BYTES,
+		onError: (c) => c.json({ error: "request_too_large" }, 413),
 	}),
 );
 
@@ -195,7 +296,12 @@ const dispatchToInstallation = async (
 	const body = (await response.json()) as
 		| { ok: true; result: unknown }
 		| { ok: false; error: { code: string; message: string } };
-	if (!body.ok) throw new Error(body.error.message);
+	if (!body.ok) {
+		const code =
+			Object.values(ERROR_CODES).find((known) => known === body.error.code) ??
+			ERROR_CODES.INTERNAL;
+		throw new RelayError(code, body.error.message);
+	}
 	return body.result;
 };
 
@@ -217,7 +323,10 @@ const oauthError = (
 /** Redirect URIs must be HTTPS, or loopback HTTP for local development. */
 const isAllowedRedirectUri = (uri: string): boolean => {
 	try {
+		if (uri.length > 2048) return false;
 		const url = new URL(uri);
+		if (url.hash || uri.includes("#") || url.username || url.password)
+			return false;
 		if (url.protocol === "https:") return true;
 		if (url.protocol !== "http:") return false;
 		return (
@@ -274,19 +383,35 @@ app.post("/register", async (c) => {
 		client_name?: unknown;
 		token_endpoint_auth_method?: unknown;
 	} | null;
-	const redirectUris = Array.isArray(body?.redirect_uris)
-		? body.redirect_uris.filter((u): u is string => typeof u === "string")
-		: [];
-	if (redirectUris.length === 0 || !redirectUris.every(isAllowedRedirectUri)) {
+	const redirectUris = body?.redirect_uris;
+	if (
+		!Array.isArray(redirectUris) ||
+		redirectUris.length === 0 ||
+		redirectUris.length > 10 ||
+		!redirectUris.every(
+			(uri): uri is string =>
+				typeof uri === "string" && isAllowedRedirectUri(uri),
+		)
+	) {
 		return oauthError(
 			"invalid_redirect_uri",
 			"redirect_uris must be non-empty HTTPS (or loopback) URLs.",
 		);
 	}
-	const authMethod =
-		body?.token_endpoint_auth_method === "client_secret_post"
-			? "client_secret_post"
-			: "none";
+	if (
+		(body?.client_name !== undefined &&
+			(typeof body.client_name !== "string" ||
+				body.client_name.length > 200)) ||
+		(body?.token_endpoint_auth_method !== undefined &&
+			body.token_endpoint_auth_method !== "none" &&
+			body.token_endpoint_auth_method !== "client_secret_post")
+	) {
+		return oauthError(
+			"invalid_client_metadata",
+			"Invalid client name or authentication method.",
+		);
+	}
+	const authMethod = body?.token_endpoint_auth_method ?? "none";
 	const clientId = randomToken(16);
 	const clientSecret =
 		authMethod === "client_secret_post" ? randomToken(32) : undefined;
@@ -318,18 +443,30 @@ app.post("/register", async (c) => {
 const validateAuthorizeRequest = async (
 	env: Env,
 	params: URLSearchParams,
+	resource: string,
 ): Promise<
 	| { ok: true; clientId: string; redirectUri: string; clientName: string }
 	| { ok: false; response: Response }
 > => {
+	if (
+		params.getAll("resource").length > 1 ||
+		(params.get("resource") ?? resource) !== resource
+	)
+		return {
+			ok: false,
+			response: oauthError(
+				"invalid_target",
+				"Only this Tabot MCP resource is supported.",
+			),
+		};
 	const clientId = params.get("client_id") ?? "";
 	const redirectUri = params.get("redirect_uri") ?? "";
-	if (!clientId || !redirectUri)
+	if (!clientId || !isAllowedRedirectUri(redirectUri))
 		return {
 			ok: false,
 			response: oauthError(
 				"invalid_request",
-				"client_id and redirect_uri are required.",
+				"client_id and a valid redirect_uri are required.",
 			),
 		};
 	const client = await authStub(env).getClient(clientId);
@@ -350,8 +487,8 @@ const validateAuthorizeRequest = async (
 			),
 		};
 	if (
-		(params.get("code_challenge_method") ?? "S256") !== "S256" ||
-		!params.get("code_challenge")
+		params.get("code_challenge_method") !== "S256" ||
+		!/^[A-Za-z0-9_-]{43}$/.test(params.get("code_challenge") ?? "")
 	)
 		return {
 			ok: false,
@@ -366,21 +503,26 @@ const validateAuthorizeRequest = async (
 // --- Authorization endpoint + extension-bridge consent page -----------------
 app.get("/authorize", async (c) => {
 	const params = new URL(c.req.url).searchParams;
-	const result = await validateAuthorizeRequest(c.env, params);
+	const resource = `${originOf(c)}/mcp`;
+	const result = await validateAuthorizeRequest(c.env, params, resource);
 	if (!result.ok) return result.response;
 	const extensionId = c.env.TABOT_EXTENSION_ID;
 	if (!extensionId)
 		return c.text("Tabot extension bridge is not configured", 503);
 	const transactionId = randomToken(32);
-	const requestedScopes = (params.get("scope") ?? "")
-		.split(" ")
-		.filter((scope) => (DEFAULT_SCOPES as readonly string[]).includes(scope));
+	const requestedScopes = [
+		...new Set((params.get("scope") ?? "").split(" ").filter(Boolean)),
+	];
+	if (requestedScopes.some((scope) => !DEFAULT_SCOPES.includes(scope)))
+		return oauthError("invalid_scope", "Unsupported Tabot scope.");
+	if ((params.get("state")?.length ?? 0) > 1024)
+		return oauthError("invalid_request", "State is too long.");
 	await authStub(c.env).createAuthorizationTransaction({
 		id: transactionId,
 		clientId: result.clientId,
 		redirectUri: result.redirectUri,
 		codeChallenge: params.get("code_challenge") ?? "",
-		resource: params.get("resource") ?? undefined,
+		resource,
 		scopes: requestedScopes.length > 0 ? requestedScopes : DEFAULT_SCOPES,
 		state: params.get("state") ?? undefined,
 	});
@@ -468,6 +610,15 @@ const authenticateClient = async (
 
 app.post("/token", async (c) => {
 	const form = new URLSearchParams(await c.req.text());
+	const resource = `${originOf(c)}/mcp`;
+	if (
+		form.getAll("resource").length > 1 ||
+		(form.get("resource") ?? resource) !== resource
+	)
+		return oauthError(
+			"invalid_target",
+			"Only this Tabot MCP resource is supported.",
+		);
 	const client = await authenticateClient(c.env, form);
 	if (!client.ok) return client.response;
 
@@ -477,6 +628,7 @@ app.post("/token", async (c) => {
 			clientId: client.clientId,
 			codeVerifier: form.get("code_verifier") ?? "",
 			redirectUri: form.get("redirect_uri") ?? "",
+			resource,
 		});
 		if (!redeemed)
 			return oauthError(
@@ -488,7 +640,7 @@ app.post("/token", async (c) => {
 				clientId: client.clientId,
 				installationId: redeemed.installationId,
 				scopes: redeemed.scopes,
-				resource: redeemed.resource,
+				resource: redeemed.resource ?? resource,
 			}),
 		);
 	}
@@ -497,6 +649,7 @@ app.post("/token", async (c) => {
 		const tokens = await authStub(c.env).rotateRefreshToken({
 			clientId: client.clientId,
 			refreshToken: form.get("refresh_token") ?? "",
+			resource,
 		});
 		if (!tokens)
 			return oauthError(
@@ -515,7 +668,7 @@ app.post("/revoke", async (c) => {
 	const client = await authenticateClient(c.env, form);
 	if (!client.ok) return client.response;
 	const token = form.get("token") ?? "";
-	if (token) await authStub(c.env).revokeToken(token);
+	if (token) await authStub(c.env).revokeToken(token, client.clientId);
 	return c.body(null, 200);
 });
 
@@ -581,13 +734,23 @@ app.all("/mcp", async (c) => {
 	const header = c.req.header("Authorization") ?? "";
 	const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 	const auth = token ? await authStub(c.env).verifyAccessToken(token) : null;
-	if (!auth) return unauthorizedMcp(origin);
+	if (!auth || auth.resource !== `${origin}/mcp`)
+		return unauthorizedMcp(origin);
+	if (!auth.scopes.includes("tabot.context")) {
+		c.header(
+			"WWW-Authenticate",
+			'Bearer error="insufficient_scope", scope="tabot.context"',
+		);
+		return c.json({ error: "insufficient_scope" }, 403);
+	}
 
 	const transport = new WebStandardStreamableHTTPServerTransport({
 		sessionIdGenerator: undefined,
 	});
-	const server = createMcpServer((method, params) =>
-		dispatchToInstallation(c.env, auth.installationId, method, params),
+	const server = createMcpServer(
+		(method, params) =>
+			dispatchToInstallation(c.env, auth.installationId, method, params),
+		c.get("requestId"),
 	);
 	await server.connect(transport);
 	return transport.handleRequest(c.req.raw);

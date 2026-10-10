@@ -42,8 +42,8 @@ branches                 release   dashboard live + extension uploaded
 
 3. **Merge the Version PR** — this is the release decision. Merging it:
 
-   - bumps the version (e.g. `0.1.2 → 0.1.3`),
-   - tags it `v0.1.3` on `main` (a marker, so it never releases twice),
+   - bumps the version (`0.1.3 → 0.2.0` for this release),
+   - tags it `v0.2.0` on `main` (a marker, so it never releases twice),
    - dispatches `submit.yml`, which builds + uploads a **draft** to the store.
 
 4. **Approve** — in the [Chrome Web Store dashboard][dashboard], review the draft and click **Publish**. Chrome auto-updates installed copies.
@@ -54,7 +54,7 @@ Version numbers can only go up inside the Version Packages PR — that's the onl
 
 ## The tag's job: a marker, not a trigger
 
-`v0.1.3` is pushed by `scripts/release-tag.mjs` (the changesets publish hook) right before the store upload. Its only job is **idempotency** — if a run needs re-doing, the script sees the tag already exists, skips the tag, and just dispatches the upload again. It never causes a double upload or a rejected duplicate version.
+`v0.2.0` is pushed by `scripts/release-tag.mjs` (the Changesets publish hook) right before the store upload. Its only job is **idempotency** — if a run needs re-doing, the script sees the tag already exists, skips the tag, and just dispatches the upload again. It never causes a double upload or a rejected duplicate version.
 
 ## Credentials (one time)
 

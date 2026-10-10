@@ -16,7 +16,7 @@ export const Header = ({
 			<a
 				href={import.meta.env.BASE_URL}
 				aria-label="Tabot home"
-				className="flex min-h-11 items-center gap-2.5 text-lg font-semibold tracking-tight"
+				className="flex min-h-11 items-center gap-2.5 text-xl font-semibold tracking-tight"
 			>
 				<img
 					src={`${import.meta.env.BASE_URL}logo.png`}
@@ -27,25 +27,11 @@ export const Header = ({
 				/>
 				TABOT
 			</a>
-			<div className="hidden items-center gap-7 text-sm font-medium md:flex">
-				<a
-					href="#how-it-works"
-					className="inline-flex min-h-11 items-center underline-offset-4 hover:underline"
-				>
-					How it works
-				</a>
-				<a
-					href="#privacy-first"
-					className="inline-flex min-h-11 items-center underline-offset-4 hover:underline"
-				>
-					Privacy
-				</a>
-			</div>
 			{extensionInstalled !== null && !isMobileDevice && (
 				<Button
 					asChild
 					variant="secondary"
-					className="px-4 text-sm font-semibold normal-case tracking-normal"
+					className="px-4 text-base font-semibold normal-case tracking-normal"
 				>
 					<a
 						href={

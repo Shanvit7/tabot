@@ -36,6 +36,15 @@ const consentHtml = consentPage({
 assert.match(consentHtml, /&lt;img/);
 assert.doesNotMatch(consentHtml, /<img src=x/);
 assert.match(consentHtml, /runtime\.sendMessage/);
+assert.match(consentHtml, /id="status"/);
+assert.match(
+	consentHtml,
+	/href="https:\/\/shanvit7\.github\.io\/tabot\/privacy\/#when-you-connect-chatgpt"/,
+);
+assert.match(
+	consentHtml,
+	/<p class="privacy-note">[\s\S]*?site names\/timing stay visible\. <a class="privacy-link"/,
+);
 const from = Date.now() - 60_000;
 const to = from + 50_000;
 const events = [0, 1, 2].map((index) => ({
@@ -49,11 +58,19 @@ const events = [0, 1, 2].map((index) => ({
 let dispatches = 0;
 let offline = false;
 const env = {
+	TABOT_PUBLIC_RATE_LIMITER: { limit: async () => ({ success: true }) },
+	TABOT_API_RATE_LIMITER: { limit: async () => ({ success: true }) },
 	TABOT_AUTH: {
 		idFromName: (name) => name,
 		get: () => ({
 			verifyAccessToken: async (token) =>
-				token === "allowed" ? { installationId: "authorized-profile" } : null,
+				token === "allowed"
+					? {
+							installationId: "authorized-profile",
+							resource: "https://test.invalid/mcp",
+							scopes: ["tabot.context"],
+						}
+					: null,
 		}),
 	},
 	TABOT_INSTALLATION: {
@@ -75,7 +92,10 @@ const env = {
 				if (offline)
 					return Response.json({
 						ok: false,
-						error: { message: "Tabot extension is currently offline." },
+						error: {
+							code: "extension_offline",
+							message: "Tabot extension is currently offline.",
+						},
 					});
 				if (method === "list_recurring_patterns") {
 					assert.deepEqual(params, { limit: 1 });

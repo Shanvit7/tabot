@@ -76,6 +76,9 @@ const NOTIFICATION_ID = "tabot-context-ready";
 const NOTIFICATION_ALARM = "tabot-context-check";
 const PREVIEW_ALARM = "tabot-notification-preview";
 const PREVIEW_INDEX_KEY = "tabot_notification_preview_index";
+const notificationPreviewEnabled =
+	process.env.NODE_ENV === "development" &&
+	process.env.PLASMO_PUBLIC_NOTIFICATION_PREVIEW === "1";
 const POPUP_LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
 const STARTUP_POPUP_DAY_KEY = "tabot_startup_popup_day";
 const HOME_URL =
@@ -550,7 +553,7 @@ void chrome.alarms
 	})
 	.catch((error) => logger.warn("notification alarm failed", { error }));
 
-if (process.env.NODE_ENV === "development") {
+if (notificationPreviewEnabled) {
 	void chrome.alarms.get(PREVIEW_ALARM).then((alarm) => {
 		if (!alarm)
 			void chrome.alarms.create(PREVIEW_ALARM, { periodInMinutes: 0.25 });
@@ -684,7 +687,7 @@ chrome.runtime.onStartup.addListener(() => {
 		.catch((error) => logger.warn("startup popup failed", { error }));
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name === PREVIEW_ALARM && process.env.NODE_ENV === "development") {
+	if (alarm.name === PREVIEW_ALARM && notificationPreviewEnabled) {
 		void chrome.storage.local
 			.get(PREVIEW_INDEX_KEY)
 			.then(async (stored) => {

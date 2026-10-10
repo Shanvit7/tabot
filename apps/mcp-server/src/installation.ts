@@ -1,4 +1,9 @@
-import { MAX_MESSAGE_CHARS, REQUEST_TIMEOUT_MS } from "./lib/constants";
+import {
+	MAX_MESSAGE_CHARS,
+	MAX_PENDING_REQUESTS,
+	REQUEST_TIMEOUT_MS,
+} from "./lib/constants";
+import { logEvent } from "./lib/log";
 import {
 	ERROR_CODES,
 	parseClientMessage,
@@ -7,6 +12,7 @@ import {
 } from "./lib/protocol";
 
 interface PendingRequest {
+	socket: WebSocket;
 	resolve: (value: unknown) => void;
 	reject: (error: Error) => void;
 	timer: ReturnType<typeof setTimeout>;
@@ -41,11 +47,19 @@ export class TabotInstallation implements DurableObject {
 	private acceptWebSocket(protocol: string | null): Response {
 		// Single live connection per installation: replace any stale socket.
 		for (const existing of this.state.getWebSockets()) {
+			this.rejectSocket(
+				existing,
+				new RelayError(
+					ERROR_CODES.DISCONNECTED,
+					"Extension connection replaced.",
+				),
+			);
 			existing.close(1000, "replaced");
 		}
 		const pair = new WebSocketPair();
 		const [client, server] = Object.values(pair);
 		this.state.acceptWebSocket(server);
+		logEvent("relay_connected");
 		return new Response(null, {
 			status: 101,
 			headers: protocol ? { "Sec-WebSocket-Protocol": protocol } : undefined,
@@ -98,12 +112,22 @@ export class TabotInstallation implements DurableObject {
 
 	/** Send a request to the extension and await the correlated response. */
 	dispatch(method: string, params: unknown): Promise<unknown> {
-		const socket = this.state.getWebSockets()[0];
+		const socket = this.state
+			.getWebSockets()
+			.find((candidate) => candidate.readyState === WebSocket.OPEN);
 		if (!socket) {
 			return Promise.reject(
 				new RelayError(
 					ERROR_CODES.OFFLINE,
 					"Tabot extension is currently offline. Open Chrome with Tabot enabled and try again.",
+				),
+			);
+		}
+		if (this.pending.size >= MAX_PENDING_REQUESTS) {
+			return Promise.reject(
+				new RelayError(
+					ERROR_CODES.BUSY,
+					"Tabot extension has too many pending requests. Try again.",
 				),
 			);
 		}
@@ -118,62 +142,99 @@ export class TabotInstallation implements DurableObject {
 					),
 				);
 			}, REQUEST_TIMEOUT_MS);
-			this.pending.set(requestId, { resolve, reject, timer });
+			this.pending.set(requestId, { socket, resolve, reject, timer });
 			const request: ServerRequest = {
 				type: "request",
 				requestId,
 				method,
 				params,
 			};
-			socket.send(JSON.stringify(request));
+			try {
+				socket.send(JSON.stringify(request));
+			} catch {
+				this.pending.delete(requestId);
+				clearTimeout(timer);
+				reject(
+					new RelayError(
+						ERROR_CODES.DISCONNECTED,
+						"Extension connection could not send request.",
+					),
+				);
+			}
 		});
 	}
 
 	async webSocketMessage(
-		_socket: WebSocket,
+		socket: WebSocket,
 		message: string | ArrayBuffer,
 	): Promise<void> {
-		if (typeof message !== "string") return;
-		if (message.length > MAX_MESSAGE_CHARS) {
-			this.rejectAll(
+		if (typeof message !== "string" || message.length > MAX_MESSAGE_CHARS) {
+			this.rejectSocket(
+				socket,
 				new RelayError(
 					ERROR_CODES.MALFORMED,
-					"Extension message exceeded size limit.",
+					"Extension message format or size is invalid.",
 				),
 			);
+			socket.close(
+				typeof message === "string" ? 1009 : 1003,
+				"invalid message",
+			);
+			logEvent("relay_rejected", { code: ERROR_CODES.MALFORMED });
 			return;
 		}
 		const parsed = parseClientMessage(message);
-		if (!parsed) return;
+		if (!parsed) {
+			this.rejectSocket(
+				socket,
+				new RelayError(
+					ERROR_CODES.MALFORMED,
+					"Extension sent an invalid response.",
+				),
+			);
+			socket.close(1008, "invalid response");
+			logEvent("relay_rejected", { code: ERROR_CODES.MALFORMED });
+			return;
+		}
 		const entry = this.pending.get(parsed.requestId);
-		if (!entry) return;
+		if (!entry || entry.socket !== socket) return;
 		this.pending.delete(parsed.requestId);
 		clearTimeout(entry.timer);
 		if (parsed.error) {
-			entry.reject(new RelayError(ERROR_CODES.INTERNAL, parsed.error.message));
+			const code =
+				Object.values(ERROR_CODES).find(
+					(known) => known === parsed.error?.code,
+				) ?? ERROR_CODES.INTERNAL;
+			entry.reject(new RelayError(code, parsed.error.message));
 		} else {
 			entry.resolve(parsed.result);
 		}
 	}
 
 	async webSocketClose(socket: WebSocket): Promise<void> {
-		this.rejectAll(
+		this.rejectSocket(
+			socket,
 			new RelayError(
 				ERROR_CODES.DISCONNECTED,
 				"Extension disconnected during request.",
 			),
 		);
+		logEvent("relay_disconnected", { code: ERROR_CODES.DISCONNECTED });
 		socket.close(1000, "closed");
 	}
 
-	async webSocketError(_socket: WebSocket, _error: unknown): Promise<void> {
-		this.rejectAll(
+	async webSocketError(socket: WebSocket, _error: unknown): Promise<void> {
+		this.rejectSocket(
+			socket,
 			new RelayError(ERROR_CODES.DISCONNECTED, "Extension connection errored."),
 		);
+		logEvent("relay_error", { code: ERROR_CODES.DISCONNECTED });
+		socket.close(1011, "connection error");
 	}
 
-	private rejectAll(error: Error): void {
+	private rejectSocket(socket: WebSocket, error: Error): void {
 		for (const [requestId, entry] of this.pending) {
+			if (entry.socket !== socket) continue;
 			clearTimeout(entry.timer);
 			entry.reject(error);
 			this.pending.delete(requestId);

@@ -49,7 +49,7 @@ const RecurringPatterns = () => {
 				<h1 className="text-[32px] font-semibold tracking-tight sm:text-[40px]">
 					Recurring patterns
 				</h1>
-				<p className="mt-2 max-w-xl text-sm text-[#476151]">
+				<p className="mt-2 max-w-xl text-sm text-preview-muted">
 					Separate observed periods with similar browsing behavior.
 				</p>
 				<RecurringPatternAssistant connected={assistantConnected} />
@@ -73,7 +73,7 @@ const RecurringPatterns = () => {
 										search={{ context: selected.lastContextId }}
 										aria-label={`View latest period on map for ${prettySite(topOrigin)}`}
 										title={`View latest period on map for ${prettySite(topOrigin)}`}
-										className="inline-flex min-h-11 items-center rounded-lg border border-[#d2ddd2] px-3 text-xs font-medium text-(--work-muted) hover:bg-[#e9eee8]"
+										className="inline-flex min-h-11 items-center rounded-lg border border-preview-line px-3 text-xs font-medium text-(--work-muted) hover:bg-[#e9eee8]"
 									>
 										View latest period on map
 									</Link>
