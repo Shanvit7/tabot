@@ -13,6 +13,7 @@ import {
 	getContexts,
 	getMemories,
 	getMeta,
+	isAiReadyContext,
 	LIFECYCLE_KINDS,
 	logger,
 	memoryPrompt,
@@ -73,6 +74,10 @@ const TRACKING_KEY = "tabot_tracking_enabled";
 const NOTIFICATION_KEY = "tabot_context_notification";
 const NOTIFICATION_ID = "tabot-context-ready";
 const NOTIFICATION_ALARM = "tabot-context-check";
+const PREVIEW_ALARM = "tabot-notification-preview";
+const PREVIEW_INDEX_KEY = "tabot_notification_preview_index";
+const POPUP_LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
+const STARTUP_POPUP_DAY_KEY = "tabot_startup_popup_day";
 const HOME_URL =
 	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
 const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
@@ -545,6 +550,15 @@ void chrome.alarms
 	})
 	.catch((error) => logger.warn("notification alarm failed", { error }));
 
+if (process.env.NODE_ENV === "development") {
+	void chrome.alarms.get(PREVIEW_ALARM).then((alarm) => {
+		if (!alarm)
+			void chrome.alarms.create(PREVIEW_ALARM, { periodInMinutes: 0.25 });
+	});
+} else {
+	void chrome.alarms.clear(PREVIEW_ALARM);
+}
+
 let notificationCheckRunning = false;
 const checkNotifications = async () => {
 	if (notificationCheckRunning) return;
@@ -599,13 +613,17 @@ const checkNotifications = async () => {
 			kind === "memory"
 				? `Similar activity appeared ${memory.evidence.occurrenceCount} times across separate periods. Ask ChatGPT what repeats.`
 				: `${(episode ?? selectedContext).domains.length} sites · ${Math.round((episode ?? selectedContext).duration / 60_000)} min. Ask ChatGPT to explore this thread.`;
-		await chrome.notifications.create(NOTIFICATION_ID, {
-			type: "basic",
-			iconUrl: notificationIcon,
-			title,
-			message,
-			buttons: [{ title: connected ? "Ask ChatGPT" : "Connect ChatGPT" }],
-		});
+		try {
+			await chrome.action.openPopup();
+		} catch {
+			await chrome.notifications.create(NOTIFICATION_ID, {
+				type: "basic",
+				iconUrl: notificationIcon,
+				title,
+				message,
+				buttons: [{ title: connected ? "Ask ChatGPT" : "Connect ChatGPT" }],
+			});
+		}
 		await chrome.storage.local.set({
 			[NOTIFICATION_KEY]: {
 				...state,
@@ -627,12 +645,58 @@ const checkNotifications = async () => {
 	}
 };
 
+const openStartupPopupForUnreadInsight = async () => {
+	if (process.env.NODE_ENV === "development") return;
+	const now = Date.now();
+	const localDay = `${new Date(now).getFullYear()}-${new Date(now).getMonth()}-${new Date(now).getDate()}`;
+	const stored = await chrome.storage.local.get([
+		NOTIFICATION_KEY,
+		POPUP_LAST_VIEWED_KEY,
+		STARTUP_POPUP_DAY_KEY,
+	]);
+	const notificationState = stored[NOTIFICATION_KEY] as
+		| NotificationState
+		| undefined;
+	const lastViewed = stored[POPUP_LAST_VIEWED_KEY];
+	if (
+		stored[STARTUP_POPUP_DAY_KEY] === localDay ||
+		(notificationState?.lastNotifiedAt &&
+			now - notificationState.lastNotifiedAt < 6 * 3_600_000) ||
+		typeof lastViewed !== "number"
+	)
+		return;
+	const contexts = await getContexts(await getDb());
+	const hasUnreadInsight = contexts.some(
+		(context) =>
+			context.endTimestamp > lastViewed &&
+			context.endTimestamp >= now - 24 * 3_600_000 &&
+			context.endTimestamp <= now &&
+			isAiReadyContext(context),
+	);
+	if (!hasUnreadInsight) return;
+	await chrome.action.openPopup();
+	await chrome.storage.local.set({ [STARTUP_POPUP_DAY_KEY]: localDay });
+};
+
 chrome.runtime.onStartup.addListener(() => {
-	void checkNotifications();
+	void checkNotifications()
+		.then(openStartupPopupForUnreadInsight)
+		.catch((error) => logger.warn("startup popup failed", { error }));
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name !== NOTIFICATION_ALARM) return;
-	void checkNotifications();
+	if (alarm.name === PREVIEW_ALARM && process.env.NODE_ENV === "development") {
+		void chrome.storage.local
+			.get(PREVIEW_INDEX_KEY)
+			.then(async (stored) => {
+				const current = stored[PREVIEW_INDEX_KEY];
+				const index = Number.isInteger(current) ? (current + 1) % 6 : 0;
+				await chrome.storage.local.set({ [PREVIEW_INDEX_KEY]: index });
+				await chrome.action.openPopup();
+			})
+			.catch((error) => logger.warn("notification preview failed", { error }));
+		return;
+	}
+	if (alarm.name === NOTIFICATION_ALARM) void checkNotifications();
 });
 
 chrome.notifications.onClicked.addListener((id) => {

@@ -30,6 +30,40 @@ const HOME_URL =
 	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
 const LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
 const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
+const NOTIFICATION_PREVIEWS = [
+	{
+		title: "Activity summary ready",
+		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
+		button: "Connect ChatGPT",
+	},
+	{
+		title: "Activity summary ready",
+		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
+		button: "Ask ChatGPT",
+	},
+	{
+		title: "Activity worth a look",
+		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
+		button: "Connect ChatGPT",
+	},
+	{
+		title: "Activity worth a look",
+		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
+		button: "Ask ChatGPT",
+	},
+	{
+		title: "A browsing pattern is repeating",
+		message:
+			"Similar activity appeared 4 times across separate periods. Ask ChatGPT what repeats.",
+		button: "Connect ChatGPT",
+	},
+	{
+		title: "A browsing pattern is repeating",
+		message:
+			"Similar activity appeared 4 times across separate periods. Ask ChatGPT what repeats.",
+		button: "Ask ChatGPT",
+	},
+] as const;
 
 const Arrow = () => (
 	<ArrowRight
@@ -166,7 +200,25 @@ const IndexPopup = () => {
 	const [dropped, setDropped] = useState(0);
 	const [error, setError] = useState<string | null>(null);
 	const [attempt, setAttempt] = useState(0);
+	const [notificationPreview, setNotificationPreview] = useState<number | null>(
+		null,
+	);
 	const previousVisit = useRef<Promise<number | null> | null>(null);
+
+	useEffect(() => {
+		if (process.env.NODE_ENV !== "development") return;
+		let active = true;
+		void chrome.storage.local
+			.get("tabot_notification_preview_index")
+			.then((stored) => {
+				if (!active) return;
+				const index = stored.tabot_notification_preview_index;
+				setNotificationPreview(Number.isInteger(index) ? index : 0);
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	useEffect(() => {
 		let active = true;
@@ -331,6 +383,51 @@ const IndexPopup = () => {
 				aria-label="Browser activity"
 				aria-busy={!summary && !error}
 			>
+				{notificationPreview !== null && (
+					<aside
+						aria-label={`Notification preview ${notificationPreview + 1} of ${NOTIFICATION_PREVIEWS.length}`}
+						className="mb-4 rounded-xl border border-line bg-surface p-4 shadow-lg"
+					>
+						<div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+							<span
+								aria-hidden="true"
+								className="size-1.5 animate-pulse rounded-full bg-lime-brand"
+							/>
+							Auto preview · every 15 seconds
+						</div>
+						<div className="flex items-start gap-3">
+							<img
+								src={logo}
+								alt=""
+								width={32}
+								height={32}
+								className="size-8 rounded-lg"
+							/>
+							<div className="min-w-0 flex-1">
+								<p className="text-sm font-semibold">
+									{NOTIFICATION_PREVIEWS[notificationPreview].title}
+								</p>
+								<p className="mt-1 text-xs leading-5 text-muted">
+									{NOTIFICATION_PREVIEWS[notificationPreview].message}
+								</p>
+							</div>
+							<button
+								type="button"
+								onClick={() => setNotificationPreview(null)}
+								aria-label="Dismiss preview"
+								className="popup-row px-2 text-xs"
+							>
+								×
+							</button>
+						</div>
+						<div className="mt-3 flex justify-end">
+							<span className="flex items-center gap-1.5 rounded-md border border-line bg-canvas px-3 py-2 text-xs">
+								<OpenAIMono aria-hidden="true" className="size-3.5" />
+								{NOTIFICATION_PREVIEWS[notificationPreview].button}
+							</span>
+						</div>
+					</aside>
+				)}
 				{assistantConnected === false && (
 					<aside
 						aria-label="ChatGPT connection"
@@ -546,8 +643,23 @@ const IndexPopup = () => {
 					{featured ? "Review activity" : "Open Tabot"}
 					<Arrow />
 				</button>
+				{process.env.NODE_ENV === "development" && (
+					<button
+						type="button"
+						onClick={() =>
+							setNotificationPreview((index) =>
+								index === null ? 0 : (index + 1) % NOTIFICATION_PREVIEWS.length,
+							)
+						}
+						className="popup-row min-h-11 w-full text-left text-xs text-muted"
+					>
+						{notificationPreview === null
+							? `Preview notification 1/${NOTIFICATION_PREVIEWS.length}`
+							: `Next notification ${((notificationPreview + 1) % NOTIFICATION_PREVIEWS.length) + 1}/${NOTIFICATION_PREVIEWS.length}`}
+					</button>
+				)}
 				<div className="mt-2 flex min-h-11 items-center justify-between gap-3 text-xs text-muted">
-					<span>Recorded on this device. You choose what to share.</span>
+					<span>Stays on this device. Choose what to share.</span>
 					{featured && (
 						<button
 							type="button"

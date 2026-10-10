@@ -122,7 +122,7 @@ export const ExtensionPreview = ({
 				<ArrowRight strokeWidth={1.5} className="size-[4cqw]" />
 			</div>
 			<div className="mt-[2cqw] flex min-h-[11cqw] items-center justify-between gap-[3cqw] text-[3cqw] text-preview-muted">
-				<span>Recorded on this device. You choose what to share.</span>
+				<span>Stays on this device. Choose what to share.</span>
 				<span className="shrink-0 font-medium">Open Tabot</span>
 			</div>
 		</footer>
