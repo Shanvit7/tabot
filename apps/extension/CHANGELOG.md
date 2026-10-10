@@ -1,5 +1,11 @@
 # extension
 
+## 0.2.0
+
+### Minor Changes
+
+- a17b306: Give Tabot a clearer map of your browsing, time spent actively using sites, and recurring patterns. You can ask ChatGPT about a time period, site, or pattern; your browsing history stays on your device, and only the summary you request is shared. The update also refreshes the popup, notifications, exports, and getting-started experience.
+
 ## Unreleased
 
 - Count only foreground browsing time. Background refreshes, hidden tabs, idle/lock, and sleep no longer extend active duration. Episode/context duration sums active time across sessions; elapsed coverage is separately exposed as `wallDuration`.
