@@ -21,6 +21,7 @@ import {
 	POPUP_SOURCE,
 	pushEvent,
 	removeMeta,
+	resolveChatGptConnectUrl,
 	type StatsSnapshot,
 	type StoredTabEvent,
 	type TabEventMetadata,
@@ -83,7 +84,6 @@ const POPUP_LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
 const STARTUP_POPUP_DAY_KEY = "tabot_startup_popup_day";
 const HOME_URL =
 	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
-const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
 interface NotificationState {
 	lastEnd: number;
 	lastNotifiedAt: number;
@@ -725,7 +725,9 @@ chrome.notifications.onButtonClicked.addListener((id, buttonIndex) => {
 			const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
 			if (!state) return;
 			if (state.chatGptConnected !== true)
-				return chrome.tabs.create({ url: CHATGPT_URL });
+				return resolveChatGptConnectUrl().then((url) =>
+					chrome.tabs.create({ url }),
+				);
 			if (state.kind === "memory" && state.memoryId)
 				return chrome.tabs.create({
 					url: chatGptPromptUrl(memoryPrompt(state.memoryId)),

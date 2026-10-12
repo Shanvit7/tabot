@@ -1,17 +1,31 @@
 import ClaudeMono from "@lobehub/icons/es/Claude/components/Mono";
 import GeminiMono from "@lobehub/icons/es/Gemini/components/Mono";
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import {
+	chatGptConnectPromptUrl,
+	resolveChatGptConnectUrl,
+} from "@tabot/shared";
+import { useEffect, useState } from "react";
 import { focusConnectorsHeading } from "~/components/connector-utils";
 import { useAssistantConnection } from "~/providers/assistant-connection";
 
-// Where the user adds the Tabot MCP connector in ChatGPT.
-const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
 const CTA_CLASS =
 	"flex min-h-16 flex-col items-center justify-center gap-1 rounded-[8px] border px-2 py-2";
 
 export const Connectors = () => {
 	const connected = useAssistantConnection();
+	const [chatGptUrl, setChatGptUrl] = useState(chatGptConnectPromptUrl);
 	const ChatGptTile = connected === false ? "a" : "div";
+
+	useEffect(() => {
+		let active = true;
+		void resolveChatGptConnectUrl().then((url) => {
+			if (active) setChatGptUrl(() => url);
+		});
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	return (
 		<section
@@ -32,7 +46,7 @@ export const Connectors = () => {
 				</p>
 				<div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
 					<ChatGptTile
-						href={connected === false ? CHATGPT_URL : undefined}
+						href={connected === false ? chatGptUrl : undefined}
 						target={connected === false ? "_blank" : undefined}
 						rel={connected === false ? "noopener noreferrer" : undefined}
 						className={`${CTA_CLASS} border-(--work-ink) bg-(--work-ink) text-white no-underline ${connected === false ? "hover:bg-[#304939]" : "cursor-default"}`}

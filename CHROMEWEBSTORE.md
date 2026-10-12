@@ -1,6 +1,6 @@
 # Chrome Web Store — Tabot
 
-Draft permission/privacy update for the 0.2.0 extension release, including foreground-time tracking and authorized activity-metrics and recurring-pattern tools. Last updated: October 10, 2026. Prepared manifest version: 0.2.0. No store submission or publication performed.
+Draft permission/privacy update for the 0.2.1 extension release, including foreground-time tracking, authorized activity-metrics and recurring-pattern tools, and guided ChatGPT connection setup. Last updated: October 12, 2026. Prepared manifest version: 0.2.1. No store submission or publication performed.
 
 ## Store listing
 
@@ -43,4 +43,4 @@ Before submission: verify live privacy-policy URL, publisher/contact details, fu
 
 | Version | Changes | Status |
 | --- | --- | --- |
-| Unreleased | Office-friendly browser-activity popup explaining what is recorded and how users can review or share it, with site favicons, bounded site map, first-run guidance, animated Observing status, and scoped dashboard links; replace bookmark imagery and saved-site wording with Activity and Review activity; remove technical labels and activity/duration metrics; remove popup provider/export/connector panels while adding a compact disconnected-only ChatGPT connection prompt, without changing capture or dashboard integrations. Foreground-only context durations; stop on idle/lock and sleep; add `idle` permission; export derivation schema 9; authorized site-level activity metrics and Activities assistant actions; recurring-pattern discovery and bounded occurrence evidence with Recurring patterns assistant actions (no additional permissions for either integration). | Draft |
+| 0.2.1 | Office-friendly browser-activity popup explaining what is recorded and how users can review or share it, with site favicons, bounded site map, first-run guidance, animated Observing status, and scoped dashboard links; replace bookmark imagery and saved-site wording with Activity and Review activity; remove technical labels and activity/duration metrics; remove popup provider/export/connector panels while adding a compact disconnected-only ChatGPT connection prompt, without changing capture or dashboard integrations. Foreground-only context durations; stop on idle/lock and sleep; add `idle` permission; export derivation schema 9; authorized site-level activity metrics and Activities assistant actions; recurring-pattern discovery and bounded occurrence evidence with Recurring patterns assistant actions. Guide ChatGPT through custom MCP setup and support remote marketplace-destination switching (no additional permission). | Draft |

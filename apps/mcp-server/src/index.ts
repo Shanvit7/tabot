@@ -39,6 +39,7 @@ export { TabotInstallation } from "./installation";
 
 export interface Env {
 	MCP_PUBLIC_URL: string;
+	CHATGPT_MARKETPLACE_URL?: string;
 	TABOT_AUTH_SECRET: string;
 	OPENAI_APPS_CHALLENGE_TOKEN?: string;
 	TABOT_EXTENSION_ID?: string;
@@ -186,8 +187,12 @@ app.use("*", async (c, next) => {
 	const started = Date.now();
 	c.set("requestId", requestId);
 	c.header("X-Request-Id", requestId);
-	c.header("Cache-Control", "no-store");
-	c.header("Pragma", "no-cache");
+	if (c.req.path === "/client-config") {
+		c.header("Cache-Control", "public, max-age=60");
+	} else {
+		c.header("Cache-Control", "no-store");
+		c.header("Pragma", "no-cache");
+	}
 	c.header("Content-Security-Policy", "frame-ancestors 'none'");
 	c.header("X-Frame-Options", "DENY");
 	c.header("X-Content-Type-Options", "nosniff");
@@ -272,6 +277,21 @@ app.use(
 app.get("/health", (c) =>
 	c.json({ ok: true, service: NAME, version: VERSION }),
 );
+
+app.get("/client-config", (c) => {
+	const candidate = c.env.CHATGPT_MARKETPLACE_URL;
+	let marketplaceUrl: string | null = null;
+	if (candidate) {
+		try {
+			const url = new URL(candidate);
+			if (url.protocol === "https:" && url.hostname === "chatgpt.com")
+				marketplaceUrl = url.toString();
+		} catch {
+			// Invalid deployment config safely keeps prompt-mode onboarding.
+		}
+	}
+	return c.json({ marketplaceUrl });
+});
 
 app.get("/.well-known/openai-apps-challenge", (c) => {
 	const token = c.env.OPENAI_APPS_CHALLENGE_TOKEN;

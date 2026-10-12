@@ -43,6 +43,39 @@ export const sitePrompt = (domain: string, contextIds: string[]): string =>
 export const chatGptPromptUrl = (prompt: string): string =>
 	prefillUrl("https://chatgpt.com/", "q", prompt);
 
+const CHATGPT_CONFIG_URL =
+	"https://tabot-mcp.shanvit7.workers.dev/client-config";
+const CONNECT_PROMPT =
+	'Help me set up Tabot on this ChatGPT account as a private plugin. Guide me one step at a time. First, have me open ChatGPT Plugins and select the Add button at the top right, then Add custom MCP server. Walk me through the form: Name Tabot; set Description to: "Search and recall your locally stored Chrome browsing context with Tabot. Ask what you were recently working on, summarize visits and site transitions, or find recurring browsing patterns. Tools share sanitized derived context on request, not raw browser events or page paths." Choose Server URL (not Tunnel) and enter https://tabot-mcp.shanvit7.workers.dev/mcp; set Authentication to OAuth; leave Advanced OAuth settings unchanged unless prompted. Have me review the custom-server risk warning and check the acknowledgment, then continue and complete OAuth sign-in/approval. Pause for each action I need to take. After the MCP server is registered, guide me through the separate step to add/create/install the Tabot plugin for this account, then confirm it appears and is enabled. Do not treat server registration alone as plugin setup or claim success unless verified. If the UI differs, ask what I see instead of guessing.';
+
+export const chatGptConnectPromptUrl = (): string =>
+	chatGptPromptUrl(CONNECT_PROMPT);
+
+const isChatGptUrl = (value: unknown): value is string => {
+	if (typeof value !== "string") return false;
+	try {
+		const url = new URL(value);
+		return url.protocol === "https:" && url.hostname === "chatgpt.com";
+	} catch {
+		return false;
+	}
+};
+
+export const resolveChatGptConnectUrl = async (): Promise<string> => {
+	try {
+		const response = await fetch(CHATGPT_CONFIG_URL, {
+			signal: AbortSignal.timeout(3_000),
+		});
+		if (!response.ok) return chatGptConnectPromptUrl();
+		const config = (await response.json()) as { marketplaceUrl?: unknown };
+		return isChatGptUrl(config.marketplaceUrl)
+			? config.marketplaceUrl
+			: chatGptConnectPromptUrl();
+	} catch {
+		return chatGptConnectPromptUrl();
+	}
+};
+
 export const WEB_TARGET_DEFS: WebTargetDef[] = [
 	{
 		name: "ChatGPT",

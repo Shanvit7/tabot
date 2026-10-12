@@ -117,3 +117,7 @@ pnpm run deploy
 ```
 
 `TABOT_EXTENSION_ID` must match the installed production extension's ID. Production deploy uses `wrangler.toml`, never `wrangler.dev.toml`.
+
+## ChatGPT connect destination
+
+`GET /client-config` is public and returns the marketplace URL or `null`. Web and extension clients treat `null` or fetch failure as prompt mode; the response is cached for 60 seconds. After the marketplace listing is approved, set `CHATGPT_MARKETPLACE_URL` in `wrangler.toml` to its `https://chatgpt.com/...` listing URL and deploy only this Worker. Existing web and extension installs will switch after their cached config expires; no extension redeploy is needed.

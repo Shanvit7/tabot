@@ -243,6 +243,36 @@ try {
 	};
 	const request = (path, init = {}, bindings = env) =>
 		app.request(`https://test.invalid${path}`, init, bindings);
+	const defaultClientConfig = await request("/client-config");
+	assert.deepEqual(await defaultClientConfig.json(), { marketplaceUrl: null });
+	assert.equal(
+		defaultClientConfig.headers.get("cache-control"),
+		"public, max-age=60",
+	);
+	assert.equal(
+		defaultClientConfig.headers.get("access-control-allow-origin"),
+		"*",
+	);
+	const marketplaceConfig = await request(
+		"/client-config",
+		{},
+		{
+			...env,
+			CHATGPT_MARKETPLACE_URL: "https://chatgpt.com/g/tabot",
+		},
+	);
+	assert.deepEqual(await marketplaceConfig.json(), {
+		marketplaceUrl: "https://chatgpt.com/g/tabot",
+	});
+	const unsafeConfig = await request(
+		"/client-config",
+		{},
+		{
+			...env,
+			CHATGPT_MARKETPLACE_URL: "https://evil.example/tabot",
+		},
+	);
+	assert.deepEqual(await unsafeConfig.json(), { marketplaceUrl: null });
 	const formPost = (path, form, headers = {}) =>
 		request(path, {
 			method: "POST",

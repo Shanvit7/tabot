@@ -706,6 +706,14 @@ Production configuration targets `https://tabot-mcp.shanvit7.workers.dev/mcp`; d
 
 `pnpm dev` invokes the MCP source watcher, which **deploys to the dev Worker on startup/change**; it is not a localhost tunnel or a harmless offline check. `dev:local` runs Wrangler locally and cannot serve ChatGPT without a public route. No custom `mcp.tabot.ai` domain/named tunnel is configured in the documented setup. Operational commands live in the [relay README](../apps/mcp-server/README.md); production deploy requires explicit approval.
 
+### Runtime connection destination and onboarding
+
+Web dashboard, extension popup and notification CTAs use shared `resolveChatGptConnectUrl()` at runtime. It fetches `GET /client-config` from the Worker with a 3-second timeout. The endpoint returns `{ marketplaceUrl: string | null }`; an absent or invalid `CHATGPT_MARKETPLACE_URL` returns `null` and selects the prefilled setup prompt. Configured destinations are accepted only for HTTPS `chatgpt.com` URLs. `/client-config` is public and cached for 60 seconds; other Worker routes remain `no-store`. The response contains no secrets or browser data.
+
+The prompt guides users through account setup: ChatGPT Plugins → top-right **Add** → **Add custom MCP server**; enter Name `Tabot`, a discovery-oriented description, production MCP Server URL, and OAuth; acknowledge the risk notice and authorize. Server registration and adding/enabling the resulting plugin on the ChatGPT account are treated as separate steps. The prompt does not claim completion until the plugin is available. The current prompt fallback is also used on timeout, fetch failure, `null`, or rejected config URL.
+
+Marketplace rollout requires setting `CHATGPT_MARKETPLACE_URL` in the production Worker and deploying that Worker. Web and already-installed extension clients switch after their short config cache expires; no client rebuild or extension redeploy is required. No feature-flag dependency is used. Source and checks are implemented, but live ChatGPT form behavior, account-level plugin installation and production marketplace rollout still require manual verification.
+
 ### Installation and OAuth
 
 - Background startup calls `startRelay()` even before ChatGPT consent. Missing credentials trigger unauthenticated `POST /installations`, issuing a random installation ID and signed **365-day** credential. Registration contains no browsing record; the ID alone is not authorization.
@@ -753,7 +761,7 @@ Metric browsing time is estimated from consecutive observations, capped at **5 m
 
 Extension heartbeats every **25 seconds**; reconnect doubles from **1 second** up to **60 seconds**, plus jitter. Chrome must remain open with the extension connected. `/health` proves Worker reachability only. `GET_ASSISTANT_CONNECTION` asks authenticated `/connection` for existing unexpired OAuth grants; no credential reaches dashboard JavaScript. **Connected does not prove a live relay socket, tool discovery or successful ChatGPT retrieval.** Unknown/checking/disconnected states remain distinct.
 
-After Worker tool/schema/auth changes, deploy the intended environment explicitly and refresh ChatGPT discovery. Existing access/refresh grants can still represent a connection to older deployed code. Non-technical UI currently links to the ChatGPT Plugins search page, while documented dev setup requires Developer mode/manual URL entry; production onboarding and actual prompt-prefill/selected-ID retrieval remain unverified.
+After Worker tool/schema/auth changes, deploy the intended environment explicitly and refresh ChatGPT discovery. Existing access/refresh grants can still represent a connection to older deployed code. The runtime onboarding CTA is wired, but real prompt-prefill behavior, successful OAuth/tool retrieval, account-level plugin availability and production marketplace switching remain unverified.
 
 ## 17. Readiness, Product Surfaces and Release Gate
 
@@ -765,7 +773,7 @@ Home maps and session inspection, Activities range/site metrics, recurring-patte
 
 The old plan’s fake topic labels, event-count examples, new-memory popup counts and deterministic “first memory forming” progress are not implementation requirements. Local review remains primary and ChatGPT optional; no extra providers, centralized history, semantic inference, universal PII detector, native app or telemetry rewrite is needed. Preserve meaningful sparse re-engagement, honest empty states, privacy-first selected retrieval and evidence before interpretation.
 
-The extension's prepared manifest version is **0.2.0**; MCP package/protocol is **0.2.0**. The extension package baseline remains **0.1.3** until Changesets creates the Version Packages PR, which will apply the minor bump to **0.2.0**. Local builds do not prove a store release or live deployment; use the existing Changesets/release PR workflow and approve deployment explicitly.
+The extension's prepared manifest version and MCP package/protocol are **0.2.1**. Local builds do not prove a store release or live deployment; review and approve extension release through the Chrome Web Store workflow, and deploy MCP explicitly.
 
 Release requires normal-user connection without MCP setup, real browsing/readiness/notification calibration, useful evidence-grounded ChatGPT results, production ID/origin/base-path/tool-version agreement, offline/restart/credential acceptance, remaining first-run notification guidance and a decision/implementation for startup reminder. See [system.md → status and acceptance](./system.md#v02-status-and-acceptance). Measure first useful activity → review → authorized assistant use → return, not raw collection volume. No implemented product-loop analytics is claimed.
 
