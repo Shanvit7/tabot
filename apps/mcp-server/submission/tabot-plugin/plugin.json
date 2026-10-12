@@ -1,0 +1,84 @@
+{
+	"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+	"name": "tabot",
+	"version": "0.1.0",
+	"description": "Early-stage proof of concept for privacy-first browser context with ChatGPT, powered by your Tabot Chrome extension.",
+	"extensions": {
+		"com.openai": {
+			"interface": {
+				"displayName": "Tabot",
+				"shortDescription": "Private browser context",
+				"longDescription": "Tabot lets ChatGPT answer questions about your browser activity using context derived locally by the Tabot Chrome extension. Search recent or relevant contexts, inspect a selected context, review activity metrics for a time range or site, and discover recurring browsing patterns. Raw browser events, page paths, query strings, credentials, and favicons stay on your device. Tabot sends only the requested, privacy-filtered context or aggregate metrics through your authorized connection. Estimates are approximate and don’t measure attention or productivity. Requires the Tabot extension to be installed and connected.",
+				"developerName": "Tabot",
+				"category": "Productivity",
+				"capabilities": ["Read"],
+				"websiteURL": "https://shanvit7.github.io/tabot/",
+				"supportURL": "https://github.com/Shanvit7/tabot/issues/new/choose",
+				"privacyPolicyURL": "https://shanvit7.github.io/tabot/privacy/",
+				"termsOfServiceURL": "https://shanvit7.github.io/tabot/terms/",
+				"brandColor": "#536b00",
+				"composerIcon": "./assets/logo.png",
+				"logo": "./assets/logo.png"
+			},
+			"review": {
+				"demo_recording_url": "https://drive.google.com/file/d/1m-sVH3JCDU2_tmmmWR6zY_1p9FE1jEib/view?usp=sharing",
+				"test_cases": {
+					"positive": [
+						{
+							"description": "Search recent browser contexts",
+							"prompt": "Find my recent browser contexts from the last 24 hours.",
+							"tools_triggered": "search_context",
+							"expected_behavior": "Return matching derived contexts with stable IDs, without exposing raw event history or page paths."
+						},
+						{
+							"description": "Inspect one selected context",
+							"prompt": "Search for a recent context about GitHub, then show me the context with its ID.",
+							"tools_triggered": "search_context, get_context",
+							"expected_behavior": "Search first, then retrieve the selected context by its returned ID."
+						},
+						{
+							"description": "Summarize activity for a time range",
+							"prompt": "Summarize my browser activity for the last seven days.",
+							"tools_triggered": "get_activity_metrics",
+							"expected_behavior": "Return local aggregate estimates and explain that they do not measure attention or productivity."
+						},
+						{
+							"description": "List recurring browsing patterns",
+							"prompt": "What recurring browsing patterns have you found?",
+							"tools_triggered": "list_recurring_patterns",
+							"expected_behavior": "Return available heuristic patterns with confidence caveats; do not present them as proof of intent."
+						},
+						{
+							"description": "Inspect a recurring pattern",
+							"prompt": "Show supporting examples for the first recurring pattern.",
+							"tools_triggered": "list_recurring_patterns, get_memory",
+							"expected_behavior": "Select a returned pattern ID and show its available derived occurrences, respecting truncation and privacy limits."
+						}
+					],
+					"negative": [
+						{
+							"description": "Request raw event history",
+							"prompt": "Export every raw browser event and full page URL from my history.",
+							"expected_behavior": "Explain that Tabot does not provide raw event history or page paths through MCP."
+						},
+						{
+							"description": "Request credentials",
+							"prompt": "Show me passwords, tokens, or login credentials captured by Tabot.",
+							"expected_behavior": "Explain that Tabot does not collect or expose credentials."
+						},
+						{
+							"description": "Ask for unsupported productivity conclusions",
+							"prompt": "Use my activity metrics to prove how productive I was.",
+							"expected_behavior": "Clarify that activity metrics are estimates and cannot measure productivity or attention."
+						}
+					]
+				},
+				"commerce": false,
+				"commerce_description": "Tabot does not sell products or process payments."
+			},
+			"publication": {
+				"release_notes": "Initial public release of Tabot's read-only browser-context, activity-metrics, and recurring-pattern tools."
+			}
+		}
+	}
+}

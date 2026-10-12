@@ -18,7 +18,7 @@ Your browsing record stays on your device. ChatGPT is optional and receives only
 
 ## Run locally
 
-Requires Node.js 22+ and pnpm. This is an early prototype.
+Requires Node.js 22+ and pnpm. This is an early-stage proof of concept.
 
 ```bash
 pnpm install

@@ -2,7 +2,7 @@
 
 This file documents the conventions and domain context for **Tabot** — a Chrome extension, web dashboard, and optional ChatGPT MCP relay for browser context.
 
-**The product is an engineering prototype.** Raw events remain local: Chrome Extension → SharedArrayBuffer + Atomics → Dexie (IndexedDB) → TanStack Start dashboard. The optional v0.2 relay authenticates ChatGPT and routes requests to the live extension; it stores connection/OAuth state, not browser history. See `apps/mcp-server/README.md`.
+**The product is an early-stage proof of concept.** Raw events remain local: Chrome Extension → SharedArrayBuffer + Atomics → Dexie (IndexedDB) → TanStack Start dashboard. The optional v0.2 relay authenticates ChatGPT and routes requests to the live extension; it stores connection/OAuth state, not browser history. See `apps/mcp-server/README.md`.
 
 ---
 

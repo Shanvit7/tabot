@@ -29,6 +29,12 @@ export const Footer = ({
 				>
 					Privacy policy
 				</a>
+				<a
+					href={`${import.meta.env.BASE_URL}terms`}
+					className="inline-flex min-h-11 items-center underline-offset-4 hover:underline"
+				>
+					Terms of service
+				</a>
 				{extensionInstalled && (
 					<a
 						href={`${import.meta.env.BASE_URL}home`}

@@ -40,6 +40,7 @@ export { TabotInstallation } from "./installation";
 export interface Env {
 	MCP_PUBLIC_URL: string;
 	TABOT_AUTH_SECRET: string;
+	OPENAI_APPS_CHALLENGE_TOKEN?: string;
 	TABOT_EXTENSION_ID?: string;
 	TABOT_INSTALLATION: DurableObjectNamespace;
 	TABOT_AUTH: DurableObjectNamespace<TabotAuth>;
@@ -271,6 +272,11 @@ app.use(
 app.get("/health", (c) =>
 	c.json({ ok: true, service: NAME, version: VERSION }),
 );
+
+app.get("/.well-known/openai-apps-challenge", (c) => {
+	const token = c.env.OPENAI_APPS_CHALLENGE_TOKEN;
+	return token ? c.text(token) : c.notFound();
+});
 
 // --- Durable Object helpers -------------------------------------------------
 const installationStub = (env: Env, installationId: string) =>

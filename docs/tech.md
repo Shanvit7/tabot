@@ -6,7 +6,7 @@
 
 ## 1. Product Boundary
 
-Tabot is an engineering prototype: a Chrome extension and local web dashboard that collect browser activity at volume, retain it locally, and deterministically derive browser context.
+Tabot is an early-stage proof of concept: a Chrome extension and local web dashboard that collect browser activity at volume, retain it locally, and deterministically derive browser context.
 
 ```text
 Chrome tab APIs + content script

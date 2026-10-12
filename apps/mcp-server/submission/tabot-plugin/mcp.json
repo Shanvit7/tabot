@@ -1,0 +1,21 @@
+{
+	"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+	"mcpServers": {
+		"tabot": {
+			"type": "streamable-http",
+			"url": "https://tabot-mcp.shanvit7.workers.dev/mcp",
+			"extensions": {
+				"com.openai": {
+					"auth": {
+						"type": "oauth",
+						"client": {
+							"mode": "dcr"
+						},
+						"registrationUrl": "https://tabot-mcp.shanvit7.workers.dev/register",
+						"baseScopes": ["tabot.context"]
+					}
+				}
+			}
+		}
+	}
+}
