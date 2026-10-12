@@ -1,5 +1,7 @@
 # Tabot MCP relay
 
+Tabot lets ChatGPT answer questions about your browser activity using context derived locally by the Tabot Chrome extension. Search recent or relevant contexts, inspect a selected context, review activity metrics for a time range or site, and discover recurring browsing patterns. Raw browser events, page paths, query strings, credentials, and favicons stay on your device. Tabot sends only the requested, privacy-filtered context or aggregate metrics through your authorized connection. Estimates are approximate and don’t measure attention or productivity. Requires the Tabot extension to be installed and connected.
+
 ## Development: stable public URL
 
 `pnpm dev` watches MCP source and deploys changes to a **separate** Worker:
@@ -31,6 +33,21 @@ Dashboard **Connected** reflects an unexpired OAuth access or refresh token for 
 `/health` and `/.well-known/oauth-authorization-server` prove only Worker and OAuth discovery are reachable. The bare Worker origin returns 404 for MCP requests; use `/mcp`. **Connected account** with **No app tools available yet** means tool discovery is still incomplete, not that ChatGPT needs a different prompt. Verify the saved connection URI ends in `/mcp`, then click **Refresh** on its ChatGPT Plugins page and check the tool list. The server advertises all seven tools with `readOnlyHint: true`, `openWorldHint: false`, and `destructiveHint: false`; after tool names, schemas, annotations, or auth change, deploy/restart the Worker and refresh the connection. If tools appear but requests fail, check Chrome profile and extension relay status: open the extension's service-worker DevTools via `chrome://extensions` and run `chrome.runtime.sendMessage({ type: 'GET_RELAY_STATUS' }, console.log)`. Expect `state: 'connected'` and the dev `relayUrl`. The existing production installation credential remains separate from dev.
 
 See [OpenAI's connection and refresh instructions](https://developers.openai.com/plugins/deploy/connect-chatgpt) and [MCP tool metadata guidance](https://developers.openai.com/plugins/build/mcp-server).
+
+## OpenAI domain verification and scan authorization
+
+Set the current verification token from the plugin editor on the **production** Worker, then deploy the challenge route:
+
+```bash
+cd apps/mcp-server
+pnpm exec wrangler secret put OPENAI_APPS_CHALLENGE_TOKEN --config wrangler.toml
+pnpm run deploy
+curl -fsS https://tabot-mcp.shanvit7.workers.dev/.well-known/openai-apps-challenge
+```
+
+The URL must return HTTP 200 with the exact token as plain text, without OAuth. Leave **Challenge Base URL** blank or use `https://tabot-mcp.shanvit7.workers.dev`, then click **Verify**. A 404 means the route is not deployed or the token binding is missing. Replace this binding if OpenAI issues a new challenge; never rotate `TABOT_AUTH_SECRET` for verification.
+
+**“Authorization for scanning is missing or no longer works”** is separate from domain verification. Reconnect the account **in the plugin editor** using the production `/mcp` URL and complete consent in the Chrome profile with the configured production extension installed. Keep Chrome and the extension connected to the production relay during the scan, then rescan. Existing review results remain stale until a scan succeeds. Do not remove MCP authentication to make the scanner pass.
 
 ## Activity metrics
 
@@ -100,3 +117,7 @@ pnpm run deploy
 ```
 
 `TABOT_EXTENSION_ID` must match the installed production extension's ID. Production deploy uses `wrangler.toml`, never `wrangler.dev.toml`.
+
+## ChatGPT connect destination
+
+`GET /client-config` is public and returns the marketplace URL or `null`. Web and extension clients treat `null` or fetch failure as prompt mode; the response is cached for 60 seconds. After the marketplace listing is approved, set `CHATGPT_MARKETPLACE_URL` in `wrangler.toml` to its `https://chatgpt.com/...` listing URL and deploy only this Worker. Existing web and extension installs will switch after their cached config expires; no extension redeploy is needed.

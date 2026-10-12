@@ -243,6 +243,36 @@ try {
 	};
 	const request = (path, init = {}, bindings = env) =>
 		app.request(`https://test.invalid${path}`, init, bindings);
+	const defaultClientConfig = await request("/client-config");
+	assert.deepEqual(await defaultClientConfig.json(), { marketplaceUrl: null });
+	assert.equal(
+		defaultClientConfig.headers.get("cache-control"),
+		"public, max-age=60",
+	);
+	assert.equal(
+		defaultClientConfig.headers.get("access-control-allow-origin"),
+		"*",
+	);
+	const marketplaceConfig = await request(
+		"/client-config",
+		{},
+		{
+			...env,
+			CHATGPT_MARKETPLACE_URL: "https://chatgpt.com/g/tabot",
+		},
+	);
+	assert.deepEqual(await marketplaceConfig.json(), {
+		marketplaceUrl: "https://chatgpt.com/g/tabot",
+	});
+	const unsafeConfig = await request(
+		"/client-config",
+		{},
+		{
+			...env,
+			CHATGPT_MARKETPLACE_URL: "https://evil.example/tabot",
+		},
+	);
+	assert.deepEqual(await unsafeConfig.json(), { marketplaceUrl: null });
 	const formPost = (path, form, headers = {}) =>
 		request(path, {
 			method: "POST",
@@ -499,6 +529,30 @@ try {
 		(await request("/health", {}, blocked)).status,
 		200,
 		"health skips rate checks",
+	);
+	const challengePath = "/.well-known/openai-apps-challenge";
+	assert.equal((await request(challengePath)).status, 404);
+	const challenge = await request(
+		challengePath,
+		{},
+		{
+			...blocked,
+			TABOT_API_RATE_LIMITER: { limit: async () => ({ success: false }) },
+			OPENAI_APPS_CHALLENGE_TOKEN: "test-domain-verification-token",
+		},
+	);
+	assert.equal(
+		challenge.status,
+		200,
+		"domain verification is public and skips rate limits",
+	);
+	assert.equal(await challenge.text(), "test-domain-verification-token");
+	assert.match(challenge.headers.get("Content-Type"), /^text\/plain/);
+	assert.equal(challenge.headers.get("Cache-Control"), "no-store");
+	assert.equal(
+		(await request("/mcp")).status,
+		401,
+		"verification never bypasses MCP auth",
 	);
 	const noBinding = { ...env, TABOT_API_RATE_LIMITER: undefined };
 	assert.equal(

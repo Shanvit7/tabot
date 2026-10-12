@@ -21,6 +21,7 @@
 		"check:pipeline": "node --import ./resolve-hook.mjs src/checks/pipeline.check.ts",
 		"check:privacy": "node --import ./resolve-hook.mjs src/checks/privacy.check.ts",
 		"check:exportFilename": "node --import ./resolve-hook.mjs src/checks/export-filename.check.ts",
+		"check:connectTargets": "node --import ./resolve-hook.mjs src/checks/connect-targets.check.ts",
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
 		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
 		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts",

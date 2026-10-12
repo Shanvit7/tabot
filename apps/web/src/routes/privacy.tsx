@@ -14,7 +14,7 @@ const Privacy = () => (
 				Privacy policy
 			</h1>
 			<p className="mt-4 text-sm text-[#8ca493]">
-				Last updated: October 9, 2026
+				Last updated: October 11, 2026
 			</p>
 			<p className="mt-6 max-w-2xl leading-7 text-[#c2d1c7]">
 				Here’s what Tabot records, what stays on your device, and what happens

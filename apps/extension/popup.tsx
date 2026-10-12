@@ -1,8 +1,10 @@
 import logo from "data-base64:~assets/icon.png";
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import {
+	chatGptConnectPromptUrl,
 	chatGptContextUrl,
 	derive,
+	resolveChatGptConnectUrl,
 	type StatsSnapshot,
 	type StoredTabEvent,
 } from "@tabot/shared";
@@ -29,7 +31,6 @@ import "./popup.tailwind.css";
 const HOME_URL =
 	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
 const LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
-const CHATGPT_URL = "https://chatgpt.com/plugins?search=Tabot";
 const NOTIFICATION_PREVIEWS = [
 	{
 		title: "Activity summary ready",
@@ -196,6 +197,7 @@ const IndexPopup = () => {
 	const [assistantConnected, setAssistantConnected] = useState<boolean | null>(
 		null,
 	);
+	const [chatGptUrl, setChatGptUrl] = useState(chatGptConnectPromptUrl);
 	const [toggling, setToggling] = useState(false);
 	const [dropped, setDropped] = useState(0);
 	const [error, setError] = useState<string | null>(null);
@@ -204,6 +206,16 @@ const IndexPopup = () => {
 		null,
 	);
 	const previousVisit = useRef<Promise<number | null> | null>(null);
+
+	useEffect(() => {
+		let active = true;
+		void resolveChatGptConnectUrl().then((url) => {
+			if (active) setChatGptUrl(() => url);
+		});
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	useEffect(() => {
 		if (
@@ -448,7 +460,7 @@ const IndexPopup = () => {
 							</p>
 						</div>
 						<a
-							href={CHATGPT_URL}
+							href={chatGptUrl}
 							target="_blank"
 							rel="noopener noreferrer"
 							className="popup-quiet flex min-h-11 shrink-0 items-center justify-center border border-line bg-canvas px-3 text-xs no-underline"
@@ -569,7 +581,7 @@ const IndexPopup = () => {
 											</a>
 										) : assistantConnected === false ? (
 											<a
-												href={CHATGPT_URL}
+												href={chatGptUrl}
 												target="_blank"
 												rel="noopener noreferrer"
 												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"

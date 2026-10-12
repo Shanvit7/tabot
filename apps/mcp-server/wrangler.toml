@@ -5,6 +5,7 @@ compatibility_date = "2026-09-20"
 # Stable free Cloudflare Workers endpoint. No custom domain required.
 [vars]
 MCP_PUBLIC_URL = "https://tabot-mcp.shanvit7.workers.dev/mcp"
+CHATGPT_MARKETPLACE_URL = ""
 
 # TABOT_AUTH_SECRET and TABOT_EXTENSION_ID are deployment bindings, not [vars]:
 #   local dev  -> apps/mcp-server/.dev.vars  (gitignored)

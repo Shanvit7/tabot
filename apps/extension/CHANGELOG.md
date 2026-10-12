@@ -1,15 +1,18 @@
 # extension
 
+## 0.2.1
+
+### Patch Changes
+
+- Guide people through adding Tabot in ChatGPT, with marketplace switching controlled remotely so future approval does not require another extension update.
+- Count foreground browsing time only; hidden tabs, idle/lock, sleep, and gaps no longer inflate active duration.
+- Add the `idle` permission to stop attention sampling while the device is idle or locked. Existing local history is re-derived without migration; re-export old downloads to get corrected conservative duration estimates.
+
 ## 0.2.0
 
 ### Minor Changes
 
 - a17b306: Give Tabot a clearer map of your browsing, time spent actively using sites, and recurring patterns. You can ask ChatGPT about a time period, site, or pattern; your browsing history stays on your device, and only the summary you request is shared. The update also refreshes the popup, notifications, exports, and getting-started experience.
-
-## Unreleased
-
-- Count only foreground browsing time. Background refreshes, hidden tabs, idle/lock, and sleep no longer extend active duration. Episode/context duration sums active time across sessions; elapsed coverage is separately exposed as `wallDuration`.
-- Add the `idle` permission to stop attention sampling when the device is idle or locked. Existing local history is re-derived without a database migration; re-export old downloads for corrected, conservatively estimated durations.
 
 ## 0.1.3
 
