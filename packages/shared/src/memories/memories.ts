@@ -9,7 +9,7 @@
 // tokenized origins + domain overlap + transition overlap + entry/exit match),
 // and recurrence requires separate temporal occurrences.
 
-import { type BrowserContext, getRecentContexts } from "../contexts/contexts";
+import { type BrowserContext, getContexts } from "../contexts/contexts";
 import type { TabotDatabase } from "../events/db";
 
 // --- Behavioral fingerprint (§15) ---
@@ -619,7 +619,10 @@ export const getMemories = async (
 	db: TabotDatabase,
 	limit: number = MEMORY_THRESHOLDS.MEMORY_MAX_MEMORIES,
 ): Promise<Memory[]> => {
-	const contexts = await getRecentContexts(db, 500); // bounded read
+	// Match dashboard derivation; response limits must not change pattern identity.
+	// ponytail: full local rebuild; share persisted derived snapshots if large
+	// histories exceed the relay timeout.
+	const contexts = await getContexts(db);
 	const memories = buildMemories(contexts);
 	return memories.slice(0, limit);
 };
@@ -628,14 +631,25 @@ export const getMemoryById = async (
 	db: TabotDatabase,
 	id: string,
 ): Promise<Memory | undefined> => {
-	const contexts = await getRecentContexts(db, 500);
-	return buildMemories(contexts).find((m) => m.id === id);
+	const memories = buildMemories(await getContexts(db));
+	return (
+		memories.find((memory) => memory.id === id) ??
+		// Composite IDs grow as occurrences arrive. Accept a previous ID only
+		// when its exact first/last supporting contexts still belong to this pattern.
+		memories.find((memory) =>
+			memory.contextIds.some((lastId) =>
+				memory.firstContextId === lastId
+					? id === lastId
+					: id === `${memory.firstContextId}-${lastId}`,
+			),
+		)
+	);
 };
 
 export const getMemoriesBySignature = async (
 	db: TabotDatabase,
 	signature: string,
 ): Promise<Memory[]> => {
-	const contexts = await getRecentContexts(db, 500);
+	const contexts = await getContexts(db);
 	return buildMemories(contexts).filter((m) => m.signature === signature);
 };

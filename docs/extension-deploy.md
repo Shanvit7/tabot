@@ -1,6 +1,6 @@
 # Deployment — Tabot
 
-Simple model: **merge to `main` deploys.** No develop branch — feature branches PR straight into `main`. The only release path for the extension is the changesets "Version Packages" PR.
+Simple model: **merge to `main` deploys.** No develop branch — feature branches PR straight into `main`. Normal extension releases use a Changesets "Version Packages" PR. For this `0.2.2` release, package, manifest and changelog are pre-bumped in feature PR #19; merging it invokes the release hook directly.
 
 ```text
 feat/* / fix/*  ──PR──►  main  ──►  prod
@@ -12,11 +12,11 @@ branches                 release   dashboard live + extension uploaded
 | Event | Workflow | Result |
 | --- | --- | --- |
 | Any merge to `main` | `deploy.yml` | Dashboard → GitHub Pages, **live immediately** |
-| Any merge to `main` (if `.changeset/*.md` exists) | `release.yml` | Opens / updates the **"Version Packages" PR** |
-| Merge of that Version PR | `release.yml` → `submit.yml` | Extension zip → Chrome Web Store **draft** |
+| Any merge to `main` with changesets | `release.yml` | Opens / updates the **"Version Packages" PR** |
+| Merge of Version PR, or main merge with prepared version and no changesets | `release.yml` → `submit.yml` | Tags version and uploads extension zip → Chrome Web Store **draft** |
 
 - **Dashboard** = fully auto. Every merge ships.
-- **Extension** = ships **only** through the Version Packages PR merge (details below). A green workflow ≠ live extension — a human still clicks **Publish** in the [Chrome Web Store dashboard][dashboard].
+- **Extension** = release hook uploads a draft after versioning. A green workflow ≠ live extension — a human still clicks **Publish** in the [Chrome Web Store dashboard][dashboard].
 
 ## How to make a release (plain English)
 
@@ -40,21 +40,17 @@ branches                 release   dashboard live + extension uploaded
 
    Merge your PR into `main`. Dashboard goes live. If a changeset exists, GitHub Actions opens a **"Version Packages"** PR that bumps `apps/extension/package.json` and writes `CHANGELOG.md`.
 
-3. **Merge the Version PR** — this is the release decision. Merging it:
-
-   - bumps the version (`0.1.3 → 0.2.0` for this release),
-   - tags it `v0.2.0` on `main` (a marker, so it never releases twice),
-   - dispatches `submit.yml`, which builds + uploads a **draft** to the store.
+3. **Merge the Version PR** — this is the release decision. Normally it applies the version bump. For current `0.2.2`, feature PR #19 already includes package/manifest versions and changelog; after merge, the release hook tags `v0.2.2` and dispatches `submit.yml`, which builds + uploads a **draft** to the store.
 
 4. **Approve** — in the [Chrome Web Store dashboard][dashboard], review the draft and click **Publish**. Chrome auto-updates installed copies.
 
 ## Why it's one path, not two
 
-Version numbers can only go up inside the Version Packages PR — that's the only place `.changeset/*.md` becomes a bump. `submit.yml` **cannot be triggered by any ordinary `main` push**; it only runs when the release hook fires it. So a hand-edited `package.json` on a normal PR merges and the store does nothing. There is no second door.
+For normal releases, Changesets applies the version bump in the Version Packages PR. If a release is pre-bumped in a feature PR, merge it without an unconsumed changeset so the Changesets action runs the publish hook. `submit.yml` is still dispatched only by `scripts/release-tag.mjs`, which creates the version tag and prevents duplicate submissions.
 
 ## The tag's job: a marker, not a trigger
 
-`v0.2.0` is pushed by `scripts/release-tag.mjs` (the Changesets publish hook) right before the store upload. Its only job is **idempotency** — if a run needs re-doing, the script sees the tag already exists, skips the tag, and just dispatches the upload again. It never causes a double upload or a rejected duplicate version.
+`v0.2.2` for this release is pushed by `scripts/release-tag.mjs` (the Changesets publish hook) right before the store upload. Its only job is **idempotency** — if a run needs re-doing, the script sees the tag already exists, skips the tag, and just dispatches the upload again. It never causes a double upload or a rejected duplicate version.
 
 ## Credentials (one time)
 

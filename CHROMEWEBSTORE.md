@@ -1,6 +1,6 @@
 # Chrome Web Store — Tabot
 
-Draft permission/privacy update for the 0.2.1 extension release, including foreground-time tracking, authorized activity-metrics and recurring-pattern tools, and guided ChatGPT connection setup. Last updated: October 12, 2026. Prepared manifest version: 0.2.1. No store submission or publication performed.
+Draft permission/privacy update for the 0.2.2 extension release, including foreground-time tracking, authorized activity-metrics and recurring-pattern tools, and guided ChatGPT connection setup. Last updated: October 14, 2026. Prepared manifest version: 0.2.2. No store submission or publication performed.
 
 ## Store listing
 
@@ -30,7 +30,7 @@ Draft permission/privacy update for the 0.2.1 extension release, including foreg
 - Foreground sampling adds timestamps and browser focus/idle state, not page contents, typed text, screenshots, or keystroke values. Idle state is used to decide whether to sample, not saved as a new raw event type.
 - The last foreground observation is saved in session storage to survive service-worker restarts. Browsing events remain in local IndexedDB.
 - The optional authorized ChatGPT connection returns sanitized derived context or site-level aggregate metrics for a requested time range. Metrics contain HTTP(S) origins, estimated time, visits, active days, and aggregate site-to-site transitions, never raw events, page paths, query strings, credentials, or favicons. Origins (including identifying subdomains) are not anonymized. Raw history is not uploaded or persisted by the relay. A user-initiated export shares the selected context with its chosen recipient.
-- Authorized pattern discovery returns bounded derived summaries; selected-pattern lookup adds occurrence timestamps, supporting context identifiers and origin-only sequences, not raw events or page URLs. Confidence describes heuristic similarity, not user intent or productivity. Discovery uses recent derived contexts and is not exhaustive history.
+- Authorized pattern discovery returns bounded derived summaries; selected-pattern lookup adds occurrence timestamps, supporting context identifiers and origin-only sequences, not raw events or page URLs. Confidence describes heuristic similarity, not user intent or productivity. Discovery and selected-pattern lookup cover all locally retained browsing stretches, matching the dashboard; deleted or uncaptured activity is unavailable. Only the bounded, sanitized results of authorized requests leave the device.
 - Historical active-time estimates cannot reconstruct attention when old visibility/focus evidence is absent. Existing downloads must be exported again to receive the fix.
 
 ## Assets and publication requirements
@@ -41,6 +41,9 @@ Before submission: verify live privacy-policy URL, publisher/contact details, fu
 
 ## Version history
 
+Unreleased fix: recurring-pattern assistant lookup now matches the dashboard across all retained browsing stretches. Existing selected-pattern links still work when new occurrences extend that pattern. Separate visits no longer fuse across inactivity gaps during cleanup. No new permissions or raw-history uploads.
+
 | Version | Changes | Status |
 | --- | --- | --- |
+| 0.2.2 | Fix recurring-pattern assistant lookup so MCP results match the dashboard across all retained browsing stretches, preserve pattern IDs as new occurrences arrive, and keep visits separated across long inactivity gaps. No new permissions or raw-history uploads. | Draft |
 | 0.2.1 | Office-friendly browser-activity popup explaining what is recorded and how users can review or share it, with site favicons, bounded site map, first-run guidance, animated Observing status, and scoped dashboard links; replace bookmark imagery and saved-site wording with Activity and Review activity; remove technical labels and activity/duration metrics; remove popup provider/export/connector panels while adding a compact disconnected-only ChatGPT connection prompt, without changing capture or dashboard integrations. Foreground-only context durations; stop on idle/lock and sleep; add `idle` permission; export derivation schema 9; authorized site-level activity metrics and Activities assistant actions; recurring-pattern discovery and bounded occurrence evidence with Recurring patterns assistant actions. Guide ChatGPT through custom MCP setup and support remote marketplace-destination switching (no additional permission). | Draft |

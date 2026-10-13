@@ -19,12 +19,7 @@ import {
 } from "../activities/meaningful-events";
 import type { TabotDatabase } from "../events/db";
 import { getAllEvents } from "../events/db";
-import {
-	getRecentSessions,
-	getSessions,
-	type Session,
-	sessionize,
-} from "../sessions/sessions";
+import { getSessions, type Session, sessionize } from "../sessions/sessions";
 
 export interface BrowserContext {
 	id: string; // `${firstSessionId}-${lastSessionId}`
@@ -439,8 +434,11 @@ export const getContexts = async (
 	start?: number,
 	end?: number,
 ): Promise<BrowserContext[]> => {
-	const sessions = await getSessions(db, start, end);
 	const events = await getAllEvents(db);
+	const sessions =
+		start === undefined && end === undefined
+			? sessionize(events)
+			: await getSessions(db, start, end);
 	const transitions = deriveTransitions(deriveMeaningfulEvents(events));
 	return buildContexts(sessions, transitions);
 };
@@ -449,19 +447,14 @@ export const getContextById = async (
 	db: TabotDatabase,
 	id: string,
 ): Promise<BrowserContext | undefined> => {
-	const events = await getAllEvents(db);
-	const sessions = sessionize(events);
-	const transitions = deriveTransitions(deriveMeaningfulEvents(events));
-	return buildContexts(sessions, transitions).find((c) => c.id === id);
+	return (await getContexts(db)).find((c) => c.id === id);
 };
 
 export const getRecentContexts = async (
 	db: TabotDatabase,
 	limit = 10,
 ): Promise<BrowserContext[]> => {
-	const sessions = await getRecentSessions(db, 500); // bounded read
-	const transitions = deriveTransitions(
-		deriveMeaningfulEvents(sessions.flatMap((s) => s.eventSequence)),
-	);
-	return buildContexts(sessions, transitions).slice(-limit);
+	// Select after full derivation: slicing sessions resets episode IDs and
+	// rebuilding transitions from session fragments can change fingerprints.
+	return (await getContexts(db)).slice(-limit);
 };

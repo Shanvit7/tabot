@@ -248,7 +248,7 @@ A new meaningful insight opens the extension popup automatically; if Chrome cann
 | Notifications | Settlement, freshness, cooldown and selected-ID actions implemented. | Real-browsing calibration, sparse delivery, click/prefill/offline acceptance. Fallback title still says “Context ready”; align remaining copy with PRODUCT.md. |
 | First run | Honest empty guidance, local-observation copy and session progress exist. | Notification-expectation guidance and complete install-to-first-use acceptance; no fake ETA or “memory forming” promise. |
 | Startup reminder | Not implemented. | If retained for v0.2, reuse meaningful unseen candidates, high-water marks and cooldown; no empty or duplicate alarm/startup reminders. |
-| Release | Extension manifest `0.2.1` and MCP package/protocol `0.2.1` are prepared. Neither is evidence of a live extension release. | Finish release review, user approval and explicit deployment; publish extension through Chrome Web Store workflow. |
+| Release | Extension package/manifest and MCP package/protocol `0.2.2` are prepared. Production MCP Worker is deployed; dashboard and extension release are pending PR merge. | Merge PR #19, verify Pages and release workflow, then review/publish Chrome Web Store draft. |
 
 Manual/live acceptance, not source/checkmark inference:
 

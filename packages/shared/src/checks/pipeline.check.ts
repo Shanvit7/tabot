@@ -8,11 +8,22 @@ import {
 	deriveMeaningfulEvents,
 	deriveTransitions,
 } from "../activities/meaningful-events.ts";
-import { buildContexts } from "../contexts/contexts.ts";
-import type { StoredTabEvent } from "../events/db.ts";
+import {
+	buildContexts,
+	getContextById,
+	getContexts,
+	getRecentContexts,
+} from "../contexts/contexts";
+import type { StoredTabEvent, TabotDatabase } from "../events/db";
 import { logger } from "../lib/logger.ts";
-import { buildMemories } from "../memories/memories.ts";
+import {
+	buildMemories,
+	getMemories,
+	getMemoriesBySignature,
+	getMemoryById,
+} from "../memories/memories";
 import { sessionize } from "../sessions/sessions.ts";
+import { derive } from "../share/export";
 
 const MIN = 60_000;
 const T0 = 1_700_000_000_000;
@@ -94,6 +105,87 @@ const run = (events: StoredTabEvent[]) => {
 			"fixture I: no intent vocabulary",
 		);
 	}
+}
+
+// Dashboard and database APIs must derive identical IDs and classification,
+// even beyond the former 500-session/context window.
+{
+	const visit = (index: number, site: string): StoredTabEvent[] => {
+		const start = T0 + index * 60 * MIN;
+		return [
+			ev(start, "TAB_ACTIVATED", 1, `https://${site}.test/start`),
+			ev(start + MIN, "NAVIGATION", 1, `https://${site}-docs.test/private`),
+			ev(start + 2 * MIN, "SCROLL", 1, `https://${site}-docs.test/private`),
+		];
+	};
+	const events = Array.from({ length: 503 }, (_, index) =>
+		visit(index, index < 2 ? "target" : "other"),
+	).flat();
+	const db = {
+		events: { toArray: async () => events },
+	} as unknown as TabotDatabase;
+	const dashboard = derive(events);
+	assert.ok(dashboard.sessions.length > 500);
+	assert.ok(dashboard.contexts.length > 500);
+	const target = dashboard.memories.find((memory) =>
+		memory.fingerprint.orderedOrigins.includes("https://target.test"),
+	);
+	assert.ok(target && target.kind === "recurrent");
+	assert.equal(target.evidence.occurrenceCount, 2);
+	assert.ok(
+		dashboard.contexts.every(
+			(context) => context.endTimestamp - context.startTimestamp <= 2 * MIN,
+		),
+		"episode cleanup must not merge either neighbor across inactivity gaps",
+	);
+	assert.deepEqual(await getContexts(db), dashboard.contexts);
+	assert.deepEqual(
+		await getRecentContexts(db, 3),
+		dashboard.contexts.slice(-3),
+		"recent reads must select after derivation, preserving IDs and evidence",
+	);
+	const shape = (memory: (typeof dashboard.memories)[number]) => ({
+		id: memory.id,
+		kind: memory.kind,
+		contextIds: memory.contextIds,
+		fingerprint: memory.fingerprint,
+		occurrences: memory.occurrences,
+		evidence: memory.evidence,
+	});
+	assert.deepEqual(
+		(await getMemories(db, Number.MAX_SAFE_INTEGER)).map(shape),
+		dashboard.memories.map(shape),
+		"MCP and dashboard must retain the same recurring patterns",
+	);
+	const retrieved = await getMemoryById(db, target.id);
+	assert.ok(retrieved);
+	assert.deepEqual(shape(retrieved), shape(target));
+	assert.deepEqual(
+		(await getMemoriesBySignature(db, target.signature)).map(shape),
+		[target].map(shape),
+	);
+	for (const id of target.contextIds) {
+		assert.deepEqual(
+			await getContextById(db, id),
+			dashboard.contexts.find((context) => context.id === id),
+		);
+	}
+	// A new occurrence extends the composite ID; existing dashboard prompts
+	// must still retrieve this pattern, never an unrelated substitute.
+	events.push(...visit(503, "target"));
+	const updated = derive(events).memories.find((memory) =>
+		memory.contextIds.includes(target.firstContextId),
+	);
+	assert.ok(updated && updated.id !== target.id);
+	assert.equal((await getMemoryById(db, target.id))?.id, updated.id);
+	assert.equal(await getMemoryById(db, "missing"), undefined);
+	assert.equal(
+		await getMemoryById(
+			db,
+			`${target.firstContextId}-${updated.lastContextId}-invalid`,
+		),
+		undefined,
+	);
 }
 
 logger.info("pipeline.check: all assertions passed ✔");
