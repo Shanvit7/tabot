@@ -16,7 +16,7 @@ export const Footer = ({
 					TABOT
 				</a>
 				<p className="mt-2 max-w-sm text-base leading-7 text-landing-muted">
-					Thinking across Tabs · Version 0.2.1
+					Thinking across Tabs · Version 0.2.2
 				</p>
 			</div>
 			<nav

@@ -773,7 +773,7 @@ Home maps and session inspection, Activities range/site metrics, recurring-patte
 
 The old plan’s fake topic labels, event-count examples, new-memory popup counts and deterministic “first memory forming” progress are not implementation requirements. Local review remains primary and ChatGPT optional; no extra providers, centralized history, semantic inference, universal PII detector, native app or telemetry rewrite is needed. Preserve meaningful sparse re-engagement, honest empty states, privacy-first selected retrieval and evidence before interpretation.
 
-The extension's prepared manifest version and MCP package/protocol are **0.2.1**. Local builds do not prove a store release or live deployment; review and approve extension release through the Chrome Web Store workflow, and deploy MCP explicitly.
+The extension package/manifest and MCP package/protocol are prepared at **0.2.2**. Production MCP Worker is deployed; local builds do not prove a Chrome Web Store release. PR #19 must merge before dashboard deployment and the extension upload workflow; review and publish the resulting store draft manually.
 
 Release requires normal-user connection without MCP setup, real browsing/readiness/notification calibration, useful evidence-grounded ChatGPT results, production ID/origin/base-path/tool-version agreement, offline/restart/credential acceptance, remaining first-run notification guidance and a decision/implementation for startup reminder. See [system.md → status and acceptance](./system.md#v02-status-and-acceptance). Measure first useful activity → review → authorized assistant use → return, not raw collection volume. No implemented product-loop analytics is claimed.
 

@@ -78,7 +78,7 @@ Confidence is heuristic similarity, not probability of intent or productivity. F
 
 On **Recurring patterns**, **Ask ChatGPT about recurring patterns** appears above the map only when the shared OAuth connection status is verified connected, including when the map is empty. It asks ChatGPT to discover patterns and inspect up to three through `get_memory`. Selecting a row exposes a compact **Ask ChatGPT** action and **View context** supporting-context link beside that row, inside the map card. When disconnected or status is unknown, the selected-pattern action goes to Home’s connection section; the overview CTA stays hidden. Prefills contain only tool instructions and a selected id, not local pattern evidence.
 
-The existing extension, MCP and web `check:metricsRelay` / `check:activityMetrics` checks also cover pattern discovery, schemas, authorization, occurrence projection, response budgets, fail-closed privacy and connected-only overview actions. No browser automation or deployment is needed to run them. Reload the extension and deploy the updated Worker, then refresh the ChatGPT connection's tool list to discover the seventh tool. No production deployment is performed by these changes.
+The existing extension, MCP and web `check:metricsRelay` / `check:activityMetrics` checks also cover pattern discovery, schemas, authorization, occurrence projection, response budgets, fail-closed privacy and connected-only overview actions. No browser automation or deployment is needed to run them. Production Worker version 0.2.2 is deployed. Extension and dashboard updates require PR #19 to merge; then reload the updated extension and refresh the ChatGPT connection's tool list.
 
 ## Production checks and logs
 
