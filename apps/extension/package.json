@@ -2,7 +2,7 @@
 	"name": "extension",
 	"displayName": "Tabot",
 	"description": "Private, local browser activity timeline. Thinking across tabs.",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"private": true,
 	"scripts": {
 		"check:popup": "node --import ../../packages/shared/resolve-hook.mjs popup-model.check.mts",
@@ -34,7 +34,7 @@
 		"typescript": "^5.7.0"
 	},
 	"manifest": {
-		"version": "0.2.1",
+		"version": "0.2.2",
 		"cross_origin_opener_policy": {
 			"value": "same-origin"
 		},

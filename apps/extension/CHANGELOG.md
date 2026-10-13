@@ -1,5 +1,11 @@
 # extension
 
+## 0.2.2
+
+### Patch Changes
+
+- 4ba4d22: Fix recurring-pattern results so dashboard links resolve consistently and visits separated by long inactivity gaps remain distinct.
+
 ## 0.2.1
 
 ### Patch Changes
