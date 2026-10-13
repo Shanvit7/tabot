@@ -396,8 +396,8 @@ const listRecurringPatterns = async (params: unknown) => {
 	) {
 		throw new Error("limit must be an integer from 1 to 20.");
 	}
-	// getMemories derives from at most 500 contexts; read all candidates before recurrent filtering.
-	const candidates = (await getMemories(await getDb(), 500))
+	// Derive the same retained history as the dashboard; bound only the response.
+	const candidates = (await getMemories(await getDb(), Number.MAX_SAFE_INTEGER))
 		.filter((m) => m.kind === "recurrent")
 		.toSorted((a, b) => b.lastSeen - a.lastSeen || b.strength - a.strength);
 	const sanitized = (
@@ -410,7 +410,7 @@ const listRecurringPatterns = async (params: unknown) => {
 		})
 	).memories;
 	const response = {
-		scope: { contextLimit: 500, exhaustiveHistory: false },
+		scope: { contextLimit: null, exhaustiveHistory: true },
 		timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 		availablePatterns: candidates.length,
 		patterns: sanitized.map((m) => {
@@ -434,7 +434,7 @@ const listRecurringPatterns = async (params: unknown) => {
 		}),
 		truncated: candidates.length > limit,
 		evidenceNotes:
-			"Discovery covers the latest 500 local contexts, not exhaustive history. Fingerprint ordering is representative; confidence is heuristic similarity, not probability of intent. Call get_memory for supporting occurrence evidence. Empty results are not proof of no routines.",
+			"Discovery covers all retained local contexts, matching the dashboard; deleted or uncaptured activity is unavailable. Fingerprint ordering is representative; confidence is heuristic similarity, not probability of intent. Call get_memory for supporting occurrence evidence. Empty results are not proof of no routines.",
 	};
 	while (JSON.stringify(response).length > 60_000) response.patterns.pop();
 	response.truncated = candidates.length > response.patterns.length;

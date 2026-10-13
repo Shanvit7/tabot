@@ -108,7 +108,7 @@ mock.module("@tabot/shared", {
 		...shared,
 		createEventsDb: async () => db,
 		getMemories: async (_db: unknown, limit: number) => {
-			assert.equal(limit, 500);
+			assert.equal(limit, Number.MAX_SAFE_INTEGER);
 			patternReads++;
 			if (fail) throw new Error("Local database unavailable");
 			return [single, ...patterns];
@@ -122,6 +122,7 @@ mock.module("@tabot/shared", {
 	},
 });
 type PatternList = {
+	scope: { contextLimit: number | null; exhaustiveHistory: boolean };
 	patterns: { id: string }[];
 	availablePatterns: number;
 	truncated: boolean;
@@ -224,6 +225,10 @@ try {
 	assert.equal(discovery?.patterns.length, 10);
 	assert.equal(discovery?.patterns[0].id, "pattern-24");
 	assert.equal(discovery?.availablePatterns, 25);
+	assert.deepEqual(discovery?.scope, {
+		contextLimit: null,
+		exhaustiveHistory: true,
+	});
 	assert.equal(discovery?.truncated, true);
 	assert.doesNotMatch(
 		JSON.stringify(discovery),
@@ -364,6 +369,12 @@ try {
 	assert.equal(boundedList.truncated, true);
 	assert.equal(boundedList.availablePatterns, 20);
 	assert.equal(boundedList.patterns[0].id, "long-pattern-19");
+	patterns = Array.from({ length: 501 }, (_, index) => pattern(index));
+	const allRetained = (
+		await request<PatternList>({ limit: 1 }, "list_recurring_patterns")
+	).result;
+	assert.equal(allRetained?.availablePatterns, 501);
+	assert.equal(allRetained?.patterns[0].id, "pattern-500");
 	patterns = [];
 	const empty = (await request<PatternList>({}, "list_recurring_patterns"))
 		.result;

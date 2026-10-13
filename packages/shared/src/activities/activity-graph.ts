@@ -615,6 +615,12 @@ export const extractActivityEpisodes = (
 			return mass < MIN_EPISODE_MASS;
 		},
 		(left, right) => {
+			// Either neighbor may be passed first. Cleanup must never undo the
+			// hard inactivity split, including meaningful same-site fragments.
+			const gap =
+				Math.max(left.startTimestamp, right.startTimestamp) -
+				Math.min(left.endTimestamp, right.endTimestamp);
+			if (gap > GRAPH_THRESHOLDS.EPISODE_GAP_MS) return 0;
 			// §10 + §11 — a tiny episode with NO meaningful activity is lifecycle
 			// noise (TAB_CREATED/PAGE_HIDDEN bursts, transient newtab/extension
 			// surfaces): 0 interactions and < 1 minute of dwelling means nothing
@@ -625,10 +631,7 @@ export const extractActivityEpisodes = (
 			// episode (interactive anchors) needs real neighbor support.
 			const noise =
 				right.totalInteractionCount === 0 && right.duration < 60_000;
-			if (right.domains.length === 0 || noise) {
-				const gap = right.startTimestamp - left.endTimestamp;
-				return gap <= GRAPH_THRESHOLDS.EPISODE_GAP_MS ? 1 : 0;
-			}
+			if (right.domains.length === 0 || noise) return 1;
 			const shared = right.domains.filter((d) =>
 				left.domains.includes(d),
 			).length;
