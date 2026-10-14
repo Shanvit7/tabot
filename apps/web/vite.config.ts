@@ -14,6 +14,17 @@ const NODE_MODULE_SHIM = fileURLToPath(
 	new URL("./src/shims/node-module.ts", import.meta.url),
 );
 
+const crossOriginIsolationHeaders = (): Plugin => ({
+	name: "tabot:cross-origin-isolation-headers",
+	configureServer(server) {
+		server.middlewares.use((_request, response, next) => {
+			response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+			response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+			next();
+		});
+	},
+});
+
 const nodeModuleShim = (): Plugin => ({
 	name: "tabot:node-module-shim",
 	// `enforce: "pre"` — vite:resolve externalizes node:module for the browser
@@ -30,6 +41,10 @@ export default defineConfig({
 	base: process.env.VITE_BASE_PATH ?? "/",
 	server: {
 		port: 3000,
+		headers: {
+			"Cross-Origin-Opener-Policy": "same-origin",
+			"Cross-Origin-Embedder-Policy": "require-corp",
+		},
 	},
 	resolve: {
 		tsconfigPaths: true,
@@ -46,6 +61,7 @@ export default defineConfig({
 		noExternal: ["@lobehub/icons"],
 	},
 	plugins: [
+		crossOriginIsolationHeaders(),
 		nodeModuleShim(),
 		tailwindcss(),
 		tanstackStart({

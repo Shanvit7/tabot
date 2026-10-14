@@ -523,6 +523,19 @@ if (chrome.runtime.onMessageExternal) {
 					});
 				return true;
 			}
+			if (message?.type === "GET_BENCHMARK_EVENTS") {
+				const limit =
+					typeof message.limit === "number"
+						? Math.max(1, Math.min(10_000, Math.floor(message.limit)))
+						: 10_000;
+				getDb()
+					.then((db) =>
+						db.events.orderBy("timestamp").reverse().limit(limit).toArray(),
+					)
+					.then((events) => sendResponse(events.reverse()))
+					.catch(() => sendResponse([]));
+				return true;
+			}
 			return false;
 		},
 	);
