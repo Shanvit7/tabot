@@ -108,6 +108,20 @@ export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 		});
 	});
 
+export const fetchBenchmarkEvents = (
+	limit = 10_000,
+	timeoutMs = 15_000,
+): Promise<StoredTabEvent[] | null> =>
+	new Promise((resolve) => {
+		send(
+			{ type: "GET_BENCHMARK_EVENTS", limit },
+			(res) => {
+				resolve(Array.isArray(res) ? res : null);
+			},
+			timeoutMs,
+		);
+	});
+
 // --- Export (Part C of docs/export-spec.md) ---
 // Derivation + JSONL building live in @tabot/shared (shared with the extension
 // popup "Share Context"); this module re-exports them for the Home route.

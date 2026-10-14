@@ -16,6 +16,7 @@ import { Route as HomeRouteImport } from './routes/home'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RecurringPatternsRouteImport } from './routes/recurring-patterns'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as DevBenchmarkRouteImport } from './routes/dev.benchmark'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +53,11 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevBenchmarkRoute = DevBenchmarkRouteImport.update({
+  id: '/dev/benchmark',
+  path: '/dev/benchmark',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/recurring-patterns': typeof RecurringPatternsRoute
   '/terms': typeof TermsRoute
+  '/dev/benchmark': typeof DevBenchmarkRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/recurring-patterns': typeof RecurringPatternsRoute
   '/terms': typeof TermsRoute
+  '/dev/benchmark': typeof DevBenchmarkRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/recurring-patterns': typeof RecurringPatternsRoute
   '/terms': typeof TermsRoute
+  '/dev/benchmark': typeof DevBenchmarkRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/recurring-patterns'
     | '/terms'
+    | '/dev/benchmark'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/recurring-patterns'
     | '/terms'
+    | '/dev/benchmark'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/recurring-patterns'
     | '/terms'
+    | '/dev/benchmark'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   RecurringPatternsRoute: typeof RecurringPatternsRoute
   TermsRoute: typeof TermsRoute
+  DevBenchmarkRoute: typeof DevBenchmarkRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dev/benchmark': {
+      id: '/dev/benchmark'
+      path: '/dev/benchmark'
+      fullPath: '/dev/benchmark'
+      preLoaderRoute: typeof DevBenchmarkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   RecurringPatternsRoute: RecurringPatternsRoute,
   TermsRoute: TermsRoute,
+  DevBenchmarkRoute: DevBenchmarkRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

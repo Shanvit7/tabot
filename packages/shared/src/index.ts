@@ -62,6 +62,7 @@ export {
 	getEventsBetween,
 	type StoredTabEvent,
 	storedTabEventSchema,
+	TabotDatabase,
 } from "./events/db";
 export {
 	EVENT_TYPES,
