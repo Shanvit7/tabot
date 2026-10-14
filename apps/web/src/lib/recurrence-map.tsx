@@ -38,12 +38,14 @@ export const RecurrenceMap = ({
 	selectedId,
 	onSelect,
 	selectedActions,
+	rowActions,
 }: {
 	memories: MemoryInput[];
 	favicons?: Map<string, string>;
 	selectedId: string;
 	onSelect: (id: string) => void;
 	selectedActions?: ReactNode;
+	rowActions?: (id: string) => ReactNode;
 }) => {
 	const map = useMemo(() => buildMemoryMap(memories), [memories]);
 	const busiest = useMemo(
@@ -53,7 +55,7 @@ export const RecurrenceMap = ({
 	return (
 		<div className="overflow-x-auto rounded-xl border border-[#d2ddd2] bg-white">
 			<div
-				className={`p-4 sm:p-6 ${selectedActions ? "min-w-[960px]" : "min-w-[720px]"}`}
+				className={`p-4 sm:p-6 ${rowActions || selectedActions ? "min-w-[960px]" : "min-w-[720px]"}`}
 			>
 				<div className="mb-4 flex items-baseline justify-between gap-4">
 					<h2 className="text-xl font-semibold">Recurrence</h2>
@@ -121,12 +123,13 @@ export const RecurrenceMap = ({
 									</span>
 								</span>
 							</button>
-							{row.id === selectedId && selectedActions && (
+							{(rowActions || (row.id === selectedId && selectedActions)) && (
 								<nav
-									aria-label="Selected pattern actions"
+									aria-label={`${labelOf(row)} actions`}
 									className="flex shrink-0 items-center gap-2 pr-2"
 								>
-									{selectedActions}
+									{rowActions?.(row.id)}
+									{row.id === selectedId && selectedActions}
 								</nav>
 							)}
 						</li>

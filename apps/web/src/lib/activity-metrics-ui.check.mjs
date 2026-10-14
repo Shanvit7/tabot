@@ -408,19 +408,19 @@ try {
 	const { RecurringPatternAssistant } = await server.ssrLoadModule(
 		"/src/components/recurring-pattern-assistant.tsx",
 	);
+	const { CheckAssistantContext } = await server.ssrLoadModule(
+		"/src/providers/assistant-connection.tsx",
+	);
 	for (const connection of [false, null, undefined, true]) {
 		const connected = connection === true;
 		const html = renderToStaticMarkup(
 			createElement(RecurringPatternAssistant, { connected }),
 		);
 		if (!connected) {
-			assert.equal(
-				html,
-				"",
-				"page overview CTA appears only with verified connection",
-			);
+			assert.match(html, /Ask AI/);
+			assert.match(html, /href="\/home#connectors-heading"/);
 		} else {
-			assert.match(html, /Ask ChatGPT about recurring patterns/);
+			assert.match(html, /Ask ChatGPT/);
 			const prompt = linkUrl(html).searchParams.get("q");
 			assert.match(prompt, /list_recurring_patterns/);
 			assert.match(prompt, /\{"limit":10\}/);
@@ -428,7 +428,11 @@ try {
 		}
 		for (const memoryId of ["pattern-1", 'pattern-"2"']) {
 			const selected = renderToStaticMarkup(
-				createElement(RecurringPatternAssistant, { memoryId, connected }),
+				createElement(
+					CheckAssistantContext.Provider,
+					{ value: { chatgpt: connected, claude: false } },
+					createElement(RecurringPatternAssistant, { memoryId, connected }),
+				),
 			);
 			assert.doesNotMatch(selected, /raw events stay local|mt-5|w-full/);
 			assert.match(selected, /min-h-11/);
@@ -436,8 +440,8 @@ try {
 			assert.match(selected, /mr-1\.5 size-3\.5/);
 			assert.doesNotMatch(selected, /text-sm|font-semibold/);
 			if (!connected) {
+				assert.match(selected, /Ask AI/);
 				assert.match(selected, /href="\/home#connectors-heading"/);
-				assert.doesNotMatch(selected, /target="_blank"/);
 			} else {
 				assert.match(selected, /Ask ChatGPT/);
 				const prompt = linkUrl(selected).searchParams.get("q");
@@ -462,17 +466,27 @@ try {
 			domains: [],
 		},
 	}));
-	for (const connected of [false, true]) {
+	for (const connection of [
+		{ chatgpt: false, claude: false },
+		{ chatgpt: true, claude: false },
+		{ chatgpt: false, claude: true },
+		{ chatgpt: true, claude: true },
+	]) {
 		for (const memory of memories) {
 			const html = renderToStaticMarkup(
 				createElement(RecurrenceMap, {
 					memories,
 					selectedId: memory.id,
 					onSelect: () => {},
-					selectedActions: createElement(RecurringPatternAssistant, {
-						memoryId: memory.id,
-						connected,
-					}),
+					rowActions: (memoryId) =>
+						createElement(
+							CheckAssistantContext.Provider,
+							{ value: connection },
+							createElement(RecurringPatternAssistant, {
+								memoryId,
+								connected: connection.chatgpt,
+							}),
+						),
 				}),
 			);
 			const rows = [...html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/g)].map(
@@ -482,27 +496,37 @@ try {
 			for (const [index, row] of rows.entries()) {
 				const rowMemory = memories.at(index);
 				assert.ok(rowMemory, "Each rendered row must belong to a memory");
+				assert.match(row, /aria-label="[^"]+ actions"/);
+				assert.ok(
+					row.indexOf("</button>") < row.indexOf("<a "),
+					"assistant links must be siblings, not nested inside row button",
+				);
 				if (rowMemory.id === memory.id) {
 					assert.match(row, /aria-pressed="true"/);
-					assert.match(row, /aria-label="Selected pattern actions"/);
-					assert.ok(
-						row.indexOf("</button>") < row.indexOf("<a "),
-						"assistant link must be sibling, not nested inside row button",
-					);
-					if (connected) {
-						const prompt = linkUrl(row).searchParams.get("q");
-						assert.ok(
-							prompt.includes(
-								`get_memory with id ${JSON.stringify(memory.id)}`,
-							),
-						);
-					} else assert.match(row, /Connect AI/);
 				} else {
-					assert.doesNotMatch(row, /<a |Selected pattern actions/);
+					assert.match(row, /aria-pressed="false"/);
+				}
+				const actions = [...row.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)];
+				if (!connection.chatgpt && !connection.claude) {
+					assert.equal(actions.length, 1);
+					assert.match(actions[0]?.[1] ?? "", /Ask AI/);
 					assert.match(
-						row,
-						/<\/button>\s*$/,
-						"unselected rows must have no action placeholder",
+						actions[0]?.[0] ?? "",
+						/href="\/home#connectors-heading"/,
+					);
+				} else {
+					assert.equal(
+						actions.length,
+						Number(connection.chatgpt) + Number(connection.claude),
+					);
+					if (connection.chatgpt) assert.match(row, /Ask ChatGPT/);
+					if (connection.claude) assert.match(row, /Ask Claude/);
+					assert.ok(
+						row.includes(
+							encodeURIComponent(
+								`get_memory with id ${JSON.stringify(rowMemory.id)}`,
+							),
+						),
 					);
 				}
 				assert.doesNotMatch(row, /w-56/, "no fixed-width action column");
@@ -555,57 +579,101 @@ try {
 	);
 	for (const assistantConnected of [false, true]) {
 		const html = renderToStaticMarkup(
-			createElement(PlaceCard, {
-				node,
-				rank: 1,
-				total: flow.nodes.length,
-				totalMs: flow.totalMs,
-				activeDays: flow.stats.activeDays,
-				connections: connectedTo(flow, node.id),
-				assistantHref: href,
-				assistantConnected,
-			}),
+			createElement(
+				CheckAssistantContext.Provider,
+				{ value: { chatgpt: assistantConnected, claude: false } },
+				createElement(PlaceCard, {
+					node,
+					rank: 1,
+					total: flow.nodes.length,
+					totalMs: flow.totalMs,
+					activeDays: flow.stats.activeDays,
+					connections: connectedTo(flow, node.id),
+					assistantHref: href,
+					assistantConnected,
+				}),
+			),
 		);
 		assert.match(html, /Estimated time/);
 		assert.match(html, /not page URLs or raw history/);
 		if (assistantConnected) {
-			assert.match(html, /Ask ChatGPT about this place/);
+			assert.match(html, /Ask ChatGPT/);
 			const prompt = linkUrl(html).searchParams.get("q");
 			assert.ok(prompt.includes(JSON.stringify({ from, to, origin: node.id })));
 			assert.doesNotMatch(prompt, /private|secret|raw-/);
 		} else {
 			assert.match(html, /href="\/home#connectors-heading"/);
-			assert.doesNotMatch(html, /target="_blank"/);
 		}
 	}
 	const overview = renderToStaticMarkup(
 		createElement(AskChatGpt, {
 			href: chatGptPromptUrl(activityMetricsPrompt(from, to)),
 			connected: true,
-			label: "Ask ChatGPT about this period",
 		}),
 	);
-	assert.match(overview, /Ask ChatGPT about this period/);
+	assert.match(overview, /Ask ChatGPT/);
 	assert.match(overview, /text-sm font-semibold/);
 	assert.doesNotMatch(linkUrl(overview).searchParams.get("q"), /"origin"/);
 	const disconnectedOverview = renderToStaticMarkup(
-		createElement(AskChatGpt, {
-			href: chatGptPromptUrl(activityMetricsPrompt(from, to)),
-			connected: false,
-			label: "Ask ChatGPT about this period",
-		}),
+		createElement(
+			CheckAssistantContext.Provider,
+			{ value: { chatgpt: false, claude: false } },
+			createElement(AskChatGpt, {
+				href: chatGptPromptUrl(activityMetricsPrompt(from, to)),
+				connected: false,
+			}),
+		),
 	);
+	const claudeConnectedOverview = renderToStaticMarkup(
+		createElement(
+			CheckAssistantContext.Provider,
+			{ value: { chatgpt: false, claude: true } },
+			createElement(AskChatGpt, {
+				href: chatGptPromptUrl(activityMetricsPrompt(from, to)),
+				connected: false,
+			}),
+		),
+	);
+	assert.match(claudeConnectedOverview, /Ask Claude/);
+	assert.doesNotMatch(claudeConnectedOverview, /Ask AI/);
+	assert.match(claudeConnectedOverview, /href="https:\/\/claude\.ai\/new\?q=/);
+	assert.match(
+		claudeConnectedOverview,
+		/border-\[#476151\] bg-white text-preview-ink/,
+	);
+	assert.doesNotMatch(claudeConnectedOverview, /Ask ChatGPT/);
 	assert.match(disconnectedOverview, /href="\/home#connectors-heading"/);
-	assert.match(disconnectedOverview, /Ask an AI assistant/);
-	assert.doesNotMatch(disconnectedOverview, /target="_blank"/);
+	assert.match(disconnectedOverview, /Ask AI/);
+	assert.doesNotMatch(disconnectedOverview, /Ask Claude/);
+	const bothConnectedOverview = renderToStaticMarkup(
+		createElement(
+			CheckAssistantContext.Provider,
+			{ value: { chatgpt: true, claude: true, order: ["claude", "chatgpt"] } },
+			createElement(AskChatGpt, {
+				href: chatGptPromptUrl(activityMetricsPrompt(from, to)),
+				connected: true,
+			}),
+		),
+	);
+	assert.match(bothConnectedOverview, /<summary[^>]*>.*?Ask AI/);
+	assert.match(bothConnectedOverview, /Ask ChatGPT/);
+	assert.match(bothConnectedOverview, /Ask Claude/);
+	assert.ok(
+		bothConnectedOverview.indexOf("Ask Claude") <
+			bothConnectedOverview.indexOf("Ask ChatGPT"),
+		"chooser lists first-connected assistant first",
+	);
 	assert.match(
 		renderToStaticMarkup(createElement(Connectors)),
 		/id="connectors-heading" tabindex="-1"/,
 	);
-	const { CheckAssistantContext } = await server.ssrLoadModule(
-		"/src/providers/assistant-connection.tsx",
-	);
-	for (const connection of [false, true, null, undefined]) {
+	for (const connection of [
+		{ chatgpt: false, claude: false },
+		{ chatgpt: true, claude: false },
+		{ chatgpt: false, claude: true },
+		null,
+		undefined,
+	]) {
 		const html = renderToStaticMarkup(
 			createElement(
 				CheckAssistantContext.Provider,
@@ -614,29 +682,36 @@ try {
 			),
 		);
 		assert.match(html, /role="status"/);
-		if (connection === false) {
-			assert.match(
-				html,
-				/href="https:\/\/chatgpt\.com\/plugins\?search=Tabot"/,
-			);
+		assert.match(html, /grid-cols-1.*sm:grid-cols-2/);
+		assert.match(html, /Gemini.*Coming soon/);
+		assert.doesNotMatch(html, /tabot-mcp\.shanvit7\.workers\.dev\/mcp/);
+		assert.match(html, /border-\(--work-ink\) bg-\(--work-ink\) text-white/);
+		if (connection?.chatgpt !== true) {
+			assert.match(html, /href="https:\/\/chatgpt\.com\/\?q=/);
 			assert.match(html, /target="_blank"/);
 			assert.match(html, /opens ChatGPT in a new tab/);
 			assert.match(html, /hover:bg/);
+			if (connection === null) assert.match(html, /Status unknown/);
+			else if (connection === undefined) assert.match(html, /Checking…/);
 		} else {
+			assert.match(html, /cursor-default/);
+			assert.match(html, /ChatGPT<\/span><span role="status"[^>]*>Connected/);
+		}
+		if (connection?.claude === true) {
+			assert.match(html, /Claude/);
+			assert.match(html, /Connected/);
+			assert.doesNotMatch(html, /Connect Claude/);
 			assert.doesNotMatch(
 				html,
-				/<a\b|href=|target=|tabindex="0"|hover:bg|opens ChatGPT/,
+				/href="https:\/\/claude\.ai\/customize\/connectors/,
 			);
-			assert.match(html, /cursor-default/);
-			assert.ok(
-				html.includes(
-					connection === true
-						? "Connected"
-						: connection === null
-							? "Status unknown"
-							: "Checking…",
-				),
+		} else {
+			assert.match(html, /Connect Claude/);
+			assert.match(
+				html,
+				/href="https:\/\/claude\.ai\/customize\/connectors\?q=Tabot"/,
 			);
+			assert.match(html, /opens Claude connectors in a new tab/);
 		}
 	}
 	const { ExportDisclosure } = await server.ssrLoadModule(
@@ -938,7 +1013,7 @@ try {
 		else globalThis.window = originalWindow;
 	}
 	console.log(
-		"Activity + recurring patterns UI passed: SSR, shared metrics, scoped prompts, connected-only overview and selected-pattern actions.",
+		"Activity + recurring patterns UI passed: SSR, shared metrics, scoped prompts, provider-aware Ask AI actions.",
 	);
 } finally {
 	await server.close();

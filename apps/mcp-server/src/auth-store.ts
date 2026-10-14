@@ -1,5 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+	type AssistantConnections,
+	type AssistantProvider,
+	assistantProviderFromClientName,
+} from "@tabot/shared/assistant-connections";
+import {
 	ACCESS_TOKEN_TTL_SECONDS,
 	AUTH_CLEANUP_INTERVAL_MS,
 	AUTHORIZATION_TRANSACTION_TTL_MS,
@@ -39,6 +44,7 @@ interface TokenRecord {
 	scopes: string[];
 	resource?: string;
 	grantId?: string;
+	connectedAt?: number;
 	expiresAt: number;
 }
 interface AuthorizationTransactionRecord {
@@ -346,6 +352,7 @@ export class TabotAuth extends DurableObject<{ MCP_PUBLIC_URL: string }> {
 		scopes: string[];
 		resource: string;
 		grantId?: string;
+		connectedAt?: number;
 	}): Promise<IssuedTokens> {
 		const accessToken = randomToken(32);
 		const refreshToken = randomToken(32);
@@ -356,6 +363,7 @@ export class TabotAuth extends DurableObject<{ MCP_PUBLIC_URL: string }> {
 		const record: TokenRecord = {
 			...args,
 			grantId: args.grantId ?? crypto.randomUUID(),
+			connectedAt: args.connectedAt ?? now(),
 			expiresAt: now() + ACCESS_TOKEN_TTL_SECONDS * 1000,
 		};
 		if (this.getRecord(`revoked:${record.grantId}`))
@@ -421,27 +429,52 @@ export class TabotAuth extends DurableObject<{ MCP_PUBLIC_URL: string }> {
 			scopes: record.scopes,
 			resource: record.resource ?? this.env.MCP_PUBLIC_URL,
 			grantId: record.grantId,
+			connectedAt: record.connectedAt,
 		});
 	}
 
-	async hasAssistantConnection(installationId: string): Promise<boolean> {
-		if (
-			this.ctx.storage.sql
-				.exec(
-					"SELECT key FROM auth_records WHERE installation_id = ? AND expires_at > ? LIMIT 1",
-					installationId,
-					now(),
-				)
-				.toArray().length
-		)
-			return true;
+	async getAssistantConnections(
+		installationId: string,
+	): Promise<AssistantConnections> {
 		if (!this.migrated) {
-			// An incomplete legacy index must not falsely report that grants were revoked.
 			const error = new Error("Authorization migration is in progress.");
 			error.name = "AuthMigrationError";
 			throw error;
 		}
-		return false;
+		const tokens = this.ctx.storage.sql
+			.exec<{ key: string; value: string; expires_at: number }>(
+				"SELECT key, value, expires_at FROM auth_records WHERE installation_id = ? AND expires_at > ?",
+				installationId,
+				now(),
+			)
+			.toArray();
+		const connectedAt = new Map<AssistantProvider, number>();
+		for (const { key, value, expires_at } of tokens) {
+			const record = JSON.parse(value) as TokenRecord;
+			const client = await this.getClient(record.clientId);
+			const provider =
+				client && assistantProviderFromClientName(client.clientName);
+			if (!provider) continue;
+			const timestamp =
+				record.connectedAt ??
+				expires_at -
+					(key.startsWith("refresh:")
+						? REFRESH_TOKEN_TTL_SECONDS
+						: ACCESS_TOKEN_TTL_SECONDS) *
+						1000;
+			connectedAt.set(
+				provider,
+				Math.min(connectedAt.get(provider) ?? Infinity, timestamp),
+			);
+		}
+		const order = [...connectedAt]
+			.sort((a, b) => a[1] - b[1])
+			.map(([provider]) => provider);
+		return {
+			chatgpt: connectedAt.has("chatgpt"),
+			claude: connectedAt.has("claude"),
+			order,
+		};
 	}
 
 	async revokeToken(token: string, clientId: string): Promise<void> {

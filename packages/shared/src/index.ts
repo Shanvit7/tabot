@@ -24,6 +24,12 @@ export {
 	parseActivityMetricsInput,
 } from "./activities/metrics";
 export {
+	type AssistantConnections,
+	type AssistantProvider,
+	assistantProviderFromClientName,
+	parseAssistantConnections,
+} from "./assistant-connections";
+export {
 	type BrowserContext,
 	buildContexts,
 	CONTEXT_THRESHOLDS,
@@ -176,11 +182,14 @@ export {
 export {
 	type AiTargetDef,
 	activityMetricsPrompt,
+	CLAUDE_CONNECTORS_URL,
+	CLAUDE_MCP_SERVER_URL,
 	CLI_TARGET_DEFS,
 	type CliTargetDef,
 	chatGptConnectPromptUrl,
 	chatGptContextUrl,
 	chatGptPromptUrl,
+	claudePromptUrl,
 	contextPrompt,
 	memoryPrompt,
 	recurringPatternsPrompt,

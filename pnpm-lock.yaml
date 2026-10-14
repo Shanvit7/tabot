@@ -81,6 +81,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(supports-color@10.2.2)(zod@4.4.3)
+      '@tabot/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       hono:
         specifier: ^4.13.8
         version: 4.13.8

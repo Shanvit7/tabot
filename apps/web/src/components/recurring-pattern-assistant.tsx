@@ -21,13 +21,11 @@ export const RecurringPatternAssistant = ({
 			/>
 		);
 	}
-	if (!connected) return null;
 	return (
 		<div className="max-w-sm">
 			<AskChatGpt
 				href={chatGptPromptUrl(recurringPatternsPrompt())}
 				connected={connected}
-				label="Ask ChatGPT about recurring patterns"
 			/>
 			<p className="mt-2 text-xs leading-5 text-(--work-muted)">
 				Shares sanitized pattern evidence. Site names remain visible; raw events

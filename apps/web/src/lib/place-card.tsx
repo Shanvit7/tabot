@@ -129,11 +129,7 @@ export const PlaceCard = ({
 					))}
 				</ul>
 			)}
-			<AskChatGpt
-				href={assistantHref}
-				connected={assistantConnected}
-				label="Ask ChatGPT about this place"
-			/>
+			<AskChatGpt href={assistantHref} connected={assistantConnected} />
 			<p className="mt-2 text-xs leading-5 text-[#8fae95]">
 				Shares this period’s site-level estimates, not page URLs or raw history.
 			</p>

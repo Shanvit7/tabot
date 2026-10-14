@@ -14,11 +14,11 @@ const Privacy = () => (
 				Privacy policy
 			</h1>
 			<p className="mt-4 text-sm text-[#8ca493]">
-				Last updated: October 11, 2026
+				Last updated: October 14, 2026
 			</p>
 			<p className="mt-6 max-w-2xl leading-7 text-[#c2d1c7]">
 				Here’s what Tabot records, what stays on your device, and what happens
-				when you connect ChatGPT.
+				when you connect ChatGPT or Claude.
 			</p>
 
 			<aside
@@ -34,23 +34,25 @@ const Privacy = () => (
 						connection service does not store them.
 					</li>
 					<li>
-						When you ask ChatGPT about your activity, it can request selected
-						information from Tabot, such as site counts or details about a
-						browsing context or recurring pattern.
+						When you ask ChatGPT or Claude about your activity, it can request
+						selected information from Tabot, such as site counts or details
+						about an activity summary or recurring pattern.
 					</li>
 					<li>
 						Tabot’s online connection service (its MCP service) powers the Tabot
-						connector you add in ChatGPT, sometimes called a plugin. It passes
-						requests and results between ChatGPT and the extension; it does not
-						save browsing records or results in its application storage.
+						connector you add in ChatGPT or Claude. It passes requests and
+						results between the assistant and the extension; it does not save
+						browsing records or results in its application storage.
 					</li>
 					<li>
-						The service keeps connection and authorization records so ChatGPT
-						can connect. Tabot does store some connection data.
+						The service keeps connection and authorization records so your
+						connected assistant can connect. Tabot does store some connection
+						data.
 					</li>
 					<li>
-						ChatGPT receives the requested information and handles it under
-						OpenAI’s privacy and retention policies.
+						The assistant receives the information you requested and handles it
+						under its provider’s privacy and retention policies (OpenAI for
+						ChatGPT; Anthropic for Claude).
 					</li>
 				</ul>
 			</aside>
@@ -77,28 +79,28 @@ const Privacy = () => (
 
 				<section>
 					<h2
-						id="when-you-connect-chatgpt"
+						id="when-you-connect-assistant"
 						className="text-2xl font-semibold text-[#eff5e7]"
 					>
-						When you connect ChatGPT
+						When you connect an AI assistant
 					</h2>
 					<p className="mt-3">
-						After you authorize the Tabot plugin/connector in ChatGPT, ChatGPT
-						can request selected information from the extension through Tabot’s
-						online connection service. This service uses MCP, the connection
-						method that lets ChatGPT request information from Tabot.
+						After you authorize Tabot’s connector in ChatGPT or Claude, that
+						assistant can request selected information from the extension
+						through Tabot’s online connection service. This service uses MCP, a
+						standard connection method for requesting information from Tabot.
 					</p>
 					<ol className="mt-3 list-decimal space-y-2 pl-5">
-						<li>You ask a question in ChatGPT.</li>
+						<li>You ask a question in ChatGPT or Claude.</li>
 						<li>
-							ChatGPT requests relevant information. The connection service
-							checks permission and passes the request to your extension while
-							it is online.
+							The assistant requests relevant information. The connection
+							service checks permission and passes the request to your extension
+							while it is online.
 						</li>
 						<li>
 							The extension looks up the requested information from activity
 							stored on your device, then returns the result through the service
-							to ChatGPT.
+							to the assistant.
 						</li>
 					</ol>
 					<p className="mt-3">
@@ -113,20 +115,21 @@ const Privacy = () => (
 						What the AI assistant receives
 					</h2>
 					<p className="mt-3">
-						ChatGPT requests information by calling a Tabot tool. Depending on
-						the tool, the extension returns selected details such as a
-						description of a browsing context, website names (including
-						subdomains), dates and times, counts, recurring-pattern details, or
-						estimated activity measures. These are structured results, not a
-						single general summary. Website names are not hidden or anonymized.
+						ChatGPT or Claude requests information by calling a Tabot tool.
+						Depending on the tool, the extension returns selected details such
+						as an activity summary, website names (including subdomains), dates
+						and times, counts, recurring-pattern details, or estimated activity
+						measures. These are structured results, not a single general
+						summary. Website names are not hidden or anonymized.
 					</p>
 					<p className="mt-3">
 						The extension does not return raw event-by-event records, page paths
 						or query strings, login credentials, or website icons. Some returned
 						text is checked for personal details, but this cannot guarantee
-						every sensitive detail is removed. OpenAI may keep information
-						ChatGPT receives under its own policies and account settings. Tabot
-						does not control how long it keeps it.
+						every sensitive detail is removed. OpenAI or Anthropic may keep
+						information its assistant receives under its own policies and
+						account settings. Tabot does not control how long either provider
+						keeps it.
 					</p>
 				</section>
 
@@ -135,21 +138,21 @@ const Privacy = () => (
 						What the connection service keeps
 					</h2>
 					<p className="mt-3">
-						The service keeps the records needed to recognize ChatGPT and
-						authorize its access. These include connection IDs, ChatGPT
+						The service keeps the records needed to recognize connected MCP
+						clients and authorize access. These include connection IDs, client
 						registration details, permissions, protected access-token records,
 						and expiry dates. It does not save your browsing records or the
-						information returned to ChatGPT in its application storage; requests
-						and results pass through while being handled. Cloudflare runs the
-						service and may process service traffic and operational information
-						under its own policies.
+						information returned to an assistant in its application storage;
+						requests and results pass through while being handled. Cloudflare
+						runs the service and may process service traffic and operational
+						information under its own policies.
 					</p>
 					<p className="mt-3">
-						You can revoke ChatGPT’s access in its connection settings. Revoking
-						access removes its active authorization, but does not delete local
-						browsing records or ChatGPT’s registration details held by the
-						service. Tabot currently has no separate self-service control to
-						delete those registration details.
+						You can revoke an assistant’s access in its connection settings.
+						Revoking access removes its active authorization, but does not
+						delete local browsing records or the client’s registration details
+						held by the service. Tabot currently has no separate self-service
+						control to delete those registration details.
 					</p>
 				</section>
 
@@ -173,10 +176,10 @@ const Privacy = () => (
 						Your browsing records remain in Chrome on your device until you
 						clear Tabot’s extension data or remove the extension. Pausing
 						recording stops new activity from being recorded; it does not delete
-						what Tabot has already saved. To stop ChatGPT from accessing Tabot,
-						revoke its connection in ChatGPT’s settings. This does not delete
-						records stored on your device or ChatGPT’s registration details held
-						by the connection service. You control exported files after
+						what Tabot has already saved. To stop an assistant from accessing
+						Tabot, revoke its connection in that assistant’s settings. This does
+						not delete records stored on your device or its registration details
+						held by the connection service. You control exported files after
 						downloading them.
 					</p>
 				</section>
@@ -209,7 +212,7 @@ export const Route = createFileRoute("/privacy")({
 			{
 				name: "description",
 				content:
-					"Learn what Tabot stores on your device, what information ChatGPT can request, and what Tabot’s connection service keeps.",
+					"Learn what Tabot stores on your device, what information ChatGPT or Claude can request, and what Tabot’s connection service keeps.",
 			},
 			{ property: "og:url", content: siteUrl("privacy/") },
 			{ property: "og:title", content: "Privacy Policy | Tabot" },

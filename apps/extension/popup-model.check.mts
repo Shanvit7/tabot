@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { type BrowserContext, derive } from "@tabot/shared";
+import {
+	type BrowserContext,
+	derive,
+	parseAssistantConnections,
+} from "@tabot/shared";
 import {
 	contextDuration,
 	contextHomeUrl,
-	parseAssistantConnection,
 	popupSummary,
 	siteFavicon,
 	siteLabel,
@@ -188,20 +191,32 @@ const scopedUrl = new URL(
 );
 assert.equal(scopedUrl.searchParams.get("context"), "id&unsafe=1");
 assert.equal(scopedUrl.searchParams.get("keep"), "yes");
-assert.equal(parseAssistantConnection({ connected: true }), true);
-assert.equal(parseAssistantConnection({ connected: false }), false);
+assert.deepEqual(parseAssistantConnections({ chatgpt: false, claude: true }), {
+	chatgpt: false,
+	claude: true,
+	order: [],
+});
+assert.deepEqual(
+	parseAssistantConnections({
+		chatgpt: true,
+		claude: true,
+		order: ["claude", "chatgpt"],
+	}),
+	{ chatgpt: true, claude: true, order: ["claude", "chatgpt"] },
+);
 for (const response of [
 	null,
 	undefined,
 	false,
 	[],
 	{},
-	{ connected: "false" },
+	{ chatgpt: true },
+	{ chatgpt: false, claude: "true" },
 ]) {
 	assert.equal(
-		parseAssistantConnection(response),
+		parseAssistantConnections(response),
 		null,
-		"unknown status must not show a connect nudge",
+		"incomplete connection status must remain unknown",
 	);
 }
 console.log("Popup context checks passed.");

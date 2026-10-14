@@ -386,9 +386,7 @@ app.get("/connection", async (c) => {
 	const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 	const installationId = await verifyInstallationToken(secret, token);
 	if (!installationId) return c.text("Unauthorized", 401);
-	return c.json({
-		connected: await authStub(c.env).hasAssistantConnection(installationId),
-	});
+	return c.json(await authStub(c.env).getAssistantConnections(installationId));
 });
 
 // --- OAuth discovery (RFC 9728 + RFC 8414) ----------------------------------

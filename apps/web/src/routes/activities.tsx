@@ -106,7 +106,6 @@ const Activities = () => {
 										activityMetricsPrompt(flow.from, flow.to),
 									)}
 									connected={assistantConnected === true}
-									label="Ask ChatGPT about this period"
 								/>
 							</div>
 						</div>

@@ -205,6 +205,12 @@
 			"skillPath": "skills/tanstack-charts/SKILL.md",
 			"computedHash": "c9f48655141504be6dd2143341a9c8bf5ef1f3fe7dd04b53f0671bd6b440b9fa"
 		},
+		"tanstack-pacer": {
+			"source": "tanstack-skills/tanstack-skills",
+			"sourceType": "github",
+			"skillPath": "plugins/tanstack-pacer/skills/tanstack-pacer/SKILL.md",
+			"computedHash": "abc0e5bcf7b80a48b39d3e3aa1d6e67220c34a8a3240c1d6a28eba3fc2b5cfd0"
+		},
 		"tanstack-start": {
 			"source": "tanstack-skills/tanstack-skills",
 			"sourceType": "github",

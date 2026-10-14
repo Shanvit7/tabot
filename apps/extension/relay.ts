@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import {
+	type AssistantConnections,
 	activityMetricsResponse,
 	type BrowserContext,
 	buildActivityMetrics,
@@ -14,6 +15,7 @@ import {
 	logger,
 	type Memory,
 	parseActivityMetricsInput,
+	parseAssistantConnections,
 	readyContextsInRange,
 	sanitizeDerived,
 	searchContextsCore,
@@ -89,29 +91,21 @@ const status: {
 
 export const getRelayStatus = () => ({ ...status, relayUrl: RELAY_URL });
 
-/** Query saved OAuth grants, not the always-on relay WebSocket. Never register just to check. */
-export const getAssistantConnection = async (): Promise<{
-	connected: boolean;
-}> => {
-	const credentials = await loadCredentials();
-	if (!credentials) return { connected: false };
-	const response = await fetch(`${HTTP_BASE}/connection`, {
-		headers: { Authorization: `Bearer ${credentials.token}` },
-		signal: AbortSignal.timeout(5_000),
-	});
-	if (!response.ok)
-		throw new Error(`connection status failed: ${response.status}`);
-	const body: unknown = await response.json();
-	if (
-		!body ||
-		typeof body !== "object" ||
-		!("connected" in body) ||
-		typeof body.connected !== "boolean"
-	) {
-		throw new Error("Invalid connection status response");
-	}
-	return { connected: body.connected };
-};
+/** Query provider-specific OAuth grants, not the always-on relay WebSocket. */
+export const getAssistantConnections =
+	async (): Promise<AssistantConnections> => {
+		const credentials = await loadCredentials();
+		if (!credentials) return { connected: false };
+		const response = await fetch(`${HTTP_BASE}/connection`, {
+			headers: { Authorization: `Bearer ${credentials.token}` },
+			signal: AbortSignal.timeout(5_000),
+		});
+		if (!response.ok)
+			throw new Error(`connection status failed: ${response.status}`);
+		const connections = parseAssistantConnections(await response.json());
+		if (!connections) throw new Error("Invalid connection status response");
+		return connections;
+	};
 
 /**
  * Prove this extension owns a one-time OAuth authorization transaction. The

@@ -1,8 +1,10 @@
 import {
+	type AssistantConnections,
 	buildExportJsonl,
 	derive,
 	exportFilename,
 	filterDerived,
+	parseAssistantConnections,
 	type StatsSnapshot,
 	type StoredTabEvent,
 	sanitizeDerived,
@@ -65,23 +67,15 @@ export const fetchStats = (timeoutMs = 800): Promise<StatsSnapshot | null> =>
 		);
 	});
 
-export const fetchAssistantConnection = (): Promise<boolean | null> =>
-	new Promise((resolve) => {
-		send(
-			{ type: "GET_ASSISTANT_CONNECTION" },
-			(res) => {
-				resolve(
-					res &&
-						typeof res === "object" &&
-						"connected" in res &&
-						typeof res.connected === "boolean"
-						? res.connected
-						: null,
-				);
-			},
-			6_000,
-		);
-	});
+export const fetchAssistantConnections =
+	(): Promise<AssistantConnections | null> =>
+		new Promise((resolve) => {
+			send(
+				{ type: "GET_ASSISTANT_CONNECTIONS" },
+				(res) => resolve(parseAssistantConnections(res)),
+				6_000,
+			);
+		});
 
 export type StatsRange = "5m" | "1h" | "6h" | "today" | "7d" | "30d" | "all";
 

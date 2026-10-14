@@ -1,3 +1,4 @@
+import type { AssistantConnections, AssistantProvider } from "@tabot/shared";
 import {
 	createContext,
 	type ReactNode,
@@ -5,27 +6,34 @@ import {
 	useEffect,
 	useReducer,
 } from "react";
-import { fetchAssistantConnection } from "~/lib/home-data";
+import { fetchAssistantConnections } from "~/lib/home-data";
 
-type AssistantConnection = boolean | null | undefined;
+type AssistantConnectionState = AssistantConnections | null | undefined;
 
 const AssistantConnectionContext =
-	createContext<AssistantConnection>(undefined);
+	createContext<AssistantConnectionState>(undefined);
 
 export const assistantConnectionReducer = (
-	_state: AssistantConnection,
-	connected: boolean | null,
-): AssistantConnection => connected;
+	_state: AssistantConnectionState,
+	connections: AssistantConnections | null,
+): AssistantConnectionState => connections;
 
-export const useAssistantConnection = () =>
-	useContext(AssistantConnectionContext);
+export const useAssistantConnection = (
+	provider: AssistantProvider = "chatgpt",
+): boolean | null | undefined => {
+	const connections = useContext(AssistantConnectionContext);
+	return connections === null ? null : connections?.[provider];
+};
+
+export const useAssistantConnectionOrder = (): AssistantProvider[] =>
+	useContext(AssistantConnectionContext)?.order ?? [];
 
 export const AssistantConnectionProvider = ({
 	children,
 }: {
 	children: ReactNode;
 }) => {
-	const [connected, dispatch] = useReducer(
+	const [connections, dispatch] = useReducer(
 		assistantConnectionReducer,
 		undefined,
 	);
@@ -37,7 +45,7 @@ export const AssistantConnectionProvider = ({
 			if (inFlight || document.hidden) return;
 			inFlight = true;
 			try {
-				const next = await fetchAssistantConnection();
+				const next = await fetchAssistantConnections();
 				if (alive) dispatch(next);
 			} catch {
 				if (alive) dispatch(null);
@@ -58,7 +66,7 @@ export const AssistantConnectionProvider = ({
 	}, []);
 
 	return (
-		<AssistantConnectionContext.Provider value={connected}>
+		<AssistantConnectionContext.Provider value={connections}>
 			{children}
 		</AssistantConnectionContext.Provider>
 	);

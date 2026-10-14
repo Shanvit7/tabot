@@ -7,6 +7,7 @@
 	"types": "./src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
+		"./assistant-connections": "./src/assistant-connections.ts",
 		"./events/buffer": "./src/events/buffer.ts",
 		"./share/targets": "./src/share/targets.ts"
 	},

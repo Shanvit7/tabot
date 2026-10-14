@@ -35,7 +35,7 @@ import {
 } from "./notification-model";
 import {
 	approveAuthorizationTransaction,
-	getAssistantConnection,
+	getAssistantConnections,
 	getRelayStatus,
 	startRelay,
 } from "./relay";
@@ -347,12 +347,12 @@ const getMergedStats = (): StatsSnapshot => {
 	};
 };
 
-const respondAssistantConnection = (
+const respondAssistantConnections = (
 	sendResponse: (response: unknown) => void,
 ) => {
 	void (async () => {
 		try {
-			sendResponse(await getAssistantConnection());
+			sendResponse(await getAssistantConnections());
 		} catch {
 			sendResponse(null); // Unknown is not disconnected.
 		}
@@ -396,8 +396,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		return false;
 	}
 
-	if (message?.type === "GET_ASSISTANT_CONNECTION") {
-		respondAssistantConnection(sendResponse);
+	if (message?.type === "GET_ASSISTANT_CONNECTIONS") {
+		respondAssistantConnections(sendResponse);
 		return true;
 	}
 
@@ -482,8 +482,8 @@ if (chrome.runtime.onMessageExternal) {
 				return true;
 			}
 
-			if (message?.type === "GET_ASSISTANT_CONNECTION") {
-				respondAssistantConnection(sendResponse);
+			if (message?.type === "GET_ASSISTANT_CONNECTIONS") {
+				respondAssistantConnections(sendResponse);
 				return true;
 			}
 
@@ -616,8 +616,8 @@ const checkNotifications = async () => {
 			)
 			.toSorted((a, b) => b.endTimestamp - a.endTimestamp)[0];
 		const kind = notifyMemory ? "memory" : episode ? "episode" : "context";
-		const connected = await getAssistantConnection()
-			.then((result) => result.connected)
+		const connected = await getAssistantConnections()
+			.then((result) => result.chatgpt)
 			.catch(() => false);
 		const title =
 			kind === "memory"

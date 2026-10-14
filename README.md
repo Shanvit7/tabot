@@ -2,7 +2,7 @@
 
 **Thinking across tabs.**
 
-![Tabot demo: browsing activity, connected sites, and optional ChatGPT sharing](videos/tabot-promo/renders/tabot-30s.gif)
+![Tabot demo: browsing activity, connected sites, and optional AI assistant sharing](videos/tabot-promo/renders/tabot-30s.gif)
 
 [Watch with music](videos/tabot-promo/renders/tabot-30s.mp4)
 
@@ -10,11 +10,11 @@ Tabot is a Chrome extension that helps you pick up where you left off, without r
 
 - See which sites you visited and how you moved between them.
 - Find sites and browsing paths you keep returning to.
-- Connect ChatGPT to ask about your browsing activity.
+- Connect ChatGPT or Claude to ask about your browsing activity.
 
 ## Privacy
 
-Your browsing record stays on your device. ChatGPT is optional and receives only requested, filtered results—not your raw browsing history. Tabot does not record page text, passwords, or what you type.
+Your browsing record stays on your device. AI assistants are optional and receive only requested, filtered results—not your raw browsing history. Tabot does not record page text, passwords, or what you type.
 
 ## Run locally
 
@@ -35,7 +35,7 @@ VITE_TABOT_EXTENSION_ID=YOUR_EXTENSION_ID pnpm dev:web
 
 Open [localhost:3000](http://localhost:3000) in the same Chrome profile.
 
-For the optional ChatGPT connection, see [setup instructions](apps/mcp-server/README.md).
+For optional ChatGPT and Claude connections, see [setup instructions](apps/mcp-server/README.md).
 
 ## Contributing
 

@@ -60,25 +60,24 @@ const RecurringPatterns = () => {
 					favicons={favicons}
 					selectedId={selected?.id ?? ""}
 					onSelect={setSelectedId}
+					rowActions={(memoryId) => (
+						<RecurringPatternAssistant
+							memoryId={memoryId}
+							connected={assistantConnected}
+						/>
+					)}
 					selectedActions={
-						selected && (
-							<>
-								<RecurringPatternAssistant
-									memoryId={selected.id}
-									connected={assistantConnected}
-								/>
-								{topOrigin && (
-									<Link
-										to="/home"
-										search={{ context: selected.lastContextId }}
-										aria-label={`View latest period on map for ${prettySite(topOrigin)}`}
-										title={`View latest period on map for ${prettySite(topOrigin)}`}
-										className="inline-flex min-h-11 items-center rounded-lg border border-preview-line px-3 text-xs font-medium text-(--work-muted) hover:bg-[#e9eee8]"
-									>
-										View latest period on map
-									</Link>
-								)}
-							</>
+						selected &&
+						topOrigin && (
+							<Link
+								to="/home"
+								search={{ context: selected.lastContextId }}
+								aria-label={`View latest period on map for ${prettySite(topOrigin)}`}
+								title={`View latest period on map for ${prettySite(topOrigin)}`}
+								className="inline-flex min-h-11 items-center rounded-lg border border-preview-line px-3 text-xs font-medium text-(--work-muted) hover:bg-[#e9eee8]"
+							>
+								View latest period on map
+							</Link>
 						)
 					}
 				/>

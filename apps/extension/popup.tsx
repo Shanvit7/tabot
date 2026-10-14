@@ -1,9 +1,15 @@
 import logo from "data-base64:~assets/icon.png";
+import ClaudeMono from "@lobehub/icons/es/Claude/components/Mono";
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import {
+	type AssistantConnections,
+	CLAUDE_CONNECTORS_URL,
 	chatGptConnectPromptUrl,
 	chatGptContextUrl,
+	claudePromptUrl,
+	contextPrompt,
 	derive,
+	parseAssistantConnections,
 	resolveChatGptConnectUrl,
 	type StatsSnapshot,
 	type StoredTabEvent,
@@ -21,7 +27,6 @@ import {
 	contextDuration,
 	contextHomeUrl,
 	type PopupSummary,
-	parseAssistantConnection,
 	popupSummary,
 	siteFavicon,
 	siteLabel,
@@ -194,9 +199,10 @@ const ActivitySites = ({
 const IndexPopup = () => {
 	const [summary, setSummary] = useState<PopupSummary | null>(null);
 	const [tracking, setTracking] = useState<boolean | null>(null);
-	const [assistantConnected, setAssistantConnected] = useState<boolean | null>(
-		null,
-	);
+	const [assistantConnections, setAssistantConnections] =
+		useState<AssistantConnections | null>(null);
+	const chatGptConnected = assistantConnections?.chatgpt ?? null;
+	const claudeConnected = assistantConnections?.claude ?? null;
 	const [chatGptUrl, setChatGptUrl] = useState(chatGptConnectPromptUrl);
 	const [toggling, setToggling] = useState(false);
 	const [dropped, setDropped] = useState(0);
@@ -241,17 +247,17 @@ const IndexPopup = () => {
 		let timer: ReturnType<typeof setTimeout>;
 		if (attempt > 0) setError(null);
 		const refreshAssistantConnection = async () => {
-			let connected: boolean | null = null;
+			let connections: AssistantConnections | null = null;
 			try {
-				connected = parseAssistantConnection(
+				connections = parseAssistantConnections(
 					await chrome.runtime.sendMessage({
-						type: "GET_ASSISTANT_CONNECTION",
+						type: "GET_ASSISTANT_CONNECTIONS",
 					}),
 				);
 			} catch {
 				// An unavailable relay is unknown, not disconnected.
 			}
-			if (active) setAssistantConnected(connected);
+			if (active) setAssistantConnections(connections);
 		};
 		const start = async () => {
 			previousVisit.current ??= (async () => {
@@ -444,7 +450,7 @@ const IndexPopup = () => {
 						</div>
 					</aside>
 				)}
-				{assistantConnected === false && (
+				{chatGptConnected === false && (
 					<aside
 						aria-label="ChatGPT connection"
 						className="mb-4 flex items-center gap-3 rounded-lg border border-line bg-surface p-3"
@@ -470,6 +476,38 @@ const IndexPopup = () => {
 						</a>
 					</aside>
 				)}
+				<aside
+					aria-label="Claude connection"
+					className="mb-4 flex items-center gap-3 rounded-lg border border-line bg-surface p-3"
+				>
+					<ClaudeMono aria-hidden="true" className="size-5 shrink-0 text-ink" />
+					<div className="min-w-0 flex-1">
+						<p className="text-sm font-medium">
+							{claudeConnected === true ? "Claude connected" : "Connect Claude"}
+						</p>
+						<p className="mt-0.5 text-xs leading-4 text-muted">
+							Ask about your browsing.
+						</p>
+					</div>
+					{claudeConnected === true ? (
+						<span role="status" className="text-xs text-muted">
+							Connected
+						</span>
+					) : (
+						<a
+							href={CLAUDE_CONNECTORS_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="popup-quiet flex min-h-11 shrink-0 items-center justify-center border border-line bg-canvas px-3 text-xs no-underline"
+						>
+							Connect
+							<span className="sr-only">
+								{" "}
+								Claude Connectors (opens in a new tab)
+							</span>
+						</a>
+					)}
+				</aside>
 				{error && (
 					<div
 						role="alert"
@@ -570,7 +608,7 @@ const IndexPopup = () => {
 												{contextDuration(featured.duration)}
 											</p>
 										</div>
-										{assistantConnected === true ? (
+										{chatGptConnected === true ? (
 											<a
 												href={chatGptContextUrl(featured.id)}
 												target="_blank"
@@ -579,7 +617,7 @@ const IndexPopup = () => {
 											>
 												Ask ChatGPT
 											</a>
-										) : assistantConnected === false ? (
+										) : chatGptConnected === false ? (
 											<a
 												href={chatGptUrl}
 												target="_blank"
@@ -593,6 +631,14 @@ const IndexPopup = () => {
 												Checking ChatGPT…
 											</span>
 										)}
+										<a
+											href={claudePromptUrl(contextPrompt(featured.id))}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
+										>
+											Ask Claude
+										</a>
 									</div>
 								)}
 							</section>

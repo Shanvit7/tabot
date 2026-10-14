@@ -6,7 +6,7 @@ import { Header } from "~/components/landing/header";
 import { Hero } from "~/components/landing/hero";
 import { HowItWorks } from "~/components/landing/how-it-works";
 import { PrivacyFirst } from "~/components/landing/privacy-first";
-import { ChatGPTIntegration } from "~/components/landing/use-cases";
+import { AssistantIntegration } from "~/components/landing/use-cases";
 import { useIsMobile } from "~/hooks/use-is-mobile";
 import { fetchStats } from "~/lib/home-data";
 import { SITE_DESCRIPTION, siteUrl } from "~/lib/site";
@@ -46,7 +46,7 @@ const Landing = () => {
 					isMobileDevice={showDesktopPrompt}
 				/>
 				<HowItWorks />
-				<ChatGPTIntegration
+				<AssistantIntegration
 					extensionInstalled={extensionInstalled}
 					isMobileDevice={showDesktopPrompt}
 				/>

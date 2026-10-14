@@ -52,14 +52,6 @@ export const popupSummary = (
 export type PopupSummary = ReturnType<typeof popupSummary>;
 
 // Unknown/offline status must never be presented as disconnected.
-export const parseAssistantConnection = (response: unknown): boolean | null =>
-	response &&
-	typeof response === "object" &&
-	"connected" in response &&
-	typeof response.connected === "boolean"
-		? response.connected
-		: null;
-
 // Show site identity only, never page paths, credentials, or query strings.
 export const siteLabel = (domain: string): string => {
 	try {

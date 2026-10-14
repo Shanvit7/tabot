@@ -22,6 +22,9 @@ export const contextPrompt = (id: string): string =>
 export const chatGptContextUrl = (id: string): string =>
 	prefillUrl("https://chatgpt.com/", "q", contextPrompt(id));
 
+export const claudePromptUrl = (prompt: string): string =>
+	prefillUrl("https://claude.ai/new", "q", prompt);
+
 // Retrieve the selected pattern or the contexts supporting the selected place.
 /** Only range and optional origin go into the prefill; metrics come from the authorized tool. */
 export const activityMetricsPrompt = (
@@ -42,6 +45,11 @@ export const sitePrompt = (domain: string, contextIds: string[]): string =>
 
 export const chatGptPromptUrl = (prompt: string): string =>
 	prefillUrl("https://chatgpt.com/", "q", prompt);
+
+export const CLAUDE_MCP_SERVER_URL =
+	"https://tabot-mcp.shanvit7.workers.dev/mcp";
+export const CLAUDE_CONNECTORS_URL =
+	"https://claude.ai/customize/connectors?q=Tabot";
 
 const CHATGPT_CONFIG_URL =
 	"https://tabot-mcp.shanvit7.workers.dev/client-config";

@@ -17,10 +17,11 @@ export const PrivacyFirst = () => (
 						.
 					</h2>
 					<p className="mt-4 max-w-lg text-lg leading-8 text-white/80">
-						Browsing history stays on this device. When you ask ChatGPT, it
-						requests selected activity details from your extension. Tabot’s
-						online connection service passes requests and results; it does not
-						store browsing history or tool results.
+						Browsing history stays on this device. When you ask ChatGPT or
+						Claude, your connected assistant requests selected activity details
+						from your extension. Tabot’s online connection service passes
+						requests and results; it does not store browsing history or tool
+						results.
 					</p>
 					<a
 						href={`${import.meta.env.BASE_URL}privacy`}
