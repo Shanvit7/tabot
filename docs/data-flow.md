@@ -105,6 +105,33 @@ A content message includes its page timestamp, but the current background page-e
 
 ### 2.3 What makes an event durable?
 
+#### Plain-English map
+
+The same background service worker receives events, puts them in SAB, and drains SAB into IndexedDB. It does not wait for the buffer to fill.
+
+```mermaid
+flowchart TD
+    A[Chrome event occurs] --> B[Background service worker handles event]
+    B --> C{Record this event?}
+    C -- No --> X[Ignore it]
+    C -- Yes --> D[Put event in next free SAB slot]
+    D --> E[Schedule drain immediately]
+    E --> F[Read up to 512 waiting events]
+    F --> G[Advance SAB read position]
+    G --> H[Start asynchronous IndexedDB save]
+    H --> I[Save succeeds: event is durable]
+    F --> J{More events waiting?}
+    J -- Yes --> F
+    J -- No --> K[50 ms follow-up; 200 ms fallback poll]
+    K --> J
+    D --> L{SAB full?}
+    L -- Yes --> M[Reject new event and count drop]
+```
+
+In practice, **512 is a maximum, not a target**: if one event is waiting, the drain takes one. If 700 are waiting, it takes 512, then schedules another drain for the rest.
+
+JavaScript runs one task at a time, so a new Chrome event cannot interrupt the drain halfway through. The drain takes its batch and starts the asynchronous database save; then the service worker can handle more events while that save is still running. Those new events go into SAB and schedule another drain.
+
 `processBatch()` decodes up to **512** rows, updates in-memory stats, and advances `READ_INDEX`. It then enriches rows with the **current** URL/favicon sidecar and starts async Dexie `bulkPut()`.
 
 Wakeups use queued microtasks, a **50 ms** follow-up after a burst, and a **200 ms** fallback poll while the service worker is alive. These timers are not durable background scheduling guarantees.
