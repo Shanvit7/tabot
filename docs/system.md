@@ -9,8 +9,8 @@ This walkthrough reflects current working-tree code, including staged changes, a
 ```text
 Chrome tab APIs + content script
   -> Chrome extension background service worker
-  -> SharedArrayBuffer ring buffer
-  -> bounded drain and Dexie / IndexedDB
+  -> bounded Pacer Batcher (128 rows / fixed first-item 25 ms)
+  -> serial AsyncQueuer -> atomic Dexie / IndexedDB commit -> persisted ACK
   -> pure derivation at read time
      events -> sessions -> anchors -> graph -> episodes -> contexts -> memories
   ├-> extension popup or local dashboard
@@ -41,7 +41,7 @@ The content script and Chrome APIs collect these signals:
 | `TAB_CREATED` | `chrome.tabs.onCreated` | tab and window IDs |
 | `TAB_ACTIVATED` | `chrome.tabs.onActivated` | tab and window IDs |
 | `TAB_UPDATED` | `chrome.tabs.onUpdated` | tab and window IDs |
-| `TAB_REMOVED` | `chrome.tabs.onRemoved` | tab ID; window ID is `0` sentinel |
+| `TAB_REMOVED` | `chrome.tabs.onRemoved` | tab ID and removal window ID |
 | `NAVIGATION` | `chrome.webNavigation.onCommitted`, main frame | tab ID and URL sidecar |
 | `PAGE_VISIBLE`, `PAGE_HIDDEN` | page visibility plus foreground/idle sampling | event only |
 | `SCROLL` | viewport and discovered nested scroll containers | scroll offset |
@@ -51,7 +51,7 @@ The content script and Chrome APIs collect these signals:
 
 `SCROLL` and `KEY_ACTIVITY` are throttled to 150 ms by TanStack Pacer before messaging the background worker. Key values, text, form values, DOM, screenshots, and page content are never recorded.
 
-Content scripts send `TABOT_PAGE_EVENT` messages. They never touch shared memory. Background service worker is sole producer and owns tab URL/title metadata in an in-memory sidecar.
+Content scripts send version-1 `TABOT_PAGE_EVENT` messages with stable document-instance UUID/sequence and capture timestamp. A bounded document-memory outbox retries identical messages; persisted ACK follows commit, not queueing. Old protocol receives reload-required. Background owns bounded ingestion and snapshots URL/favicon before asynchronous scheduling; no production shared memory or dedicated transport worker remains.
 
 Foreground capture checks the selected tab in the focused, non-minimized window, with a 30-second alarm sample and immediate focus/tab/idle samples. Idle (60 seconds without system input) or lock ends attention. The last sample is stored in `chrome.storage.session`; delayed samples after sleep close at the last observation, not wake time. Only foreground navigation and interactions enter the behavioral capture path.
 
@@ -98,29 +98,19 @@ Every event carries a semantic class, applied by the shared classifier before an
 
 The SW experiment documented 5 signals, 4 categories, 1 new permission (`downloads`), 0 content-bearing fields — and ended with `downloads` permission **removed** and only `SW_WINDOW_FOCUS` retained. Full experimental record: `docs/sw-schema.md` (schema design, still current for encode/decode).
 
-`packages/shared/src/events/buffer.ts` defines a 10,000-slot `SharedArrayBuffer` ring buffer. Each 32-byte slot stores fixed-width numeric data only:
+## Bounded capture and durable commit
 
-```text
-type, tabId, windowId, flags, timestamp high, timestamp low, value0, value1
-```
+`event-pipeline.ts` uses Pacer 0.22.0 synchronous `Batcher` plus FIFO `AsyncQueuer` (one active transaction). First collected item sets a fixed 25 ms deadline; later arrivals do not extend it. Size 128 or a semantic boundary flushes the collector, never the writer queue. No idle collection timer or drain polling.
 
-Four atomic control slots hold logical write, read, capacity, and published indexes.
+One budget covers eligibility, collection, pending, active and held failure: 2,048 rows / 4 MiB conservative payload accounting, including 128 rows / 256 KiB reserved for boundaries/native events. Events/waiters are bounded before scheduling. Overload rejects new work explicitly; no eviction of admitted events.
 
-- Producer writes a complete slot, then publishes its logical index.
-- Consumer reads only through published index; it cannot read half-written slots.
-- Physical position is `logicalIndex % capacity`; logical indexes keep event IDs unique across slot reuse.
-- Full buffer rejects new event and increments visible `droppedEvents`.
-- MV3 service workers cannot block on `Atomics.wait`; a queued microtask drains new work and 200 ms polling is fallback wakeup.
+`tabot_events/events` retains v1 indexes `id, timestamp, type, tabId`. Native IDs are capture-generated UUIDs; page IDs are document UUID + monotonic sequence. Historical IDs/types/rows remain readable without migration. Source sequence resolves same-time ties without assuming global causal order. URL/favicon is an immutable event snapshot, not latest-state enrichment during drain.
 
-Background drains at most 512 events per pass. It updates aggregate counters, enriches each event with current tab URL if available, advances read index, then asynchronously persists with Dexie `bulkPut`. A persistence failure is logged and does not block capture.
+Shared DB helper validates input and in one transaction reads existing IDs, rejects conflicting reuse, and bulk-adds missing rows. Every row failure rolls back the whole new batch. Only commit (or identical committed replay) can resolve persisted ACK or increase insert totals. Retrying never overwrites enrichment or invents new IDs.
 
-`tabot_events` contains one `events` table:
+Transient storage failures retry three attempts; permanent failure/exhaustion stops writer starts and retains bounded held work. Recovery alarm/suitable later event retries transient held work after cooldown; internal `RETRY_INGEST` explicitly resumes held work first. Tracking pause stops new capture, not active commits. Popup closure/sender timeout never abort persistence. In-memory queues, retries, held rows and timers are lost on termination; committed history remains subject to browser storage guarantees. Native events and destroyed documents cannot generally replay. No zero-loss/exactly-once claim.
 
-```text
-id, timestamp, type, tabId
-```
-
-`id` is `${timestamp}-${tabId}-${logicalIndex}`. URLs, captured favicon sidecars, window IDs and event metadata are stored but intentionally unindexed. Old `tabot_rxdb` storage is deleted on first Dexie open.
+Read errors return explicit unavailable results, never empty history/zero counts. Home/popup retain last good snapshots and expose degraded state. Runtime counters reset on restart; durable count comes from IndexedDB. Legacy buffer-named fields are documented queue aliases, not SAB statistics. No new React adapter, offscreen document or durable job database.
 
 ## Derivation
 
@@ -277,14 +267,10 @@ pnpm --filter @tabot/shared check:activityMetrics
 pnpm --filter @tabot/shared check:liveContext
 pnpm --filter @tabot/shared check:pipeline
 pnpm --filter @tabot/shared check:v5regression
-pnpm --filter @tabot/shared check:bufferRoundtrip
 pnpm --filter @tabot/shared run swSemantics
 pnpm --filter @tabot/shared run swDerivation
 pnpm --filter @tabot/shared run swGraph
 pnpm --filter @tabot/shared run swEpisodes
-pnpm --filter @tabot/shared run swFirstSignal
-pnpm --filter @tabot/shared run swCost
-pnpm --filter @tabot/shared run swValidation
 pnpm --filter extension check:popup
 pnpm --filter extension check:notifications
 pnpm --filter extension check:metricsRelay

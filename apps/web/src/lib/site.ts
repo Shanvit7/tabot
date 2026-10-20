@@ -1,7 +1,7 @@
 // Canonical production origin + base path for the GitHub Pages project site.
 // Canonical / Open Graph URLs must be absolute and must never point at a dev
 // host, so this is intentionally NOT derived from import.meta.env.BASE_URL
-// (which is "/" under `vite dev`). Override via VITE_SITE_URL on a domain change;
+// (which is "/" under `rsbuild dev`). Override via VITE_SITE_URL on a domain change;
 // the fallback keeps local builds and CI green when the var is unset.
 export const SITE_URL = (
 	import.meta.env.VITE_SITE_URL?.trim() || "https://shanvit7.github.io/tabot"

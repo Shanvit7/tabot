@@ -32,6 +32,25 @@ const ev = (
 const redact = async (input: string): Promise<string> =>
 	(await piiRedactor.redact(input)).redacted;
 
+// Ingest transport identity is local-only; source.documentUrl must not bypass URL redaction.
+{
+	const event = {
+		...ev(T0, "NAVIGATION", 1, "https://example.com/"),
+		source: {
+			instanceId: "12345678-1234-1234-1234-123456789012",
+			sequence: 1,
+			documentUrl: "https://example.com/?q=john@example.com",
+		},
+	};
+	const clean = await sanitizeDerived(derive([event]));
+	assert.equal(clean.events[0].source, undefined);
+	assert.ok(!JSON.stringify(clean).includes("john@example.com"));
+	assert.ok(
+		event.source.documentUrl.includes("john@example.com"),
+		"source mutated",
+	);
+}
+
 // --- 1. primitives ---
 
 {

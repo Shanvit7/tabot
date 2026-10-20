@@ -10,7 +10,8 @@ import { RecurrenceMap } from "~/lib/recurrence-map";
 import { useAssistantConnection } from "~/providers/assistant-connection";
 
 const RecurringPatterns = () => {
-	const { derived, events, initialized, hasExtension } = useHomeData();
+	const { derived, events, initialized, hasExtension, degraded } =
+		useHomeData();
 	const redirecting = useExtensionRedirect({ hasExtension, initialized });
 	const assistantConnected = useAssistantConnection() === true;
 	const [selectedId, setSelectedId] = useState("");
@@ -44,7 +45,7 @@ const RecurringPatterns = () => {
 		selected?.fingerprint?.domains?.[0]?.domain ??
 		"";
 	return (
-		<HomeShell>
+		<HomeShell degraded={degraded}>
 			<header className="mb-8">
 				<h1 className="text-[32px] font-semibold tracking-tight sm:text-[40px]">
 					Recurring patterns

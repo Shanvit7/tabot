@@ -1,32 +1,44 @@
+import type { PageEventType } from "@tabot/shared";
 import { Throttler } from "@tanstack/pacer";
 import type { PlasmoCSConfig } from "plasmo";
+import { createPageOutbox } from "../page-outbox";
 
 export const config: PlasmoCSConfig = {
 	matches: ["<all_urls>"],
 	run_at: "document_idle",
 };
 
-// never capture key values, text, input contents — only that activity occurred
-const send = (type: string, metadata?: Record<string, number>) => {
-	if (type !== "PAGE_HIDDEN" && (document.hidden || !document.hasFocus()))
+// Never capture key values/text. Failures expose codes only, never private payloads.
+const outbox = createPageOutbox({
+	documentUrl: () => location.href,
+	send: (message) => chrome.runtime.sendMessage(message),
+	onFailure: (code) => console.warn("[Tabot] page event not confirmed", code),
+});
+let flushingHidden = false;
+const send = (
+	type: PageEventType,
+	metadata?: Record<string, number>,
+	timestamp = Date.now(),
+) => {
+	if (
+		type !== "PAGE_HIDDEN" &&
+		!flushingHidden &&
+		(document.hidden || !document.hasFocus())
+	)
 		return;
-	void chrome.runtime
-		.sendMessage({
-			kind: "TABOT_PAGE_EVENT",
-			type,
-			timestamp: Date.now(),
-			metadata,
-		})
-		.catch(() => {}); // Extension may reload while this page stays open.
+	outbox.add(type, metadata, timestamp);
 };
-
 const scrollThrottler = new Throttler(
-	(scrollY: number) => send("SCROLL", { scrollY }),
-	{ wait: 150 },
+	(scrollY: number, timestamp: number) =>
+		send("SCROLL", { scrollY }, timestamp),
+	{ wait: 150, leading: true, trailing: true },
 );
-const keyThrottler = new Throttler(() => send("KEY_ACTIVITY"), { wait: 150 });
+const keyThrottler = new Throttler(
+	(timestamp: number) => send("KEY_ACTIVITY", undefined, timestamp),
+	{ wait: 150, leading: true, trailing: true },
+);
 
-// standard read of the document's scroll offset (window.scrollY is not a real property)
+// Include nested scroll containers without recording element contents.
 const scrollY = () =>
 	document.documentElement?.scrollTop ?? document.body?.scrollTop ?? 0;
 
@@ -34,7 +46,7 @@ document.addEventListener("click", (e: MouseEvent) => {
 	if (e.isTrusted) send("CLICK", { x: e.clientX, y: e.clientY });
 });
 document.addEventListener("keydown", (e) => {
-	if (e.isTrusted) keyThrottler.maybeExecute();
+	if (e.isTrusted) keyThrottler.maybeExecute(Date.now());
 });
 
 // scroll events do NOT bubble: they fire on the scrolling node only.
@@ -42,7 +54,7 @@ document.addEventListener("keydown", (e) => {
 // overflow containers scroll independently → attach to each scrollable node.
 window.addEventListener(
 	"scroll",
-	() => scrollThrottler.maybeExecute(scrollY()),
+	() => scrollThrottler.maybeExecute(scrollY(), Date.now()),
 	{ passive: true },
 );
 for (const el of document.querySelectorAll("*")) {
@@ -51,12 +63,18 @@ for (const el of document.querySelectorAll("*")) {
 	if (overflow !== "auto" && overflow !== "scroll") continue;
 	el.addEventListener(
 		"scroll",
-		() => scrollThrottler.maybeExecute(el.scrollTop),
+		() => scrollThrottler.maybeExecute(el.scrollTop, Date.now()),
 		{ passive: true },
 	);
 }
 
 document.addEventListener("visibilitychange", () => {
+	if (document.hidden) {
+		flushingHidden = true;
+		scrollThrottler.flush();
+		keyThrottler.flush();
+		flushingHidden = false;
+	}
 	send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");
 });
 send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");

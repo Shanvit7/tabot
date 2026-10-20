@@ -1,0 +1,11 @@
+{
+	"version": 1,
+	"skills": {
+		"chrome-devtools-mcp-skill": {
+			"source": "holon-run/uxc",
+			"sourceType": "github",
+			"skillPath": "skills/chrome-devtools-mcp-skill/SKILL.md",
+			"computedHash": "39e1bf2cb72a948c96f522804616e371b4dbdc1171cbcfada8df5b8d4f322556"
+		}
+	}
+}

@@ -15,10 +15,10 @@ visual_density: 5
 A calm, legible record of work across Chrome tabs: evidence comes into focus, not telemetry shouting for attention.
 
 ## Direction / lock
-**Work trace, distilled.** One bounded evidence graph leads Home. Lines mean only observed context↔site membership or memory↔supporting-context IDs. Activity is a time-series; memories compare separate observed periods. No KPI grid or inferred intent. White page canvas, restrained ink/green, lime only for a selected or recurring signal. Native selectors reveal exact evidence without turning chart nodes into mystery controls.
+**Work trace, retrieval first.** Recent activity and website-name search lead Home. One highlighted activity and a ruled earlier-activity list replace mandatory graph interpretation. Exact activity detail is light and text-first; links explicitly reopen website homepages, not previous pages. Observed connections remain optional, collapsed, lazy-loaded, and unmounted when closed. No KPI grid or inferred intent. White page canvas, restrained ink/green, lime only for a selected or recurring signal. Activity and recurring-pattern routes retain their existing renderers.
 
 ## Signature
-**The context map:** a small force-settled network of recent observed connections; no site↔site links unless a real relationship is recorded. Node selection is via a keyboard-operable native control below the visualization. At mobile width chart remains secondary to the exact text evidence.
+**Find and return:** recognizable website names and precise dates make a past activity retrievable without a graph. View activity opens its exact ID, and returning preserves the search and its keyboard focus. Explore connections reveals the existing deterministic Remotion/native SVG graph only on request; edges retain observed membership/support semantics.
 
 ## Color (locked)
 | role | OKLCH | hex | use |
@@ -39,7 +39,7 @@ A calm, legible record of work across Chrome tabs: evidence comes into focus, no
 60% canvas, 30% surface/ruled content, at most 10% accent. Tinted neutrals extend logo's green family. Lime is **never** text on white; never use line color alone for focus or controls. Contrast ratios, verified against sRGB hex: ink/canvas 16:1, muted/canvas 6.78:1, ink/surface 14.95:1, muted/surface 6.33:1, ink/accent 13.35:1, white/ink 16:1; semantic foreground/background success 6.49:1, warning 6.17:1, danger 6.52:1, info 6.48:1. Accent/canvas 1.2:1 so add ink line or label on selected surfaces; line/canvas 1.4:1 so never sole active indication.
 
 ## Visual material
-White canvas with one quiet green-tinted chart surface. No decorative artwork or extra illustration competing with observed connections.
+White canvas with one quiet green-tinted most-recent-activity surface, followed by ruled text entries. Captured favicons aid recognition when available; no repeated placeholder icon strip or decorative artwork. Optional graph retains its dark green surface.
 
 ## Type (locked)
 Keep installed self-hosted IBM Plex Sans variable for headings (600) and body (400/500), IBM Plex Mono for compact timestamps/IDs only. Pair on humanist readable text vs precise instrumentation, not mono everywhere. Display 36/40 desktop, 28/32 mobile; h2 24/30; h3 18/24; body 15/23; small 13/19; mono meta 12/18 minimum in web, 12/18 in popup. Max text measure 70ch. Sentence case actions; no all-caps body. Tabular figures only on counts/times.

@@ -44,12 +44,12 @@ jobs:
         run: |
           # SPA fallback for unknown deep links only. Real routes (/, /privacy,
           # /home) are prerendered to their own index.html by the build.
-          cp apps/web/.output/public/index.html apps/web/.output/public/404.html
-          touch apps/web/.output/public/.nojekyll
+          cp apps/web/.output/client/index.html apps/web/.output/client/404.html
+          touch apps/web/.output/client/.nojekyll
 
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: apps/web/.output/public
+          path: apps/web/.output/client
 
   deploy:
     needs: build

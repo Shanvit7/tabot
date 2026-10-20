@@ -6,7 +6,7 @@ const HomeRoute = () => {
 		select: (state) => state.location.searchStr,
 	});
 	const requestedId = new URLSearchParams(search).get("context");
-	return <Home key={requestedId ?? "default"} requestedId={requestedId} />;
+	return <Home requestedId={requestedId} />;
 };
 
 export const Route = createFileRoute("/home")({

@@ -40,32 +40,12 @@ export {
 	getRecentContexts,
 } from "./contexts/contexts";
 export {
-	advanceReadIndex,
-	attachBuffer,
-	availableCount,
-	BUFFER_BYTE_SIZE,
-	bufferOccupancy,
-	CAPACITY,
-	CONTROL_SLOTS,
-	claimSlots,
-	createBuffer,
-	DEFAULT_CAPACITY,
-	decodeEvent,
-	EVENT_SLOT_SIZE,
-	type EventBuffer,
-	encodeEvent,
-	PUBLISHED_INDEX,
-	pushEvent,
-	READ_INDEX,
-	reserveSlot,
-	WRITE_INDEX,
-} from "./events/buffer";
-export {
 	bulkInsertEvents,
 	countEvents,
 	createEventsDb,
 	getAllEvents,
 	getEventsBetween,
+	type InsertEventsResult,
 	type StoredTabEvent,
 	storedTabEventSchema,
 	TabotDatabase,
@@ -81,6 +61,22 @@ export {
 	ValueToEventType,
 } from "./events/events";
 export {
+	EventConflictError,
+	EventValidationError,
+	eventBytes,
+	eventIdentity,
+	type IngestAck,
+	isTransientStorageError,
+	MAX_EVENT_BYTES,
+	normalizeEvent,
+	orderEvents,
+	PAGE_EVENT_TYPES,
+	PAGE_PROTOCOL_VERSION,
+	type PageEventType,
+	storageErrorCode,
+	UUID_PATTERN,
+} from "./events/ingest";
+export {
 	getMeta,
 	removeMeta,
 	type TabMeta,
@@ -89,13 +85,11 @@ export {
 } from "./events/metadata";
 export { logger } from "./lib/logger";
 export {
-	type BufferReadyMessage,
 	createEmptyStats,
-	type GetEventsMessage,
-	MSG,
 	type PipelineStats,
+	type ReadFailure,
+	readFailure,
 	type StatsSnapshot,
-	type StatsUpdateMessage,
 } from "./lib/protocol";
 export {
 	buildMemories,

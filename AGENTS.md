@@ -2,7 +2,7 @@
 
 This file documents the conventions and domain context for **Tabot** — a Chrome extension, web dashboard, and optional ChatGPT MCP relay for browser context.
 
-**The product is an early-stage proof of concept.** Raw events remain local: Chrome Extension → SharedArrayBuffer + Atomics → Dexie (IndexedDB) → TanStack Start dashboard. The optional v0.2 relay authenticates ChatGPT and routes requests to the live extension; it stores connection/OAuth state, not browser history. See `apps/mcp-server/README.md`.
+**The product is an early-stage proof of concept.** Raw events remain local: Chrome Extension service worker → bounded Pacer batching + serial writer → atomic Dexie (IndexedDB) commit → TanStack Start dashboard. The optional v0.2 relay authenticates ChatGPT and routes requests to the live extension; it stores connection/OAuth state, not browser history. See `apps/mcp-server/README.md`.
 
 ---
 
@@ -26,9 +26,9 @@ This is a **pnpm monorepo** with three apps and a shared package:
 ```text
 Chrome Extension (Plasmo)
   → Browser activity events (TAB_CREATED, TAB_ACTIVATED, TAB_UPDATED, TAB_REMOVED)
-  → SharedArrayBuffer + Atomics (ring buffer)
-  → Web Worker (aggregation + batching)
-  → Dexie (IndexedDB) (local persistence)
+  → Existing MV3 service worker: validate + snapshot + bounded admission
+  → Pacer Batcher (128 rows / fixed 25 ms window) → AsyncQueuer (concurrency 1)
+  → Dexie transaction (deduplicate + atomic insert) → commit → persisted ACK
   ├→ TanStack Start dashboard (visualization)
   └→ optional extension WebSocket ↔ MCP relay ↔ ChatGPT (sanitized derived context only)
 ```
@@ -44,11 +44,11 @@ Chrome Extension (Plasmo)
 ### Domain Context
 
 - **Events**: Tab lifecycle events from Chrome (created, activated, updated, removed)
-- **SharedArrayBuffer**: Fixed-size ring buffer for high-speed event transport between producer (extension) and consumer (worker)
-- **Atomics**: Coordinates read/write indexes in the shared buffer
-- **Worker**: Processes events off main thread, maintains aggregates, batches to Dexie (IndexedDB)
+- **Ingestion**: `event-pipeline.ts` owns bounded memory, FIFO writes, retry/held failures; queued never means durable
+- **Identity/ACK**: Stable source IDs, replay-safe atomic inserts, persisted ACK only after commit
+- **Service worker**: Ephemeral scheduler state; no dedicated transport worker, SAB or production drain polling. Historical SAB experiment is development-only
 - **Dexie (IndexedDB)**: Local event store for persistence (not uploaded anywhere)
-- **Dashboard**: Displays aggregated stats only — never consumes raw event stream
+- **Dashboard**: Reads committed local snapshots through Chrome messaging, derives locally, renders aggregates; read failure is not empty history
 
 ---
 

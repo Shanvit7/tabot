@@ -10,9 +10,10 @@ Tabot is an early-stage proof of concept: a Chrome extension and local web dashb
 
 ```text
 Chrome tab APIs + content script
-  -> background service worker (sole producer)
-  -> SharedArrayBuffer ring buffer + Atomics
-  -> bounded drain + Dexie / IndexedDB
+  -> existing service worker (validation, metadata snapshot, bounded admission)
+  -> Pacer Batcher (128 rows / fixed first-item 25 ms window)
+  -> Pacer AsyncQueuer (FIFO, concurrency 1)
+  -> atomic Dexie / IndexedDB transaction -> commit -> persisted ACK
   -> pure lazy derivation:
      events -> sessions -> anchors -> graph -> episodes -> contexts -> memories -> retrieval
   -> live browser-context snapshot
@@ -37,10 +38,10 @@ Raw browser events remain local. The ChatGPT integration uses Tabot’s online M
 ## 2. Stack and Repository
 
 - **Extension:** Plasmo, Manifest V3, Chrome target, background service worker.
-- **Dashboard:** TanStack Start + Vite/Nitro, React 19, Tailwind and local UI components; `react-force-graph-2d` for activity maps and `react-call` for session inspection. Marketing routes are prerendered; browser data is fetched/derived client-side. TanStack Charts is not a current package dependency.
+- **Dashboard:** TanStack Start + Rsbuild, React 19 with React Compiler, Tailwind and local UI components; `react-force-graph-2d` for activity maps and `react-call` for session inspection. Marketing routes are prerendered; browser data is fetched/derived client-side. TanStack Charts is not a current package dependency.
 - **Language/package manager:** TypeScript (ESNext, bundler resolution), pnpm workspaces.
-- **Concurrency:** `SharedArrayBuffer` and `Atomics` using `Int32Array`.
-- **Rate shaping:** TanStack Pacer at the content-script boundary.
+- **Scheduling:** TanStack Pacer 0.22.0 Batcher + serial AsyncQueuer in the same MV3 worker; no production SAB/Atomics or transport Web Worker.
+- **Rate shaping:** Pacer 150 ms scroll/key throttlers and bounded transport retries at the content-script boundary.
 - **Persistence:** Dexie 4.x over IndexedDB database `tabot_events`, `events` table.
 - **Graph substrate:** graphology.
 - **Optional relay:** Hono + MCP SDK on Cloudflare Workers, Durable Objects for OAuth/installation state, authenticated WebSocket to the extension. No remote browser-history store.
@@ -49,7 +50,7 @@ Raw browser events remain local. The ChatGPT integration uses Tabot’s online M
 tabot/
 ├── apps/
 │   ├── extension/
-│   │   ├── background.ts                # event producer, SAB drain, Dexie, messaging
+│   │   ├── background.ts                # native producers, ingest wiring, readers, messaging
 │   │   ├── contents/tabot.ts            # page-level telemetry collection
 │   │   ├── popup.tsx                    # activity recap, progress, new-summary CTA
 │   │   ├── popup-model.ts, notification-model.ts
@@ -61,7 +62,7 @@ tabot/
 │       ├── src/lib/home-data.ts         # extension transport + in-memory derivation
 │       └── src/components/              # landing, dashboard, and UI components
 ├── packages/shared/src/
-│   ├── events/                         # buffer, protocol, metadata, Dexie, event registry
+│   ├── events/                         # ingest validation, metadata, atomic Dexie, historical buffer experiment
 │   ├── sessions/                       # sessionization
 │   ├── activities/                     # anchors, episodes, foreground, metrics, SW semantics
 │   ├── contexts/, memories/, recall/    # derivation, retrieval and live snapshot
@@ -111,7 +112,7 @@ export const EVENT_TYPES = {
 | `TAB_CREATED` | `chrome.tabs.onCreated` | none |
 | `TAB_ACTIVATED` | `chrome.tabs.onActivated` | none |
 | `TAB_UPDATED` | `chrome.tabs.onUpdated` | none |
-| `TAB_REMOVED` | `chrome.tabs.onRemoved` | none; `windowId` uses `0` sentinel |
+| `TAB_REMOVED` | `chrome.tabs.onRemoved` | actual removal window ID |
 | `NAVIGATION` | `chrome.webNavigation.onCommitted`, main frame only | none |
 | `PAGE_VISIBLE` | content-script `visibilitychange` to visible | none |
 | `PAGE_HIDDEN` | content-script `visibilitychange` to hidden | none |
@@ -126,18 +127,19 @@ Every persisted event has this representation:
 
 ```ts
 interface StoredTabEvent {
-  id: string;       // `${timestamp}-${tabId}-${logicalIndex}`
+  id: string;       // native UUID or document-instance UUID + sequence; historical IDs preserved
   type: TabEventType;
   tabId: number;
   windowId: number;
   timestamp: number; // Date.now() at capture
-  url?: string;      // in-memory tab metadata enrichment at drain time
+  url?: string;      // event-specific snapshot BEFORE asynchronous admission
   favicon?: string;  // local visual sidecar; stripped by sanitized export/tool projections
   metadata?: { x?: number; y?: number; scrollY?: number; previousWindowId?: number; enabled?: boolean; state?: number };
+  source?: { instanceId: string; sequence: number; documentId?: string };
 }
 ```
 
-`id` uses a monotonic logical ring-buffer index, never a physical slot. This prevents collisions when ring-buffer slots are reused or the service worker restarts.
+IDs are generated once at capture and reused for retries. Committed duplicates are validated in IndexedDB, including after restart; conflicting reuse is rejected, not overwritten. Historical IDs need no migration. Same-source timestamp ties use sequence, never UUID lexical order; independent sources have no global causal order.
 
 ### Collection details
 
@@ -151,62 +153,37 @@ interface StoredTabEvent {
 
 `StatsSnapshot` is an internal engineering/transport-health contract. Popup and dashboard also fetch persisted events for local derivation; presentational components do not render the raw stream. Raw event totals must not appear as user-facing activity/action/visit counts, per [PRODUCT.md](../PRODUCT.md).
 
-```ts
-interface StatsSnapshot {
-  totalEvents: number;
-  tabCreated: number; tabActivated: number; tabUpdated: number; tabRemoved: number;
-  navigation: number;
-  pageVisible: number; pageHidden: number;
-  scroll: number; click: number; keyActivity: number;
-  eventsProcessed: number; droppedEvents: number;
-  bufferCapacity: number; bufferOccupancy: number; peakBufferOccupancy: number;
-  lastProcessedAt: number;
-}
-```
+`StatsSnapshot` exposes health, collector/pending/active/held/outstanding rows, pending bytes and oldest age, observed/selected/queued/persisted/duplicate/ignored/coalesced/rejected counters, retry/failure counts, last commit/error code, and 128 bounded batch timing samples. Counters reset on worker activation, not lifetime loss totals. Compatibility `buffer*` fields mean queue admission budget/occupancy/peak, `eventsProcessed/totalEvents` mean committed inserts, `droppedEvents` means admission rejections. See the exact type in `packages/shared/src/lib/protocol.ts`.
 
-`GET_COUNTS` obtains the authoritative persisted count through `db.events.count()` for internal diagnostics. Current popup uses a plain recording-loss message when `droppedEvents > 0`; it does not present pipeline-counter panels or buffer occupancy/peak as primary product UI. Sites, observed time, sessions and recurrence are the product-facing evidence.
+`GET_COUNTS` obtains authoritative committed count through `db.events.count()`. Popup/Home show plain degraded-state feedback; raw pipeline totals are not activity counts. Read failures are explicit, not empty history or zero counts; readers retain last successful data.
 
 ---
 
 ## 4. Event Transport and Persistence
 
-### Metadata sidecar
+### Single-worker ingestion and metadata
 
-Variable-length values never enter shared memory. `tabMeta: Map<tabId, { url?, title?, lastSeen }>` is maintained in the background worker and URL metadata is added to decoded events at persistence time.
+Native handlers snapshot their own tab/navigation payload or existing metadata before asynchronous policy checks. Page ingress uses validated Chrome sender/document identity, not payload URLs/tab IDs. The normalized row is copied before scheduling; numeric zero/fractional values remain intact. Foreground/tracking rules apply to new capture, not known replay. Async eligibility checks precede FIFO collection, so there is no claim of global causal order.
 
-### SharedArrayBuffer ring buffer
+### Bounded Pacer stages
 
-The background service worker is the only producer. Content scripts send page events through `chrome.runtime` and never write to the SAB directly.
+`apps/extension/event-pipeline.ts` owns 2,048 outstanding rows / 4 MiB conservative payload accounting across eligibility, collector, pending, active and held batches. Reserve 128 rows / 256 KiB for native/boundary events within that total. Each normalized payload is limited to 32 KiB; each in-flight ID permits four response waiters. Interaction overload receives retryable/busy, never eviction or persisted success.
 
-- Capacity: `10,000` slots.
-- Event slot: `8 * Int32` = `32` bytes (`type`, `tabId`, `windowId`, flags, timestamp high/low, `value0`, `value1`).
-- Control slots: `WRITE_INDEX`, `READ_INDEX`, `CAPACITY`, `PUBLISHED_INDEX`.
-- Logical indexes are monotonic. Physical slot is `logicalIndex % capacity`.
-- `PUBLISHED_INDEX` is the consumer's source of truth: fields are written before publication.
-- `SCROLL` stores `scrollY` in `value0`; `CLICK` stores `x` and `y` in `value0`/`value1`.
-- An attempt to write when `writeIndex - readIndex >= capacity` fails and increments `droppedEvents`.
+`Batcher` collects at most 128 rows / 25 ms from first item. Function-valued remaining wait prevents later arrivals extending the deadline; semantic boundaries flush promptly. Synchronous transfer goes to `AsyncQueuer` FIFO, concurrency 1, wait 0. Never writer-flush: installed Pacer flush can bypass concurrency. No idle collection timer, drain polling, dedicated transport worker, SAB or Atomics in production bundles. Timing values are provisional scheduling targets, not durability guarantees.
 
-MV3 service workers cannot use `Atomics.wait`, so draining uses queued microtasks with short burst polling and a 200ms fallback poll.
+### Atomic IndexedDB and failure ownership
 
-### Drain and IndexedDB
+V1 schema remains `events: 'id, timestamp, type, tabId'` in `tabot_events`. No destructive migration, extra index or job table. The shared helper normalizes and deduplicates input, then reads existing IDs and inserts only missing rows in one read/write transaction. Conflict or any failed row aborts all new rows; no swallowed BulkError or replay upsert. Resolution after commit returns inserted/duplicate counts, then releases capacity and ACKs.
 
-The background consumer decodes at most `512` events per drain, advances `READ_INDEX` after reading the batch, updates aggregate counters, enriches events with `tabMeta`, then asynchronously calls Dexie's `bulkPut`.
+Writer retries classified transient failures three times (exponential 100 ms base, 1 s cap, 0.2 jitter). Permanent failure/exhaustion stops new starts and retains one bounded immutable held batch. Pending work remains owned; responses are not persisted ACKs. Recovery retries held work first after cooldown via suitable events/alarm, or explicit internal `RETRY_INGEST`. No active transaction is cancelled for UI closure, sender timeout or pause. No DB timeout starts an overlapping writer. Shared failed-open cache resets and background/relay do not cache rejected opens.
 
-```text
-SAB -> bounded drain (512) -> StoredTabEvent[] -> Dexie bulkPut -> IndexedDB
-```
+### Protocol, readers and lifetime
 
-Persistence is downstream from the hot path. A failed `bulkPut` is logged; it does not block the drain. The Dexie schema is:
+Protocol v1 requires stable document-instance UUID + sequence, preserved capture timestamp, type/numeric metadata allowlists and Chrome sender checks. Five-minute replay age / five-second future skew bound input; unseen messages delayed over ten seconds lack historical foreground proof and are ignored. Source outbox caps 256 events / 512 KiB, four active sends and three attempts; hidden boundaries flush pending trailing samples first. Old protocol receives reload-required; invalidated content contexts still require page reload.
 
-```ts
-events: 'id, timestamp, type, tabId'
-```
+`persisted` means commit or identical committed replay; `ignored`, `retryable` and `rejected` never mean durable. Queues, timers, held work and callbacks disappear on worker termination. Live page retry can recover an ambiguous ACK; native Chrome events have no general replay. Committed history survives ordinary restarts under browser storage guarantees, not deletion/uninstall/quota or universal hardware fsync. No exactly-once, physical-interaction losslessness or shutdown-flush guarantee.
 
-`windowId`, `url`, and numeric metadata are stored but not indexed. The database is `tabot_events`; the legacy `tabot_rxdb` database is deleted at first open.
-
-### Messages
-
-`GET_STATS` is synchronous. `GET_COUNTS` is asynchronous and returns `{ dexieCount }` (with legacy `rxdbCount` compatibility while consumers retain it). `TABOT_PAGE_EVENT` accepts content-script events. `GET_EVENTS` returns persisted events for in-browser derivation. Both internal and `onMessageExternal` listeners expose the same contract for the web dashboard.
+`GET_STATS` is a cheap synchronous scheduler snapshot. `GET_COUNTS` returns committed count with legacy rxdbCount alias; `GET_EVENTS` returns committed rows. Both internal/external read failures return `{ ok: false, code: 'storage-unavailable' }`, never zero/empty fallback. Dashboard/popup preserve last successful snapshots and show degraded status. Different-origin dashboard still reads via Chrome messaging. MCP authorization/sanitization is unchanged and reads committed rows without flushing ingestion. Full flow and failure ownership: [data-flow.md](./data-flow.md).
 
 ---
 
@@ -568,14 +545,10 @@ pnpm --filter @tabot/shared check:activityMetrics
 pnpm --filter @tabot/shared check:liveContext
 pnpm --filter @tabot/shared check:pipeline
 pnpm --filter @tabot/shared check:v5regression
-pnpm --filter @tabot/shared check:bufferRoundtrip
 pnpm --filter @tabot/shared run swSemantics
 pnpm --filter @tabot/shared run swDerivation
 pnpm --filter @tabot/shared run swGraph
 pnpm --filter @tabot/shared run swEpisodes
-pnpm --filter @tabot/shared run swFirstSignal
-pnpm --filter @tabot/shared run swCost
-pnpm --filter @tabot/shared run swValidation
 pnpm --filter extension check:popup
 pnpm --filter extension check:notifications
 pnpm --filter extension check:metricsRelay
@@ -624,8 +597,8 @@ The current ChatGPT integration serves requested, sanitized activity summaries, 
 
 ## 14. Constraints and Out of Scope
 
-1. Background service worker is the sole SAB producer; content scripts never write shared memory.
-2. SAB contains only fixed-size numeric fields; URLs/titles remain in the sidecar.
+1. Existing service worker owns bounded ingestion and serial atomic writes; no second capture worker.
+2. Metadata snapshots are immutable before asynchronous admission; retries never re-enrich stored events.
 3. IndexedDB persists raw normalized events in batches; derived data is lazy and rebuildable.
 4. Dashboard and popup do not render raw event streams; they show aggregates plus derived views.
 5. Derived output never names a task, intent, or content meaning.
@@ -637,7 +610,7 @@ The current ChatGPT integration serves requested, sanitized activity summaries, 
 
 ## 15. Service Worker Telemetry (Phase 2 final)
 
-Phase 2 ran a Service Worker (SW) telemetry experiment and concluded **KEEP WITH REDUCTION**: one SW signal survives, four were retired, the `downloads` permission was removed. Raw events remain the source of truth; SW rows flow through the exact same SAB → Dexie → pure-derivation path as Phase 1 events.
+Phase 2 ran a Service Worker (SW) telemetry experiment and concluded **KEEP WITH REDUCTION**: one SW signal survives, four were retired, the `downloads` permission was removed. Raw events remain the source of truth; SW rows flow through the same bounded ingest → atomic Dexie → pure-derivation path as Phase 1 events.
 
 ### Semantic classification (single derivation gate)
 
@@ -663,13 +636,13 @@ Retired types are **deterministically** ignored — classification is hardcoded,
 
 ### `SW_WINDOW_FOCUS` semantics
 
-- Source: `chrome.windows.onFocusChanged`; requires `windows` permission. `windowId = -1` is the no-window sentinel; `previousWindowId` goes in SAB slot 3.
+- Source: `chrome.windows.onFocusChanged`; requires `windows` permission. `windowId = -1` is the no-window sentinel; `previousWindowId` is ordinary numeric metadata (historically SAB slot 3).
 - **Session layer:** a focus row cannot itself open a session or reset its inactivity clock; a focus-only trace yields 0 sessions. The foreground prefilter uses focus state to reject activity in unfocused windows and close observed dwell. Correcting previously admitted background activity can change derived sessions; focus regain alone never proves continued work.
 - **Meaningful events:** classified contextual; never forms a transition (no URL).
 - **Graph layer:** `applyFocusContinuity` (in `sw-graph.ts`) may only **decorate an existing same-session edge** with a strengthened weight when a causal focus sandwich is present (departure w→x, return x→w chained via `previousWindowId` inside the anchor span). Chains where `previousWindowId === -1`/`WINDOW_ID_NONE` are excluded (focus loss/regain is not an excursion return). SW adds zero nodes/edges/counts.
 - **Episode layer:** no SW terms in the boundary scorer — no focus boost; evidence is a causal record only.
 
-Historical Phase 2 measurement (before schema 9 foreground filtering): SW telemetry added **0** sessions, anchors, graph edges, episodes, contexts, memories; only graph evidence counts changed where genuine cross-window continuity occurred. Cost (from `sw-cost.check.ts`): SW ratio far under the 30% acceptance ceiling; SW derivation cost within measurement noise.
+Historical Phase 2 analysis (before schema 9 foreground filtering): SW telemetry added **0** sessions, anchors, graph edges, episodes, contexts, or memories; only graph evidence counts changed where genuine cross-window continuity occurred.
 
 ### SW checks
 
@@ -678,9 +651,6 @@ pnpm --filter @tabot/shared run swSemantics    # taxonomy + firewall classificat
 pnpm --filter @tabot/shared run swDerivation   # Pipeline A vs B comparison
 pnpm --filter @tabot/shared run swGraph        # focus continuity (-1 chains excluded)
 pnpm --filter @tabot/shared run swEpisodes     # focus-only burst -> 0 sessions
-pnpm --filter @tabot/shared run swFirstSignal  # per-signal decision audit
-pnpm --filter @tabot/shared run swCost         # noise + storage + CPU
-pnpm --filter @tabot/shared run swValidation   # encode -> decode roundtrip
 pnpm --filter @tabot/shared run swRealReport   # requires a supplied real trace
 ```
 

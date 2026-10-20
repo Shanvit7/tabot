@@ -205,7 +205,8 @@ const IndexPopup = () => {
 	const claudeConnected = assistantConnections?.claude ?? null;
 	const [chatGptUrl, setChatGptUrl] = useState(chatGptConnectPromptUrl);
 	const [toggling, setToggling] = useState(false);
-	const [dropped, setDropped] = useState(0);
+	const [pipelineDegraded, setPipelineDegraded] = useState(false);
+	const [writerBlocked, setWriterBlocked] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [attempt, setAttempt] = useState(0);
 	const [notificationPreview, setNotificationPreview] = useState<number | null>(
@@ -302,7 +303,8 @@ const IndexPopup = () => {
 					// Keep full derivation so context IDs match dashboard; never derive a sliced export.
 					setSummary(popupSummary(derive(events), lastViewed, now));
 					setTracking(status.enabled);
-					setDropped(stats.droppedEvents);
+					setPipelineDegraded(stats.health !== "healthy" || stats.rejected > 0);
+					setWriterBlocked(stats.health === "blocked");
 					setError(null);
 					try {
 						await chrome.storage.local.set({ [LAST_VIEWED_KEY]: now });
@@ -689,10 +691,26 @@ const IndexPopup = () => {
 						)}
 					</>
 				)}
-				{dropped > 0 && (
+				{writerBlocked && (
+					<button
+						type="button"
+						className="popup-row mt-3 min-h-11 text-xs underline"
+						onClick={async () => {
+							try {
+								await chrome.runtime.sendMessage({ type: "RETRY_INGEST" });
+								setAttempt((value) => value + 1);
+							} catch {
+								setError("Could not retry recording. Try again.");
+							}
+						}}
+					>
+						Retry recording
+					</button>
+				)}
+				{pipelineDegraded && (
 					<p role="status" className="mt-4 text-xs leading-5 text-muted">
-						Some browser activity could not be recorded. Your earlier activity
-						is still available.
+						Capture delayed or some events not admitted this worker session.
+						Committed activity remains available.
 					</p>
 				)}
 			</main>

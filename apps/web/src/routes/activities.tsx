@@ -29,7 +29,7 @@ const periodLabel: Record<Period, string> = {
 };
 
 const Activities = () => {
-	const { events, initialized, hasExtension } = useHomeData();
+	const { events, initialized, hasExtension, degraded } = useHomeData();
 	const redirecting = useExtensionRedirect({ hasExtension, initialized });
 	const assistantConnected = useAssistantConnection();
 	const [period, setPeriod] = useState<Period>("7d");
@@ -46,7 +46,7 @@ const Activities = () => {
 		);
 	}
 	return (
-		<HomeShell>
+		<HomeShell degraded={degraded}>
 			<header className="mb-8">
 				<h1 className="text-[32px] font-semibold tracking-tight sm:text-[40px]">
 					Activities

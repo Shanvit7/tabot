@@ -6,20 +6,16 @@ import {
 	chatGptContextUrl,
 	chatGptPromptUrl,
 	countEvents,
-	createBuffer,
-	createEmptyStats,
 	createEventsDb,
 	getAllEvents,
 	getContexts,
 	getMemories,
 	getMeta,
 	isAiReadyContext,
-	LIFECYCLE_KINDS,
 	logger,
 	memoryPrompt,
 	nextNotifiableContext,
-	POPUP_SOURCE,
-	pushEvent,
+	readFailure,
 	removeMeta,
 	resolveChatGptConnectUrl,
 	type StatsSnapshot,
@@ -28,11 +24,13 @@ import {
 	type TabEventType,
 	updateMeta,
 } from "@tabot/shared";
+import { createEventPipeline } from "./event-pipeline";
 import { isForegroundTab, startForegroundTracking } from "./foreground";
 import {
 	isNotifiableEpisode,
 	nextNotifiableMemory,
 } from "./notification-model";
+import { ingestPageMessage } from "./page-ingress";
 import {
 	approveAuthorizationTransaction,
 	getAssistantConnections,
@@ -40,36 +38,28 @@ import {
 	startRelay,
 } from "./relay";
 
-// --- Shared buffer (transient hot path) ---
-const CAPACITY = 10_000;
-const { control, events, capacity } = createBuffer(CAPACITY);
-
-// ponytail: no Blob Worker — service workers have no URL.createObjectURL, inline drain keeps same SAB semantics
-const EVENT_SLOT_SIZE = 8;
-const READ_INDEX = 1;
-const PUBLISHED_INDEX = 3;
-const MAX_BATCH_SIZE = 512;
-const TYPE_NAMES: TabEventType[] = [
-	"TAB_CREATED",
-	"TAB_ACTIVATED",
-	"TAB_UPDATED",
-	"TAB_REMOVED",
-	"NAVIGATION",
-	"PAGE_VISIBLE",
-	"PAGE_HIDDEN",
-	"SCROLL",
-	"CLICK",
-	"KEY_ACTIVITY",
-	// --- SW telemetry — must stay index-aligned with EVENT_TYPES 10–14 ---
-	// FINAL: only SW_WINDOW_FOCUS is produced. Entries 11–14 remain index-aligned
-	// so HISTORICAL persisted rows still decode deterministically; they are never
-	// emitted by this producer anymore.
-	"SW_WINDOW_FOCUS",
-	"SW_POPUP_OPEN",
-	"SW_TRACKING_TOGGLE",
-	"SW_DOWNLOAD",
-	"SW_LIFECYCLE",
-];
+// One service worker, one bounded serial writer. Queued is not persisted.
+const RECOVERY_ALARM = "tabot-ingest-recovery";
+const getDb = createEventsDb;
+const pipeline = createEventPipeline({
+	commit: async (rows) => bulkInsertEvents(await getDb(), rows),
+	onBlocked: (recoverable) => {
+		if (recoverable)
+			void chrome.alarms
+				.create(RECOVERY_ALARM, { delayInMinutes: 0.5 })
+				.catch(() => {});
+	},
+	onHealthy: () => {
+		void chrome.alarms.clear(RECOVERY_ALARM).catch(() => {});
+	},
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+	if (alarm.name === RECOVERY_ALARM) pipeline.retry();
+});
+// A retained batch cannot survive termination. Stale alarms never invent work.
+void chrome.alarms.clear(RECOVERY_ALARM).catch(() => {});
+const nativeInstance = crypto.randomUUID();
+let nativeSequence = 0;
 
 const TRACKING_KEY = "tabot_tracking_enabled";
 const NOTIFICATION_KEY = "tabot_context_notification";
@@ -94,9 +84,6 @@ interface NotificationState {
 	chatGptConnected?: boolean;
 }
 
-const latestStats: StatsSnapshot = createEmptyStats(capacity);
-let droppedEvents = 0;
-let drainScheduled = false;
 let trackingEnabled = true;
 const trackingReady = chrome.storage.local
 	.get(TRACKING_KEY)
@@ -105,199 +92,99 @@ const trackingReady = chrome.storage.local
 	})
 	.catch(() => {});
 
-// ponytail: batch Dexie persistence downstream of SAB — IndexedDB bulkPut keeps hot path allocation-free
-let dbPromise: ReturnType<typeof createEventsDb> | null = null;
-const getDb = (): ReturnType<typeof createEventsDb> => {
-	if (!dbPromise) dbPromise = createEventsDb();
-	return dbPromise;
-};
-
 // --- SW telemetry: browser focus is the ONLY emitted SW signal ---
 // popup polling (GET_STATS/GET_COUNTS/GET_EVENTS) is answered without
 // recording telemetry — extension UI interaction must not inflate event counts.
 let lastFocusedWindow = -1;
 
-const processBatch = (): number => {
-	const read = Atomics.load(control, READ_INDEX);
-	const published = Atomics.load(control, PUBLISHED_INDEX);
-	const available = published - read;
-	if (available <= 0) return 0;
-	const count = Math.min(available, MAX_BATCH_SIZE);
-	const docs: StoredTabEvent[] = [];
-	for (let i = 0; i < count; i++) {
-		const logical = read + i;
-		const slot = logical % capacity;
-		const base = slot * EVENT_SLOT_SIZE;
-		const typeVal = Atomics.load(events, base + 0);
-		const type = TYPE_NAMES[typeVal] ?? "TAB_CREATED";
-		const tabId = Atomics.load(events, base + 1);
-		const windowId = Atomics.load(events, base + 2);
-		const slot3 = Atomics.load(events, base + 3);
-		const tsHigh = Atomics.load(events, base + 4);
-		const tsLow = Atomics.load(events, base + 5);
-		const v0 = Atomics.load(events, base + 6);
-		const v1 = Atomics.load(events, base + 7);
-		const timestamp = tsHigh * 2 ** 32 + (tsLow >>> 0);
-		latestStats.totalEvents++;
-		latestStats.eventsProcessed++;
-		if (type === "TAB_CREATED") latestStats.tabCreated++;
-		else if (type === "TAB_ACTIVATED") latestStats.tabActivated++;
-		else if (type === "TAB_UPDATED") latestStats.tabUpdated++;
-		else if (type === "TAB_REMOVED") latestStats.tabRemoved++;
-		else if (type === "NAVIGATION") latestStats.navigation++;
-		else if (type === "PAGE_VISIBLE") latestStats.pageVisible++;
-		else if (type === "PAGE_HIDDEN") latestStats.pageHidden++;
-		else if (type === "SCROLL") latestStats.scroll++;
-		else if (type === "CLICK") latestStats.click++;
-		else if (type === "KEY_ACTIVITY") latestStats.keyActivity++;
-		let metadata: StoredTabEvent["metadata"];
-		if (type === "SCROLL" && v0 !== 0) metadata = { scrollY: v0 };
-		else if (type === "CLICK" && (v0 !== 0 || v1 !== 0))
-			metadata = { x: v0, y: v1 };
-		else if (type === "SW_WINDOW_FOCUS") metadata = { previousWindowId: slot3 };
-		else if (type === "SW_TRACKING_TOGGLE") metadata = { enabled: slot3 !== 0 };
-		else if (type === "SW_DOWNLOAD") metadata = { state: v0 };
-		else if (type === "SW_POPUP_OPEN")
-			metadata = {
-				source: windowId === POPUP_SOURCE.POPUP ? "popup" : "dashboard",
-			};
-		else if (type === "SW_LIFECYCLE") {
-			const kind = LIFECYCLE_KINDS[windowId];
-			if (kind) metadata = { lifecycle: kind };
-		}
-		docs.push({
-			id: `${timestamp}-${tabId}-${logical}`,
-			type,
-			tabId,
-			windowId,
-			timestamp,
-			metadata,
-		});
-	}
-	Atomics.store(control, READ_INDEX, read + count);
-	const occupancy = Math.max(
-		0,
-		Atomics.load(control, 0) - Atomics.load(control, 1),
-	);
-	latestStats.bufferOccupancy = occupancy;
-	if (occupancy > latestStats.peakBufferOccupancy)
-		latestStats.peakBufferOccupancy = occupancy;
-	latestStats.lastProcessedAt = Date.now();
-	latestStats.droppedEvents = droppedEvents;
-	if (docs.length) {
-		const enriched: StoredTabEvent[] = docs.map((d) => {
-			const meta = getMeta(d.tabId);
-			if (!meta) return d;
-			const next = { ...d };
-			if (meta.url) next.url = meta.url;
-			if (meta.favicon) next.favicon = meta.favicon;
-			return next;
-		});
-		getDb()
-			.then((db) => bulkInsertEvents(db, enriched))
-			.catch((err) => logger.warn("bulkInsert failed", { error: err }));
-	}
-	return count;
-};
-
-const scheduleDrain = () => {
-	if (drainScheduled) return;
-	drainScheduled = true;
-	const run = () => {
-		drainScheduled = false;
-		const n = processBatch();
-		// keep draining synchronously if more remains, otherwise poll
-		if (
-			Atomics.load(control, PUBLISHED_INDEX) > Atomics.load(control, READ_INDEX)
-		) {
-			scheduleDrain();
-		} else if (n > 0) {
-			// one more poll shortly after a batch in case of burst
-			setTimeout(scheduleDrain, 50);
-		}
-	};
-	// microtask then immediate — lets push() finish before draining
-	queueMicrotask(run);
-};
-
-// fallback poll for burst safety (service workers can't Atomics.wait — polling is the wakeup)
-setInterval(() => {
-	if (
-		Atomics.load(control, PUBLISHED_INDEX) > Atomics.load(control, READ_INDEX)
-	)
-		scheduleDrain();
-}, 200);
-
-// --- Single producer (spec §5, §9) ---
-const push = async (
+const push = (
 	type: TabEventType,
 	tabId: number,
 	windowId: number,
 	metadata?: TabEventMetadata,
 	timestamp = Date.now(),
+	snapshot: { url?: string; favicon?: string } | undefined = getMeta(tabId),
 ) => {
-	await trackingReady;
-	if (!trackingEnabled) return false;
-	if (
-		[
-			"TAB_ACTIVATED",
-			"NAVIGATION",
-			"PAGE_VISIBLE",
-			"SCROLL",
-			"CLICK",
-			"KEY_ACTIVITY",
-		].includes(type) &&
-		!(await isForegroundTab(tabId))
-	)
-		return false;
-	const ok = pushEvent(control, events, capacity, {
+	const row: StoredTabEvent = {
+		id: crypto.randomUUID(),
 		type,
 		tabId,
 		windowId,
 		timestamp,
 		metadata,
-	});
-	if (!ok) {
-		droppedEvents++;
-		latestStats.droppedEvents = droppedEvents;
-	} else {
-		scheduleDrain();
-	}
-	return ok;
+		url: snapshot?.url,
+		favicon: snapshot?.favicon,
+		source: { instanceId: nativeInstance, sequence: ++nativeSequence },
+	};
+	return pipeline.ingest(
+		row,
+		async () => {
+			await trackingReady;
+			if (
+				!trackingEnabled ||
+				([
+					"TAB_ACTIVATED",
+					"NAVIGATION",
+					"PAGE_VISIBLE",
+					"SCROLL",
+					"CLICK",
+					"KEY_ACTIVITY",
+				].includes(type) &&
+					!(await isForegroundTab(tabId)))
+			)
+				return { status: "ignored", code: "capture-policy" };
+			return null;
+		},
+		true,
+	);
 };
 
 // --- Chrome tab lifecycle ---
 chrome.tabs.onCreated.addListener((tab) => {
-	if (tab.id == null || tab.windowId == null) return;
-	push("TAB_CREATED", tab.id, tab.windowId);
+	if (tab.id == null || tab.windowId == null || tab.incognito) return;
+	void push("TAB_CREATED", tab.id, tab.windowId, undefined, Date.now(), {
+		url: tab.url,
+		favicon: tab.favIconUrl,
+	});
 	if (tab.url) updateMeta(tab.id, { url: tab.url });
 	if (tab.title) updateMeta(tab.id, { title: tab.title });
 	if (tab.favIconUrl) updateMeta(tab.id, { favicon: tab.favIconUrl });
 });
 
 chrome.tabs.onActivated.addListener((info) => {
+	const timestamp = Date.now();
 	void (async () => {
 		if (!(await isForegroundTab(info.tabId))) return;
 		lastFocusedWindow = info.windowId;
 		const tab = await chrome.tabs.get(info.tabId);
 		updateMeta(info.tabId, { url: tab.url, favicon: tab.favIconUrl });
-		await push("TAB_ACTIVATED", info.tabId, info.windowId);
+		await push(
+			"TAB_ACTIVATED",
+			info.tabId,
+			info.windowId,
+			undefined,
+			timestamp,
+			{ url: tab.url, favicon: tab.favIconUrl },
+		);
 	})().catch((error) => logger.warn("tab activation failed", { error }));
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 	if (tab.windowId == null) return;
 	// avoid spamming on every property change — only when tab actually updated
-	push("TAB_UPDATED", tabId, tab.windowId);
+	if (tab.incognito) return;
+	void push("TAB_UPDATED", tabId, tab.windowId, undefined, Date.now(), {
+		url: tab.url,
+		favicon: tab.favIconUrl,
+	});
 	if (changeInfo.url) updateMeta(tabId, { url: changeInfo.url });
 	if (changeInfo.title) updateMeta(tabId, { title: changeInfo.title });
 	if (changeInfo.favIconUrl)
 		updateMeta(tabId, { favicon: changeInfo.favIconUrl });
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
-	// TAB_REMOVED has no windowId in the Chrome API — use 0 as sentinel, sidecar owns cleanup
-	push("TAB_REMOVED", tabId, 0);
+chrome.tabs.onRemoved.addListener((tabId, info) => {
+	void push("TAB_REMOVED", tabId, info.windowId);
 	removeMeta(tabId);
 });
 
@@ -305,7 +192,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 if (chrome.webNavigation?.onCommitted) {
 	chrome.webNavigation.onCommitted.addListener((details) => {
 		if (details.frameId !== 0) return;
-		push("NAVIGATION", details.tabId, 0);
+		void push("NAVIGATION", details.tabId, 0, undefined, details.timeStamp, {
+			url: details.url,
+		});
 		if (details.url) updateMeta(details.tabId, { url: details.url });
 	});
 }
@@ -324,28 +213,23 @@ if (chrome.windows?.onFocusChanged) {
 
 const sampleForeground = startForegroundTracking(async (type, state) => {
 	updateMeta(state.tabId, { url: state.url, favicon: state.favicon });
-	return push(type, state.tabId, state.windowId, undefined, state.timestamp);
+	return push(
+		type,
+		state.tabId,
+		state.windowId,
+		undefined,
+		state.timestamp,
+		state,
+	);
 });
 
-// --- retired SW signals: NO producers. Historical rows still decode ---
+// --- retired SW signals: NO producers. Historical rows remain readable ---
 // (SW_POPUP_OPEN, SW_TRACKING_TOGGLE, SW_DOWNLOAD, SW_LIFECYCLE were removed
 // from the production telemetry path. The tracking state still lives in
 // chrome.storage.local via SET_TRACKING — just no longer persisted as a
 // behavioral event. See packages/shared/src/activities/sw-semantics.ts.)
 
-const getMergedStats = (): StatsSnapshot => {
-	const occupancy = Math.max(
-		0,
-		Atomics.load(control, 0) - Atomics.load(control, 1),
-	);
-	return {
-		...latestStats,
-		droppedEvents,
-		bufferCapacity: capacity,
-		bufferOccupancy: occupancy,
-		peakBufferOccupancy: Math.max(latestStats.peakBufferOccupancy, occupancy),
-	};
-};
+const getMergedStats = (): StatsSnapshot => pipeline.stats();
 
 const respondAssistantConnections = (
 	sendResponse: (response: unknown) => void,
@@ -359,7 +243,7 @@ const respondAssistantConnections = (
 	})();
 };
 
-// --- Content-script page events (spec §5: never write SAB directly, background is single producer) ---
+// Listeners register synchronously; literal true retains asynchronous response channel.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.type === "SET_TRACKING") {
 		void (async () => {
@@ -379,20 +263,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	}
 
 	if (message?.kind === "TABOT_PAGE_EVENT") {
-		const tabId = sender.tab?.id ?? 0;
-		const windowId = sender.tab?.windowId ?? 0;
-		const t = message.type as TabEventType;
-		if (
-			[
-				"PAGE_VISIBLE",
-				"PAGE_HIDDEN",
-				"SCROLL",
-				"CLICK",
-				"KEY_ACTIVITY",
-			].includes(t)
-		) {
-			push(t, tabId, windowId, message.metadata);
-		}
+		void ingestPageMessage(message, sender, {
+			extensionId: chrome.runtime.id,
+			pipeline,
+			find: async (id) => (await getDb()).events.get(id),
+			eligible: async (tabId) => {
+				await trackingReady;
+				return trackingEnabled && (await isForegroundTab(tabId));
+			},
+		})
+			.then(sendResponse)
+			.catch(() =>
+				sendResponse({ status: "retryable", code: "storage-unavailable" }),
+			);
+		return true;
+	}
+	if (message?.type === "RETRY_INGEST") {
+		sendResponse({ resumed: pipeline.retry(true) });
 		return false;
 	}
 
@@ -425,7 +312,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			})
 			.catch(() => {
 				try {
-					sendResponse({ dexieCount: 0, rxdbCount: 0 });
+					sendResponse(readFailure());
 				} catch {}
 			});
 		return true;
@@ -441,7 +328,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			})
 			.catch(() => {
 				try {
-					sendResponse([]);
+					sendResponse(readFailure());
 				} catch {}
 			});
 		return true;
@@ -503,7 +390,7 @@ if (chrome.runtime.onMessageExternal) {
 					})
 					.catch(() => {
 						try {
-							sendResponse({ dexieCount: 0, rxdbCount: 0 });
+							sendResponse(readFailure());
 						} catch {}
 					});
 				return true;
@@ -518,22 +405,9 @@ if (chrome.runtime.onMessageExternal) {
 					})
 					.catch(() => {
 						try {
-							sendResponse([]);
+							sendResponse(readFailure());
 						} catch {}
 					});
-				return true;
-			}
-			if (message?.type === "GET_BENCHMARK_EVENTS") {
-				const limit =
-					typeof message.limit === "number"
-						? Math.max(1, Math.min(10_000, Math.floor(message.limit)))
-						: 10_000;
-				getDb()
-					.then((db) =>
-						db.events.orderBy("timestamp").reverse().limit(limit).toArray(),
-					)
-					.then((events) => sendResponse(events.reverse()))
-					.catch(() => sendResponse([]));
 				return true;
 			}
 			return false;

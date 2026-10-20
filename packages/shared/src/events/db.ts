@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import { logger } from "../lib/logger";
 import type { TabEventMetadata, TabEventType } from "./events";
+import { EventConflictError, eventIdentity, normalizeEvent } from "./ingest";
 
 export interface StoredTabEvent {
 	id: string;
@@ -11,6 +12,12 @@ export interface StoredTabEvent {
 	url?: string;
 	favicon?: string;
 	metadata?: TabEventMetadata;
+	source?: {
+		instanceId: string;
+		sequence: number;
+		documentId?: string;
+		documentUrl?: string;
+	};
 }
 
 // ponytail: kept for backwards compat — Dexie uses stores() string, not JSON schema
@@ -67,34 +74,57 @@ export const createEventsDb = async (): Promise<TabotDatabase> => {
 	if (dbPromise) return dbPromise;
 	deleteLegacyRxDb();
 	const db = new TabotDatabase(DB_NAME);
-	dbPromise = db
+	const opening = db
 		.open()
 		.then(() => db)
 		.catch((err) => {
 			logger.warn("createEventsDb failed", { error: err });
-			dbPromise = null;
+			if (dbPromise === opening) dbPromise = null;
 			throw err;
 		});
-	return dbPromise;
+	dbPromise = opening;
+	db.on("close", () => {
+		if (dbPromise === opening) dbPromise = null;
+	});
+	return opening;
 };
 
+export interface InsertEventsResult {
+	inserted: number;
+	duplicates: number;
+}
+
+/** Resolves only after commit. Any row failure rolls back the entire batch. */
 export const bulkInsertEvents = async (
 	db: TabotDatabase,
 	docs: StoredTabEvent[],
-): Promise<void> => {
-	if (docs.length === 0) return;
-	try {
-		await db.events.bulkPut(docs);
-	} catch (err: unknown) {
-		// BulkError: some keys conflicted, successful puts still committed
-		const e = err as { name?: string; failures?: unknown[] };
-		if (e?.name === "BulkError") {
-			logger.warn("bulkPut partial", { failures: e.failures?.length ?? 0 });
-			return;
-		}
-		logger.warn("bulkPut failed", { error: err });
-		throw err;
+): Promise<InsertEventsResult> => {
+	const unique = new Map<string, StoredTabEvent>();
+	for (const input of docs) {
+		const row = normalizeEvent(input);
+		const previous = unique.get(row.id);
+		if (previous && eventIdentity(previous) !== eventIdentity(row))
+			throw new EventConflictError("id-conflict");
+		if (!previous) unique.set(row.id, row);
 	}
+	if (!unique.size) return { inserted: 0, duplicates: 0 };
+	return db.transaction("rw", db.events, async () => {
+		const rows = [...unique.values()];
+		const existing = await db.events.bulkGet(rows.map((row) => row.id));
+		const missing: StoredTabEvent[] = [];
+		rows.forEach((row, i) => {
+			if (!existing[i]) missing.push(row);
+			else if (
+				eventIdentity(existing[i] as StoredTabEvent) !== eventIdentity(row)
+			)
+				throw new EventConflictError("id-conflict");
+		});
+		if (missing.length) await db.events.bulkAdd(missing);
+		return {
+			inserted: missing.length,
+			duplicates: docs.length - missing.length,
+		};
+	});
 };
 
 export const countEvents = async (db: TabotDatabase): Promise<number> => {

@@ -62,7 +62,12 @@ export const fetchStats = (timeoutMs = 800): Promise<StatsSnapshot | null> =>
 	new Promise((resolve) => {
 		send(
 			{ type: "GET_STATS" },
-			(res) => resolve((res as StatsSnapshot) || null),
+			(res) =>
+				resolve(
+					res && typeof res === "object" && "health" in res
+						? (res as StatsSnapshot)
+						: null,
+				),
 			timeoutMs,
 		);
 	});
@@ -95,25 +100,25 @@ export const rangeStart = (r: StatsRange): number => {
 	return d.getTime();
 };
 
+export const fetchEventCount = (): Promise<number | null> =>
+	new Promise((resolve) => {
+		send({ type: "GET_COUNTS" }, (res) => {
+			resolve(
+				res &&
+					typeof res === "object" &&
+					"dexieCount" in res &&
+					typeof res.dexieCount === "number"
+					? res.dexieCount
+					: null,
+			);
+		});
+	});
+
 export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 	new Promise((resolve) => {
 		send({ type: "GET_EVENTS" }, (res) => {
 			resolve(Array.isArray(res) ? res : null);
 		});
-	});
-
-export const fetchBenchmarkEvents = (
-	limit = 10_000,
-	timeoutMs = 15_000,
-): Promise<StoredTabEvent[] | null> =>
-	new Promise((resolve) => {
-		send(
-			{ type: "GET_BENCHMARK_EVENTS", limit },
-			(res) => {
-				resolve(Array.isArray(res) ? res : null);
-			},
-			timeoutMs,
-		);
 	});
 
 // --- Export (Part C of docs/export-spec.md) ---

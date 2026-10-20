@@ -5,6 +5,7 @@
 	"version": "0.2.2",
 	"private": true,
 	"scripts": {
+		"check:ingest": "node --import ../../packages/shared/resolve-hook.mjs ingest.check.mts",
 		"check:popup": "node --import ../../packages/shared/resolve-hook.mjs popup-model.check.mts",
 		"check:notifications": "node --import ../../packages/shared/resolve-hook.mjs notification-model.check.mts",
 		"check:metricsRelay": "node --experimental-test-module-mocks --import ../../packages/shared/resolve-hook.mjs relay-metrics.check.mts",
@@ -35,12 +36,6 @@
 	},
 	"manifest": {
 		"version": "0.2.2",
-		"cross_origin_opener_policy": {
-			"value": "same-origin"
-		},
-		"cross_origin_embedder_policy": {
-			"value": "require-corp"
-		},
 		"permissions": [
 			"storage",
 			"tabs",

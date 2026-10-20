@@ -1,4 +1,5 @@
 import type { StoredTabEvent } from "../events/db";
+import { orderEvents } from "../events/ingest";
 import { isDiagnostic } from "./sw-semantics";
 
 export interface ActiveSpan {
@@ -20,7 +21,7 @@ export const foregroundEvents = (
 	let focusedWindow: number | undefined;
 	let visible = true;
 	const urls = new Map<number, string>();
-	for (const event of [...events].sort((a, b) => a.timestamp - b.timestamp)) {
+	for (const event of orderEvents(events)) {
 		if (isDiagnostic(event.type)) continue;
 		if (event.type === "SW_WINDOW_FOCUS") {
 			focusedWindow = event.windowId;

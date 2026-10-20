@@ -160,6 +160,7 @@ const sanitizeEvent = async (
 ): Promise<StoredTabEvent> => {
 	const next = { ...event };
 	delete next.favicon;
+	delete next.source; // Transport identity can include original document URL; never export it.
 	if (next.url) next.url = await redactUrl(next.url, run);
 	return next;
 };

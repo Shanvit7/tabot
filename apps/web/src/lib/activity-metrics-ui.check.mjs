@@ -13,6 +13,7 @@ const linkUrl = (html) => {
 
 const server = await createServer({
 	configFile: false,
+	cacheDir: "node_modules/.vite-activity-check",
 	root: fileURLToPath(new URL("../../", import.meta.url)),
 	resolve: { alias: { "~": fileURLToPath(new URL("../", import.meta.url)) } },
 	ssr: { noExternal: ["@lobehub/icons"] },
@@ -29,8 +30,8 @@ const server = await createServer({
 							"const { useEffect, useMemo, useState } = globalThis.checkHomeHooks;",
 						)
 						.replace(
-							/import \{ derive, fetchEvents, fetchStats \} from ['"]~\/lib\/home-data['"];/,
-							"const { derive, fetchEvents, fetchStats } = globalThis.checkHomeTransport;",
+							/import \{[\s\S]*?\} from ['"]~\/lib\/home-data['"];/,
+							"const { derive, fetchEventCount, fetchEvents, fetchStats } = globalThis.checkHomeTransport;",
 						);
 				}
 				if (id.endsWith("/components/ui/work-panels.tsx?check-loader")) {
@@ -57,6 +58,12 @@ try {
 	{
 		const oldInterval = globalThis.setInterval;
 		const oldClearInterval = globalThis.clearInterval;
+		const oldDocument = globalThis.document;
+		globalThis.document = {
+			hidden: false,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		};
 		const oldHooks = globalThis.checkHomeHooks;
 		const oldTransport = globalThis.checkHomeTransport;
 		const intervals = new Map();
@@ -64,6 +71,7 @@ try {
 		let cursor;
 		let effect;
 		let statsReplies;
+		let countReplies;
 		let eventReplies;
 		const deferred = () => {
 			let resolve;
@@ -102,6 +110,7 @@ try {
 		};
 		globalThis.checkHomeTransport = {
 			fetchStats: () => read(statsReplies),
+			fetchEventCount: () => read(countReplies),
 			fetchEvents: () => read(eventReplies),
 			derive: (events) => ({ events }),
 		};
@@ -117,27 +126,49 @@ try {
 				cells = [];
 				effect = null;
 				statsReplies = [];
+				countReplies = [];
 				eventReplies = [];
 				assert.equal(render().initialized, false);
 				const cleanup = effect();
 				assert.equal(statsReplies.length, 1);
-				assert.equal(eventReplies.length, 1, "initial reads start in parallel");
+				assert.equal(countReplies.length, 1, "initial reads start in parallel");
+				assert.equal(eventReplies.length, 0, "full history waits for count");
 				return cleanup;
 			};
 			const rows = [{ id: 1 }];
 			let cleanup = start();
 			statsReplies[0].resolve({ totalEvents: 1 });
+			countReplies[0].resolve(1);
 			await flush();
 			assert.equal(
 				render().initialized,
 				false,
 				"stats first must not expose empty UI",
 			);
+			assert.equal(eventReplies.length, 1);
 			eventReplies[0].resolve(rows);
 			await flush();
 			assert.equal(render().initialized, true);
 			assert.equal(render().events, rows);
 			intervals.get(5000)();
+			countReplies.at(-1).resolve(1);
+			await flush();
+			assert.equal(
+				render().events,
+				rows,
+				"unchanged counts skip full history reads and preserve identity",
+			);
+			assert.equal(eventReplies.length, 1);
+			intervals.get(5000)();
+			countReplies.at(-1).resolve(2);
+			await flush();
+			const revised = [{ id: 1 }, { id: 2 }];
+			eventReplies.at(-1).resolve(revised);
+			await flush();
+			assert.equal(render().events, revised, "new events refresh full history");
+			intervals.get(5000)();
+			countReplies.at(-1).resolve(0);
+			await flush();
 			eventReplies.at(-1).resolve([]);
 			await flush();
 			assert.deepEqual(
@@ -147,6 +178,8 @@ try {
 			);
 			assert.deepEqual(render().derived.events, []);
 			intervals.get(5000)();
+			countReplies.at(-1).resolve(1);
+			await flush();
 			eventReplies.at(-1).resolve(null);
 			await flush();
 			assert.deepEqual(
@@ -158,6 +191,8 @@ try {
 			assert.equal(intervals.size, 0);
 
 			cleanup = start();
+			countReplies[0].resolve(0);
+			await flush();
 			eventReplies[0].resolve([]);
 			await flush();
 			assert.equal(
@@ -181,14 +216,19 @@ try {
 
 			cleanup = start();
 			statsReplies[0].resolve({ totalEvents: 1 });
+			countReplies[0].resolve(1);
+			await flush();
 			eventReplies[0].resolve(null);
 			await flush();
 			assert.equal(
 				render().initialized,
-				false,
-				"a timed-out read is not an empty history",
+				true,
+				"a timed-out read completes setup without pretending history is empty",
 			);
+			assert.equal(render().events, null);
 			intervals.get(5000)();
+			countReplies.at(-1).resolve(0);
+			await flush();
 			eventReplies.at(-1).resolve([]);
 			await flush();
 			assert.equal(
@@ -200,7 +240,7 @@ try {
 
 			cleanup = start();
 			statsReplies[0].resolve(null);
-			eventReplies[0].resolve(null);
+			countReplies[0].resolve(null);
 			await flush();
 			assert.equal(
 				render().initialized,
@@ -214,7 +254,7 @@ try {
 			const beforeUnmount = [...cells];
 			cleanup();
 			statsReplies[0].resolve({ totalEvents: 1 });
-			eventReplies[0].resolve(rows);
+			countReplies[0].resolve(1);
 			await flush();
 			assert.deepEqual(
 				cells,
@@ -225,6 +265,8 @@ try {
 		} finally {
 			globalThis.setInterval = oldInterval;
 			globalThis.clearInterval = oldClearInterval;
+			if (oldDocument === undefined) delete globalThis.document;
+			else globalThis.document = oldDocument;
 			globalThis.checkHomeHooks = oldHooks;
 			globalThis.checkHomeTransport = oldTransport;
 		}
@@ -394,11 +436,19 @@ try {
 			source,
 			/title="(?:Your first dot starts here|No activity here yet)"/,
 		);
-		assert.match(
-			source,
-			/onClick=\{\(\) => set(?:Range|Period)\(['"]all['"]\)\}/,
-		);
 	}
+	await Promise.all(
+		[
+			"../components/home-connections.tsx",
+			"../routes/activities.tsx",
+		].map(async (path) => {
+			const source = await readFile(new URL(path, import.meta.url), "utf8");
+			assert.match(
+				source,
+				/onClick=\{\(\) => set(?:Range|Period)\(['"]all['"]\)\}/,
+			);
+		}),
+	);
 	// The route must be importable on the server without loading window-only graph dependencies.
 	const { Route } = await server.ssrLoadModule("/src/routes/activities.tsx");
 	assert.ok(Route);

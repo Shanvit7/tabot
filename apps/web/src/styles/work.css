@@ -151,6 +151,128 @@
 	}
 }
 
+/* Home's trailbook has its own soft geometry; landing keeps its square tokens. */
+.trail-home {
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 12px;
+	--radius-xl: 16px;
+	--radius-2xl: 20px;
+	--radius-3xl: 24px;
+	--trail-ground: #101c16;
+	--trail-on-accent: #15251b;
+	caret-color: var(--work-ink);
+}
+.trail-dark {
+	--work-ink: #e8f3e8;
+	--work-muted: #a9c6b1;
+	--work-surface: #1e3427;
+	--work-raised: #2a4534;
+	--work-line: #34503e;
+	color: var(--work-ink);
+	color-scheme: dark;
+}
+.trail-view {
+	view-transition-name: trail-content;
+}
+.trail-press {
+	cursor: pointer;
+	transition:
+		background-color 160ms ease-out,
+		box-shadow 160ms ease-out,
+		color 160ms ease-out,
+		transform 120ms ease-out;
+}
+.trail-press:active:not(:disabled) {
+	transform: scale(0.98);
+}
+.trail-progress {
+	appearance: none;
+	overflow: hidden;
+	border: 0;
+	border-radius: 999px;
+	background: var(--work-raised);
+	color: var(--work-ink);
+}
+.trail-progress::-webkit-progress-bar {
+	background: var(--work-raised);
+}
+.trail-progress::-webkit-progress-value {
+	background: var(--work-ink);
+	border-radius: 999px;
+}
+.trail-progress::-moz-progress-bar {
+	background: var(--work-ink);
+	border-radius: 999px;
+}
+@media (prefers-reduced-motion: no-preference) {
+	.trail-stamp {
+		animation: trail-stamp 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+	}
+	.trail-discovery {
+		animation: trail-unfold 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+	}
+	.trail-reward {
+		animation: trail-reward 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+	}
+	::view-transition-old(trail-content) {
+		animation: trail-leave 100ms ease-out both;
+	}
+	::view-transition-new(trail-content) {
+		animation: trail-unfold 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+	}
+}
+@keyframes trail-stamp {
+	from {
+		transform: scale(0.55) rotate(-18deg);
+	}
+	70% {
+		transform: scale(1.12) rotate(3deg);
+	}
+	to {
+		transform: scale(1) rotate(0);
+	}
+}
+@keyframes trail-unfold {
+	from {
+		opacity: 0.35;
+		clip-path: inset(0 0 12% 0 round 16px);
+		transform: translateX(10px);
+	}
+	to {
+		opacity: 1;
+		clip-path: inset(0 round 16px);
+		transform: translateX(0);
+	}
+}
+@keyframes trail-leave {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes trail-reward {
+	from {
+		opacity: 0;
+		transform: translateY(12px) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.trail-home *,
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none;
+		transition: none;
+	}
+	.trail-press:active:not(:disabled) {
+		transform: none;
+	}
+}
+
 /* Session recap inherits the selected-context panel's green/lime world. */
 .session-recap {
 	--session-bg: #101c16;

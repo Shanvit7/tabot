@@ -1,8 +1,15 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { Activity, House, Repeat2 } from "lucide-react";
 import { EMAIL } from "~/lib/constants";
 import "~/styles/work.css";
 
-export const HomeShell = ({ children }: { children: React.ReactNode }) => {
+export const HomeShell = ({
+	children,
+	degraded = false,
+}: {
+	children: React.ReactNode;
+	degraded?: boolean;
+}) => {
 	const path = useRouterState({ select: (state) => state.location.pathname });
 	return (
 		<div className="work-shell">
@@ -32,17 +39,22 @@ export const HomeShell = ({ children }: { children: React.ReactNode }) => {
 					>
 						{(
 							[
-								{ to: "/home", label: "Home" },
-								{ to: "/activities", label: "Activities" },
-								{ to: "/recurring-patterns", label: "Recurring patterns" },
+								{ to: "/home", label: "Home", icon: House },
+								{ to: "/activities", label: "Activities", icon: Activity },
+								{
+									to: "/recurring-patterns",
+									label: "Recurring patterns",
+									icon: Repeat2,
+								},
 							] as const
-						).map(({ to, label }) => (
+						).map(({ to, label, icon: Icon }) => (
 							<Link
 								key={to}
 								to={to}
 								aria-current={path === to ? "page" : undefined}
-								className={`inline-flex min-h-11 items-center border-b-2 transition-colors ${path === to ? "border-[#15251b] text-[#15251b]" : "border-transparent text-[#476151] hover:text-[#15251b]"}`}
+								className={`inline-flex min-h-11 items-center gap-2 border-b-2 transition-colors ${path === to ? "border-[#15251b] text-[#15251b]" : "border-transparent text-[#476151] hover:text-[#15251b]"}`}
 							>
+								<Icon aria-hidden="true" className="size-4" />
 								{label}
 							</Link>
 						))}
@@ -53,6 +65,12 @@ export const HomeShell = ({ children }: { children: React.ReactNode }) => {
 				id="work-content"
 				className="mx-auto max-w-290 px-4 pb-20 pt-10 sm:px-6 lg:px-8"
 			>
+				{degraded && (
+					<p role="status" className="mb-4 text-sm text-muted">
+						Activity storage unavailable or catching up. Showing last successful
+						snapshot, if available.
+					</p>
+				)}
 				{children}
 			</main>
 			<footer className="border-t work-rule px-4 py-6 text-center text-xs text-[#476151]">

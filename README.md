@@ -37,6 +37,12 @@ Open [localhost:3000](http://localhost:3000) in the same Chrome profile.
 
 For optional ChatGPT and Claude connections, see [setup instructions](apps/mcp-server/README.md).
 
+## Local capture reliability
+
+Capture uses bounded Pacer batching inside the extension service worker, then atomic Dexie transactions. A persisted acknowledgment follows commit; retries reuse stable IDs.
+
+Checks: `pnpm --filter extension check:ingest`. Architecture and failure guarantees: [data flow](docs/data-flow.md).
+
 ## Contributing
 
 Issues and pull requests welcome. Run `pnpm lint` before submitting code.

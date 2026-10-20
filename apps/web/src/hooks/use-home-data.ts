@@ -1,32 +1,61 @@
 import type { StatsSnapshot, StoredTabEvent } from "@tabot/shared";
 import { useEffect, useMemo, useState } from "react";
-import { derive, fetchEvents, fetchStats } from "~/lib/home-data";
+import {
+	derive,
+	fetchEventCount,
+	fetchEvents,
+	fetchStats,
+} from "~/lib/home-data";
 
 export const useHomeData = () => {
 	const [stats, setStats] = useState<StatsSnapshot | null>(null);
 	const [events, setEvents] = useState<StoredTabEvent[] | null>(null);
 	const [initialized, setInitialized] = useState(false);
+	const [stale, setStale] = useState(false);
+	const [statsUnavailable, setStatsUnavailable] = useState(false);
 
 	useEffect(() => {
 		let alive = true;
 		const pollStats = async () => {
+			if (document.hidden) return;
 			const next = await fetchStats();
-			if (alive && next) setStats(next);
+			if (!alive) return;
+			setStatsUnavailable(next === null);
+			if (next)
+				setStats((current) =>
+					current?.health === next.health ? current : next,
+				);
 		};
+		let eventCount: number | null = null;
 		const pollEvents = async () => {
+			if (document.hidden) return;
+			const count = await fetchEventCount();
+			if (!alive) return;
+			setStale(count === null);
+			if (count === null || count === eventCount) return;
 			const next = await fetchEvents();
-			if (alive && next !== null) setEvents(next);
+			if (!alive) return;
+			setStale(next === null);
+			if (next === null) return;
+			// Event IDs are immutable; only a changed row count requires a full read.
+			eventCount = next.length;
+			setEvents(next);
 		};
 
+		const onVisibilityChange = () => {
+			if (!document.hidden) void Promise.all([pollStats(), pollEvents()]);
+		};
 		const initialize = async () => {
 			await Promise.all([pollStats(), pollEvents()]);
 			if (alive) setInitialized(true);
 		};
 		void initialize();
+		document.addEventListener("visibilitychange", onVisibilityChange);
 		const statsInterval = setInterval(pollStats, 1000);
 		const eventsInterval = setInterval(pollEvents, 5000);
 		return () => {
 			alive = false;
+			document.removeEventListener("visibilitychange", onVisibilityChange);
 			clearInterval(statsInterval);
 			clearInterval(eventsInterval);
 		};
@@ -37,7 +66,10 @@ export const useHomeData = () => {
 		derived: useMemo(() => (events ? derive(events) : null), [events]),
 		events,
 		hasExtension,
-		// A failed read is not an empty history. Keep loading until a snapshot arrives.
-		initialized: initialized && (!hasExtension || events !== null),
+		degraded:
+			stale ||
+			statsUnavailable ||
+			(stats !== null && stats.health !== "healthy"),
+		initialized,
 	};
 };

@@ -70,21 +70,6 @@ export const faviconOf = (origin: string): string | undefined => {
 	return /^https?:\/\//.test(bare) ? `${bare}/favicon.ico` : undefined;
 };
 
-// Module-level image cache: fetched once per session. A pending or failed load
-// is remembered as null so a broken icon falls back to a dot instead of being
-// re-requested on every animation frame.
-const iconCache = new Map<string, HTMLImageElement | null>();
-export const faviconImage = (url?: string): HTMLImageElement | null => {
-	if (!url) return null;
-	if (iconCache.has(url)) return iconCache.get(url) ?? null;
-	iconCache.set(url, null);
-	const image = new Image();
-	image.onload = () => iconCache.set(url, image);
-	image.onerror = () => iconCache.set(url, null);
-	image.src = url;
-	return null;
-};
-
 // Typo-tolerant subsequence match: "lnkdn" finds "Linkedin", "gh" finds "Github".
 const fuzzy = (haystack: string, query: string): boolean => {
 	let i = 0;

@@ -12,16 +12,16 @@ Non-technical office workers who spend their workday across Chrome tabs, alongsi
 
 ## Product Purpose
 
-Tabot is a Chrome extension and web dashboard that record browser activity locally and make it visible as maps of visited sites and how browsing connects over time. People can look back at where they browsed, then ask ChatGPT about their activity through an optional connection. Success: users can see and understand their browsing trail without rebuilding it from memory.
+Tabot is a Chrome extension and web dashboard that record browser activity locally and help people find their way back to websites they visited. Home leads with recent activity and website-name search; connection maps are optional exploration. People can also ask ChatGPT about their activity through an optional connection. Success: users recover a useful browsing trail without rebuilding it from memory or learning a graph.
 
 ## Positioning
 
-Tabot collects browser activity on the user's device, visualizes it as an explorable activity map, and lets the user ask ChatGPT what happened through an optional, authorized connection. Tabot reports observed sites, visits, and patterns; it does not claim to know intent or productivity. Downloads are secondary: a user-controlled copy for review or audit, not the main product experience. No cloud history sync or Tabot account is needed for local recording and review.
+Tabot collects browser activity on the user's device, makes recent activity searchable and recognizable, and offers an optional connection map and authorized ChatGPT questions. Tabot reports observed sites, visits, and patterns; it does not claim to know intent or productivity. Downloads are secondary: a user-controlled copy for review or audit, not the main product experience. No cloud history sync or Tabot account is needed for local recording and review.
 
 ## Operating Context
 
 - **Capture:** Chrome extension (Manifest V3, Plasmo). Chrome tab/window/navigation APIs + content scripts: tab lifecycle, navigation (URL sidecar), page visibility, scroll, clicks, key-occurrence.
-- **Transport:** `SharedArrayBuffer` ring buffer (10,000 × 32-byte slots) + `Atomics`; background service worker is sole producer.
+- **Transport:** bounded Pacer batching and serial writes in the extension service worker; no SharedArrayBuffer or transport worker.
 - **Persistence:** Dexie 4.x over IndexedDB (`tabot_events`), fully local.
 - **Derivation:** pure, lazy, at read time — events → sessions → anchors → temporal graph → episodes → contexts → memories → retrieval → live browser-context snapshot (graphology).
 - **Surfaces:** extension popup (pipeline stats) and local web dashboard (stats, charts, sessions, activity summaries, export).
@@ -63,7 +63,7 @@ Tabot collects browser activity on the user's device, visualizes it as an explor
 2. **Local-first is a boundary, not a feature.** Nothing leaves the device unless the user exports it.
 3. **Evidence over interpretation.** Report what happened — where, when, how it connected. Never assert what it meant.
 4. **Raw events are the only truth.** Everything derived is disposable, rebuildable, deterministic.
-5. **Make browsing visible.** Local collection and clear visualization are the core experience; ChatGPT is an optional way to ask about that activity. Downloads exist for review and audit.
+5. **Make past browsing useful.** Recent activity and search deliver value before visualization. Connection maps and ChatGPT are optional ways to explore further. Downloads exist for review and audit.
 
 ## Product Decisions
 

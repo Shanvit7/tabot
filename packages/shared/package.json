@@ -8,7 +8,6 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./assistant-connections": "./src/assistant-connections.ts",
-		"./events/buffer": "./src/events/buffer.ts",
 		"./share/targets": "./src/share/targets.ts"
 	},
 	"scripts": {
@@ -27,12 +26,8 @@
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
 		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
 		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts",
-		"check:bufferRoundtrip": "node --import ./resolve-hook.mjs src/checks/buffer-roundtrip.check.ts",
-		"swValidation": "node --import ./resolve-hook.mjs src/checks/sw-validation.check.ts",
-		"swCost": "node --import ./resolve-hook.mjs src/checks/sw-cost.check.ts",
 		"swSemantics": "node --import ./resolve-hook.mjs src/checks/sw-semantics.check.ts",
 		"swDerivation": "node --import ./resolve-hook.mjs src/checks/sw-derivation.check.ts",
-		"swFirstSignal": "node --import ./resolve-hook.mjs src/checks/sw-first-signal.check.ts",
 		"swGraph": "node --import ./resolve-hook.mjs src/checks/sw-graph.check.ts",
 		"swEpisodes": "node --import ./resolve-hook.mjs src/checks/sw-episodes.check.ts",
 		"swRealReport": "node --import ./resolve-hook.mjs src/checks/sw-real.report.ts"

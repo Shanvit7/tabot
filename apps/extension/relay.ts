@@ -169,8 +169,8 @@ const send = (message: unknown) => {
 // --- Local context execution -----------------------------------------------
 // Runs inside the extension against the local Dexie store, then passes the
 // result through the privacy boundary before it leaves the device.
-let dbPromise: ReturnType<typeof createEventsDb> | null = null;
-const getDb = () => (dbPromise ??= createEventsDb());
+// Shared helper resets failed opens; do not cache a rejected promise here.
+const getDb = createEventsDb;
 
 // The privacy boundary, applied once: derived contexts in → externally-safe
 // copy out. Only concise fields are returned — no raw telemetry.
