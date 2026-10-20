@@ -1,11 +1,6 @@
 import type { StatsSnapshot, StoredTabEvent } from "@tabot/shared";
-import { useEffect, useMemo, useState } from "react";
-import {
-	derive,
-	fetchEventCount,
-	fetchEvents,
-	fetchStats,
-} from "~/lib/home-data";
+import { useEffect, useState } from "react";
+import { fetchEventCount, fetchEvents, fetchStats } from "~/lib/home-data";
 
 export const useHomeData = () => {
 	const [stats, setStats] = useState<StatsSnapshot | null>(null);
@@ -63,7 +58,6 @@ export const useHomeData = () => {
 
 	const hasExtension = stats !== null || events !== null;
 	return {
-		derived: useMemo(() => (events ? derive(events) : null), [events]),
 		events,
 		hasExtension,
 		degraded:

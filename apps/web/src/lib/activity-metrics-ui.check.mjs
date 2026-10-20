@@ -26,12 +26,12 @@ const server = await createServer({
 				if (id.endsWith("/hooks/use-home-data.ts?check-data")) {
 					return source
 						.replace(
-							/import \{ useEffect, useMemo, useState \} from ['"]react['"];/,
-							"const { useEffect, useMemo, useState } = globalThis.checkHomeHooks;",
+							/import \{ useEffect, useState \} from ['"]react['"];/,
+							"const { useEffect, useState } = globalThis.checkHomeHooks;",
 						)
 						.replace(
-							/import \{[\s\S]*?\} from ['"]~\/lib\/home-data['"];/,
-							"const { derive, fetchEventCount, fetchEvents, fetchStats } = globalThis.checkHomeTransport;",
+							/import \{ fetchEventCount, fetchEvents, fetchStats \} from ['"]~\/lib\/home-data['"];/,
+							"const { fetchEventCount, fetchEvents, fetchStats } = globalThis.checkHomeTransport;",
 						);
 				}
 				if (id.endsWith("/components/ui/work-panels.tsx?check-loader")) {
@@ -176,7 +176,7 @@ try {
 				[],
 				"empty snapshots must clear stale activity",
 			);
-			assert.deepEqual(render().derived.events, []);
+			assert.equal("derived" in render(), false);
 			intervals.get(5000)();
 			countReplies.at(-1).resolve(1);
 			await flush();
@@ -422,33 +422,19 @@ try {
 	);
 	assert.match(workCss, /animation-play-state: paused/);
 	const graphSources = await Promise.all(
-		["../components/home-page.tsx", "../routes/activities.tsx"].map((path) =>
-			readFile(new URL(path, import.meta.url), "utf8"),
-		),
+		[
+			"../components/home-page.tsx",
+			"../routes/activities.tsx",
+			"../routes/recurring-patterns.tsx",
+		].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
 	);
 	for (const source of graphSources) {
-		assert.match(source, /<Suspense fallback=\{<GraphLoading/);
 		assert.doesNotMatch(
 			source,
-			/<Loading|Drawing your last few hours|Nothing watched yet/,
-		);
-		assert.match(
-			source,
-			/title="(?:Your first dot starts here|No activity here yet)"/,
+			/NetworkGraph|ContextGraph|ActivityFlowGraph|RecurrenceMap|<Suspense/,
+			"heavy graph UI stays out of active routes",
 		);
 	}
-	await Promise.all(
-		[
-			"../components/home-connections.tsx",
-			"../routes/activities.tsx",
-		].map(async (path) => {
-			const source = await readFile(new URL(path, import.meta.url), "utf8");
-			assert.match(
-				source,
-				/onClick=\{\(\) => set(?:Range|Period)\(['"]all['"]\)\}/,
-			);
-		}),
-	);
 	// The route must be importable on the server without loading window-only graph dependencies.
 	const { Route } = await server.ssrLoadModule("/src/routes/activities.tsx");
 	assert.ok(Route);

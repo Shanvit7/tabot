@@ -1,5 +1,36 @@
-import type { BrowserContext } from "@tabot/shared";
+import type { BrowserContext, StoredTabEvent } from "@tabot/shared";
 import { prettySite } from "~/lib/context-graph-data";
+
+export type SiteSummary = {
+	origin: string;
+	host: string;
+	lastSeen: number;
+};
+
+export const siteSummaries = (events: StoredTabEvent[]): SiteSummary[] => {
+	const sites = new Map<string, SiteSummary>();
+	for (const event of events) {
+		if (!event.url || !Number.isFinite(event.timestamp)) continue;
+		try {
+			const url = new URL(event.url);
+			if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+			const host = url.host.replace(/^www\./, "");
+			const current = sites.get(host);
+			if (!current || event.timestamp >= current.lastSeen) {
+				sites.set(host, {
+					origin: url.origin,
+					host,
+					lastSeen: event.timestamp,
+				});
+			}
+		} catch {
+			// Invalid URLs are not displayed or linked.
+		}
+	}
+	return [...sites.values()].toSorted(
+		(a, b) => b.lastSeen - a.lastSeen || a.host.localeCompare(b.host),
+	);
+};
 
 export type ActivitySummary = {
 	id: string;

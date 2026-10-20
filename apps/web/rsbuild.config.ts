@@ -19,7 +19,10 @@ export default defineConfig({
 		tanstackStart({
 			srcDirectory: "src",
 			server: { build: { inlineCss: true } },
-			prerender: { enabled: true, crawlLinks: true },
+			prerender: {
+				enabled: true,
+				crawlLinks: true,
+			},
 		}),
 	],
 	server: { base, port: 3000 },
