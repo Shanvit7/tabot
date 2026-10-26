@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Home } from "~/components/home-page";
+import { ActivityWorkspace } from "~/components/activity-workspace";
 
 export const Route = createFileRoute("/home")({
 	head: () => ({
 		meta: [
-			{ title: "Home | Tabot" },
+			{ title: "Trail map | Tabot" },
 			{ name: "robots", content: "noindex, nofollow" },
 		],
 	}),
-	component: Home,
+	component: () => <ActivityWorkspace view="map" />,
 });

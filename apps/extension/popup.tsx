@@ -9,6 +9,7 @@ import {
 	claudePromptUrl,
 	contextPrompt,
 	derive,
+	type PageCaptureSiteSummary,
 	parseAssistantConnections,
 	resolveChatGptConnectUrl,
 	type StatsSnapshot,
@@ -24,6 +25,12 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
+	MAX_CONSENTED_ORIGINS,
+	normalizePageCaptureOrigins,
+	PAGE_CAPTURE_ORIGINS_KEY,
+	pageCaptureSite,
+} from "~/page-capture-consent";
+import {
 	contextDuration,
 	contextHomeUrl,
 	type PopupSummary,
@@ -36,41 +43,6 @@ import "./popup.tailwind.css";
 const HOME_URL =
 	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
 const LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
-const NOTIFICATION_PREVIEWS = [
-	{
-		title: "Activity summary ready",
-		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
-		button: "Connect ChatGPT",
-	},
-	{
-		title: "Activity summary ready",
-		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
-		button: "Ask ChatGPT",
-	},
-	{
-		title: "Activity worth a look",
-		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
-		button: "Connect ChatGPT",
-	},
-	{
-		title: "Activity worth a look",
-		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
-		button: "Ask ChatGPT",
-	},
-	{
-		title: "A browsing pattern is repeating",
-		message:
-			"Similar activity appeared 4 times across separate periods. Ask ChatGPT what repeats.",
-		button: "Connect ChatGPT",
-	},
-	{
-		title: "A browsing pattern is repeating",
-		message:
-			"Similar activity appeared 4 times across separate periods. Ask ChatGPT what repeats.",
-		button: "Ask ChatGPT",
-	},
-] as const;
-
 const Arrow = () => (
 	<ChevronRight
 		aria-hidden="true"
@@ -199,6 +171,15 @@ const ActivitySites = ({
 const IndexPopup = () => {
 	const [summary, setSummary] = useState<PopupSummary | null>(null);
 	const [tracking, setTracking] = useState<boolean | null>(null);
+	const [captureSite, setCaptureSite] =
+		useState<ReturnType<typeof pageCaptureSite>>(null);
+	const [consentedOrigins, setConsentedOrigins] = useState<string[]>([]);
+	const [pageSummaries, setPageSummaries] = useState<PageCaptureSiteSummary[]>(
+		[],
+	);
+	const [consentLoading, setConsentLoading] = useState(true);
+	const [consentSaving, setConsentSaving] = useState(false);
+	const [consentError, setConsentError] = useState<string | null>(null);
 	const [assistantConnections, setAssistantConnections] =
 		useState<AssistantConnections | null>(null);
 	const chatGptConnected = assistantConnections?.chatgpt ?? null;
@@ -209,35 +190,43 @@ const IndexPopup = () => {
 	const [writerBlocked, setWriterBlocked] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [attempt, setAttempt] = useState(0);
-	const [notificationPreview, setNotificationPreview] = useState<number | null>(
-		null,
-	);
 	const previousVisit = useRef<Promise<number | null> | null>(null);
 
 	useEffect(() => {
 		let active = true;
-		void resolveChatGptConnectUrl().then((url) => {
-			if (active) setChatGptUrl(() => url);
-		});
+		void Promise.all([
+			chrome.tabs.query({ active: true, currentWindow: true }),
+			chrome.storage.local.get(PAGE_CAPTURE_ORIGINS_KEY),
+		])
+			.then(([tabs, stored]) => {
+				if (!active) return;
+				setCaptureSite(pageCaptureSite(tabs[0]?.url, tabs[0]?.incognito));
+				setConsentedOrigins(
+					normalizePageCaptureOrigins(stored[PAGE_CAPTURE_ORIGINS_KEY]),
+				);
+				void chrome.runtime
+					.sendMessage({ type: "GET_PAGE_CAPTURE_SUMMARIES" })
+					.then((summaries: PageCaptureSiteSummary[] | { ok: false }) => {
+						if (active && Array.isArray(summaries)) setPageSummaries(summaries);
+					})
+					.catch(() => {});
+			})
+			.catch(() => {
+				if (active) setConsentError("Could not load page-capture choices.");
+			})
+			.finally(() => {
+				if (active) setConsentLoading(false);
+			});
 		return () => {
 			active = false;
 		};
 	}, []);
 
 	useEffect(() => {
-		if (
-			process.env.NODE_ENV !== "development" ||
-			process.env.PLASMO_PUBLIC_NOTIFICATION_PREVIEW !== "1"
-		)
-			return;
 		let active = true;
-		void chrome.storage.local
-			.get("tabot_notification_preview_index")
-			.then((stored) => {
-				if (!active) return;
-				const index = stored.tabot_notification_preview_index;
-				setNotificationPreview(Number.isInteger(index) ? index : 0);
-			});
+		void resolveChatGptConnectUrl().then((url) => {
+			if (active) setChatGptUrl(() => url);
+		});
 		return () => {
 			active = false;
 		};
@@ -326,6 +315,63 @@ const IndexPopup = () => {
 		};
 	}, [attempt]);
 
+	const refreshPageSummaries = async () => {
+		try {
+			const summaries = (await chrome.runtime.sendMessage({
+				type: "GET_PAGE_CAPTURE_SUMMARIES",
+			})) as PageCaptureSiteSummary[];
+			if (Array.isArray(summaries)) setPageSummaries(summaries);
+		} catch {
+			setConsentError("Could not load saved page excerpts.");
+		}
+	};
+
+	const deletePageEvidence = async (origin?: string) => {
+		if (consentSaving) return;
+		setConsentSaving(true);
+		setConsentError(null);
+		try {
+			const result = (await chrome.runtime.sendMessage({
+				type: "DELETE_PAGE_OBSERVATIONS",
+				...(origin ? { origin } : {}),
+			})) as
+				| { ok: true; deleted: number; consentedOrigins: string[] }
+				| { ok: false };
+			if (!result?.ok) throw new Error("delete-failed");
+			setConsentedOrigins(result.consentedOrigins);
+			await refreshPageSummaries();
+		} catch {
+			setConsentError("Could not delete saved page excerpts. Try again.");
+		} finally {
+			setConsentSaving(false);
+		}
+	};
+
+	const setPageCaptureConsent = async (origin: string, allowed: boolean) => {
+		if (consentSaving) return;
+		setConsentError(null);
+		if (
+			allowed &&
+			!consentedOrigins.includes(origin) &&
+			consentedOrigins.length >= MAX_CONSENTED_ORIGINS
+		) {
+			setConsentError("Remove a site before adding another.");
+			return;
+		}
+		setConsentSaving(true);
+		const next = allowed
+			? [...consentedOrigins, origin]
+			: consentedOrigins.filter((item) => item !== origin);
+		try {
+			await chrome.storage.local.set({ [PAGE_CAPTURE_ORIGINS_KEY]: next });
+			setConsentedOrigins(next);
+		} catch {
+			setConsentError("Could not save this site choice. Try again.");
+		} finally {
+			setConsentSaving(false);
+		}
+	};
+
 	const toggleTracking = async () => {
 		if (tracking === null || toggling) return;
 		setToggling(true);
@@ -407,51 +453,117 @@ const IndexPopup = () => {
 				aria-label="Browser activity"
 				aria-busy={!summary && !error}
 			>
-				{notificationPreview !== null && (
-					<aside
-						aria-label={`Notification preview ${notificationPreview + 1} of ${NOTIFICATION_PREVIEWS.length}`}
-						className="mb-4 rounded-xl border border-line bg-surface p-4 shadow-lg"
+				<section
+					aria-labelledby="page-capture-heading"
+					className="mb-5 border-y border-line py-4"
+				>
+					<h2 id="page-capture-heading" className="text-sm font-semibold">
+						Page-capture choices
+					</h2>
+					<p
+						id="page-capture-note"
+						className="mt-1 text-xs leading-5 text-muted"
 					>
-						<div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted">
-							<span
-								aria-hidden="true"
-								className="size-1.5 animate-pulse rounded-full bg-lime-brand"
+						Optional short excerpts from visible text, after a one-second dwell
+						or trusted interaction. Saved locally; not shared with AI
+						assistants.
+					</p>
+					{consentLoading && (
+						<p role="status" className="mt-2 text-xs text-muted">
+							Loading site choices…
+						</p>
+					)}
+					{captureSite ? (
+						<label className="mt-3 flex min-h-11 items-center gap-3 text-sm">
+							<input
+								type="checkbox"
+								className="size-4 shrink-0 accent-lime-brand"
+								aria-describedby="page-capture-note"
+								checked={consentedOrigins.includes(captureSite.origin)}
+								disabled={consentLoading || consentSaving}
+								onChange={(event) =>
+									void setPageCaptureConsent(
+										captureSite.origin,
+										event.currentTarget.checked,
+									)
+								}
 							/>
-							Auto preview · every 15 seconds
+							<span className="min-w-0 flex-1">
+								Allow visible excerpts on <strong>{captureSite.label}</strong>
+							</span>
+						</label>
+					) : (
+						!consentLoading && (
+							<p role="status" className="mt-2 text-xs leading-5 text-muted">
+								Open a website in a regular tab to set its choice.
+							</p>
+						)
+					)}
+					{consentedOrigins.length > 0 && (
+						<div className="mt-3">
+							<p className="text-xs font-medium">Capture allowed on</p>
+							<ul className="mt-1 divide-y divide-line">
+								{consentedOrigins.map((origin) => (
+									<li
+										key={origin}
+										className="flex min-h-11 items-center justify-between gap-3 py-1"
+									>
+										<span className="min-w-0 truncate text-xs">
+											{new URL(origin).host}
+										</span>
+										<button
+											type="button"
+											disabled={consentSaving}
+											className="popup-row min-h-11 shrink-0 px-2 text-xs underline"
+											onClick={() => void setPageCaptureConsent(origin, false)}
+										>
+											Remove
+										</button>
+									</li>
+								))}
+							</ul>
 						</div>
-						<div className="flex items-start gap-3">
-							<img
-								src={logo}
-								alt=""
-								width={32}
-								height={32}
-								className="size-8 rounded-lg"
-							/>
-							<div className="min-w-0 flex-1">
-								<p className="text-sm font-semibold">
-									{NOTIFICATION_PREVIEWS[notificationPreview].title}
-								</p>
-								<p className="mt-1 text-xs leading-5 text-muted">
-									{NOTIFICATION_PREVIEWS[notificationPreview].message}
-								</p>
-							</div>
+					)}
+					{pageSummaries.length > 0 && (
+						<div className="mt-3 border-t border-line pt-3">
+							<p className="text-xs font-medium">Saved page excerpts</p>
+							<ul className="mt-1 divide-y divide-line">
+								{pageSummaries.map(({ origin, count }) => (
+									<li
+										key={origin}
+										className="flex min-h-11 items-center justify-between gap-3 py-1"
+									>
+										<span className="min-w-0 truncate text-xs">
+											{new URL(origin).host} · {count}
+										</span>
+										<button
+											type="button"
+											disabled={consentSaving}
+											aria-label={`Delete excerpts from ${new URL(origin).host} and pause capture`}
+											className="popup-row min-h-11 shrink-0 px-2 text-xs underline"
+											onClick={() => void deletePageEvidence(origin)}
+										>
+											Delete & pause
+										</button>
+									</li>
+								))}
+							</ul>
 							<button
 								type="button"
-								onClick={() => setNotificationPreview(null)}
-								aria-label="Dismiss preview"
-								className="popup-row px-2 text-xs"
+								disabled={consentSaving}
+								className="popup-quiet mt-2 min-h-11 px-3 text-xs"
+								onClick={() => void deletePageEvidence()}
 							>
-								×
+								Delete all & turn off page capture
 							</button>
 						</div>
-						<div className="mt-3 flex justify-end">
-							<span className="flex items-center gap-1.5 rounded-md border border-line bg-canvas px-3 py-2 text-xs">
-								<OpenAIMono aria-hidden="true" className="size-3.5" />
-								{NOTIFICATION_PREVIEWS[notificationPreview].button}
-							</span>
-						</div>
-					</aside>
-				)}
+					)}
+					{consentError && (
+						<p role="alert" className="mt-2 text-xs text-muted">
+							{consentError}
+						</p>
+					)}
+				</section>
 				{chatGptConnected === false && (
 					<aside
 						aria-label="ChatGPT connection"

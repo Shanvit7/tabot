@@ -22,6 +22,7 @@
 		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/checks/meaningful-events.check.ts",
 		"check:pipeline": "node --import ./resolve-hook.mjs src/checks/pipeline.check.ts",
 		"check:privacy": "node --import ./resolve-hook.mjs src/checks/privacy.check.ts",
+		"check:pageObservations": "node --import ./resolve-hook.mjs src/checks/page-observations.check.ts",
 		"check:exportFilename": "node --import ./resolve-hook.mjs src/checks/export-filename.check.ts",
 		"check:connectTargets": "node --import ./resolve-hook.mjs src/checks/connect-targets.check.ts",
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",

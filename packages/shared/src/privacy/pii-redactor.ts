@@ -14,7 +14,7 @@ export const piiRedactor: PiiRedactor = {
 		} catch (err) {
 			// Never log the source string — it is the PII we failed to strip.
 			logger.warn("pii redaction failed", {
-				error: err instanceof Error ? err.message : String(err),
+				code: err instanceof Error ? err.name : "unknown",
 			});
 			throw err;
 		}

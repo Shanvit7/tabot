@@ -59,7 +59,7 @@ export const RecurrenceMap = ({
 			>
 				<div className="mb-4 flex items-baseline justify-between gap-4">
 					<h2 className="text-xl font-semibold">Recurrence</h2>
-					<p className="work-meta text-[#476151]">
+					<p className="font-mono text-xs leading-[1.5] text-[#476151]">
 						{dayLabel(map.axis[0])} – {dayLabel(map.axis[map.axis.length - 1])}
 					</p>
 				</div>
@@ -80,7 +80,7 @@ export const RecurrenceMap = ({
 								}`}
 							>
 								<span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-									<span className="work-meta text-[#8fae95]">
+									<span className="font-mono text-xs leading-[1.5] text-[#8fae95]">
 										{String(row.index + 1).padStart(2, "0")}
 									</span>
 									<Favicon
@@ -115,7 +115,7 @@ export const RecurrenceMap = ({
 										/>
 									))}
 								</span>
-								<span className="work-meta text-right text-[#476151]">
+								<span className="text-right font-mono text-xs leading-[1.5] text-[#476151]">
 									{row.occurrenceCount}
 									{row.occurrenceCount === 1 ? " period" : " periods"}
 									<span className="block text-[#8fae95]">
@@ -135,7 +135,7 @@ export const RecurrenceMap = ({
 						</li>
 					))}
 				</ul>
-				<p className="work-meta mt-4 flex items-center gap-2 text-[#8fae95]">
+				<p className="mt-4 flex items-center gap-2 font-mono text-xs leading-[1.5] text-[#8fae95]">
 					<Legend busiest={busiest} />
 					each square is a day
 				</p>

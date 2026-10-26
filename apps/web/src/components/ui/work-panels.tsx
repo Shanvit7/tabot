@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 
 export const GraphLoading = ({
 	className = "min-h-105",
@@ -11,34 +11,12 @@ export const GraphLoading = ({
 	message?: string;
 	children?: ReactNode;
 }) => {
-	const ref = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		const element = ref.current;
-		if (!element) return;
-		let visible = false;
-		const update = () => {
-			element.dataset.animate = String(visible && !document.hidden);
-		};
-		const observer = new IntersectionObserver(([entry]) => {
-			visible = entry.isIntersecting;
-			update();
-		});
-		observer.observe(element);
-		document.addEventListener("visibilitychange", update);
-		return () => {
-			observer.disconnect();
-			document.removeEventListener("visibilitychange", update);
-		};
-	}, []);
-
 	return (
 		<div
-			ref={ref}
 			role="status"
 			aria-live="polite"
 			aria-atomic="true"
-			data-animate="false"
-			className={`graph-loader flex flex-col items-center justify-center gap-5 rounded-lg bg-[#0b1310] px-4 py-10 text-center ${className}`}
+			className={`flex flex-col items-center justify-center gap-5 rounded-lg bg-[#0b1310] px-4 py-10 text-center ${className}`}
 		>
 			<span className="inline-flex items-center gap-2 rounded-full border border-[#476151] px-3 py-1 text-[11px] font-semibold tracking-[0.14em] text-[#bfff00]">
 				<span
@@ -58,23 +36,13 @@ export const GraphLoading = ({
 					strokeWidth="2"
 				/>
 				<g className="fill-[#101d15] stroke-[#6f9c81]" strokeWidth="2">
-					<circle className="graph-loader-checkpoint" cx="32" cy="112" r="10" />
-					<circle className="graph-loader-checkpoint" cx="92" cy="48" r="10" />
-					<circle
-						className="graph-loader-checkpoint"
-						cx="164"
-						cy="104"
-						r="10"
-					/>
-					<circle className="graph-loader-checkpoint" cx="236" cy="48" r="10" />
-					<circle
-						className="graph-loader-checkpoint"
-						cx="284"
-						cy="112"
-						r="10"
-					/>
+					<circle className="fill-[#bfff00]" cx="32" cy="112" r="10" />
+					<circle cx="92" cy="48" r="10" />
+					<circle cx="164" cy="104" r="10" />
+					<circle cx="236" cy="48" r="10" />
+					<circle cx="284" cy="112" r="10" />
 				</g>
-				<g className="graph-loader-marker">
+				<g transform="translate(32 112)">
 					<rect
 						x="-9"
 						y="-10"

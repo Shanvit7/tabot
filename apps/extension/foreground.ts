@@ -1,4 +1,4 @@
-import type { TabEventType } from "@tabot/shared";
+import { sanitizeUrlForIngestion, type TabEventType } from "@tabot/shared";
 
 const STATE_KEY = "tabot_foreground";
 const ALARM = "tabot-foreground-sample";
@@ -9,7 +9,6 @@ interface ForegroundState {
 	tabId: number;
 	windowId: number;
 	url?: string;
-	favicon?: string;
 	timestamp: number;
 }
 
@@ -39,7 +38,22 @@ export const startForegroundTracking = (emit: Emit) => {
 		queue = queue
 			.then(async () => {
 				const stored = await chrome.storage.session.get(STATE_KEY);
-				const previous = stored[STATE_KEY] as ForegroundState | undefined;
+				const savedPrevious = stored[STATE_KEY] as ForegroundState | undefined;
+				const previous = savedPrevious
+					? {
+							...savedPrevious,
+							url: savedPrevious.url
+								? await sanitizeUrlForIngestion(savedPrevious.url).catch(
+										() => undefined,
+									)
+								: undefined,
+						}
+					: undefined;
+				if (savedPrevious) {
+					if (previous)
+						await chrome.storage.session.set({ [STATE_KEY]: previous });
+					else await chrome.storage.session.remove(STATE_KEY);
+				}
 				const windows = enabled
 					? await chrome.windows.getAll({ populate: true })
 					: [];
@@ -52,13 +66,16 @@ export const startForegroundTracking = (emit: Emit) => {
 					tab?.id !== undefined &&
 					!tab.incognito &&
 					(await chrome.idle.queryState(IDLE_SECONDS)) === "active";
+				const cleanUrl =
+					active && tab?.url
+						? await sanitizeUrlForIngestion(tab.url).catch(() => undefined)
+						: undefined;
 				const next: ForegroundState | undefined =
 					active && tab
 						? {
 								tabId: tab.id as number,
 								windowId: tab.windowId,
-								url: tab.url,
-								favicon: tab.favIconUrl,
+								url: cleanUrl,
 								timestamp,
 							}
 						: undefined;

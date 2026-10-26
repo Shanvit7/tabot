@@ -163,40 +163,48 @@ try {
 		"saving cannot pretend a website was opened",
 	);
 
-	const home = await readFile(
-		new URL("../components/home-page.tsx", import.meta.url),
+	const workspace = await readFile(
+		new URL("../components/activity-workspace.tsx", import.meta.url),
 		"utf8",
 	);
 	const route = await readFile(
 		new URL("../routes/home.tsx", import.meta.url),
 		"utf8",
 	);
-	assert.doesNotMatch(
-		home,
-		/HomeConnections|ContextGraph|Explore connections|visits|raw event count/,
-		"dashboard does not expose raw event counts or old graph UI",
+	assert.match(
+		workspace,
+		/ActivityTrailMap/,
+		"home is the real-data trail map",
 	);
 	assert.match(
-		home,
-		/if \(!initialized \|\| redirecting \|\| !bookReady\)[\s\S]*?Loading local activity/,
-		"keep a clear loading state",
+		workspace,
+		/ActivityTimeline/,
+		"timeline is available from real data",
 	);
-	assert.doesNotMatch(
-		home,
-		/Loading your recent activity|setTimeout\(/,
-		"no plain-text loader regression or artificial waits",
-	);
-	assert.match(home, /useVirtualizer/, "large site lists stay virtualized");
-	assert.match(home, /useTrailbook/, "saved places use local collection state");
 	assert.match(
-		home,
-		/Rediscover/,
-		"production dashboard uses quest-board layout",
+		workspace,
+		/ActivityPatterns/,
+		"recurrences use real derived evidence",
+	);
+	assert.match(
+		workspace,
+		/useHomeData/,
+		"screens read extension-local activity",
+	);
+	assert.match(
+		workspace,
+		/Activity could not be loaded/,
+		"read failure is not an empty history",
 	);
 	assert.doesNotMatch(
+		workspace,
+		/prototype-data|sampleEvents|busySampleEvents/,
+		"production screens never import demo records",
+	);
+	assert.match(
 		route,
-		/<Home key=/,
-		"opening an activity must not erase search state",
+		/ActivityWorkspace view="map"/,
+		"home opens the map screen",
 	);
 	console.log("home-retrieval.check: passed");
 } finally {

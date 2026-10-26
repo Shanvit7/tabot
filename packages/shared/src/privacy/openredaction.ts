@@ -35,7 +35,7 @@ const getDetector = (): LiteOpenRedaction => {
 		redactionMode: "placeholder", // typed placeholders, not deletion
 		deterministic: true, // same value → same placeholder across an export
 		enableFalsePositiveFilter: false, // see note 1
-		enableCache: true, // repeated values (common in URLs) hit the cache
+		enableCache: false, // PII values must not be retained in a process-wide detector cache
 	});
 	return detector;
 };

@@ -159,23 +159,6 @@ export const readyContextsInRange = (
 			(to === undefined || c.startTimestamp <= to),
 	);
 
-// Wait past the context merge gap before treating its ID as final. Never
-// notify about old history, still-active threads, or thin contexts.
-export const nextNotifiableContext = (
-	contexts: BrowserContext[],
-	lastEnd: number,
-	now = Date.now(),
-): BrowserContext | undefined =>
-	contexts
-		.filter(
-			(c) =>
-				isAiReadyContext(c) &&
-				c.endTimestamp > lastEnd &&
-				c.endTimestamp <= now - 30 * 60_000 &&
-				c.endTimestamp >= now - 24 * 3_600_000,
-		)
-		.sort((a, b) => b.endTimestamp - a.endTimestamp)[0];
-
 // --- Free-text context search (MCP `search_context`) ---
 // Pure core: score contexts against query tokens by domain/sequence match. No
 // db, no LLM — callers supply a bounded context list (getRecentContexts).

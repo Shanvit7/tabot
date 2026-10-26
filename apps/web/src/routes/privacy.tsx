@@ -14,7 +14,7 @@ const Privacy = () => (
 				Privacy policy
 			</h1>
 			<p className="mt-4 text-sm text-[#8ca493]">
-				Last updated: October 14, 2026
+				Last updated: October 20, 2026
 			</p>
 			<p className="mt-6 max-w-2xl leading-7 text-[#c2d1c7]">
 				Here’s what Tabot records, what stays on your device, and what happens
@@ -70,10 +70,18 @@ const Privacy = () => (
 						search terms in the address.
 					</p>
 					<p className="mt-3">
-						Tabot does not record the keys you press, what you type, form
-						entries, passwords, page contents, screenshots, audio, or video.
-						“Keyboard activity” means only that activity happened; it does not
-						include the keys or text.
+						By default, Tabot does not save page text. You can separately opt in
+						for individual sites to save a few short excerpts from visible text
+						after it stays in view for a moment or you interact with the page.
+						This is not a page snapshot. Excerpts are saved locally, stay
+						separate from activity metrics, and are not returned to ChatGPT or
+						Claude. Capture excludes private browsing, sign-in pages, forms and
+						editable areas.
+					</p>
+					<p className="mt-3">
+						Tabot never records the keys you press, what you type, form entries,
+						passwords, screenshots, audio, or video. “Keyboard activity” means
+						only that activity happened; it does not include the keys or text.
 					</p>
 				</section>
 
@@ -120,7 +128,8 @@ const Privacy = () => (
 						as an activity summary, website names (including subdomains), dates
 						and times, counts, recurring-pattern details, or estimated activity
 						measures. These are structured results, not a single general
-						summary. Website names are not hidden or anonymized.
+						summary. Website names are not hidden or anonymized. Page excerpts
+						are not currently available to assistant tools.
 					</p>
 					<p className="mt-3">
 						The extension does not return raw event-by-event records, page paths
@@ -173,14 +182,16 @@ const Privacy = () => (
 						Keeping and deleting your data
 					</h2>
 					<p className="mt-3">
-						Your browsing records remain in Chrome on your device until you
-						clear Tabot’s extension data or remove the extension. Pausing
-						recording stops new activity from being recorded; it does not delete
-						what Tabot has already saved. To stop an assistant from accessing
-						Tabot, revoke its connection in that assistant’s settings. This does
-						not delete records stored on your device or its registration details
-						held by the connection service. You control exported files after
-						downloading them.
+						Activity records remain in Chrome on your device until you clear
+						Tabot’s extension data or remove the extension. Page excerpts are
+						kept for up to seven days or until their local storage reaches 25
+						MiB, whichever comes first. In the popup, you can remove excerpts
+						from a site or delete all excerpts; those actions also turn off page
+						capture for the affected sites. Pausing activity recording stops new
+						activity; it does not delete existing activity records. To stop an
+						assistant from accessing Tabot, revoke its connection in that
+						assistant’s settings. You control exported files after downloading
+						them.
 					</p>
 				</section>
 

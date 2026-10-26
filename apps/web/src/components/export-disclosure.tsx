@@ -94,7 +94,7 @@ export const ExportDisclosure = ({ derived }: { derived: Derived | null }) => {
 		}
 	};
 	return (
-		<details id="export" className="group mt-14 border-t pt-6 work-rule">
+		<details id="export" className="group mt-14 border-t border-work-line pt-6">
 			<summary className="flex min-h-11 cursor-pointer list-none items-start justify-between gap-6 py-1 [&::-webkit-details-marker]:hidden">
 				<span>
 					<span className="block text-lg font-semibold">
@@ -144,7 +144,7 @@ export const ExportDisclosure = ({ derived }: { derived: Derived | null }) => {
 							From
 							<input
 								type="date"
-								className="work-field"
+								className="min-h-11 rounded border border-work-muted bg-white px-3 py-2 text-work-ink"
 								disabled={busy}
 								value={from}
 								max={to || undefined}
@@ -159,7 +159,7 @@ export const ExportDisclosure = ({ derived }: { derived: Derived | null }) => {
 							To
 							<input
 								type="date"
-								className="work-field"
+								className="min-h-11 rounded border border-work-muted bg-white px-3 py-2 text-work-ink"
 								disabled={busy}
 								value={to}
 								min={from || undefined}
@@ -216,7 +216,7 @@ export const ExportDisclosure = ({ derived }: { derived: Derived | null }) => {
 				)}
 				<div className="mt-6 flex justify-end border-t border-(--work-line) pt-5">
 					<button
-						className="cursor-pointer work-button min-w-36 w-full gap-2 sm:w-auto"
+						className="inline-flex min-h-11 min-w-36 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-work-ink px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#304939] disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none sm:w-auto"
 						type="button"
 						onClick={download}
 						aria-busy={busy}

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { mock } from "node:test";
 import { eventIdentity, orderEvents, type StoredTabEvent } from "@tabot/shared";
 import { createEventPipeline } from "./event-pipeline";
@@ -246,6 +247,10 @@ const deps = {
 	pipeline: pages,
 	find: async (id: string) => history.get(id),
 	eligible: async () => enabled,
+	captureIdentity: async (value: unknown) =>
+		createHmac("sha256", "test-install-key")
+			.update(JSON.stringify(value))
+			.digest("hex"),
 };
 assert.equal(
 	(await ingestPageMessage({ ...message, version: 0 }, sender, deps)).status,
@@ -344,6 +349,61 @@ assert.equal(
 	).status,
 	"ignored",
 );
+const privateUrl = "https://example.com/work?token=private#private";
+const privateSender = {
+	...sender,
+	url: privateUrl,
+	tab: { ...sender.tab, url: privateUrl },
+};
+const privateEvent = {
+	...message,
+	id: `${instanceId}:606`,
+	sequence: 606,
+	documentUrl: privateUrl,
+};
+assert.equal(
+	(await ingestPageMessage(privateEvent, privateSender, deps)).status,
+	"persisted",
+);
+assert.equal(new URL(history.get(privateEvent.id)?.url as string).search, "");
+assert.match(
+	history.get(privateEvent.id)?.source?.captureIdentity ?? "",
+	/^[0-9a-f]{64}$/,
+);
+assert.equal(
+	JSON.stringify(history.get(privateEvent.id)).includes("token=private"),
+	false,
+);
+assert.equal(
+	(await ingestPageMessage(privateEvent, privateSender, deps)).status,
+	"persisted",
+	"sanitized committed replay remains idempotent",
+);
+assert.equal(
+	(
+		await ingestPageMessage(privateEvent, privateSender, {
+			...deps,
+			captureIdentity: async (value) =>
+				createHmac("sha256", "rotated-test-key")
+					.update(JSON.stringify(value))
+					.digest("hex"),
+		})
+	).status,
+	"rejected",
+	"changed keyed identity cannot replace committed event",
+);
+assert.equal(
+	(
+		await ingestPageMessage(privateEvent, privateSender, {
+			...deps,
+			captureIdentity: async () => {
+				throw new Error("key unavailable");
+			},
+		})
+	).code,
+	"privacy-processing-failed",
+	"key failure fails closed before persistence",
+);
 assert.equal(
 	(await ingestPageMessage(message, spaSender, deps)).status,
 	"persisted",
@@ -391,14 +451,16 @@ assert.equal(saturation.stats().active, 4);
 assert.ok(errors.includes("outbox-capacity"));
 // Historical type names survive normalization; no retired production producer is restored.
 const historical = [
-	{ ...row(800, 'SW_POPUP_OPEN'), metadata: { source: 'popup' as const } },
-	{ ...row(801, 'SW_TRACKING_TOGGLE'), metadata: { enabled: false } },
-	{ ...row(802, 'SW_DOWNLOAD'), metadata: { state: 0 } },
-	{ ...row(803, 'SW_LIFECYCLE'), metadata: { lifecycle: 'startup' as const } },
-	{ ...row(804, 'SCROLL'), metadata: { scrollY: 0 } },
+	{ ...row(800, "SW_POPUP_OPEN"), metadata: { source: "popup" as const } },
+	{ ...row(801, "SW_TRACKING_TOGGLE"), metadata: { enabled: false } },
+	{ ...row(802, "SW_DOWNLOAD"), metadata: { state: 0 } },
+	{ ...row(803, "SW_LIFECYCLE"), metadata: { lifecycle: "startup" as const } },
+	{ ...row(804, "SCROLL"), metadata: { scrollY: 0 } },
 ];
 const historicalAcks = historical.map((event) => pipeline.ingest(event));
-await microtasks(); pipeline.flush(); await Promise.all(historicalAcks);
+await microtasks();
+pipeline.flush();
+await Promise.all(historicalAcks);
 assert.deepEqual(commits.at(-1), historical);
 mock.timers.reset();
 console.log(

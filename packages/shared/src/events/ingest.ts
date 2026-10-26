@@ -75,7 +75,8 @@ export const normalizeEvent = (event: StoredTabEvent): StoredTabEvent => {
 		}
 	}
 	if (event.source) {
-		const { instanceId, sequence, documentId, documentUrl } = event.source;
+		const { instanceId, sequence, documentId, documentUrl, captureIdentity } =
+			event.source;
 		if (
 			!UUID_PATTERN.test(instanceId) ||
 			!integer(sequence) ||
@@ -83,7 +84,10 @@ export const normalizeEvent = (event: StoredTabEvent): StoredTabEvent => {
 			(documentId !== undefined &&
 				(typeof documentId !== "string" || documentId.length > 128)) ||
 			(documentUrl !== undefined &&
-				(typeof documentUrl !== "string" || documentUrl.length > 8192))
+				(typeof documentUrl !== "string" || documentUrl.length > 8192)) ||
+			(captureIdentity !== undefined &&
+				(typeof captureIdentity !== "string" ||
+					!/^[0-9a-f]{64}$/.test(captureIdentity)))
 		)
 			throw new EventValidationError("invalid-source");
 	}
@@ -115,7 +119,7 @@ export const eventIdentity = (event: StoredTabEvent): string =>
 		event.source?.instanceId,
 		event.source?.sequence,
 		event.source?.documentId,
-		event.source?.documentUrl,
+		event.source?.captureIdentity ?? event.source?.documentUrl,
 	]);
 
 export const storageErrorCode = (error: unknown): string => {

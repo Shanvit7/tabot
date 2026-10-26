@@ -7,6 +7,7 @@ Date.now = () => now;
 let focused = true;
 let idle = "active";
 let tabId = 1;
+let tabUrl = `https://site${tabId}.com`;
 let fail = false;
 const store: Record<string, unknown> = {};
 const emitted: { type: string; tabId: number; timestamp: number }[] = [];
@@ -20,7 +21,7 @@ const tab = () => ({
 	windowId: 1,
 	active: true,
 	incognito: false,
-	url: `https://site${tabId}.com`,
+	url: tabUrl,
 });
 
 globalThis.chrome = {
@@ -77,8 +78,18 @@ try {
 		emitted.push({ type, ...state });
 	};
 	const sample = startForegroundTracking(emit);
+	tabUrl = "https://site1.com/path?token=private#private";
 	await sample();
 	assert.equal(emitted.at(-1)?.type, "PAGE_VISIBLE");
+	assert.equal(
+		new URL((store.tabot_foreground as { url: string }).url).search,
+		"",
+	);
+	assert.equal(
+		(store.tabot_foreground as { favicon?: string }).favicon,
+		undefined,
+	);
+	tabUrl = "https://site1.com";
 	assert.equal(alarms[0].periodInMinutes, 0.5);
 	assert.ok(
 		activated.length &&

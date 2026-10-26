@@ -6,8 +6,9 @@
 	"private": true,
 	"scripts": {
 		"check:ingest": "node --import ../../packages/shared/resolve-hook.mjs ingest.check.mts",
+		"check:pageCaptureConsent": "node --import ../../packages/shared/resolve-hook.mjs page-capture-consent.check.mts",
+		"check:pageCapture": "node --import ../../packages/shared/resolve-hook.mjs page-capture.check.mts",
 		"check:popup": "node --import ../../packages/shared/resolve-hook.mjs popup-model.check.mts",
-		"check:notifications": "node --import ../../packages/shared/resolve-hook.mjs notification-model.check.mts",
 		"check:metricsRelay": "node --experimental-test-module-mocks --import ../../packages/shared/resolve-hook.mjs relay-metrics.check.mts",
 		"check:foreground": "node --import ../../packages/shared/resolve-hook.mjs foreground.check.mts",
 		"predev": "tailwindcss -i ./popup.css -o ./popup.tailwind.css",
@@ -42,8 +43,7 @@
 			"webNavigation",
 			"windows",
 			"idle",
-			"alarms",
-			"notifications"
+			"alarms"
 		],
 		"host_permissions": [
 			"<all_urls>"

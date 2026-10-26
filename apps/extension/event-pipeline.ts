@@ -6,7 +6,10 @@ import {
 	type InsertEventsResult,
 	isTransientStorageError,
 	normalizeEvent,
+	normalizePageObservation,
 	type StatsSnapshot,
+	type StoredIngestRecord,
+	type StoredPageObservation,
 	type StoredTabEvent,
 	storageErrorCode,
 } from "@tabot/shared";
@@ -31,8 +34,16 @@ const BOUNDARIES = new Set([
 	"TAB_REMOVED",
 	"SW_WINDOW_FOCUS",
 ]);
-type Entry = {
-	row: StoredTabEvent;
+type IngestRecord = StoredIngestRecord;
+const isPageObservation = (row: IngestRecord): row is StoredPageObservation =>
+	"kind" in row && row.kind === "page-observation";
+const normalizeRecord = (row: IngestRecord): IngestRecord =>
+	isPageObservation(row) ? normalizePageObservation(row) : normalizeEvent(row);
+const recordIdentity = (row: IngestRecord): string =>
+	isPageObservation(row) ? row.captureIdentity : eventIdentity(row);
+
+type Entry<T extends IngestRecord> = {
+	row: T;
 	bytes: number;
 	admittedAt: number;
 	collectedAt: number;
@@ -44,8 +55,8 @@ type Entry = {
 type CommitResult =
 	| { committed: true; counts: InsertEventsResult }
 	| { committed: false; code: string };
-type Options = {
-	commit: (rows: StoredTabEvent[]) => Promise<InsertEventsResult>;
+type Options<T extends IngestRecord> = {
+	commit: (rows: T[]) => Promise<InsertEventsResult>;
 	onBlocked?: (recoverable: boolean) => void;
 	onHealthy?: () => void;
 	// Test knobs; production uses defaults above.
@@ -55,24 +66,26 @@ type Options = {
 };
 
 /** In-memory admission is NOT durability. Only commit() may resolve persisted ACKs. */
-export const createEventPipeline = (options: Options) => {
+export const createEventPipeline = <T extends IngestRecord = StoredTabEvent>(
+	options: Options<T>,
+) => {
 	const limits = { ...INGEST_LIMITS, ...options.limits };
 	const now = options.now ?? (() => performance.now());
-	const outstanding = new Map<string, Entry>();
+	const outstanding = new Map<string, Entry<T>>();
 	const counters = createEmptyStats(limits.rows);
 	let bytes = 0;
 	let deadline: number | null = null;
-	let held: Entry[] | null = null;
+	let held: Entry<T>[] | null = null;
 	let recoverable = false;
 	let retryAfter = 0;
 	let health: StatsSnapshot["health"] = "healthy";
 	const samples: StatsSnapshot["samples"] = [];
-	const release = (entry: Entry, ack: IngestAck) => {
+	const release = (entry: Entry<T>, ack: IngestAck) => {
 		entry.respond(ack);
 		outstanding.delete(entry.row.id);
 		bytes -= entry.bytes;
 	};
-	const block = (batch: Entry[], code: string, canRecover: boolean) => {
+	const block = (batch: Entry<T>[], code: string, canRecover: boolean) => {
 		writer.stop(); // Never abort active IndexedDB work or clear pending batches.
 		held = batch;
 		health = "blocked";
@@ -83,8 +96,8 @@ export const createEventPipeline = (options: Options) => {
 			entry.respond({ status: "retryable", code });
 		options.onBlocked?.(canRecover);
 	};
-	const writer = new AsyncQueuer<Entry[]>(
-		async (batch): Promise<CommitResult> => {
+	const writer = new AsyncQueuer<Entry<T>[]>(
+		async (batch: Entry<T>[]): Promise<CommitResult> => {
 			const started = now();
 			try {
 				const counts = await options.commit(batch.map(({ row }) => row));
@@ -140,13 +153,22 @@ export const createEventPipeline = (options: Options) => {
 				counters.lastProcessedAt = counters.lastCommitAt = Date.now();
 				counters.lastErrorCode = null;
 				health = "healthy";
-				for (const entry of batch)
-					release(entry, { status: "persisted", id: entry.row.id });
+				for (const entry of batch) {
+					const code = isPageObservation(entry.row)
+						? result.counts.ignoredPages?.[entry.row.id]
+						: undefined;
+					if (code) {
+						counters.ignored++;
+						release(entry, { status: "ignored", code });
+					} else {
+						release(entry, { status: "persisted", id: entry.row.id });
+					}
+				}
 				options.onHealthy?.();
 			},
 		},
 	);
-	const collector = new Batcher<Entry>(
+	const collector = new Batcher<Entry<T>>(
 		(batch) => {
 			// 0.22.0 clears items, not its old size/boundary timer. Cancel it explicitly.
 			collector.cancel();
@@ -179,21 +201,21 @@ export const createEventPipeline = (options: Options) => {
 		return true;
 	};
 	const ingest = (
-		input: StoredTabEvent,
+		input: T,
 		prepare?: () => Promise<IngestAck | null>,
 		native = false,
 	): Promise<IngestAck> => {
 		counters.observed++;
-		let row: StoredTabEvent;
+		let row: T;
 		try {
-			row = normalizeEvent(input);
+			row = normalizeRecord(input) as T;
 		} catch {
 			counters.rejected++;
 			return Promise.resolve({ status: "rejected", code: "invalid-event" });
 		}
 		const previous = outstanding.get(row.id);
 		if (previous) {
-			if (eventIdentity(previous.row) !== eventIdentity(row)) {
+			if (recordIdentity(previous.row) !== recordIdentity(row)) {
 				counters.rejected++;
 				return Promise.resolve({ status: "rejected", code: "id-conflict" });
 			}
@@ -215,7 +237,8 @@ export const createEventPipeline = (options: Options) => {
 			return Promise.resolve({ status: "retryable", code: "writer-blocked" });
 		}
 		const size = eventBytes(row);
-		const reserved = native || BOUNDARIES.has(row.type);
+		const reserved =
+			native || (!isPageObservation(row) && BOUNDARIES.has(row.type));
 		if (
 			outstanding.size >= limits.rows - (reserved ? 0 : limits.reserveRows) ||
 			bytes + size > limits.bytes - (reserved ? 0 : limits.reserveBytes)
@@ -223,11 +246,11 @@ export const createEventPipeline = (options: Options) => {
 			counters.rejected++;
 			return Promise.resolve({ status: "retryable", code: "busy" });
 		}
-		let respond!: Entry["respond"];
+		let respond!: Entry<T>["respond"];
 		const promise = new Promise<IngestAck>((resolve) => {
 			respond = resolve;
 		});
-		const entry: Entry = {
+		const entry: Entry<T> = {
 			row,
 			bytes: size,
 			admittedAt: now(),
@@ -258,7 +281,8 @@ export const createEventPipeline = (options: Options) => {
 				entry.collectedAt = now();
 				if (deadline === null) deadline = now() + limits.windowMs;
 				collector.addItem(entry);
-				if (BOUNDARIES.has(row.type)) collector.flush();
+				if (!isPageObservation(row) && BOUNDARIES.has(row.type))
+					collector.flush();
 			} catch (error) {
 				counters.lastErrorCode = storageErrorCode(error);
 				if (health === "healthy") health = "unavailable";

@@ -19,7 +19,7 @@ export const Sessions = ({
 	return (
 		<section
 			aria-label="Browsing sessions"
-			className="session-recap mt-5 border-t border-(--session-line) pt-4"
+			className="mt-5 border-t border-(--session-line) pt-4 text-(--session-ink) [--session-raised:#1e3427] [--session-ink:#e8f3e8] [--session-muted:#a9c6b1] [--session-line:#34503e] [--session-accent:#bfff00]"
 		>
 			<h4 className="flex items-center gap-2 text-sm font-semibold text-(--session-ink)">
 				<Compass

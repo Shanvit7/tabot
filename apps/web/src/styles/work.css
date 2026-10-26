@@ -280,6 +280,13 @@
 	}
 }
 
+.garden-quest > p {
+	margin-top: 4px;
+	color: var(--work-muted);
+	font-size: 13px;
+	line-height: 1.5;
+}
+
 /* Activities Signal Garden: bounded SVG relationships, no idle motion. */
 .work-shell .activities-heading h1 {
 	font-size: clamp(30px, 3vw, 44px);
@@ -485,12 +492,6 @@
 	color: var(--work-ink);
 	font-size: 17px;
 	font-weight: 600;
-}
-.garden-quest p {
-	margin-top: 4px;
-	color: var(--work-muted);
-	font-size: 13px;
-	line-height: 1.5;
 }
 .garden-evidence {
 	display: grid;

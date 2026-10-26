@@ -20,7 +20,7 @@ Tabot collects browser activity on the user's device, makes recent activity sear
 
 ## Operating Context
 
-- **Capture:** Chrome extension (Manifest V3, Plasmo). Chrome tab/window/navigation APIs + content scripts: tab lifecycle, navigation (URL sidecar), page visibility, scroll, clicks, key-occurrence.
+- **Capture:** Chrome extension (Manifest V3, Plasmo). Chrome tab/window/navigation APIs + content scripts: tab lifecycle, navigation (URL sidecar), page visibility, scroll, clicks, key-occurrence, and separately consented visible-text excerpts.
 - **Transport:** bounded Pacer batching and serial writes in the extension service worker; no SharedArrayBuffer or transport worker.
 - **Persistence:** Dexie 4.x over IndexedDB (`tabot_events`), fully local.
 - **Derivation:** pure, lazy, at read time — events → sessions → anchors → temporal graph → episodes → contexts → memories → retrieval → live browser-context snapshot (graphology).
@@ -31,8 +31,9 @@ Tabot collects browser activity on the user's device, makes recent activity sear
 ## Capabilities and Constraints
 
 - **Local browser record.** Raw browser activity and its visual derivations stay on-device. No cloud history sync or Tabot account is required. If the user connects ChatGPT’s Tabot plugin and asks a question, ChatGPT requests a selected, sanitized result (such as an activity summary, pattern details, or activity metrics) from the extension. The online MCP connection service routes requests and results and stores connection/OAuth state, not browser history or tool results.
-- **Never recorded:** typed text, key values, form values, passwords, DOM snapshots, page content, screenshots.
-- **Raw events are immutable source data.** Every derived object is disposable and rebuildable from raw events; changing a derivation algorithm never requires data migration.
+- **Never recorded:** typed text, key values, form values, passwords, whole-page snapshots, screenshots.
+- **Visible excerpts:** off by default; enabled per exact site. At most four visible fragments are saved after a one-second foreground dwell or trusted interaction. Capture excludes incognito, authentication routes, editable/form surfaces, and content not confirmed visible. Excerpts stay local and are not included in assistant requests. PII detection covers selected patterns, not every name or secret.
+- **Evidence boundaries:** raw events stay immutable; page excerpts use a separate local store. Excerpts never inflate visit, duration, session, readiness, or recurring-pattern metrics. Evidence-backed outcome claims must link to observations that support them.
 - **Deterministic and bounded:** same input produces same output; all derived/retrieval reads have practical caps.
 - **Evidence first:** derived values retain IDs, domains, timestamps, counts, similarity, staleness, and recurrence data that support them. Evidence signals, not confidence claims.
 - **Event taxonomy:** `behavioral` / `contextual` / `diagnostic`. Diagnostic events never influence derivation. SW telemetry reduced in Phase 2 to a single contextual signal, `SW_WINDOW_FOCUS` — it is never a session boundary and only strengthens existing graph edges.

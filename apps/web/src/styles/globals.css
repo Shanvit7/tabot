@@ -89,6 +89,13 @@
 	--color-preview-trace: #0b1310;
 	--color-preview-raised: #101d15;
 	--color-preview-text: #e8f3e8;
+	--color-work-canvas: var(--work-canvas);
+	--color-work-surface: var(--work-surface);
+	--color-work-raised: var(--work-raised);
+	--color-work-ink: var(--work-ink);
+	--color-work-muted: var(--work-muted);
+	--color-work-line: var(--work-line);
+	--color-work-accent: var(--work-accent);
 	--color-black: #000000;
 	--color-white: #ffffff;
 
@@ -103,6 +110,13 @@
 :root {
 	/* ── Brand ── */
 	--lime: #bfff00;
+	--work-canvas: #fff;
+	--work-surface: #f5f8f4;
+	--work-raised: #e9eee8;
+	--work-ink: #15251b;
+	--work-muted: #476151;
+	--work-line: #d2ddd2;
+	--work-accent: #bfff00;
 	--lime-hsl: 72 100% 50%;
 	--black: #000000;
 

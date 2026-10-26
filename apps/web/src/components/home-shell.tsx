@@ -1,7 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Activity, House, Repeat2 } from "lucide-react";
+import { List, Map as MapIcon, Repeat2 } from "lucide-react";
 import { EMAIL } from "~/lib/constants";
-import "~/styles/work.css";
 
 export const HomeShell = ({
 	children,
@@ -12,14 +11,14 @@ export const HomeShell = ({
 }) => {
 	const path = useRouterState({ select: (state) => state.location.pathname });
 	return (
-		<div className="work-shell">
+		<div className="min-h-screen bg-work-canvas text-work-ink selection:bg-work-accent selection:text-work-ink [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-work-ink [&_a:focus-visible]:outline-offset-[3px] [&_a:focus-visible]:shadow-[0_0_0_5px_var(--work-accent)] [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-work-ink [&_button:focus-visible]:outline-offset-[3px] [&_button:focus-visible]:shadow-[0_0_0_5px_var(--work-accent)] [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-work-ink [&_input:focus-visible]:outline-offset-[3px] [&_input:focus-visible]:shadow-[0_0_0_5px_var(--work-accent)] [&_summary:focus-visible]:outline-2 [&_summary:focus-visible]:outline-work-ink [&_summary:focus-visible]:outline-offset-[3px] [&_summary:focus-visible]:shadow-[0_0_0_5px_var(--work-accent)] [&_a]:[text-underline-offset:3px]">
 			<a
 				href="#work-content"
 				className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-80 focus:bg-white focus:p-3"
 			>
 				Skip to content
 			</a>
-			<header className="border-b work-rule">
+			<header className="border-b border-work-line">
 				<div className="mx-auto flex max-w-290 flex-wrap items-center justify-between gap-x-6 gap-y-4 px-4 py-5 sm:px-6 lg:px-8">
 					<Link
 						to="/home"
@@ -39,8 +38,8 @@ export const HomeShell = ({
 					>
 						{(
 							[
-								{ to: "/home", label: "Home", icon: House },
-								{ to: "/activities", label: "Activities", icon: Activity },
+								{ to: "/home", label: "Trail map", icon: MapIcon },
+								{ to: "/activities", label: "Timeline", icon: List },
 								{
 									to: "/recurring-patterns",
 									label: "Recurring patterns",
@@ -52,7 +51,7 @@ export const HomeShell = ({
 								key={to}
 								to={to}
 								aria-current={path === to ? "page" : undefined}
-								className={`inline-flex min-h-11 items-center gap-2 border-b-2 transition-colors ${path === to ? "border-[#15251b] text-[#15251b]" : "border-transparent text-[#476151] hover:text-[#15251b]"}`}
+								className={`inline-flex min-h-11 items-center gap-2 border-b-2 transition-colors ${path === to ? "border-work-ink text-work-ink" : "border-transparent text-work-muted hover:text-work-ink"}`}
 							>
 								<Icon aria-hidden="true" className="size-4" />
 								{label}
@@ -73,7 +72,7 @@ export const HomeShell = ({
 				)}
 				{children}
 			</main>
-			<footer className="border-t work-rule px-4 py-6 text-center text-xs text-[#476151]">
+			<footer className="border-t border-work-line px-4 py-6 text-center text-xs text-work-muted">
 				<p>
 					Browser activity stays local. Connected tools receive selected data
 					only when you ask.
@@ -84,7 +83,7 @@ export const HomeShell = ({
 				>
 					<Link
 						to="/privacy"
-						className="inline-flex min-h-11 items-center rounded-sm px-2 underline hover:text-(--work-ink)"
+						className="inline-flex min-h-11 items-center rounded-sm px-2 underline hover:text-work-ink"
 					>
 						Privacy
 					</Link>
@@ -93,7 +92,7 @@ export const HomeShell = ({
 						Any feedback or complaints? Reach out to{" "}
 						<a
 							href={`mailto:${EMAIL}?subject=Hey%20Tabot%2C%20let%27s%20talk`}
-							className="inline-flex min-h-11 select-all items-center rounded-sm underline hover:text-(--work-ink)"
+							className="inline-flex min-h-11 select-all items-center rounded-sm underline hover:text-work-ink"
 						>
 							{EMAIL}
 						</a>

@@ -8,6 +8,7 @@ import type { BrowserContext } from "../contexts/contexts.ts";
 import type { StoredTabEvent } from "../events/db.ts";
 import { logger } from "../lib/logger.ts";
 import type { Memory } from "../memories/memories.ts";
+import { sanitizeEventForIngestion } from "../privacy/ingest.ts";
 import { piiRedactor } from "../privacy/pii-redactor.ts";
 import { sanitizeDerived } from "../privacy/sanitize.ts";
 import { buildExportJsonl, derive } from "../share/export.ts";
@@ -49,6 +50,32 @@ const redact = async (input: string): Promise<string> =>
 		event.source.documentUrl.includes("john@example.com"),
 		"source mutated",
 	);
+}
+
+// Ingestion sanitizes before the Dexie write boundary.
+{
+	const event = {
+		...ev(
+			T0,
+			"NAVIGATION",
+			1,
+			"https://example.com/users/john%40example.com?token=secret#private",
+		),
+		favicon: "https://example.com/favicon.ico?user=john@example.com",
+		source: {
+			instanceId: "12345678-1234-1234-1234-123456789012",
+			sequence: 1,
+			documentUrl: "https://example.com/?q=john@example.com",
+		},
+	};
+	const clean = await sanitizeEventForIngestion(event);
+	const serialized = JSON.stringify(clean);
+	assert.ok(!serialized.toLowerCase().includes("john"));
+	assert.ok(!serialized.includes("secret"));
+	assert.ok(!serialized.includes("private"));
+	assert.equal(clean.favicon, undefined);
+	assert.equal(new URL(clean.url as string).search, "");
+	assert.equal(new URL(clean.url as string).hash, "");
 }
 
 // --- 1. primitives ---

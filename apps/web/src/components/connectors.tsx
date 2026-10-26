@@ -56,7 +56,7 @@ export const Connectors = () => {
 	return (
 		<section
 			aria-labelledby="connectors-heading"
-			className="work-rule mt-14 border-t pt-6"
+			className="mt-14 border-t border-work-line pt-6"
 		>
 			<div>
 				<h2

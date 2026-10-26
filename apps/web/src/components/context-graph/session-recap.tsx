@@ -73,7 +73,7 @@ export const SessionRecap = ({
 		<dialog
 			ref={dialogRef}
 			aria-labelledby={titleId}
-			className="session-recap session-dialog"
+			className="fixed inset-0 m-0 flex h-dvh max-h-dvh w-full max-w-none flex-col border-0 bg-[#101c16] p-0 text-[#e8f3e8] [--session-raised:#1e3427] [--session-ink:#e8f3e8] [--session-muted:#a9c6b1] [--session-line:#34503e] [--session-accent:#bfff00] [color-scheme:dark] [scrollbar-color:#a9c6b1_#101c16] backdrop:bg-[rgb(4_12_8_/_76%)] open:flex sm:m-auto sm:h-auto sm:max-h-[min(860px,calc(100dvh-64px))] sm:w-[min(840px,calc(100vw-64px))] sm:rounded-2xl sm:shadow-[0_24px_80px_rgb(0_0_0_/_40%)] [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-[#bfff00] [&_button:focus-visible]:outline-offset-[3px] [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-[#bfff00] [&_a:focus-visible]:outline-offset-[3px] [&_summary:focus-visible]:outline-2 [&_summary:focus-visible]:outline-[#bfff00] [&_summary:focus-visible]:outline-offset-[3px]"
 			onCancel={(event) => {
 				event.preventDefault();
 				onClose();
@@ -92,7 +92,7 @@ export const SessionRecap = ({
 				}
 			}}
 		>
-			<header className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--session-line)] px-5 py-5 sm:px-8 sm:py-6">
+			<header className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--session-line)] px-5 pt-[max(20px,env(safe-area-inset-top))] pb-5 sm:px-8 sm:py-6">
 				<div className="min-w-0">
 					<h2
 						id={titleId}
@@ -126,7 +126,7 @@ export const SessionRecap = ({
 					<X aria-hidden="true" className="size-5" />
 				</button>
 			</header>
-			<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 sm:px-8">
+			<div className="min-h-0 flex-1 scroll-p-4 overflow-y-auto overscroll-contain px-5 py-6 sm:px-8">
 				<dl className="grid grid-cols-3 divide-x divide-[var(--session-line)] border-b border-[var(--session-line)] pb-6 text-center">
 					<div className="px-2">
 						<dt className="text-xs text-[var(--session-muted)] sm:text-sm">

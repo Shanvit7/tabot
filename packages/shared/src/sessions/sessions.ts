@@ -8,7 +8,11 @@ import {
 	activeSpans,
 	foregroundEvents,
 } from "../activities/foreground";
-import type { StoredTabEvent, TabotDatabase } from "../events/db";
+import {
+	type StoredTabEvent,
+	sanitizeEventsForRead,
+	type TabotDatabase,
+} from "../events/db";
 import type { TabEventType } from "../events/events";
 
 export interface TabParticipation {
@@ -318,14 +322,16 @@ export const getSessions = async (
 				: end !== undefined
 					? await db.events.where("timestamp").belowOrEqual(end).toArray()
 					: await db.events.toArray();
-	return sessionize(events);
+	return sessionize(await sanitizeEventsForRead(events));
 };
 
 export const getSessionById = async (
 	db: TabotDatabase,
 	id: string,
 ): Promise<Session | undefined> => {
-	const sessions = sessionize(await db.events.toArray());
+	const sessions = sessionize(
+		await sanitizeEventsForRead(await db.events.toArray()),
+	);
 	return sessions.find((s) => s.id === id);
 };
 
@@ -333,6 +339,8 @@ export const getRecentSessions = async (
 	db: TabotDatabase,
 	limit = 10,
 ): Promise<Session[]> => {
-	const sessions = sessionize(await db.events.toArray());
+	const sessions = sessionize(
+		await sanitizeEventsForRead(await db.events.toArray()),
+	);
 	return sessions.slice(-limit);
 };

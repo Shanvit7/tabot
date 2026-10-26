@@ -1,6 +1,6 @@
 # Tabot Technical Specification
 
-> **Technical source of truth for Tabot's architecture and deterministic derived layer.** Supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`) and incorporates the former v0.2 product plan with [`system.md`](./system.md). Audited against working-tree code, including staged changes, on 2026-10-09. Implementation, deployment and live acceptance are separate statuses. Release gaps and acceptance are documented below and in the companion walkthrough.
+> **Technical source of truth for Tabot's architecture and deterministic derived layer.** Supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`) and incorporates the former v0.2 product plan with [`system.md`](./system.md). Audited against working-tree code on 2026-10-20. Implementation, deployment and live acceptance are separate statuses. Release gaps and acceptance are documented below and in the companion walkthrough.
 
 ---
 
@@ -14,7 +14,7 @@ Chrome tab APIs + content script
   -> Pacer Batcher (128 rows / fixed first-item 25 ms window)
   -> Pacer AsyncQueuer (FIFO, concurrency 1)
   -> atomic Dexie / IndexedDB transaction -> commit -> persisted ACK
-  -> pure lazy derivation:
+  -> events derive activity; optional page observations derive bounded evidence separately
      events -> sessions -> anchors -> graph -> episodes -> contexts -> memories -> retrieval
   -> live browser-context snapshot
 ```
@@ -25,13 +25,13 @@ Raw browser events remain local. The ChatGPT integration uses Tabot’s online M
 
 1. **Raw events are immutable source data.** Every derived object is disposable and rebuildable.
 2. **No semantic claims from sparse telemetry.** The system may report domains, timestamps, counts, overlaps, recurrences, and similarity scores; it must not assert what a user was doing.
-3. **No new telemetry for the derived layer.** Use the existing event stream until Phase 7 evaluates whether it is sufficient.
+3. **Separate evidence domains.** Page excerpts require independent opt-in and never become lifecycle events or behavioral metrics.
 4. **Deterministic, with bounded results.** Same input and supplied clock produce the same output. Result counts/payloads have caps, but several local derivations scan the full retained event store; output bounds are not input-cost bounds.
 5. **Evidence first.** Derived values retain IDs, domains, timestamps, counts, similarity, staleness, and recurrence data that support them.
 
 ### Privacy boundary
 
-`KEY_ACTIVITY` records only that activity happened, never typed text, key values, characters or form/input values. Tabot does not capture password fields, DOM snapshots or page content. Raw URL sidecars can contain paths/query values and remain local; authorized tool results and user-controlled downloads are separate privacy boundaries. Sanitized derived results **do leave the device** when requested through ChatGPT (§16); “local-first” does not mean no network traffic or no sharing.
+`KEY_ACTIVITY` records only that activity happened, never typed text, key values, characters or form/input values. Page excerpts are off by default, exact-origin opt-in, and restricted to bounded text fragments that pass current viewport, clipping and occlusion checks after one-second foreground dwell or trusted interaction. Password/form/editor content, auth routes, incognito and whole-page snapshots are excluded. Page excerpts stay local and are not included in assistant tools. Raw URL sidecars can contain paths/query values and remain local; authorized tool results and user-controlled downloads are separate privacy boundaries. Sanitized derived results **do leave the device** when requested through ChatGPT (§16); “local-first” does not mean no network traffic or no sharing.
 
 ---
 
@@ -42,7 +42,7 @@ Raw browser events remain local. The ChatGPT integration uses Tabot’s online M
 - **Language/package manager:** TypeScript (ESNext, bundler resolution), pnpm workspaces.
 - **Scheduling:** TanStack Pacer 0.22.0 Batcher + serial AsyncQueuer in the same MV3 worker; no production SAB/Atomics or transport Web Worker.
 - **Rate shaping:** Pacer 150 ms scroll/key throttlers and bounded transport retries at the content-script boundary.
-- **Persistence:** Dexie 4.x over IndexedDB database `tabot_events`, `events` table.
+- **Persistence:** Dexie 4.x over IndexedDB database `tabot_events`; immutable activity `events` and separate opt-in page `pages` evidence table.
 - **Graph substrate:** graphology.
 - **Optional relay:** Hono + MCP SDK on Cloudflare Workers, Durable Objects for OAuth/installation state, authenticated WebSocket to the extension. No remote browser-history store.
 
@@ -51,9 +51,9 @@ tabot/
 ├── apps/
 │   ├── extension/
 │   │   ├── background.ts                # native producers, ingest wiring, readers, messaging
-│   │   ├── contents/tabot.ts            # page-level telemetry collection
+│   │   ├── contents/tabot.ts            # page telemetry and consent-gated visible excerpts
 │   │   ├── popup.tsx                    # activity recap, progress, new-summary CTA
-│   │   ├── popup-model.ts, notification-model.ts
+│   │   ├── popup-model.ts
 │   │   ├── foreground.ts               # focused/idle-aware sampling
 │   │   └── relay.ts                    # authenticated WebSocket + local tool handlers
 │   ├── mcp-server/                      # optional ChatGPT MCP/OAuth relay
@@ -63,6 +63,7 @@ tabot/
 │       └── src/components/              # landing, dashboard, and UI components
 ├── packages/shared/src/
 │   ├── events/                         # ingest validation, metadata, atomic Dexie, historical buffer experiment
+│   ├── pages/                          # sanitized page observations and bounded evidence reads
 │   ├── sessions/                       # sessionization
 │   ├── activities/                     # anchors, episodes, foreground, metrics, SW semantics
 │   ├── contexts/, memories/, recall/    # derivation, retrieval and live snapshot
@@ -132,8 +133,8 @@ interface StoredTabEvent {
   tabId: number;
   windowId: number;
   timestamp: number; // Date.now() at capture
-  url?: string;      // event-specific snapshot BEFORE asynchronous admission
-  favicon?: string;  // local visual sidecar; stripped by sanitized export/tool projections
+  url?: string;      // new writes are minimized/redacted before pipeline admission
+  favicon?: string;  // legacy field; omitted from new writes
   metadata?: { x?: number; y?: number; scrollY?: number; previousWindowId?: number; enabled?: boolean; state?: number };
   source?: { instanceId: string; sequence: number; documentId?: string };
 }
@@ -147,7 +148,7 @@ IDs are generated once at capture and reused for retries. Committed duplicates a
 - `SCROLL` observes `window` plus nested elements with `overflow-y: auto|scroll` and `scrollHeight > clientHeight`.
 - `CLICK`, `PAGE_VISIBLE`, and `PAGE_HIDDEN` are emitted directly.
 - Chrome tab lifecycle and navigation events are not throttled.
-- `TAB_REMOVED` cleans its `tabMeta` entry. `TAB_CREATED` and `TAB_UPDATED`, plus navigation handling, update sidecar URL/title metadata.
+- URL/title/favicon values are no longer retained in the in-memory `tabMeta` sidecar. Lifecycle events use the Chrome snapshot available at capture.
 
 ### Metrics and UI boundary
 
@@ -550,7 +551,7 @@ pnpm --filter @tabot/shared run swDerivation
 pnpm --filter @tabot/shared run swGraph
 pnpm --filter @tabot/shared run swEpisodes
 pnpm --filter extension check:popup
-pnpm --filter extension check:notifications
+
 pnpm --filter extension check:metricsRelay
 pnpm --filter mcp-server check:activityMetrics
 pnpm --filter extension build
@@ -678,7 +679,7 @@ Production configuration targets `https://tabot-mcp.shanvit7.workers.dev/mcp`; d
 
 ### Runtime connection destination and onboarding
 
-Web dashboard, extension popup and notification CTAs use shared `resolveChatGptConnectUrl()` at runtime. It fetches `GET /client-config` from the Worker with a 3-second timeout. The endpoint returns `{ marketplaceUrl: string | null }`; an absent or invalid `CHATGPT_MARKETPLACE_URL` returns `null` and selects the prefilled setup prompt. Configured destinations are accepted only for HTTPS `chatgpt.com` URLs. `/client-config` is public and cached for 60 seconds; other Worker routes remain `no-store`. The response contains no secrets or browser data.
+Web dashboard and extension popup use shared `resolveChatGptConnectUrl()` at runtime. It fetches `GET /client-config` from the Worker with a 3-second timeout. The endpoint returns `{ marketplaceUrl: string | null }`; an absent or invalid `CHATGPT_MARKETPLACE_URL` returns `null` and selects the prefilled setup prompt. Configured destinations are accepted only for HTTPS `chatgpt.com` URLs. `/client-config` is public and cached for 60 seconds; other Worker routes remain `no-store`. The response contains no secrets or browser data.
 
 The prompt guides users through account setup: ChatGPT Plugins → top-right **Add** → **Add custom MCP server**; enter Name `Tabot`, a discovery-oriented description, production MCP Server URL, and OAuth; acknowledge the risk notice and authorize. Server registration and adding/enabling the resulting plugin on the ChatGPT account are treated as separate steps. The prompt does not claim completion until the plugin is available. The current prompt fallback is also used on timeout, fetch failure, `null`, or rejected config URL.
 
@@ -737,17 +738,17 @@ After Worker tool/schema/auth changes, deploy the intended environment explicitl
 
 Readiness is deterministic: `duration >= 10 minutes` AND `totalEventCount >= 10` AND (`domainCount >= 2` OR `sessionCount >= 2` OR `totalInteractionCount >= 5`). Shared core is `isAiReadyEvidence`; context and episode wrappers reuse it. It gates MCP discovery and popup readiness, **not** exact-ID access or a claim that a topic/intent is known.
 
-Notifications in `background.ts` use a **15-minute Chrome alarm**, settled **30-minute**-old candidates, **24-hour** freshness, persisted context/memory high-water marks and **6-hour** cooldown. They are tracking-enabled only. First initialization seeds “seen” timestamps to now; no historical backfill. Selection compares ready contexts and newly seen recurrent memories; a qualifying episode inside the selected context can refine wording, not independently trigger notification. The selected summary/memory ID and connection state are saved with the notification. Click opens Home; button opens a scoped ChatGPT prompt or connection using that saved state. No dedicated Chrome startup reminder exists.
+Tabot's activity-derived reminders and notification heuristics have been removed. Readiness and recurring-pattern derivation remain for on-demand discovery; they do not create obligations or contact the user. ChatGPT-owned scheduled check-ins are a proposed direction, not a current capability: verify unattended custom-connector invocation and delivery before building or promising it. Until then, use a plain reminder and user-initiated lookup without implying fresh background evidence.
 
-Home maps and session inspection, Activities range/site metrics, recurring-pattern discovery/actions, popup new-summary counts and session-count progress are implemented. Inspector mounts one `react-call` root, projects aggregate session evidence, separates browser/extension sources and shows no event counters or technical footer. The explicit shared-gate readiness indicator on Home is **absent**. At least notification and relay fallback wording still needs alignment with PRODUCT.md’s **activity/activity summary** vocabulary. Use internal `context` names only for contracts, not UI labels.
+Home maps and session inspection, Activities range/site metrics, recurring-pattern discovery/actions, popup activity summaries and session-count progress are implemented. Inspector mounts one `react-call` root, projects aggregate session evidence, separates browser/extension sources and shows no event counters or technical footer. The explicit shared-gate readiness indicator on Home is **absent**. Use internal `context` names only for contracts, not UI labels.
 
 The old plan’s fake topic labels, event-count examples, new-memory popup counts and deterministic “first memory forming” progress are not implementation requirements. Local review remains primary and ChatGPT optional; no extra providers, centralized history, semantic inference, universal PII detector, native app or telemetry rewrite is needed. Preserve meaningful sparse re-engagement, honest empty states, privacy-first selected retrieval and evidence before interpretation.
 
 The extension package/manifest and MCP package/protocol are prepared at **0.2.2**. Production MCP Worker is deployed; local builds do not prove a Chrome Web Store release. PR #19 must merge before dashboard deployment and the extension upload workflow; review and publish the resulting store draft manually.
 
-Release requires normal-user connection without MCP setup, real browsing/readiness/notification calibration, useful evidence-grounded ChatGPT results, production ID/origin/base-path/tool-version agreement, offline/restart/credential acceptance, remaining first-run notification guidance and a decision/implementation for startup reminder. See [system.md → status and acceptance](./system.md#v02-status-and-acceptance). Measure first useful activity → review → authorized assistant use → return, not raw collection volume. No implemented product-loop analytics is claimed.
+Release requires normal-user connection without MCP setup, real browsing and evidence-grounded ChatGPT results, production ID/origin/base-path/tool-version agreement, offline/restart/credential acceptance, and a decision on supported user-directed scheduled checks. See [system.md → status and acceptance](./system.md#v02-status-and-acceptance). Measure first useful activity → review → authorized assistant use → return, not raw collection volume. No implemented product-loop analytics is claimed.
 
-**Audit evidence:** seven existing non-UI logic/relay checks passed on 2026-10-09: shared retrieval, privacy and activity metrics; extension popup model, notification model and metrics relay; server activity-metrics/MCP checks. They use constructed/mocked data and do not validate production ChatGPT. No UI tests/previews/browser automation, live consent/retrieval, production deployment or complete release acceptance was performed during this audit. UI review belongs to the user.
+**Audit evidence:** non-UI logic/relay checks pass locally; they use constructed/mocked data and do not validate production ChatGPT. Real-browser consent/retrieval, production deployment and complete release acceptance remain unverified. UI review belongs to the user.
 
 ---
 
@@ -757,4 +758,31 @@ Release requires normal-user connection without MCP setup, real browsing/readine
 - `2026-08-24` - Added the implemented deterministic derived layer: sessions, contexts, memories, retrieval, and live browser context; merged metrics into this document and retired split specification files.
 - `2026-08-28` - Rewrote the derived-layer sections to match the V6/V7 implementation: added the meaningful-event, activity-anchor, activity-graph, and episode stages; contexts are now built from episodes with trajectory-coherence segmentation; memories use behavioral fingerprints rather than exact domain signatures; sessions retain full event sequences; added a companion `system.md` walkthrough.
 - `2026-09-13` - Synthesized the Phase 2 SW experiment into §15 (KEEP WITH REDUCTION): `SW_WINDOW_FOCUS` retained as the only SW signal; popup/toggle/download/lifecycle retired to diagnostic; `downloads` permission dropped; retired `docs/sw-events.md`, `docs/sw-inventory.md`, `docs/sw-phase.md`, `docs/sw-step11-report.md` folded in here and `system.md`.
-- `2026-10-09` - Audited and absorbed the v0.2 product plan into this specification and `system.md`; documented all seven MCP tools, actual OAuth/relay/privacy/readiness contracts and current UI behavior. Corrected stale package paths, result-vs-read bounds and deferred-surface claims. Kept production/live acceptance and absent features separate from implementation; retired the standalone plan.
+- `2026-10-09` - Audited and absorbed the v0.2 product plan into this specification and `system.md`; documented all seven MCP tools, actual OAuth/relay/privacy/readiness contracts and current UI behavior. Corrected stale package paths, result-vs-read bounds and deferred-surface claims. Kept production/live acceptance and absent features separate from implementation.
+- `2026-10-20` - Added the off-by-default visible page-excerpt path, separate Dexie page table, local consent/deletion/retention controls, ingestion redaction and strict assistant isolation. Real-browser acceptance and the evidence-backed workflow UI remain release gates.
+
+---
+
+## 19. Opt-in Page Observation Path
+
+### Consent and extraction
+
+`tabot_page_capture_origins_v1` is a locally stored exact-origin allowlist. It defaults empty and is separate from activity tracking. Content extraction is not run before consent, while hidden/unfocused, in incognito, or on auth/credential routes and password-manager hosts. Site selection does not grant assistant access. Revocation disables extraction, cancels timers/observers, and purges queued excerpt payloads.
+
+The content script waits one continuous second after the initial foreground viewport or after scroll settling (250 ms settle + one second dwell). Trusted clicks and Enter/Space activation on non-editable targets can nominate bounded visible context immediately. A per-document five-second send ceiling applies; the DB transaction independently enforces the same-resource rate limit and cumulative budgets. Same-document route changes reset dwell. Visible DOM mutations restart dwell only when bounded geometry checks find changed text within the viewport; this is not proof of reading.
+
+`visible-excerpts.ts` walks at most 2,000 DOM nodes, 8,000 words and 100,000 source characters per extraction; it persists no more than four segments of 1,000 characters each. It checks each word's Range geometry, viewport bounds, ancestor clipping and topmost element. Editors, inputs, hidden/aria-hidden content and unsupported geometry are excluded. Entire text-node values are never read; only complete words whose rendered ranges pass visibility checks are assembled. If visibility is uncertain, skip rather than capture the ancestor. These DOM checks are best-effort browser evidence, not proof that a person read or understood text.
+
+### Ingestion, privacy and identity
+
+`TABOT_PAGE_OBSERVATION` is a separate schema, never an event `type`. Worker ingress validates same-extension top-frame sender, Chrome tab/window/document identity, current URL, exact consent, message allowlist, UUID, timestamp, byte/segment limits and eligibility. It builds a versioned allowlisted record, removes URL credentials/query/fragment, redacts supported URL-path PII and excerpt text, and drops malformed/oversized input. OpenRedaction detects selected email/phone/card/IBAN patterns; targeted patterns also redact credential assignments, bearer strings, JWT-like values and bounded PEM blocks. This is not universal PII/secret detection. Detector failures reject observations; raw text never enters collector/held rows, logs, telemetry or export.
+
+An installation-local Web Crypto HMAC signs immutable capture identity and raw route resource identity under separate domain labels. Only signatures are stored; they remain sensitive metadata, not anonymization. Replay comparison precedes current consent/focus checks so identical committed retries succeed without rewriting first evidence. Same-ID/different-payload is rejected. New page records are privacy-processed before the shared bounded writer and revalidated at the shared atomic Dexie commit.
+
+### Storage and read boundary
+
+Dexie schema v2 adds `pages: id, timestamp, pageKey`; events remain `events: id, timestamp, type, tabId`. Page observations retain sanitized route, opaque `pageKey`, HMAC replay identity, sender tab/window/document IDs, trigger, sanitized segments, privacy provenance and coverage flags. IndexedDB transaction atomically inserts events and pages in the existing single serial writer; no second writer or durable raw queue. Per-resource UTC-day ceiling is 32 KiB; per-origin UTC-hour ceiling is 128 KiB; serialized sanitized allocation is counted. Resource budget accounting has a 1,000-row fail-closed guard. Budget/rate failure returns ignored, not persisted.
+
+Page evidence retention is seven days or 25 MiB, whichever is reached first; a Chrome alarm prunes in bounded 500-row batches, repeating each minute while more rows need deletion and otherwise every six hours. Page deletion endpoints are internal extension-page messages only. Deleting a site/all first revokes affected consent, flushes the collector, waits up to 15 seconds for the shared pipeline to drain, then deletes in bounded transactions; if the writer cannot drain, deletion reports failure and can be retried. The popup shows metadata-only site summaries and offers delete-and-pause controls. Existing event history is not rewritten or deleted by this feature.
+
+`GET_EVENTS`, event-derived sessions/contexts/metrics, popup refresh and assistant tools never include page bodies. Page metadata and selected-observation reads are internal extension-page messages only. No dashboard or assistant endpoint reads page observations. Page capture remains local-only; no assistant schema/grant change exists.

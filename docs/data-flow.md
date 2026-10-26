@@ -4,11 +4,11 @@ Production capture runs entirely in the existing MV3 service worker. Dashboard a
 
 ```text
 Chrome lifecycle / navigation / focus / foreground samples
-  + content script (150 ms scroll/key sampling, stable IDs, bounded retry)
+  + content script (150 ms signal sampling; opted-in visible excerpts; stable IDs; bounded retry)
   → service worker: validate sender/payload, capture policy, immutable metadata snapshot
   → bounded admission → Pacer Batcher (128 rows / fixed first-item 25 ms window)
   → Pacer AsyncQueuer (FIFO, concurrency 1)
-  → Dexie transaction: deduplicate + insert missing rows atomically
+  → Dexie v2 transaction: deduplicate + insert event/page rows atomically; enforce page budgets
   → COMMIT → persisted ACK, release admission reservation
       ├→ popup / dashboard: local messages → derive → aggregate UI
       └→ authorized MCP: local reads → sanitize/project → relay → assistant
@@ -17,9 +17,9 @@ Chrome lifecycle / navigation / focus / foreground samples
 ## Ownership and identity
 
 - `apps/extension/background.ts` registers Chrome/message listeners synchronously and snapshots native metadata before asynchronous admission. Native IDs are UUIDs generated once per observed callback. Tracking, idle and foreground filtering remain in effect.
-- `contents/tabot.ts` intentionally coalesces scroll/key presence at 150 ms, explicitly leading/trailing. It flushes pending trailing samples before hidden visibility boundaries. No typed values, page text or form contents are captured.
-- `page-outbox.ts` assigns one UUID document instance plus monotonic sequence. ID, timestamp, sequence and numeric metadata remain identical across retries. Up to 256 unacknowledged events / 512 KiB conservative payload allocation, four active sends, three attempts per event. ACK timeout is 2 s per attempt. Exhaustion/rejection is surfaced as a sanitized console code, then released; no infinite retry loop or website storage outbox.
-- `page-ingress.ts` requires protocol version 1, same-extension sender, main frame, non-incognito HTTP(S) document, allowed type, matching ID/instance/sequence, finite metadata, and bounded message size. Time bounds: five-minute replay age, five-second future skew. Previously unseen events delayed over ten seconds are intentionally ignored because historical foreground proof is unavailable.
+- `contents/tabot.ts` coalesces scroll/key presence at 150 ms, explicitly leading/trailing. Page excerpts are a separate exact-origin opt-in; no text traversal runs without consent and foreground focus. It saves at most four complete visible text fragments after one-second dwell or trusted interaction, and skips editable/form/auth/incognito surfaces. No typed values or form contents are captured.
+- `page-outbox.ts` uses a UUID document instance plus monotonic sequence for telemetry and immutable UUIDs for excerpts. Payloads remain identical across retries. One bounded outbox holds up to 256 messages / 512 KiB, four active sends, three attempts, and 2 s ACK timeout. Revocation removes queued excerpt payloads; active requests are still checked by the worker. No infinite retry or website storage outbox.
+- `page-ingress.ts` validates separate telemetry/observation protocols, same-extension top-frame sender, current route/document, non-incognito HTTP(S), allowlisted fields, IDs and byte bounds. Excerpts require exact-origin consent, foreground eligibility, and pass local URL/text redaction before queue admission. Identity and resource keys are installation-keyed HMACs. Event replay bounds remain five-minute age / five-second future skew; unseen delayed events are ignored.
 - Sender supplies tab/window/document identity, not payload claims. New admission requires the frozen capture URL to match Chrome's current top-frame tab URL (falling back to `sender.url`), because `sender.url` can retain the load URL after `pushState`. Unseen retries after same-document navigation are ignored rather than acquiring a newer URL. This capture URL is local-only immutable identity and the entire source descriptor is stripped at sanitized export boundaries. Favicon is an optional sender tab snapshot. Missing historical metadata is not guessed later. Native tab/navigation payloads supply their own snapshots where available.
 - Existing pending IDs share completion (four response waiters maximum). A committed replay is checked before current pause/focus policy. Same-ID/different-capture-payload is rejected; replay cannot overwrite URL/favicon enrichment. No unbounded completed-ID cache.
 - Historical IDs, retired event types and rows remain readable without migration. `orderEvents()` resolves timestamp ties using sequence within one source; independent sources retain their positions. UUID lexical order is never causality. Async eligibility checks mean admitted FIFO is not global physical-interaction order.
@@ -45,12 +45,12 @@ Later arrivals do not move the oldest-item deadline. Size, deadline or an admitt
 
 ## Atomic persistence
 
-`packages/shared/src/events/db.ts` retains v1 schema `id, timestamp, type, tabId` in `tabot_events/events`:
+`packages/shared/src/events/db.ts` retains v1 `events: id, timestamp, type, tabId` and adds v2 `pages: id, timestamp, pageKey` in `tabot_events`:
 
-1. Normalize/validate rows and deduplicate IDs inside input batch.
-2. In one read/write transaction, read existing IDs and reject conflicting capture payloads.
-3. `bulkAdd` only missing rows. All errors escape; a failed row rolls back all new rows.
-4. Return inserted/duplicate counts **after transaction commit**.
+1. Redact page content and normalize both record types before opening a transaction; page write boundary repeats redaction and allowlist validation.
+2. In the single read/write transaction, deduplicate both tables, reject conflicting identities, and reserve per-resource/day (32 KiB) plus per-origin/hour (128 KiB) budgets.
+3. `bulkAdd` only accepted missing rows. Events and pages roll back together on transaction failure; budget/rate limits return ignored ACKs without persistence.
+4. Return ACK only after commit. Pages are separately indexed/read and do not appear in `GET_EVENTS`.
 
 There are no Chrome API calls, external requests, backoff waits or metadata enrichment inside the transaction. Retries reuse the exact rows/IDs in a new transaction. Shared failed-open cache resets; background and relay no longer add rejected-promise caches.
 
@@ -71,11 +71,11 @@ Commit survives ordinary worker/browser restarts subject to browser storage guar
 
 ## Readers, diagnostics and privacy
 
-`GET_EVENTS` returns committed rows only. `GET_COUNTS` returns committed count, not queued/processed totals. Both internal/external read failures return `{ ok: false, code: 'storage-unavailable' }`, never `[]` or zero. Dashboard transport maps failures to unavailable; Home/popup keep last successful snapshots and show degraded state. Stats still poll at 1 s, events at 5 s, popup at 10 s; no per-second history derivation/count was added.
+`GET_EVENTS` returns committed event rows only. Internal extension-page endpoints provide bounded page metadata, selected observation detail, site summaries, and explicit delete-and-revoke controls. No dashboard or assistant endpoint reads page observations. `GET_COUNTS` remains event-only. Both internal/external read failures return `{ ok: false, code: 'storage-unavailable' }`, never `[]` or zero. Dashboard transport maps failures to unavailable; Home/popup keep last successful snapshots and show degraded state. Stats still poll at 1 s, events at 5 s, popup at 10 s; no per-second history derivation/count was added.
 
 `GET_STATS` exposes health, collector/pending/active/held/outstanding rows, conservative bytes, oldest outstanding age, inserted/duplicate/ignored/coalesced/rejected counts, failures/retries, last commit/error code and last 128 successful batch timing samples. `observed` counts pipeline calls, including replays—not physical DOM actions. `coalesced` counts shared in-flight duplicate sends, not all upstream throttle omissions. Invalid messages rejected before pipeline admission cannot be counted as stored events. Counters reset each worker activation; durable count is separate. Compatibility `buffer*` fields mean queue budget/occupancy/peak, **not SAB slots**; `eventsProcessed/totalEvents` alias committed inserts and `droppedEvents` aliases admission rejections. None is a lifetime loss total.
 
-Dashboard is a different origin and reads through Chrome messaging, not direct extension IndexedDB. Raw rows reach trusted local dashboard JavaScript for derivation; presentational components receive aggregates. MCP remains read-only, authorized, sanitized and fail-closed. It does not wait for pending ingestion on each request. Relay disconnection does not stop local ingest or upload/replay raw telemetry. OAuth, reconnect, grant binding and result limits are unchanged; see [relay README](../apps/mcp-server/README.md) and [technical contract](./tech.md#16-chatgpt-mcpoauth-relay--implemented-contract).
+Dashboard is a different origin and reads through Chrome messaging, not direct extension IndexedDB. Raw rows reach trusted local dashboard JavaScript for derivation; presentational components receive aggregates. MCP remains read-only, authorized, sanitized and fail-closed; page excerpts are not exposed to assistant tools. It does not wait for pending ingestion on each request. Relay disconnection does not stop local ingest or upload/replay raw telemetry. OAuth, reconnect, grant binding and result limits are unchanged; see [relay README](../apps/mcp-server/README.md) and [technical contract](./tech.md#16-chatgpt-mcpoauth-relay--implemented-contract).
 
 ## Verification and remaining limits
 

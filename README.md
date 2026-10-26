@@ -14,7 +14,7 @@ Tabot is a Chrome extension that helps you pick up where you left off, without r
 
 ## Privacy
 
-Your browsing record stays on your device. AI assistants are optional and receive only requested, filtered results—not your raw browsing history. Tabot does not record page text, passwords, or what you type.
+Your browsing record stays on your device. Optional page excerpts are off by default, require per-site consent, and are never shared with assistants. Tabot never records passwords, form values, or what you type. Excerpts are bounded visible text, not page snapshots.
 
 ## Run locally
 

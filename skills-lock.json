@@ -157,6 +157,12 @@
 			"skillPath": "skills/product-launch-video/SKILL.md",
 			"computedHash": "cb7b4e255378afcbbe086e09c5f66cccaa8f0c78eb2fafc9324721829122dd06"
 		},
+		"prototype": {
+			"source": "mattpocock/skills",
+			"sourceType": "github",
+			"skillPath": "skills/engineering/prototype/SKILL.md",
+			"computedHash": "d3fc74689bd993e39c44bfae510d014eecffbeec2922764b065377fd1327c0f6"
+		},
 		"react-call": {
 			"source": "desko27/react-call",
 			"sourceType": "github",

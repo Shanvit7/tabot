@@ -6,7 +6,11 @@
 
 import { foregroundEvents } from "../activities/foreground";
 import type { BrowserContext } from "../contexts/contexts";
-import type { StoredTabEvent, TabotDatabase } from "../events/db";
+import {
+	type StoredTabEvent,
+	sanitizeEventsForRead,
+	type TabotDatabase,
+} from "../events/db";
 import {
 	findSimilarContexts,
 	findSimilarMemories,
@@ -116,7 +120,7 @@ export const getCurrentBrowserContext = async (
 	navigationLimit = 10,
 ): Promise<LiveBrowserContext> => {
 	const currentContext = await getCurrentContext(db);
-	const events = await db.events.toArray();
+	const events = await sanitizeEventsForRead(await db.events.toArray());
 	const now = Date.now();
 
 	const relatedContexts = currentContext

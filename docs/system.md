@@ -17,19 +17,19 @@ Chrome tab APIs + content script
   └-> optional: extension relay -> Cloudflare MCP Worker -> ChatGPT
 ```
 
-Raw telemetry stays on device; the optional ChatGPT integration sends sanitized, derived context on tool requests. The Worker holds OAuth/installation routing state, not browser history. There is no Tabot account, cloud sync, page-content capture, typed-text capture, Tabot-hosted LLM, embedding store, or task/intent inference. See [MCP relay development and connection](../apps/mcp-server/README.md).
+Raw telemetry stays on device; the optional ChatGPT integration sends sanitized, derived context on tool requests. The Worker holds OAuth/installation routing state, not browser history. There is no Tabot account, cloud sync, typed-text capture, Tabot-hosted LLM, embedding store, or task/intent inference. Separate page-excerpt capture is off by default and requires exact-site consent. See [MCP relay development and connection](../apps/mcp-server/README.md).
 
-Only raw normalized browser events are durable as browser data. Derived results are rebuilt from those events, so changing a derivation algorithm does not require migrating derived tables. The separate relay persists authentication/installation state.
+Normalized browser events and separately consented, privacy-processed page observations are durable local data. Page observations never enter event/session/behavioral metric reads. Derived outcomes must retain observation IDs and unknown-coverage limits. The separate relay persists authentication/installation state.
 
 ## Product loop and boundaries
 
-The intended experience is **install → browse normally → review an activity summary → optionally connect ChatGPT → ask about that activity → return to useful new activity**. Sessions, summaries, recurring patterns, notifications and scoped assistant actions support one loop, not separate telemetry dashboards.
+The intended experience is **install → browse normally → review an activity summary → optionally connect ChatGPT → ask about that activity → return to useful new activity**. Sessions, summaries, recurring patterns and scoped assistant actions support one loop, not separate telemetry dashboards.
 
 - Local recording and review work without an assistant. ChatGPT is the only connected provider implemented; Claude/Gemini tiles are disabled.
 - User-facing copy says **activity** / **activity summary**, never **context**. Internal `BrowserContext`, tool names and `?context=` links remain technical contracts. [PRODUCT.md](../PRODUCT.md) governs current vocabulary and decisions, overriding obsolete plan examples.
 - Lead with sites, time, connections and recurrence—not raw event counters. Event totals remain internal readiness/derivation inputs, not “activities,” “actions” or “visits” in UI or ChatGPT summary results.
 - Do not manufacture a topic, intent, first memory, progress percentage, ETA, productivity score or immediate value at install. An empty record is valid.
-- Notifications describe observed evidence, stay sparse and open selected activity rather than dump history. ChatGPT controls its answer; Tabot neither infers tasks nor guarantees a useful next step.
+- Tabot does not generate activity-derived reminders. ChatGPT controls its answer; Tabot neither infers tasks nor guarantees a useful next step. Any future check-in must be explicitly user-scheduled and supported by the assistant platform.
 - Manual JSONL download is a separate user-controlled review/audit path, not the primary assistant handoff; it is never automatically uploaded.
 
 ## Capture
@@ -49,9 +49,9 @@ The content script and Chrome APIs collect these signals:
 | `KEY_ACTIVITY` | document keydown | event only |
 | `SW_WINDOW_FOCUS` | `chrome.windows.onFocusChanged` | window ID focus transition (see SW telemetry section) |
 
-`SCROLL` and `KEY_ACTIVITY` are throttled to 150 ms by TanStack Pacer before messaging the background worker. Key values, text, form values, DOM, screenshots, and page content are never recorded.
+`SCROLL` and `KEY_ACTIVITY` are throttled to 150 ms by TanStack Pacer before messaging the background worker. Typed/key values, form values, screenshots and whole-page DOM snapshots are never recorded. Visible text excerpts are a separate opt-in signal: exact-origin consent, one-second foreground dwell or trusted interaction, four fragments / 4,000 characters maximum, and no page-load snapshots.
 
-Content scripts send version-1 `TABOT_PAGE_EVENT` messages with stable document-instance UUID/sequence and capture timestamp. A bounded document-memory outbox retries identical messages; persisted ACK follows commit, not queueing. Old protocol receives reload-required. Background owns bounded ingestion and snapshots URL/favicon before asynchronous scheduling; no production shared memory or dedicated transport worker remains.
+Content scripts send version-1 `TABOT_PAGE_EVENT` messages for numeric telemetry and separate `TABOT_PAGE_OBSERVATION` messages for opted-in visible excerpts. Both use the existing bounded outbox and shared FIFO writer; content text is redacted before admission and revalidated before the atomic `events` + `pages` commit. Page observations have keyed replay/resource identities, exact-origin consent, hard auth/incognito/editor exclusions, per-resource/day and per-site/hour byte ceilings, a five-second resource send limit, and seven-day/25 MiB retention. `GET_EVENTS` remains content-free; page summary and selected-evidence reads are internal extension-page operations. New event URLs are minimized/redacted before admission and again at the Dexie boundary. Foreground session URLs receive the same minimization. Existing event history is not rewritten and may retain legacy fields.
 
 Foreground capture checks the selected tab in the focused, non-minimized window, with a 30-second alarm sample and immediate focus/tab/idle samples. Idle (60 seconds without system input) or lock ends attention. The last sample is stored in `chrome.storage.session`; delayed samples after sleep close at the last observation, not wake time. Only foreground navigation and interactions enter the behavioral capture path.
 
@@ -104,7 +104,7 @@ The SW experiment documented 5 signals, 4 categories, 1 new permission (`downloa
 
 One budget covers eligibility, collection, pending, active and held failure: 2,048 rows / 4 MiB conservative payload accounting, including 128 rows / 256 KiB reserved for boundaries/native events. Events/waiters are bounded before scheduling. Overload rejects new work explicitly; no eviction of admitted events.
 
-`tabot_events/events` retains v1 indexes `id, timestamp, type, tabId`. Native IDs are capture-generated UUIDs; page IDs are document UUID + monotonic sequence. Historical IDs/types/rows remain readable without migration. Source sequence resolves same-time ties without assuming global causal order. URL/favicon is an immutable event snapshot, not latest-state enrichment during drain.
+`tabot_events/events` retains v1 indexes `id, timestamp, type, tabId`. Native IDs are capture-generated UUIDs; page IDs are document UUID + monotonic sequence. Historical IDs/types/rows remain readable without migration. Source sequence resolves same-time ties without assuming global causal order. New event URL snapshots are privacy-processed before queueing; favicon is omitted. Older stored rows are not rewritten automatically.
 
 Shared DB helper validates input and in one transaction reads existing IDs, rejects conflicting reuse, and bulk-adds missing rows. Every row failure rolls back the whole new batch. Only commit (or identical committed replay) can resolve persisted ACK or increase insert totals. Retrying never overwrites enrichment or invents new IDs.
 
@@ -218,13 +218,13 @@ The extension sends correlated request/response messages over an authenticated o
 
 Other providers, native MCP servers, accounts, cloud history/embeddings, task inference, custom MCP UI and cross-device pairing are excluded, not hidden capabilities.
 
-## AI readiness and notifications
+## Assistant discovery and user-directed check-ins
 
-`isAiReadyEvidence` in `packages/shared/src/recall/retrieval.ts` requires **10 minutes foreground duration**, **10 events**, plus at least one of **2 domains**, **2 sessions**, or **5 interactions**. This internal heuristic is not probability of intent or a validated usefulness score. Search/recent/current discovery applies it; exact-ID lookup does not. Discovery does not require notification settlement.
+`isAiReadyEvidence` in `packages/shared/src/recall/retrieval.ts` requires **10 minutes foreground duration**, **10 events**, plus at least one of **2 domains**, **2 sessions**, or **5 interactions**. This internal retrieval heuristic is not probability of intent or a validated usefulness score. Search/recent/current discovery applies it; exact-ID lookup does not.
 
-`background.ts` installs a **15-minute alarm** and persists notification state in `chrome.storage.local`. It runs while tracking is enabled, selects a new ready context or newly seen recurrent memory, and can use a qualifying episode inside the selected context for wording. Episodes alone are not an independent source. Candidates must end at least **30 minutes** ago, be within **24 hours**, and exceed the high-water mark. At most one notification every **6 hours**. First-run marks start at current time, preventing historical backfill. The newest context/memory candidate wins; recurring-memory qualification does not independently apply the context readiness gate.
+Tabot no longer schedules notifications from activity volume or recurring-pattern detection. Such heuristics cannot establish the user's goal or that work remains unfinished. There is no extension notification permission or notification alarm. Users can review activity and ask an assistant on demand.
 
-A new meaningful insight opens the extension popup automatically; if Chrome cannot open the popup, the system notification is the fallback. At Chrome startup, an unread AI-ready summary can reopen the popup once per local day, only when no notification was sent in the previous six hours. Empty and already-viewed startup reminders are suppressed. The opt-in development preview opens the popup every 15 seconds to cycle preview states; start it with `pnpm --filter extension dev:preview`. Plain `pnpm --filter extension dev` does not run the preview. Clicks on the system-notification fallback open the associated summary on Home; its button uses connection state saved when created. MCP reads and derivation do not directly emit notifications.
+Proposed ChatGPT check-ins are user-defined: user supplies goal, cadence and sharing scope; ChatGPT must own schedule and delivery. MCP currently provides read-only, request/response tools, not a scheduler or notification API. Verify unattended custom-connector calls and notification delivery in the target ChatGPT product before claiming this works. Until supported, fallback is a plain ChatGPT reminder followed by user-initiated Tabot lookup; it must not imply a background evidence review. No scheduled access or page-evidence sharing is enabled.
 
 ## v0.2 status and acceptance
 
@@ -235,18 +235,18 @@ A new meaningful insight opens the extension popup automatically; if Chrome cann
 | Non-technical connection | Runtime-configured prompt/listing CTA and guided custom-MCP setup instructions exist on web and extension. | Verify real ChatGPT setup, separate account-level plugin add/enable, OAuth retrieval and marketplace rollout in production. |
 | Dashboard | Activity/pattern maps, scoped handoffs and session inspector implemented. | Explicit shared-gate readiness indication on Home is **not implemented**. UI review belongs to the user. |
 | Popup | New ready-summary count, session-count progress and scoped CTA implemented. | Live first-run and re-engagement acceptance; summary counts are not new memories/raw events. |
-| Notifications | Settlement, freshness, cooldown and selected-ID actions implemented. | Real-browsing calibration, sparse delivery, click/prefill/offline acceptance. Fallback title still says “Context ready”; align remaining copy with PRODUCT.md. |
+| Notifications | Automatic activity-derived notifications removed to avoid guessed-intent reminders. | No Tabot notification delivery. ChatGPT-owned scheduled check-ins require verified unattended connector support; plain reminder + manual lookup is the fallback. |
 | First run | Honest empty guidance, local-observation copy and session progress exist. | Notification-expectation guidance and complete install-to-first-use acceptance; no fake ETA or “memory forming” promise. |
-| Startup reminder | Not implemented. | If retained for v0.2, reuse meaningful unseen candidates, high-water marks and cooldown; no empty or duplicate alarm/startup reminders. |
+| User-directed check-ins | Not implemented in Tabot. | Verify ChatGPT scheduled custom-connector execution and notification delivery before building a dedicated integration. |
 | Release | Extension package/manifest and MCP package/protocol `0.2.2` are prepared. Production MCP Worker is deployed; dashboard and extension release are pending PR merge. | Merge PR #19, verify Pages and release workflow, then review/publish Chrome Web Store draft. |
 
 Manual/live acceptance, not source/checkmark inference:
 
 1. Fresh-profile install communicates local recording and honest empty/progress states.
 2. Normal browsing yields inspectable activity, sessions and supported recurring patterns without invented tasks.
-3. Meaningful settled activity produces a sparse notification; click opens the exact summary and disconnected users reach connection first.
-4. Non-technical ChatGPT connection works. Notification/popup/dashboard prompts retrieve the selected summary/pattern or displayed metric range, not all history.
-5. ChatGPT answers usefully from evidence; actual tool traffic excludes raw events and sensitive URL components. Startup reminders, if implemented, are useful and deduplicated.
+3. Activity remains reviewable on demand; Tabot does not infer that browsing means a user wants a reminder.
+4. Non-technical ChatGPT connection works. Popup/dashboard prompts retrieve the selected summary/pattern or displayed metric range, not all history.
+5. ChatGPT answers usefully from evidence; actual tool traffic excludes raw events and sensitive URL components. Any future scheduled review must be user-authored, explicitly authorized and verified to run unattended.
 6. Offline extension, reconnect, Chrome/service-worker restart, missing IDs and expired credentials fail honestly without silently changing installation identity.
 
 Measure first useful summary → user reviews it → authorized ChatGPT use → return engagement, not event/memory volume. No product-loop analytics is claimed here. Other providers, raw-history AI dumps, centralized history, native companions, generic profiles, broad PII detection and telemetry rewrites remain out of scope.
@@ -272,7 +272,6 @@ pnpm --filter @tabot/shared run swDerivation
 pnpm --filter @tabot/shared run swGraph
 pnpm --filter @tabot/shared run swEpisodes
 pnpm --filter extension check:popup
-pnpm --filter extension check:notifications
 pnpm --filter extension check:metricsRelay
 pnpm --filter mcp-server check:activityMetrics
 pnpm --filter extension build

@@ -41,12 +41,22 @@ export {
 } from "./contexts/contexts";
 export {
 	bulkInsertEvents,
+	bulkInsertIngestRecords,
 	countEvents,
 	createEventsDb,
+	deletePageObservations,
 	getAllEvents,
 	getEventsBetween,
+	getPageCaptureSiteSummaries,
+	getPageObservationById,
+	getPageObservations,
 	type InsertEventsResult,
+	type PageCaptureSiteSummary,
+	type PageObservationSummary,
+	prunePageObservations,
+	type StoredIngestRecord,
 	type StoredTabEvent,
+	sanitizeEventsForRead,
 	storedTabEventSchema,
 	TabotDatabase,
 } from "./events/db";
@@ -101,6 +111,28 @@ export {
 	type MemoryDomain,
 } from "./memories/memories";
 export {
+	PAGE_MIN_INTERVAL_MS,
+	PAGE_RESOURCE_DAILY_BYTES,
+	PAGE_SITE_HOURLY_BYTES,
+	pageObservationBudgetFailure,
+	pageObservationSizeBytes,
+} from "./pages/budget";
+export {
+	MAX_PAGE_OBSERVATION_BYTES,
+	MAX_PAGE_SEGMENT_CHARS,
+	MAX_PAGE_SEGMENTS,
+	normalizePageObservation,
+	PAGE_OBSERVATION_PROTOCOL_VERSION,
+	PAGE_PRIVACY_POLICY_VERSION,
+	type PageObservationTrigger,
+	type StoredPageObservation,
+	sanitizePageObservationForIngestion,
+} from "./pages/observations";
+export {
+	sanitizeEventForIngestion,
+	sanitizeUrlForIngestion,
+} from "./privacy/ingest";
+export {
 	PII_REDACTION_DEFAULT_ENABLED,
 	sanitizeDerived,
 } from "./privacy/sanitize";
@@ -143,7 +175,6 @@ export {
 	isDomainNovel,
 	isSignatureRecurrent,
 	jaccardIndex,
-	nextNotifiableContext,
 	type RecurrenceReport,
 	readyContextsInRange,
 	reportRecurrence,
