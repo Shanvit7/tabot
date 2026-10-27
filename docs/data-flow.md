@@ -8,8 +8,9 @@ Chrome lifecycle / navigation / focus / foreground samples
   → service worker: validate sender/payload, capture policy, immutable metadata snapshot
   → bounded admission → Pacer Batcher (128 rows / fixed first-item 25 ms window)
   → Pacer AsyncQueuer (FIFO, concurrency 1)
-  → Dexie v2 transaction: deduplicate + insert event/page rows atomically; enforce page budgets
-  → COMMIT → persisted ACK, release admission reservation
+  → extension storage RPC → single offscreen TalaDB owner
+  → serialize validation + deduplicate, enforce page budgets, insert event/page records atomically
+  → OPFS commit → persisted ACK, release admission reservation
       ├→ popup / dashboard: local messages → derive → aggregate UI
       └→ authorized MCP: local reads → sanitize/project → relay → assistant
 ```
@@ -45,14 +46,14 @@ Later arrivals do not move the oldest-item deadline. Size, deadline or an admitt
 
 ## Atomic persistence
 
-`packages/shared/src/events/db.ts` retains v1 `events: id, timestamp, type, tabId` and adds v2 `pages: id, timestamp, pageKey` in `tabot_events`:
+`apps/extension/tabs/storage-owner.ts` stores event and page envelopes in one TalaDB `records` collection on OPFS. Only the offscreen document opens the database; the MV3 service worker and dashboard use bounded extension messaging. Stable source IDs are mapped to TalaDB ULIDs and retained in each envelope. Page payloads are sanitized before persistence and are excluded from `GET_EVENTS`.
 
-1. Redact page content and normalize both record types before opening a transaction; page write boundary repeats redaction and allowlist validation.
-2. In the single read/write transaction, deduplicate both tables, reject conflicting identities, and reserve per-resource/day (32 KiB) plus per-origin/hour (128 KiB) budgets.
-3. `bulkAdd` only accepted missing rows. Events and pages roll back together on transaction failure; budget/rate limits return ignored ACKs without persistence.
-4. Return ACK only after commit. Pages are separately indexed/read and do not appear in `GET_EVENTS`.
+1. Redact page content and normalize both record types before mutation; page write boundary repeats redaction and allowlist validation.
+2. A single serialized owner mutation preflights existing IDs, rejects conflicting identities, and reserves per-resource/day (32 KiB) plus per-origin/hour (128 KiB) budgets.
+3. `records.insertMany()` writes accepted missing event/page records atomically. Budget/rate limits return ignored outcomes without persistence.
+4. Return ACK only after the durable TalaDB call resolves. Retries reuse stable IDs; owner loss can leave an unknown commit outcome, so replay reconciles by identity before ACK.
 
-There are no Chrome API calls, external requests, backoff waits or metadata enrichment inside the transaction. Retries reuse the exact rows/IDs in a new transaction. Shared failed-open cache resets; background and relay no longer add rejected-promise caches.
+No Chrome API calls, external requests, backoff waits or metadata enrichment occur inside the storage mutation. OPFS failure is explicit; readers fail unavailable rather than returning empty history. A temporary native IndexedDB reader imports legacy profiles, verifies the copy, then retires `tabot_events`; it is not an active event store.
 
 Transient open/transaction failures retry within the writer. Nested bulk failures retain transient/permanent classification. Quota, permission, validation, conflict and serialization failures do not hot-loop. Exhaustion/permanent failure stops new writer starts, retaining one immutable held batch plus bounded pending work. Responses indicate failure, never persisted. Suitable later events or a best-effort recovery alarm may retry transient held work after 30 s; internal `RETRY_INGEST` explicitly retries permanent held work. Held batch goes ahead of pending batches. An active write is never cancelled for pause, sender timeout or closing UI.
 
@@ -73,17 +74,17 @@ Commit survives ordinary worker/browser restarts subject to browser storage guar
 
 `GET_EVENTS` returns committed event rows only. Internal extension-page endpoints provide bounded page metadata, selected observation detail, site summaries, and explicit delete-and-revoke controls. No dashboard or assistant endpoint reads page observations. `GET_COUNTS` remains event-only. Both internal/external read failures return `{ ok: false, code: 'storage-unavailable' }`, never `[]` or zero. Dashboard transport maps failures to unavailable; Home/popup keep last successful snapshots and show degraded state. Stats still poll at 1 s, events at 5 s, popup at 10 s; no per-second history derivation/count was added.
 
-`GET_STATS` exposes health, collector/pending/active/held/outstanding rows, conservative bytes, oldest outstanding age, inserted/duplicate/ignored/coalesced/rejected counts, failures/retries, last commit/error code and last 128 successful batch timing samples. `observed` counts pipeline calls, including replays—not physical DOM actions. `coalesced` counts shared in-flight duplicate sends, not all upstream throttle omissions. Invalid messages rejected before pipeline admission cannot be counted as stored events. Counters reset each worker activation; durable count is separate. Compatibility `buffer*` fields mean queue budget/occupancy/peak, **not SAB slots**; `eventsProcessed/totalEvents` alias committed inserts and `droppedEvents` aliases admission rejections. None is a lifetime loss total.
+`GET_STATS` exposes health, collector/pending/active/held/outstanding rows, conservative bytes, oldest outstanding age, inserted/duplicate/ignored/coalesced/rejected counts, failures/retries, last commit/error code and last 128 successful batch timing samples. `observed` counts pipeline calls, including replays—not physical DOM actions. `coalesced` counts shared in-flight duplicate sends, not all upstream throttle omissions. Invalid messages rejected before pipeline admission cannot be counted as stored events. Counters reset each worker activation; durable count is read from TalaDB. Compatibility `buffer*` fields mean queue budget/occupancy/peak, **not SAB slots**; `eventsProcessed/totalEvents` alias committed inserts and `droppedEvents` aliases admission rejections. None is a lifetime loss total.
 
-Dashboard is a different origin and reads through Chrome messaging, not direct extension IndexedDB. Raw rows reach trusted local dashboard JavaScript for derivation; presentational components receive aggregates. MCP remains read-only, authorized, sanitized and fail-closed; page excerpts are not exposed to assistant tools. It does not wait for pending ingestion on each request. Relay disconnection does not stop local ingest or upload/replay raw telemetry. OAuth, reconnect, grant binding and result limits are unchanged; see [relay README](../apps/mcp-server/README.md) and [technical contract](./tech.md#16-chatgpt-mcpoauth-relay--implemented-contract).
+Dashboard is a different origin and reads through Chrome messaging, not direct access to the extension-owned OPFS/TalaDB store. Raw rows reach trusted local dashboard JavaScript for derivation; presentational components receive aggregates. MCP remains read-only, authorized, sanitized and fail-closed; page excerpts are not exposed to assistant tools. It does not wait for pending ingestion on each request. Relay disconnection does not stop local ingest or upload/replay raw telemetry. OAuth, reconnect, grant binding and result limits are unchanged; see [relay README](../apps/mcp-server/README.md) and [technical contract](./tech.md#16-chatgpt-mcpoauth-relay--implemented-contract).
 
 ## Verification and remaining limits
 
-Run `pnpm --filter extension check:ingest` for scheduler, ACK, FIFO, capacity, retry, protocol and outbox assertions. Real Chromium IndexedDB rollback, replay, and worker restart behavior were checked during implementation; temporary browser harnesses were removed after verification. The retained in-memory checks are not browser durability proof.
+Run `pnpm --filter extension check:ingest` for scheduler, ACK, FIFO, capacity, retry, protocol and outbox assertions; `pnpm --filter extension check:storageOwner` also checks migration IDs, failed-open cleanup, and offscreen reconnect behavior. User manually confirmed imported history and new capture survive a full Chrome restart; extension-origin `indexedDB.databases()` returned `[]` after migration. This verifies that profile's cutover, not quota/power-loss guarantees or every upgrading profile.
 
-### Recorded browser measurements
+### Historical IndexedDB browser baseline (pre-TalaDB)
 
-Implementation verification used Chrome 150 on macOS with eight reported hardware threads. The following warmed IndexedDB runs used the same event trace, schema and atomic helper. These are local observations, not production SLOs or a comparison with the retired best-effort SAB writer.
+These measurements are the legacy IndexedDB baseline, not current TalaDB performance. They used Chrome 150 on macOS with eight reported hardware threads and the same event trace, schema and atomic helper. They are local observations, not production SLOs or a comparison with the retired best-effort SAB writer.
 
 | Workload | Transactions: 25 ms / 0 ms / direct | p95 ACK ms: 25 ms / 0 ms / direct |
 | --- | --- | --- |

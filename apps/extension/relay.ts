@@ -5,7 +5,6 @@ import {
 	activityMetricsResponse,
 	type BrowserContext,
 	buildActivityMetrics,
-	createEventsDb,
 	getContextById,
 	getContexts,
 	getEventsBetween,
@@ -21,6 +20,7 @@ import {
 	searchContextsCore,
 	summarizeContextCore,
 } from "@tabot/shared";
+import { getStorageDb } from "./storage-client";
 
 /**
  * Extension ↔ relay connection.
@@ -95,7 +95,7 @@ export const getRelayStatus = () => ({ ...status, relayUrl: RELAY_URL });
 export const getAssistantConnections =
 	async (): Promise<AssistantConnections> => {
 		const credentials = await loadCredentials();
-		if (!credentials) return { connected: false };
+		if (!credentials) return { chatgpt: false, claude: false, order: [] };
 		const response = await fetch(`${HTTP_BASE}/connection`, {
 			headers: { Authorization: `Bearer ${credentials.token}` },
 			signal: AbortSignal.timeout(5_000),
@@ -167,10 +167,10 @@ const send = (message: unknown) => {
 };
 
 // --- Local context execution -----------------------------------------------
-// Runs inside the extension against the local Dexie store, then passes the
+// Runs inside the extension against the local TalaDB store, then passes the
 // result through the privacy boundary before it leaves the device.
 // Shared helper resets failed opens; do not cache a rejected promise here.
-const getDb = createEventsDb;
+const getDb = getStorageDb;
 
 // The privacy boundary, applied once: derived contexts in → externally-safe
 // copy out. Only concise fields are returned — no raw telemetry.

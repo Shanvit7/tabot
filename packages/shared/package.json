@@ -36,7 +36,6 @@
 	},
 	"dependencies": {
 		"@openredaction/core": "^1.1.5",
-		"dexie": "^4.4.5",
 		"graphology": "^0.26.0"
 	},
 	"devDependencies": {

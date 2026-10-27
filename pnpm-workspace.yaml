@@ -11,3 +11,5 @@ allowBuilds:
   workerd: true
 minimumReleaseAgeExclude:
   - '@cloudflare/workers-types@5.20260920.1'
+patchedDependencies:
+  '@taladb/web@0.12.1': patches/@taladb__web@0.12.1.patch

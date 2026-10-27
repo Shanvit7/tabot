@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dexie.js"
+  short_description: "Build offline-first apps with Dexie.js"
+  default_prompt: "Use this skill to implement Dexie.js correctly in browser-based JavaScript apps and frameworks."

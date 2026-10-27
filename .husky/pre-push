@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -e
+
+pnpm --filter mcp-server typecheck
+pnpm --filter web exec tsc --noEmit

@@ -1,6 +1,6 @@
 # Tabot Technical Specification
 
-> **Technical source of truth for Tabot's architecture and deterministic derived layer.** Supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`) and incorporates the former v0.2 product plan with [`system.md`](./system.md). Audited against working-tree code on 2026-10-20. Implementation, deployment and live acceptance are separate statuses. Release gaps and acceptance are documented below and in the companion walkthrough.
+> **Technical source of truth for Tabot's architecture and deterministic derived layer.** Supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`) and incorporates the former v0.2 product plan with [`system.md`](./system.md). Audited against working-tree code on 2026-10-28. TalaDB migration is implemented and one user's profile passed full-Chrome-restart verification; broader failure qualification and release acceptance remain separate statuses. Release gaps and acceptance are documented below and in the companion walkthrough.
 
 ---
 
@@ -13,7 +13,7 @@ Chrome tab APIs + content script
   -> existing service worker (validation, metadata snapshot, bounded admission)
   -> Pacer Batcher (128 rows / fixed first-item 25 ms window)
   -> Pacer AsyncQueuer (FIFO, concurrency 1)
-  -> atomic Dexie / IndexedDB transaction -> commit -> persisted ACK
+  -> offscreen TalaDB owner -> atomic OPFS commit -> persisted ACK
   -> events derive activity; optional page observations derive bounded evidence separately
      events -> sessions -> anchors -> graph -> episodes -> contexts -> memories -> retrieval
   -> live browser-context snapshot
@@ -42,7 +42,7 @@ Raw browser events remain local. The ChatGPT integration uses Tabot’s online M
 - **Language/package manager:** TypeScript (ESNext, bundler resolution), pnpm workspaces.
 - **Scheduling:** TanStack Pacer 0.22.0 Batcher + serial AsyncQueuer in the same MV3 worker; no production SAB/Atomics or transport Web Worker.
 - **Rate shaping:** Pacer 150 ms scroll/key throttlers and bounded transport retries at the content-script boundary.
-- **Persistence:** Dexie 4.x over IndexedDB database `tabot_events`; immutable activity `events` and separate opt-in page `pages` evidence table.
+- **Persistence:** TalaDB 0.12.1 in one OPFS-backed `records` collection; immutable activity and opt-in page evidence stored as distinct record kinds. IndexedDB is used only by the verified legacy-profile importer.
 - **Graph substrate:** graphology.
 - **Optional relay:** Hono + MCP SDK on Cloudflare Workers, Durable Objects for OAuth/installation state, authenticated WebSocket to the extension. No remote browser-history store.
 
@@ -62,7 +62,7 @@ tabot/
 │       ├── src/lib/home-data.ts         # extension transport + in-memory derivation
 │       └── src/components/              # landing, dashboard, and UI components
 ├── packages/shared/src/
-│   ├── events/                         # ingest validation, metadata, atomic Dexie, historical buffer experiment
+│   ├── events/                         # ingest validation, metadata, TalaDB domain adapter, historical buffer experiment
 │   ├── pages/                          # sanitized page observations and bounded evidence reads
 │   ├── sessions/                       # sessionization
 │   ├── activities/                     # anchors, episodes, foreground, metrics, SW semantics
@@ -96,7 +96,7 @@ export const EVENT_TYPES = {
   SCROLL: 7,
   CLICK: 8,
   KEY_ACTIVITY: 9,
-  // SW telemetry (Phase 2). Indices fixed — ever. Historical Dexie rows
+  // SW telemetry (Phase 2). Indices fixed — ever. Historical rows
   // decode via these values even though only SW_WINDOW_FOCUS is produced.
   SW_WINDOW_FOCUS: 10,
   SW_POPUP_OPEN: 11,
@@ -140,7 +140,7 @@ interface StoredTabEvent {
 }
 ```
 
-IDs are generated once at capture and reused for retries. Committed duplicates are validated in IndexedDB, including after restart; conflicting reuse is rejected, not overwritten. Historical IDs need no migration. Same-source timestamp ties use sequence, never UUID lexical order; independent sources have no global causal order.
+IDs are generated once at capture and reused for retries. Committed duplicates are validated in TalaDB, including after restart; conflicting reuse is rejected, not overwritten. Historical IDs need no migration. Same-source timestamp ties use sequence, never UUID lexical order; independent sources have no global causal order.
 
 ### Collection details
 
@@ -172,11 +172,11 @@ Native handlers snapshot their own tab/navigation payload or existing metadata b
 
 `Batcher` collects at most 128 rows / 25 ms from first item. Function-valued remaining wait prevents later arrivals extending the deadline; semantic boundaries flush promptly. Synchronous transfer goes to `AsyncQueuer` FIFO, concurrency 1, wait 0. Never writer-flush: installed Pacer flush can bypass concurrency. No idle collection timer, drain polling, dedicated transport worker, SAB or Atomics in production bundles. Timing values are provisional scheduling targets, not durability guarantees.
 
-### Atomic IndexedDB and failure ownership
+### TalaDB persistence and failure ownership
 
-V1 schema remains `events: 'id, timestamp, type, tabId'` in `tabot_events`. No destructive migration, extra index or job table. The shared helper normalizes and deduplicates input, then reads existing IDs and inserts only missing rows in one read/write transaction. Conflict or any failed row aborts all new rows; no swallowed BulkError or replay upsert. Resolution after commit returns inserted/duplicate counts, then releases capacity and ACKs.
+`apps/extension/tabs/storage-owner.ts` hosts one OPFS-backed TalaDB database in an extension offscreen document. Events and page observations are envelopes in one `records` collection, separated by `recordKind`; source IDs and replay identities remain in the payload. One serialized owner mutation lane normalizes and deduplicates input, checks existing identities and page budgets, then calls atomic `records.insertMany()` for accepted rows. Conflicting reuse rejects before insert; matching replay never overwrites. ACK follows the durable call, then releases capacity.
 
-Writer retries classified transient failures three times (exponential 100 ms base, 1 s cap, 0.2 jitter). Permanent failure/exhaustion stops new starts and retains one bounded immutable held batch. Pending work remains owned; responses are not persisted ACKs. Recovery retries held work first after cooldown via suitable events/alarm, or explicit internal `RETRY_INGEST`. No active transaction is cancelled for UI closure, sender timeout or pause. No DB timeout starts an overlapping writer. Shared failed-open cache resets and background/relay do not cache rejected opens.
+The existing writer retries classified transient failures three times (exponential 100 ms base, 1 s cap, 0.2 jitter). Permanent failure/exhaustion stops new starts and retains one bounded immutable held batch. Pending work remains owned; responses are not persisted ACKs. Recovery retries held work first after cooldown via suitable events/alarm, or explicit internal `RETRY_INGEST`. OPFS errors fail closed; an ambiguous owner response is reconciled by stable identity after reopening, not assumed uncommitted. The migration-only native IndexedDB reader imports old `tabot_events` profiles in verified batches and retires the database after verification; it is not a live write/read fallback.
 
 ### Protocol, readers and lifetime
 
@@ -203,12 +203,12 @@ StoredTabEvent[]
   -> buildLiveContext()            -> LiveBrowserContext
 ```
 
-All layers use **lazy derivation**. No sessions, contexts, memories, retrieval, or live-context tables exist in IndexedDB. Persisted events remain the only durable source of truth.
+All layers use **lazy derivation**. No sessions, contexts, memories, retrieval, or live-context tables exist in TalaDB. Persisted records remain the only durable source of truth.
 
 ### Shared constraints
 
 - No LLM, semantic search, embeddings, vector database, user-intent inference, cross-device correlation, content semantics, or application identity beyond domains.
-- New algorithms must remain pure at their core and expose a minimal Dexie adapter around that core.
+- New algorithms must remain pure at their core and use only the minimal storage adapter they need.
 - Recent-context helpers cap selected sessions at 500; memory database adapters use up to 500 resulting contexts and default to 50 returned memories. Pure `derive()`/`buildMemories()` and full-context lookup are not globally capped to those counts. These caps do not prevent full event-store scans. Add persistence caches only after measurement demonstrates a need.
 
 ---
@@ -245,7 +245,7 @@ Capture samples the selected tab in the focused, non-minimized window every 30 s
 
 `duration` in sessions, episodes, and contexts is foreground time, summed from non-overlapping observed intervals. Hidden/idle time and gaps between sessions are excluded even when one episode groups several sessions. `wallDuration` retains elapsed coverage, not time spent. Each page owns foreground dwell until the next page switch, without changing the last-event timestamps used by trajectory scoring.
 
-Historical rows are re-derived locally; no IndexedDB migration or deletion is needed. Old traces lack periodic samples and sometimes focus/visibility evidence: duration remains an estimate, never extrapolated to now or across event gaps of five minutes or longer. Existing downloaded exports must be generated again to receive corrected durations; missing historical attention cannot be reconstructed exactly.
+Historical rows are re-derived locally; no derivation-field migration is needed beyond the one-time storage import. Old traces lack periodic samples and sometimes focus/visibility evidence: duration remains an estimate, never extrapolated to now or across event gaps of five minutes or longer. Existing downloaded exports must be generated again to receive corrected durations; missing historical attention cannot be reconstructed exactly.
 
 Checks: `pnpm --filter @tabot/shared check:foreground` and `pnpm --filter extension check:foreground`.
 
@@ -571,7 +571,7 @@ The check scripts exercise the respective pure functions and rebuild consistency
 
 ### Deferred only after measurement
 
-Do not add derived IndexedDB tables, event caches/indexes, semantic enrichment or additional telemetry merely for convenience. Existing dashboard routes, popup messages and assistant handlers are already implemented; the evidence gate is a requirement for expanding capabilities, not a claim that those surfaces are absent.
+Do not add derived TalaDB collections, event caches/indexes, semantic enrichment or additional telemetry merely for convenience. Existing dashboard routes, popup messages and assistant handlers are already implemented; the evidence gate is a requirement for expanding capabilities, not a claim that those surfaces are absent.
 
 ---
 
@@ -600,7 +600,7 @@ The current ChatGPT integration serves requested, sanitized activity summaries, 
 
 1. Existing service worker owns bounded ingestion and serial atomic writes; no second capture worker.
 2. Metadata snapshots are immutable before asynchronous admission; retries never re-enrich stored events.
-3. IndexedDB persists raw normalized events in batches; derived data is lazy and rebuildable.
+3. TalaDB persists raw normalized records in batches on OPFS; derived data is lazy and rebuildable. Native IndexedDB is retained only as a migration reader for legacy profiles.
 4. Dashboard and popup do not render raw event streams; they show aggregates plus derived views.
 5. Derived output never names a task, intent, or content meaning.
 6. The optional Cloudflare relay authenticates ChatGPT requests and routes them to the user's live extension; it does not store raw events or derived browser history. There is no Tabot account, cloud sync, or multi-user history store.
@@ -669,7 +669,7 @@ The extension owns raw browser records, local queries, derivation and safe resul
 ChatGPT -- OAuth access token --> POST /mcp
   -> token-bound installation Durable Object
   -> authenticated outbound extension WebSocket
-  -> local Dexie / shared derivation / sanitization or aggregate projection
+  -> local TalaDB / shared derivation / sanitization or aggregate projection
   -> correlated bounded result -> ChatGPT
 ```
 
@@ -759,7 +759,8 @@ Release requires normal-user connection without MCP setup, real browsing and evi
 - `2026-08-28` - Rewrote the derived-layer sections to match the V6/V7 implementation: added the meaningful-event, activity-anchor, activity-graph, and episode stages; contexts are now built from episodes with trajectory-coherence segmentation; memories use behavioral fingerprints rather than exact domain signatures; sessions retain full event sequences; added a companion `system.md` walkthrough.
 - `2026-09-13` - Synthesized the Phase 2 SW experiment into §15 (KEEP WITH REDUCTION): `SW_WINDOW_FOCUS` retained as the only SW signal; popup/toggle/download/lifecycle retired to diagnostic; `downloads` permission dropped; retired `docs/sw-events.md`, `docs/sw-inventory.md`, `docs/sw-phase.md`, `docs/sw-step11-report.md` folded in here and `system.md`.
 - `2026-10-09` - Audited and absorbed the v0.2 product plan into this specification and `system.md`; documented all seven MCP tools, actual OAuth/relay/privacy/readiness contracts and current UI behavior. Corrected stale package paths, result-vs-read bounds and deferred-surface claims. Kept production/live acceptance and absent features separate from implementation.
-- `2026-10-20` - Added the off-by-default visible page-excerpt path, separate Dexie page table, local consent/deletion/retention controls, ingestion redaction and strict assistant isolation. Real-browser acceptance and the evidence-backed workflow UI remain release gates.
+- `2026-10-20` - Added the off-by-default visible page-excerpt path, local consent/deletion/retention controls, ingestion redaction and strict assistant isolation. Real-browser acceptance and the evidence-backed workflow UI remain release gates.
+- `2026-10-28` - Replaced the active Dexie event store with TalaDB/OPFS, added verified legacy import and offscreen ownership, and recorded one user's successful full-browser-restart check. Broader qualification remains open.
 
 ---
 
@@ -777,11 +778,11 @@ The content script waits one continuous second after the initial foreground view
 
 `TABOT_PAGE_OBSERVATION` is a separate schema, never an event `type`. Worker ingress validates same-extension top-frame sender, Chrome tab/window/document identity, current URL, exact consent, message allowlist, UUID, timestamp, byte/segment limits and eligibility. It builds a versioned allowlisted record, removes URL credentials/query/fragment, redacts supported URL-path PII and excerpt text, and drops malformed/oversized input. OpenRedaction detects selected email/phone/card/IBAN patterns; targeted patterns also redact credential assignments, bearer strings, JWT-like values and bounded PEM blocks. This is not universal PII/secret detection. Detector failures reject observations; raw text never enters collector/held rows, logs, telemetry or export.
 
-An installation-local Web Crypto HMAC signs immutable capture identity and raw route resource identity under separate domain labels. Only signatures are stored; they remain sensitive metadata, not anonymization. Replay comparison precedes current consent/focus checks so identical committed retries succeed without rewriting first evidence. Same-ID/different-payload is rejected. New page records are privacy-processed before the shared bounded writer and revalidated at the shared atomic Dexie commit.
+An installation-local Web Crypto HMAC signs immutable capture identity and raw route resource identity under separate domain labels. Only signatures are stored; they remain sensitive metadata, not anonymization. Replay comparison precedes current consent/focus checks so identical committed retries succeed without rewriting first evidence. Same-ID/different-payload is rejected. New page records are privacy-processed before the shared bounded writer and revalidated at the serialized TalaDB owner mutation boundary.
 
 ### Storage and read boundary
 
-Dexie schema v2 adds `pages: id, timestamp, pageKey`; events remain `events: id, timestamp, type, tabId`. Page observations retain sanitized route, opaque `pageKey`, HMAC replay identity, sender tab/window/document IDs, trigger, sanitized segments, privacy provenance and coverage flags. IndexedDB transaction atomically inserts events and pages in the existing single serial writer; no second writer or durable raw queue. Per-resource UTC-day ceiling is 32 KiB; per-origin UTC-hour ceiling is 128 KiB; serialized sanitized allocation is counted. Resource budget accounting has a 1,000-row fail-closed guard. Budget/rate failure returns ignored, not persisted.
+TalaDB stores event/page envelopes in one OPFS-backed `records` collection. Page observations retain sanitized route, opaque `pageKey`, HMAC replay identity, sender tab/window/document IDs, trigger, sanitized segments, privacy provenance and coverage flags. The single offscreen owner serializes mutations and atomically inserts both record kinds through `insertMany()`; no second writer or durable raw queue. Per-resource UTC-day ceiling is 32 KiB; per-origin UTC-hour ceiling is 128 KiB; serialized sanitized allocation is counted. Resource budget accounting has a 1,000-row fail-closed guard. Budget/rate failure returns ignored, not persisted. The migration-only native IndexedDB reader imports and verifies legacy profiles before retiring `tabot_events`.
 
 Page evidence retention is seven days or 25 MiB, whichever is reached first; a Chrome alarm prunes in bounded 500-row batches, repeating each minute while more rows need deletion and otherwise every six hours. Page deletion endpoints are internal extension-page messages only. Deleting a site/all first revokes affected consent, flushes the collector, waits up to 15 seconds for the shared pipeline to drain, then deletes in bounded transactions; if the writer cannot drain, deletion reports failure and can be retried. The popup shows metadata-only site summaries and offers delete-and-pause controls. Existing event history is not rewritten or deleted by this feature.
 

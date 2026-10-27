@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "rsbuild dev",
 		"build": "rsbuild build && tsc --noEmit",
-		"check:home": "node src/lib/home-retrieval.check.mjs",
+		"check:home": "node src/lib/home-retrieval.check.mjs && node src/lib/home-transport.check.mjs",
 		"check:graph": "node --experimental-strip-types src/lib/context-graph.check.mjs",
 		"check:activityMetrics": "node src/lib/activity-metrics-ui.check.mjs",
 		"check:activityFlow": "node --import ../../packages/shared/resolve-hook.mjs src/lib/activity-flow.check.mjs",

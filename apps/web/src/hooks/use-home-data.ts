@@ -22,19 +22,25 @@ export const useHomeData = () => {
 				);
 		};
 		let eventCount: number | null = null;
+		let readingEvents = false;
 		const pollEvents = async () => {
-			if (document.hidden) return;
-			const count = await fetchEventCount();
-			if (!alive) return;
-			setStale(count === null);
-			if (count === null || count === eventCount) return;
-			const next = await fetchEvents();
-			if (!alive) return;
-			setStale(next === null);
-			if (next === null) return;
-			// Event IDs are immutable; only a changed row count requires a full read.
-			eventCount = next.length;
-			setEvents(next);
+			if (document.hidden || readingEvents) return;
+			readingEvents = true;
+			try {
+				const count = await fetchEventCount();
+				if (!alive) return;
+				setStale(count === null);
+				if (count === null || count === eventCount) return;
+				const next = await fetchEvents();
+				if (!alive) return;
+				setStale(next === null);
+				if (next === null) return;
+				// Event IDs are immutable; only a changed row count requires a full read.
+				eventCount = next.length;
+				setEvents(next);
+			} finally {
+				readingEvents = false;
+			}
 		};
 
 		const onVisibilityChange = () => {

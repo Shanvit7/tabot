@@ -1,8 +1,8 @@
 # Tabot System Overview
 
-Tabot is a local-first Chrome extension plus browser dashboard. It records a small set of browser-activity signals, stores normalized events in IndexedDB, and deterministically derives sessions, activity episodes, contexts, and recurring behavioral patterns.
+Tabot is a local-first Chrome extension plus browser dashboard. It records a small set of browser-activity signals, stores normalized events and consented page evidence in TalaDB on OPFS, and deterministically derives sessions, activity episodes, contexts, and recurring behavioral patterns.
 
-This walkthrough reflects current working-tree code, including staged changes, audited on 2026-10-09. [`tech.md`](./tech.md) is the technical source of truth. Release gaps and acceptance criteria appear below. Together they absorb the former v0.2 product plan. **Implemented in source does not mean deployed, production-verified or release-complete.**
+This walkthrough reflects current working-tree code, including staged changes, audited on 2026-10-28. TalaDB cutover and full-browser-restart persistence were manually verified for one profile; see `docs/plan.md` for remaining qualification and migration limits. [`tech.md`](./tech.md) is the technical source of truth. Release gaps and acceptance criteria appear below. Together they absorb the former v0.2 product plan. **Implemented in source does not mean deployed, production-verified or release-complete.**
 
 ## Pipeline
 
@@ -10,7 +10,7 @@ This walkthrough reflects current working-tree code, including staged changes, a
 Chrome tab APIs + content script
   -> Chrome extension background service worker
   -> bounded Pacer Batcher (128 rows / fixed first-item 25 ms)
-  -> serial AsyncQueuer -> atomic Dexie / IndexedDB commit -> persisted ACK
+  -> serial AsyncQueuer -> offscreen TalaDB owner -> atomic OPFS commit -> persisted ACK
   -> pure derivation at read time
      events -> sessions -> anchors -> graph -> episodes -> contexts -> memories
   ├-> extension popup or local dashboard
@@ -51,11 +51,11 @@ The content script and Chrome APIs collect these signals:
 
 `SCROLL` and `KEY_ACTIVITY` are throttled to 150 ms by TanStack Pacer before messaging the background worker. Typed/key values, form values, screenshots and whole-page DOM snapshots are never recorded. Visible text excerpts are a separate opt-in signal: exact-origin consent, one-second foreground dwell or trusted interaction, four fragments / 4,000 characters maximum, and no page-load snapshots.
 
-Content scripts send version-1 `TABOT_PAGE_EVENT` messages for numeric telemetry and separate `TABOT_PAGE_OBSERVATION` messages for opted-in visible excerpts. Both use the existing bounded outbox and shared FIFO writer; content text is redacted before admission and revalidated before the atomic `events` + `pages` commit. Page observations have keyed replay/resource identities, exact-origin consent, hard auth/incognito/editor exclusions, per-resource/day and per-site/hour byte ceilings, a five-second resource send limit, and seven-day/25 MiB retention. `GET_EVENTS` remains content-free; page summary and selected-evidence reads are internal extension-page operations. New event URLs are minimized/redacted before admission and again at the Dexie boundary. Foreground session URLs receive the same minimization. Existing event history is not rewritten and may retain legacy fields.
+Content scripts send version-1 `TABOT_PAGE_EVENT` messages for numeric telemetry and separate `TABOT_PAGE_OBSERVATION` messages for opted-in visible excerpts. Both use the existing bounded outbox and shared FIFO writer; content text is redacted before admission and revalidated before atomic `records` collection insertion. Page observations have keyed replay/resource identities, exact-origin consent, hard auth/incognito/editor exclusions, per-resource/day and per-site/hour byte ceilings, a five-second resource send limit, and seven-day/25 MiB retention. `GET_EVENTS` remains content-free; page summary and selected-evidence reads are internal extension-page operations. New event URLs are minimized/redacted before admission and again at the TalaDB owner mutation boundary. Foreground session URLs receive the same minimization. Existing event history is not rewritten and may retain legacy fields.
 
 Foreground capture checks the selected tab in the focused, non-minimized window, with a 30-second alarm sample and immediate focus/tab/idle samples. Idle (60 seconds without system input) or lock ends attention. The last sample is stored in `chrome.storage.session`; delayed samples after sleep close at the last observation, not wake time. Only foreground navigation and interactions enter the behavioral capture path.
 
-Derived `duration` means foreground milliseconds; `wallDuration` means elapsed coverage. Episodes may group multiple sessions, but their duration never includes intervening gaps. Historical events are re-derived locally, conservatively when focus/visibility samples are missing. No database migration is needed. Re-export old downloads to get schema 9 durations.
+Derived `duration` means foreground milliseconds; `wallDuration` means elapsed coverage. Episodes may group multiple sessions, but their duration never includes intervening gaps. Historical events are re-derived locally, conservatively when focus/visibility samples are missing; the schema 9 derivation change itself needs no event-payload migration. Storage-engine replacement does require the separate verified IndexedDB-to-TalaDB import. Re-export old downloads to get schema 9 durations.
 
 The extension also observes one service-worker-level signal (`SW_WINDOW_FOCUS`, see [SW telemetry](#service-worker-telemetry-phase-2-outcome)); four experimental SW signals (popup open, tracking toggle, download, lifecycle) were retired in the Phase 2 final reduction.
 
@@ -104,13 +104,13 @@ The SW experiment documented 5 signals, 4 categories, 1 new permission (`downloa
 
 One budget covers eligibility, collection, pending, active and held failure: 2,048 rows / 4 MiB conservative payload accounting, including 128 rows / 256 KiB reserved for boundaries/native events. Events/waiters are bounded before scheduling. Overload rejects new work explicitly; no eviction of admitted events.
 
-`tabot_events/events` retains v1 indexes `id, timestamp, type, tabId`. Native IDs are capture-generated UUIDs; page IDs are document UUID + monotonic sequence. Historical IDs/types/rows remain readable without migration. Source sequence resolves same-time ties without assuming global causal order. New event URL snapshots are privacy-processed before queueing; favicon is omitted. Older stored rows are not rewritten automatically.
+TalaDB stores event and page envelopes in one OPFS-backed `records` collection, keyed by deterministic ULIDs while preserving original source IDs and replay identities. Native IDs are capture-generated UUIDs; page IDs are document UUID + monotonic sequence. Historical event types/rows remain readable after verified import. Source sequence resolves same-time ties without assuming global causal order. New event URL snapshots are privacy-processed before queueing; favicon is omitted. Older payloads are not rewritten automatically.
 
-Shared DB helper validates input and in one transaction reads existing IDs, rejects conflicting reuse, and bulk-adds missing rows. Every row failure rolls back the whole new batch. Only commit (or identical committed replay) can resolve persisted ACK or increase insert totals. Retrying never overwrites enrichment or invents new IDs.
+The extension offscreen owner serializes database mutations, validates input, checks existing IDs, rejects conflicting reuse, and atomically inserts missing event/page rows through TalaDB `records.insertMany()`. Only a successful durable call (or identical committed replay) resolves persisted ACK or increases insert totals. Retrying never overwrites enrichment or invents new IDs; ambiguous owner responses reconcile by stable ID after reconnect.
 
 Transient storage failures retry three attempts; permanent failure/exhaustion stops writer starts and retains bounded held work. Recovery alarm/suitable later event retries transient held work after cooldown; internal `RETRY_INGEST` explicitly resumes held work first. Tracking pause stops new capture, not active commits. Popup closure/sender timeout never abort persistence. In-memory queues, retries, held rows and timers are lost on termination; committed history remains subject to browser storage guarantees. Native events and destroyed documents cannot generally replay. No zero-loss/exactly-once claim.
 
-Read errors return explicit unavailable results, never empty history/zero counts. Home/popup retain last good snapshots and expose degraded state. Runtime counters reset on restart; durable count comes from IndexedDB. Legacy buffer-named fields are documented queue aliases, not SAB statistics. No new React adapter, offscreen document or durable job database.
+Read errors return explicit unavailable results, never empty history/zero counts. Home/popup retain last good snapshots and expose degraded state. Runtime counters reset on restart; durable count comes from TalaDB. Legacy buffer-named fields are documented queue aliases, not SAB statistics. The offscreen document hosts TalaDB's DedicatedWorker; it is not an ingestion scheduler or durable job database.
 
 ## Derivation
 
@@ -170,7 +170,7 @@ Single-occurrence patterns require 500 events. Generic single-site activity such
 - **Browsing sessions:** select an activity on Home, then a session card. A `react-call` inspector opens a native desktop dialog/full-screen mobile sheet with date/time, **Time in Chrome**, **Tabs used**, **Websites**, first/last site observations and related activity links. Browser/extension/unknown sources remain separate from websites. No raw events, page URLs or tab IDs reach this inspector; internal event totals are not displayed. A session can contribute to several summaries, so session totals are not selected-summary totals. Site observation spans are not per-site dwell. No technical disclaimer footer is shown.
 - **Popup:** derives the full local record, features recent activity, counts new AI-ready activity summaries since the previous popup visit and reviews the newest one. First visit establishes a baseline without counting old history as new. Before readiness, it can show today’s browsing-session count and honest guidance. Pause/resume and recording-loss feedback remain; pipeline counters are not the main surface. Connected users get a scoped **Ask ChatGPT** action; disconnected users get **Connect ChatGPT**; unknown is not disconnected.
 
-`use-home-data.ts` polls stats every second and persisted events every five seconds, deriving locally. Popup activity refreshes every ten seconds. No history upload is needed to render these views. The dashboard reads the extension through messaging; its web origin does not directly share the extension’s IndexedDB origin.
+`use-home-data.ts` polls stats every second and persisted events every five seconds, deriving locally. Popup activity refreshes every ten seconds. No history upload is needed to render these views. The dashboard reads the extension through messaging; its web origin does not directly access the extension-owned OPFS/TalaDB store.
 
 The manifest permits `https://shanvit7.github.io/*`, `http://localhost/*` and production/dev relay origins through `externally_connectable`. Set the published extension ID as GitHub Actions variable `TABOT_EXTENSION_ID`; the dashboard receives `VITE_TABOT_EXTENSION_ID`. ID, dashboard origin and deployed consent-page configuration must agree. Configuration alone does not prove production connectivity.
 
@@ -194,7 +194,7 @@ A single auth Durable Object persists client registrations, short-lived consent 
 
 ### Tool execution and privacy boundary
 
-An authenticated MCP call travels `ChatGPT → /mcp → installation Durable Object → extension WebSocket → local Dexie/query → sanitizeDerived → bounded result → ChatGPT`. The **seven** read-only tools registered and handled in code are:
+An authenticated MCP call travels `ChatGPT → /mcp → installation Durable Object → extension WebSocket → local TalaDB/query → sanitizeDerived → bounded result → ChatGPT`. The **seven** read-only tools registered and handled in code are:
 
 | Tool | Local result |
 | --- | --- |

@@ -24,6 +24,9 @@ const configuredExtensionId = import.meta.env.VITE_TABOT_EXTENSION_ID?.trim();
 
 const getExtId = (): string | undefined => configuredExtensionId || undefined;
 
+// Storage can include offscreen/WASM startup and legacy migration, unlike GET_STATS.
+const STORAGE_READ_TIMEOUT_MS = 30_000;
+
 const send = (
 	msg: Record<string, unknown>,
 	cb: (res: unknown) => void,
@@ -31,9 +34,11 @@ const send = (
 ): void => {
 	const s = chromeSend();
 	let done = false;
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	const finish = (res: unknown) => {
 		if (done) return;
 		done = true;
+		clearTimeout(timer);
 		cb(res);
 	};
 	// No chrome runtime (plain web page, extension absent) — resolve null once
@@ -43,6 +48,7 @@ const send = (
 		return;
 	}
 	const extId = getExtId();
+	timer = setTimeout(() => finish(null), timeoutMs);
 	try {
 		if (extId)
 			(s as (a: string, b: unknown, c: (r: unknown) => void) => void)(
@@ -54,8 +60,6 @@ const send = (
 	} catch {
 		finish(null);
 	}
-	// timeout fallback: if the extension never responds, resolve with null once
-	setTimeout(() => finish(null), timeoutMs);
 };
 
 export const fetchStats = (timeoutMs = 800): Promise<StatsSnapshot | null> =>
@@ -102,23 +106,29 @@ export const rangeStart = (r: StatsRange): number => {
 
 export const fetchEventCount = (): Promise<number | null> =>
 	new Promise((resolve) => {
-		send({ type: "GET_COUNTS" }, (res) => {
-			resolve(
-				res &&
-					typeof res === "object" &&
-					"dexieCount" in res &&
-					typeof res.dexieCount === "number"
-					? res.dexieCount
-					: null,
-			);
-		});
+		send(
+			{ type: "GET_COUNTS" },
+			(res) => {
+				resolve(
+					res &&
+						typeof res === "object" &&
+						"eventCount" in res &&
+						typeof res.eventCount === "number"
+						? res.eventCount
+						: null,
+				);
+			},
+			STORAGE_READ_TIMEOUT_MS,
+		);
 	});
 
 export const fetchEvents = (): Promise<StoredTabEvent[] | null> =>
 	new Promise((resolve) => {
-		send({ type: "GET_EVENTS" }, (res) => {
-			resolve(Array.isArray(res) ? res : null);
-		});
+		send(
+			{ type: "GET_EVENTS" },
+			(res) => resolve(Array.isArray(res) ? res : null),
+			STORAGE_READ_TIMEOUT_MS,
+		);
 	});
 
 // --- Export (Part C of docs/export-spec.md) ---

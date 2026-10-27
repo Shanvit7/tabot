@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@taladb/web@0.12.1': a03ba7678079f87f5e9db92df0243c70b578eab2863c6944f2d654fe8a67fa92
+
 importers:
 
   .:
@@ -41,6 +44,9 @@ importers:
       '@tabot/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@taladb/web':
+        specifier: 0.12.1
+        version: 0.12.1(patch_hash=a03ba7678079f87f5e9db92df0243c70b578eab2863c6944f2d654fe8a67fa92)
       '@tanstack/pacer':
         specifier: ^0.22.0
         version: 0.22.0
@@ -53,6 +59,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      taladb:
+        specifier: 0.12.1
+        version: 0.12.1(@taladb/web@0.12.1(patch_hash=a03ba7678079f87f5e9db92df0243c70b578eab2863c6944f2d654fe8a67fa92))
     devDependencies:
       '@tailwindcss/cli':
         specifier: ^4.3.3
@@ -63,6 +72,9 @@ importers:
       '@types/chrome':
         specifier: ^0.0.268
         version: 0.0.268
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.18
@@ -206,9 +218,6 @@ importers:
       '@openredaction/core':
         specifier: ^1.1.5
         version: 1.1.5
-      dexie:
-        specifier: ^4.4.5
-        version: 4.4.5
       graphology:
         specifier: ^0.26.0
         version: 0.26.0(graphology-types@0.24.8)
@@ -1743,6 +1752,7 @@ packages:
   '@opentelemetry/sdk-trace-base@2.12.0':
     resolution: {integrity: sha512-JOERgZCxRM06FEJ5kEWxlSRChah6MmXDx3KwCruqEv/iEyLkTokCSemf2y1w8oIHtfrr8EVTpzebq/31vn2Cpg==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
@@ -4151,6 +4161,10 @@ packages:
   '@tailwindcss/postcss@4.3.3':
     resolution: {integrity: sha512-JTSZZGQi1AyKirbLN3azmjVzef92tcX7h+iSqPdaeStyFpGpDlKvvpxeOE8njhbUanbRwr3z8DyzhICWnMtQeg==}
 
+  '@taladb/web@0.12.1':
+    resolution: {integrity: sha512-oCnhg7RNASbiMp3FvOiv+NR+oF76+dS2l1DwTANTifo67u91MhrV0/mDQPWcquoaBMy9yYUXL5qnSCxCf+rTkA==}
+    engines: {node: '>=18'}
+
   '@tanstack/devtools-event-client@0.4.4':
     resolution: {integrity: sha512-6T5Yop/793YI+H+5J8Hsyj4kCih9sl4t3ElLgKioW5hk3ocn+ZdSJ94tT7vL7uabxSugWYBZlOTMPzEw2puvQw==}
     engines: {node: '>=18'}
@@ -5255,9 +5269,6 @@ packages:
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
-
-  dexie@4.4.5:
-    resolution: {integrity: sha512-wWCHdihT3dmlUSuNhn5mMZDWSpG0suxjAni7YjjiZdzabZcKmy3uNZGZ7AeYYXBoLbpSXX35fikPLkPC44Osiw==}
 
   diff@9.0.0:
     resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
@@ -7946,6 +7957,18 @@ packages:
 
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
+
+  taladb@0.12.1:
+    resolution: {integrity: sha512-3rniNQx0/MB1zjd+OomPSrS5LL+U6MhB+1H/4R2zZMnodzqfBGnn8GMimZQ9KOAxuXRUgQV8UB3eWkSuBRtW4w==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@taladb/node': 0.12.1
+      '@taladb/web': 0.12.1
+    peerDependenciesMeta:
+      '@taladb/node':
+        optional: true
+      '@taladb/web':
+        optional: true
 
   tapable@2.3.3:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
@@ -13332,6 +13355,8 @@ snapshots:
       postcss: 8.5.31
       tailwindcss: 4.3.3
 
+  '@taladb/web@0.12.1(patch_hash=a03ba7678079f87f5e9db92df0243c70b578eab2863c6944f2d654fe8a67fa92)': {}
+
   '@tanstack/devtools-event-client@0.4.4': {}
 
   '@tanstack/devtools-event-client@0.5.0': {}
@@ -14664,8 +14689,6 @@ snapshots:
   devlop@1.1.0:
     dependencies:
       dequal: 2.0.3
-
-  dexie@4.4.5: {}
 
   diff@9.0.0: {}
 
@@ -18292,6 +18315,12 @@ snapshots:
   tailwind-merge@3.7.0: {}
 
   tailwindcss@4.3.3: {}
+
+  taladb@0.12.1(@taladb/web@0.12.1(patch_hash=a03ba7678079f87f5e9db92df0243c70b578eab2863c6944f2d654fe8a67fa92)):
+    dependencies:
+      js-yaml: 4.3.2
+    optionalDependencies:
+      '@taladb/web': 0.12.1(patch_hash=a03ba7678079f87f5e9db92df0243c70b578eab2863c6944f2d654fe8a67fa92)
 
   tapable@2.3.3: {}
 

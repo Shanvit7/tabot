@@ -311,17 +311,12 @@ export const getSessions = async (
 	start?: number,
 	end?: number,
 ): Promise<Session[]> => {
-	const events =
-		start !== undefined && end !== undefined
-			? await db.events
-					.where("timestamp")
-					.between(start, end, true, true)
-					.toArray()
-			: start !== undefined
-				? await db.events.where("timestamp").aboveOrEqual(start).toArray()
-				: end !== undefined
-					? await db.events.where("timestamp").belowOrEqual(end).toArray()
-					: await db.events.toArray();
+	const events = await db.readEvents({
+		from: start,
+		to: end,
+		fromInclusive: true,
+		toInclusive: true,
+	});
 	return sessionize(await sanitizeEventsForRead(events));
 };
 
@@ -330,7 +325,7 @@ export const getSessionById = async (
 	id: string,
 ): Promise<Session | undefined> => {
 	const sessions = sessionize(
-		await sanitizeEventsForRead(await db.events.toArray()),
+		await sanitizeEventsForRead(await db.readEvents()),
 	);
 	return sessions.find((s) => s.id === id);
 };
@@ -340,7 +335,7 @@ export const getRecentSessions = async (
 	limit = 10,
 ): Promise<Session[]> => {
 	const sessions = sessionize(
-		await sanitizeEventsForRead(await db.events.toArray()),
+		await sanitizeEventsForRead(await db.readEvents()),
 	);
 	return sessions.slice(-limit);
 };

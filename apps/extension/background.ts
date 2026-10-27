@@ -3,7 +3,6 @@
 import {
 	bulkInsertIngestRecords,
 	countEvents,
-	createEventsDb,
 	deletePageObservations,
 	getAllEvents,
 	getPageCaptureSiteSummaries,
@@ -37,11 +36,12 @@ import {
 	getRelayStatus,
 	startRelay,
 } from "./relay";
+import { getStorageDb } from "./storage-client";
 
 // One service worker, one bounded serial writer. Queued is not persisted.
 const RECOVERY_ALARM = "tabot-ingest-recovery";
 const PAGE_RETENTION_ALARM = "tabot-page-retention";
-const getDb = createEventsDb;
+const getDb = getStorageDb;
 const pipeline = createEventPipeline<StoredIngestRecord>({
 	commit: async (rows) => bulkInsertIngestRecords(await getDb(), rows),
 	onBlocked: (recoverable) => {
@@ -321,7 +321,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		void ingestPageMessage(message, sender, {
 			extensionId: chrome.runtime.id,
 			pipeline,
-			find: async (id) => (await getDb()).events.get(id),
+			find: async (id) => (await getDb()).findEvent(id),
 			eligible: async (tabId) => {
 				await trackingReady;
 				return trackingEnabled && (await isForegroundTab(tabId));
@@ -361,9 +361,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.type === "GET_COUNTS") {
 		getDb()
 			.then((db) => countEvents(db))
-			.then((dexieCount) => {
+			.then((eventCount) => {
 				try {
-					sendResponse({ dexieCount, rxdbCount: dexieCount });
+					sendResponse({ eventCount });
 				} catch {}
 			})
 			.catch(() => {
@@ -477,9 +477,9 @@ if (chrome.runtime.onMessageExternal) {
 			if (message?.type === "GET_COUNTS") {
 				getDb()
 					.then((db) => countEvents(db))
-					.then((dexieCount) => {
+					.then((eventCount) => {
 						try {
-							sendResponse({ dexieCount, rxdbCount: dexieCount });
+							sendResponse({ eventCount });
 						} catch {}
 					})
 					.catch(() => {

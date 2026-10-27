@@ -1,0 +1,20 @@
+diff --git a/worker/taladb.worker.js b/worker/taladb.worker.js
+index a91f99f2aa0ebb24804a2797129c81c1133f4370..2cc99cec1297c1ac8054185509d62f06d26e429a 100644
+--- a/worker/taladb.worker.js
++++ b/worker/taladb.worker.js
+@@ -5,12 +5,12 @@
+  * mean the owner committed but its response was lost.
+  */
+ import { adaptiveConfigJson } from './cache-config.js';
++import * as wasmModule from '../pkg/taladb_web.js';
+ 
+ let wasmReady;
+ function loadWasm() { return wasmReady ??= (async () => {
+-  const wasm = await import(/* @vite-ignore */ '../pkg/taladb_web.js');
+-  await wasm.default();
+-  return wasm;
++  await wasmModule.default();
++  return wasmModule;
+ })(); }
+ let db = null;
+ let WorkerDB = null;

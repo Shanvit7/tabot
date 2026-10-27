@@ -39,7 +39,7 @@ For optional ChatGPT and Claude connections, see [setup instructions](apps/mcp-s
 
 ## Local capture reliability
 
-Capture uses bounded Pacer batching inside the extension service worker, then atomic Dexie transactions. A persisted acknowledgment follows commit; retries reuse stable IDs.
+Capture uses bounded Pacer batching inside the extension service worker, then atomic TalaDB writes through an extension offscreen owner to local OPFS. A persisted acknowledgment follows commit; retries reuse stable IDs. Existing IndexedDB history is imported and retired after verification.
 
 Checks: `pnpm --filter extension check:ingest`. Architecture and failure guarantees: [data flow](docs/data-flow.md).
 

@@ -165,7 +165,7 @@ export const ActivityTimeline = ({
 					>
 						<time
 							className="block text-center font-mono text-[clamp(56px,6vw,88px)] leading-none tracking-tight tabular-nums"
-							datetime={new Date(current.at).toISOString()}
+							dateTime={new Date(current.at).toISOString()}
 						>
 							{clock(current.at)}
 						</time>

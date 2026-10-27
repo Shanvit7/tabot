@@ -1,6 +1,6 @@
 # Chrome Web Store — Tabot
 
-Draft permission/privacy update for the 0.2.2 extension release, including foreground-time tracking, authorized activity-metrics and recurring-pattern tools, and guided ChatGPT connection setup. Last updated: October 14, 2026. Prepared manifest version: 0.2.2. No store submission or publication performed.
+Draft permission/privacy update for the 0.2.2 extension release, including TalaDB local storage, foreground-time tracking, authorized activity-metrics and recurring-pattern tools, and guided ChatGPT connection setup. Last updated: October 28, 2026. Prepared manifest version: 0.2.2. No store submission or publication performed.
 
 ## Store listing
 
@@ -21,6 +21,7 @@ Draft permission/privacy update for the 0.2.2 extension release, including foreg
 | `windows` | permission | Distinguish the focused browser window from background/minimized windows so browsing time is not inflated. |
 | `idle` (new) | permission | Stop counting browsing time when the device is idle or locked; no keyboard values or typed text are collected. |
 | `alarms` | permission | Retry interrupted local writes and prune expired local page evidence. |
+| `offscreen` | permission | Host TalaDB's local database worker from an extension-owned page; browser activity stays on device. |
 | `<all_urls>` | host permission | Observe page visibility and interaction signals across the websites included in the user's local browsing timeline. |
 
 ## Privacy and data use
@@ -29,7 +30,7 @@ Draft permission/privacy update for the 0.2.2 extension release, including foreg
 - Page excerpts are pruned after seven days or when the 25 MiB local page-evidence cap is exceeded. The popup can delete excerpts by site or all at once; deletion also revokes capture consent for affected sites.
 - New event URLs are structurally minimized and redacted before persistence: credentials, query strings, fragments, and supported PII in paths are removed. Older history may predate this protection; existing records are not silently rewritten or deleted.
 - Tab/window IDs, timestamps, and interaction signals remain local. Foreground sampling adds timestamps and browser focus/idle state, not typed text, form values, screenshots, or keystroke values. Page excerpts are a separate opt-in evidence store; they do not alter activity metrics. Idle state is used to decide whether to sample, not saved as a new raw event type.
-- Foreground session state is saved in session storage with its URL minimized before persistence. Browsing events remain in local IndexedDB.
+- Foreground session state is saved in session storage with its URL minimized before persistence. Activity and consented page evidence are stored locally in TalaDB on OPFS through the extension's offscreen database owner. Existing IndexedDB history is imported and retired after verification; a migration-only IndexedDB reader remains for profiles that have not upgraded. Data is not synced to a Tabot server.
 - The optional authorized ChatGPT connection returns sanitized derived context or site-level aggregate metrics for a requested time range. Metrics contain HTTP(S) origins, estimated time, visits, active days, and aggregate site-to-site transitions, never raw events, page paths, query strings, credentials, or favicons. Origins (including identifying subdomains) are not anonymized. Raw history is not uploaded or persisted by the relay. A user-initiated export shares the selected context with its chosen recipient.
 - Authorized pattern discovery returns bounded derived summaries; selected-pattern lookup adds occurrence timestamps, supporting context identifiers and origin-only sequences, not raw events or page URLs. Confidence describes heuristic similarity, not user intent or productivity. Discovery and selected-pattern lookup cover all locally retained browsing stretches, matching the dashboard; deleted or uncaptured activity is unavailable. Only the bounded, sanitized results of authorized requests leave the device.
 - Historical active-time estimates cannot reconstruct attention when old visibility/focus evidence is absent. Existing downloads must be exported again to receive the fix.

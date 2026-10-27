@@ -1,4 +1,4 @@
-// Runs the real WebSocket handler against an in-memory stand-in for local IndexedDB.
+// Runs the real WebSocket handler against an in-memory TalaDB transport.
 import assert from "node:assert/strict";
 import { mock } from "node:test";
 import { setImmediate as nextTurn } from "node:timers/promises";
@@ -21,30 +21,21 @@ const events = [
 let reads = 0;
 let fail = false;
 const db = {
-	events: {
-		where: (index: string) => {
-			assert.equal(index, "timestamp");
-			return {
-				between: (
-					start: number,
-					end: number,
-					includeStart: boolean,
-					includeEnd: boolean,
-				) => {
-					assert.deepEqual(
-						[start, end, includeStart, includeEnd],
-						[from, to, true, false],
-					);
-					return {
-						toArray: async () => {
-							reads++;
-							if (fail) throw new Error("Local database unavailable");
-							return events;
-						},
-					};
-				},
-			};
-		},
+	readEvents: async (range: {
+		from?: number;
+		to?: number;
+		fromInclusive?: boolean;
+		toInclusive?: boolean;
+	}) => {
+		assert.deepEqual(range, {
+			from,
+			to,
+			fromInclusive: true,
+			toInclusive: false,
+		});
+		reads++;
+		if (fail) throw new Error("Local database unavailable");
+		return events;
 	},
 };
 const pattern = (index: number): shared.Memory => ({
@@ -106,7 +97,6 @@ let failPrivacy = false;
 mock.module("@tabot/shared", {
 	namedExports: {
 		...shared,
-		createEventsDb: async () => db,
 		getMemories: async (_db: unknown, limit: number) => {
 			assert.equal(limit, Number.MAX_SAFE_INTEGER);
 			patternReads++;
@@ -120,6 +110,9 @@ mock.module("@tabot/shared", {
 			return shared.sanitizeDerived(derived);
 		},
 	},
+});
+mock.module("./storage-client", {
+	namedExports: { getStorageDb: async () => db },
 });
 type PatternList = {
 	scope: { contextLimit: number | null; exhaustiveHistory: boolean };
@@ -176,7 +169,9 @@ globalThis.chrome = {
 	},
 } as unknown as typeof chrome;
 globalThis.WebSocket = TestSocket as unknown as typeof WebSocket;
-const request = async <T = ReturnType<typeof shared.activityMetricsResponse>>(
+const request = async <
+	T extends object = ReturnType<typeof shared.activityMetricsResponse>,
+>(
 	params: unknown,
 	method = "get_activity_metrics",
 ) => {

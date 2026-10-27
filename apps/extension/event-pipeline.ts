@@ -86,7 +86,7 @@ export const createEventPipeline = <T extends IngestRecord = StoredTabEvent>(
 		bytes -= entry.bytes;
 	};
 	const block = (batch: Entry<T>[], code: string, canRecover: boolean) => {
-		writer.stop(); // Never abort active IndexedDB work or clear pending batches.
+		writer.stop(); // Never abort active database work or clear pending batches.
 		held = batch;
 		health = "blocked";
 		recoverable = canRecover;

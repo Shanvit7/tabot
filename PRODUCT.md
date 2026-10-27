@@ -22,7 +22,7 @@ Tabot collects browser activity on the user's device, makes recent activity sear
 
 - **Capture:** Chrome extension (Manifest V3, Plasmo). Chrome tab/window/navigation APIs + content scripts: tab lifecycle, navigation (URL sidecar), page visibility, scroll, clicks, key-occurrence, and separately consented visible-text excerpts.
 - **Transport:** bounded Pacer batching and serial writes in the extension service worker; no SharedArrayBuffer or transport worker.
-- **Persistence:** Dexie 4.x over IndexedDB (`tabot_events`), fully local.
+- **Persistence:** TalaDB 0.12.1 in one OPFS-backed database, fully local; IndexedDB is used only to import legacy profiles.
 - **Derivation:** pure, lazy, at read time — events → sessions → anchors → temporal graph → episodes → contexts → memories → retrieval → live browser-context snapshot (graphology).
 - **Surfaces:** extension popup (pipeline stats) and local web dashboard (stats, charts, sessions, activity summaries, export).
 - **Export:** canonical format is JSONL with a manifest — human inspectable, scriptable, reproducible, agent-usable. It is a secondary user-controlled copy for review or audit, not the primary product experience. Schema is documented as evolving while the project is experimental.
@@ -37,7 +37,7 @@ Tabot collects browser activity on the user's device, makes recent activity sear
 - **Deterministic and bounded:** same input produces same output; all derived/retrieval reads have practical caps.
 - **Evidence first:** derived values retain IDs, domains, timestamps, counts, similarity, staleness, and recurrence data that support them. Evidence signals, not confidence claims.
 - **Event taxonomy:** `behavioral` / `contextual` / `diagnostic`. Diagnostic events never influence derivation. SW telemetry reduced in Phase 2 to a single contextual signal, `SW_WINDOW_FOCUS` — it is never a session boundary and only strengthens existing graph edges.
-- **Overflow:** a full ring buffer rejects the event and increments a visible `droppedEvents` counter.
+- **Overflow:** a full bounded ingest queue rejects the event and increments internal `droppedEvents` counter.
 - **Status:** experimental, MIT; v0.2.1 release prepared, not deployed. Roadmap is deliberately narrow: stabilize telemetry/export format, improve activity summaries, evaluate AI inference against real examples.
 
 ## Brand Commitments

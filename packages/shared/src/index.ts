@@ -54,6 +54,7 @@ export {
 	type PageCaptureSiteSummary,
 	type PageObservationSummary,
 	prunePageObservations,
+	type StorageTransport,
 	type StoredIngestRecord,
 	type StoredTabEvent,
 	sanitizeEventsForRead,

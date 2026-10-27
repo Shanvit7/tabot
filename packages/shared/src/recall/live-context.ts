@@ -120,7 +120,7 @@ export const getCurrentBrowserContext = async (
 	navigationLimit = 10,
 ): Promise<LiveBrowserContext> => {
 	const currentContext = await getCurrentContext(db);
-	const events = await sanitizeEventsForRead(await db.events.toArray());
+	const events = await sanitizeEventsForRead(await db.readEvents());
 	const now = Date.now();
 
 	const relatedContexts = currentContext

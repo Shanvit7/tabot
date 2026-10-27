@@ -6,6 +6,7 @@
 	"private": true,
 	"scripts": {
 		"check:ingest": "node --import ../../packages/shared/resolve-hook.mjs ingest.check.mts",
+		"check:storageOwner": "node --experimental-test-module-mocks --import ../../packages/shared/resolve-hook.mjs storage-owner.check.mts && node --import ../../packages/shared/resolve-hook.mjs storage-client.check.mts",
 		"check:pageCaptureConsent": "node --import ../../packages/shared/resolve-hook.mjs page-capture-consent.check.mts",
 		"check:pageCapture": "node --import ../../packages/shared/resolve-hook.mjs page-capture.check.mts",
 		"check:popup": "node --import ../../packages/shared/resolve-hook.mjs popup-model.check.mts",
@@ -21,15 +22,18 @@
 	"dependencies": {
 		"@lobehub/icons": "^5.16.0",
 		"@tabot/shared": "workspace:*",
+		"@taladb/web": "0.12.1",
 		"@tanstack/pacer": "^0.22.0",
 		"lucide-react": "0.562.0",
 		"react": "^19.0.0",
-		"react-dom": "^19.0.0"
+		"react-dom": "^19.0.0",
+		"taladb": "0.12.1"
 	},
 	"devDependencies": {
 		"@tailwindcss/cli": "^4.3.3",
 		"@tailwindcss/postcss": "^4.3.3",
 		"@types/chrome": "^0.0.268",
+		"@types/node": "^22.20.5",
 		"@types/react": "^19.0.0",
 		"@types/react-dom": "^19.0.0",
 		"tailwindcss": "^4.3.3",
@@ -37,7 +41,17 @@
 	},
 	"manifest": {
 		"version": "0.2.2",
+		"cross_origin_opener_policy": {
+			"value": "same-origin"
+		},
+		"cross_origin_embedder_policy": {
+			"value": "credentialless"
+		},
+		"content_security_policy": {
+			"extension_pages": "script-src 'self' 'wasm-unsafe-eval' http://localhost; object-src 'self'; worker-src 'self'"
+		},
 		"permissions": [
+			"offscreen",
 			"storage",
 			"tabs",
 			"webNavigation",

@@ -52,7 +52,7 @@ const redact = async (input: string): Promise<string> =>
 	);
 }
 
-// Ingestion sanitizes before the Dexie write boundary.
+// Ingestion sanitizes before the TalaDB write boundary.
 {
 	const event = {
 		...ev(

@@ -118,6 +118,42 @@ assert.equal(pipeline.stats().outstandingRows, 0);
 	assert.equal((await ack).status, "persisted");
 	assert.equal(attempts, 2);
 }
+// A commit-then-lost-ACK retry must reconcile the immutable source ID.
+{
+	const durable = new Map<string, StoredTabEvent>();
+	let loseFirstAck = true;
+	let attempts = 0;
+	const p = createEventPipeline({
+		now: Date.now,
+		retryWait: 1,
+		commit: async (rows) => {
+			attempts++;
+			let duplicates = 0;
+			for (const item of rows) {
+				if (durable.has(item.id)) duplicates++;
+				else durable.set(item.id, structuredClone(item));
+			}
+			if (loseFirstAck) {
+				loseFirstAck = false;
+				throw new Error("commit-ack-lost");
+			}
+			return { inserted: rows.length - duplicates, duplicates };
+		},
+	});
+	const ack = p.ingest(row(261, "PAGE_HIDDEN"));
+	await microtasks();
+	await tick(10);
+	assert.equal((await ack).status, "retryable");
+	assert.equal(p.stats().heldRows, 1);
+	assert.equal(p.retry(true), true);
+	await microtasks();
+	assert.equal(attempts, 2);
+	assert.equal(durable.size, 1);
+	const replay = p.ingest(row(261, "PAGE_HIDDEN"));
+	await microtasks();
+	assert.equal((await replay).status, "persisted");
+	assert.equal(durable.size, 1);
+}
 // A late timer / slow commit cannot imply an ACK. Snapshot survives caller mutation.
 let finish!: (counts: { inserted: number; duplicates: number }) => void;
 let writes = 0;
@@ -218,6 +254,32 @@ const byteBound = createEventPipeline({
 });
 assert.equal((await byteBound.ingest(row(501))).status, "retryable");
 assert.equal(byteBound.stats().pendingBytes, 0);
+// Synthetic sustained capture verifies bounded queue and eventual ACKs, not DB throughput.
+const soakBatches: number[] = [];
+const soak = createEventPipeline({
+	now: Date.now,
+	limits: { rows: 128, reserveRows: 16, bytes: 128_000, reserveBytes: 16_000 },
+	commit: async (rows) => {
+		soakBatches.push(rows.length);
+		return { inserted: rows.length, duplicates: 0 };
+	},
+});
+const soakAcks = [];
+for (let sequence = 10_000; sequence < 11_000; sequence++) {
+	soakAcks.push(soak.ingest(row(sequence)));
+	if (soakAcks.length === 64 || sequence === 10_999) {
+		assert.ok(soak.stats().outstandingRows <= 128);
+		await microtasks();
+		soak.flush();
+		await tick(25);
+		assert.ok(
+			(await Promise.all(soakAcks)).every((ack) => ack.status === "persisted"),
+		);
+		soakAcks.length = 0;
+	}
+}
+assert.equal(soak.stats().outstandingRows, 0);
+assert.ok(Math.max(...soakBatches) <= 128);
 // Untrusted protocol + sender, delayed policy, committed replay while paused.
 let enabled = true;
 const history = new Map<string, StoredTabEvent>(); // Scheduler/contract test only, NOT browser durability proof.
@@ -392,15 +454,15 @@ assert.equal(
 	"rejected",
 	"changed keyed identity cannot replace committed event",
 );
+const keyFailure = await ingestPageMessage(privateEvent, privateSender, {
+	...deps,
+	captureIdentity: async () => {
+		throw new Error("key unavailable");
+	},
+});
+assert.ok(keyFailure.status === "rejected");
 assert.equal(
-	(
-		await ingestPageMessage(privateEvent, privateSender, {
-			...deps,
-			captureIdentity: async () => {
-				throw new Error("key unavailable");
-			},
-		})
-	).code,
+	keyFailure.code,
 	"privacy-processing-failed",
 	"key failure fails closed before persistence",
 );
@@ -464,5 +526,5 @@ await Promise.all(historicalAcks);
 assert.deepEqual(commits.at(-1), historical);
 mock.timers.reset();
 console.log(
-	"ingest: scheduler, ACK ownership, FIFO, limits, retries, replay/policy, protocol and outbox passed",
+	"ingest: scheduler, ACK ownership, FIFO, unknown-outcome reconciliation, limits, retries and protocol passed",
 );
