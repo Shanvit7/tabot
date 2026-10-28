@@ -33,8 +33,11 @@ jobs:
       - name: Lint and format check
         run: pnpm lint
 
-      - name: Check MCP server
-        run: pnpm --filter mcp-server deploy:check
+      - name: Run behavioral checks
+        run: pnpm test
+
+      - name: Dry-run MCP deployment
+        run: pnpm --filter mcp-server exec wrangler deploy --config wrangler.toml --dry-run
 
       - name: Build dashboard
         run: pnpm --filter web build

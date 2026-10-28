@@ -24,9 +24,9 @@ const [
 	{ parseClientMessage },
 	{ MAX_PENDING_REQUESTS },
 ] = await Promise.all([
-	import("../src/installation.ts"),
-	import("../src/lib/protocol.ts"),
-	import("../src/lib/constants.ts"),
+	import("../src/auth/installation.ts"),
+	import("../src/mcp/protocol.ts"),
+	import("../src/config.ts"),
 ]);
 globalThis.WebSocketRequestResponsePair = class {};
 const socket = () => ({
@@ -136,10 +136,10 @@ const [
 	{ sha256Base64Url },
 	{ signInstallationToken },
 ] = await Promise.all([
-	import("../src/auth-store.ts"),
+	import("../src/auth/store.ts"),
 	import("../src/index.ts"),
-	import("../src/lib/oauth.ts"),
-	import("../src/lib/auth.ts"),
+	import("../src/auth/oauth.ts"),
+	import("../src/auth/tokens.ts"),
 ]);
 const authState = (legacy = new Map()) => {
 	const db = new DatabaseSync(":memory:");
@@ -409,7 +409,7 @@ try {
 	);
 	assert.deepEqual(
 		await auth.getAssistantConnections("test-installation"),
-		{ chatgpt: false, claude: false },
+		{ chatgpt: false, claude: false, order: [] },
 		"approval alone is not an OAuth connection",
 	);
 	const approved = await formPost("/authorize", { transaction });
@@ -457,6 +457,7 @@ try {
 	assert.deepEqual(await auth.getAssistantConnections("test-installation"), {
 		chatgpt: true,
 		claude: false,
+		order: ["chatgpt"],
 	});
 	const claudeClientId = "claude-test-client";
 	await auth.saveClient({
@@ -478,6 +479,7 @@ try {
 	assert.deepEqual(await connectionResponse.json(), {
 		chatgpt: true,
 		claude: true,
+		order: ["chatgpt", "claude"],
 	});
 	const listCalls = state.listCalls;
 	await auth.getAssistantConnections("not-connected");
@@ -680,6 +682,7 @@ try {
 	assert.deepEqual(await auth.getAssistantConnections("test-installation"), {
 		chatgpt: false,
 		claude: true,
+		order: ["claude"],
 	});
 	const race = await auth.issueTokens({
 		clientId,
@@ -822,7 +825,7 @@ assert.equal(
 );
 assert.deepEqual(
 	await legacyAuth.getAssistantConnections("legacy-installation"),
-	{ chatgpt: false, claude: false },
+	{ chatgpt: false, claude: false, order: [] },
 );
 assert.equal(
 	(await legacyAuth.getClient("legacy-client")).clientName,

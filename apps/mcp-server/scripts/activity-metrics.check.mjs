@@ -26,7 +26,7 @@ registerHooks({
 });
 const [{ default: app }, { consentPage }] = await Promise.all([
 	import("../src/index.ts"),
-	import("../src/consent-page.tsx"),
+	import("../src/auth/consent-page.tsx"),
 ]);
 const consentHtml = consentPage({
 	clientName: "<img src=x onerror=alert(1)>",

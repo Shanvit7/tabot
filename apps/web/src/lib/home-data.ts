@@ -4,6 +4,7 @@ import {
 	derive,
 	exportFilename,
 	filterDerived,
+	type HistorySearchResult,
 	parseAssistantConnections,
 	type StatsSnapshot,
 	type StoredTabEvent,
@@ -104,20 +105,46 @@ export const rangeStart = (r: StatsRange): number => {
 	return d.getTime();
 };
 
-export const fetchEventCount = (): Promise<number | null> =>
+export type StorageCounts = { eventCount: number; pageCount: number };
+export const fetchStorageCounts = (): Promise<StorageCounts | null> =>
 	new Promise((resolve) => {
 		send(
 			{ type: "GET_COUNTS" },
-			(res) => {
+			(res) =>
 				resolve(
 					res &&
 						typeof res === "object" &&
 						"eventCount" in res &&
 						typeof res.eventCount === "number"
-						? res.eventCount
+						? {
+								eventCount: res.eventCount,
+								pageCount:
+									"pageCount" in res && typeof res.pageCount === "number"
+										? res.pageCount
+										: 0,
+							}
 						: null,
-				);
-			},
+				),
+			STORAGE_READ_TIMEOUT_MS,
+		);
+	});
+
+export const fetchHistorySearch = (
+	query: string,
+	options: { from: number; to: number; origin?: string },
+): Promise<HistorySearchResult[] | null> =>
+	new Promise((resolve) => {
+		send(
+			{ type: "SEARCH_HISTORY", query, ...options, limit: 10 },
+			(res) =>
+				resolve(
+					res &&
+						typeof res === "object" &&
+						"results" in res &&
+						Array.isArray(res.results)
+						? (res.results as HistorySearchResult[])
+						: null,
+				),
 			STORAGE_READ_TIMEOUT_MS,
 		);
 	});

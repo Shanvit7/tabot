@@ -31,6 +31,7 @@ import {
 import { applyFocusContinuity } from "../activities/sw-graph";
 import { buildContexts } from "../contexts/contexts";
 import type { StoredTabEvent } from "../events/db";
+import { logger } from "../lib/logger";
 import { buildMemories } from "../memories/memories";
 import { sessionize } from "../sessions/sessions";
 
@@ -136,27 +137,27 @@ const report = {
 };
 
 // readable summary
-console.log(
+logger.info(
 	`trace: ${report.trace.totalEvents} events (${report.trace.swEvents} SW)`,
 );
-for (const [t, n] of report.trace.eventTypes) console.log(`  ${t}: ${n}`);
-console.log(
+for (const [t, n] of report.trace.eventTypes) logger.info(`  ${t}: ${n}`);
+logger.info(
 	`\nPhase 1 (no SW): sessions=${p1.sessions} anchors=${p1.anchors} edges=${p1.graphEdges} episodes=${p1.episodes} contexts=${p1.contexts} memories=${p1.memories}`,
 );
-console.log(
+logger.info(
 	`Phase 2 (SW)  : sessions=${p2.sessions} anchors=${p2.anchors} edges=${p2.graphEdges} episodes=${p2.episodes} contexts=${p2.contexts} memories=${p2.memories}`,
 );
-console.log(
+logger.info(
 	`evidence     : ${report.swEvidence.focusContinuityEdgesStrengthened} edge(s) strengthened`,
 );
-console.log(`deltas       : ${JSON.stringify(report.deltas)}`);
-console.log(`\nepisode boundaries (phase 2):`);
+logger.info(`deltas       : ${JSON.stringify(report.deltas)}`);
+logger.info(`\nepisode boundaries (phase 2):`);
 for (const ep of p2.episodesDetailed)
 	for (const b of ep.boundaries)
-		console.log(
+		logger.info(
 			`  ${b.left}->${b.right} score=${b.score} ${b.decision} [${b.reasons.join(", ")}]`,
 		);
 
 const out = path.resolve(process.cwd(), "report.json");
 writeFileSync(out, JSON.stringify(report, null, 2));
-console.log(`\nwritten: ${out}`);
+logger.info(`\nwritten: ${out}`);

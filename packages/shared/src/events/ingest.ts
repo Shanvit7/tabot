@@ -139,6 +139,8 @@ export const storageErrorCode = (error: unknown): string => {
 			) ?? codes[0]
 		);
 	}
+	if (error instanceof Error && error.message.includes("QuotaExceededError"))
+		return "QuotaExceededError";
 	const name = bulk?.name;
 	return [
 		"AbortError",

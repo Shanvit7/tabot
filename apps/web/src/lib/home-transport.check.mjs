@@ -52,7 +52,7 @@ const flush = async () => {
 	for (let i = 0; i < 20; i++) await Promise.resolve();
 };
 try {
-	const { fetchEventCount, fetchEvents, fetchStats } =
+	const { fetchStorageCounts, fetchEvents, fetchStats } =
 		await server.ssrLoadModule("/src/lib/home-data.ts");
 	const { useHomeData } = await server.ssrLoadModule(
 		"/src/hooks/use-home-data.ts",
@@ -70,7 +70,7 @@ try {
 		},
 	};
 	let settled = 0;
-	const count = fetchEventCount().then((value) => {
+	const count = fetchStorageCounts().then((value) => {
 		settled++;
 		return value;
 	});
@@ -85,10 +85,10 @@ try {
 		0,
 		"healthy storage replies must not expire after 800 ms",
 	);
-	callbacks.get("GET_COUNTS")({ eventCount: 1 });
+	callbacks.get("GET_COUNTS")({ eventCount: 1, pageCount: 0 });
 	const rows = [{ id: "delayed-history" }];
 	callbacks.get("GET_EVENTS")(rows);
-	assert.equal(await count, 1);
+	assert.deepEqual(await count, { eventCount: 1, pageCount: 0 });
 	assert.deepEqual(await events, rows);
 
 	const stats = fetchStats();
@@ -102,7 +102,7 @@ try {
 		"missing storage reply must remain failure, not empty history",
 	);
 	callbacks.get("GET_EVENTS")([]); // Late response cannot replace timeout result.
-	const failed = fetchEventCount();
+	const failed = fetchStorageCounts();
 	callbacks.get("GET_COUNTS")({ ok: false, code: "storage-unavailable" });
 	assert.equal(await failed, null);
 	const empty = fetchEvents();

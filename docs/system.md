@@ -2,7 +2,7 @@
 
 Tabot is a local-first Chrome extension plus browser dashboard. It records a small set of browser-activity signals, stores normalized events and consented page evidence in TalaDB on OPFS, and deterministically derives sessions, activity episodes, contexts, and recurring behavioral patterns.
 
-This walkthrough reflects current working-tree code, including staged changes, audited on 2026-10-28. TalaDB cutover and full-browser-restart persistence were manually verified for one profile; see `docs/plan.md` for remaining qualification and migration limits. [`tech.md`](./tech.md) is the technical source of truth. Release gaps and acceptance criteria appear below. Together they absorb the former v0.2 product plan. **Implemented in source does not mean deployed, production-verified or release-complete.**
+This walkthrough reflects current working-tree code, including staged changes, audited on 2026-10-28. TalaDB cutover and full-browser-restart persistence were manually verified for one Chrome profile. Per-profile upgrade and live search validation remain for human QA. [`tech.md`](./tech.md) is the technical source of truth and holds migration status, storage contracts, and deferred evaluation notes. Remaining qualification and search-quality checks can happen later; they do not undo completion of the implementation. **Implemented in source does not mean deployed, production-verified or release-complete.**
 
 ## Pipeline
 
@@ -20,6 +20,8 @@ Chrome tab APIs + content script
 Raw telemetry stays on device; the optional ChatGPT integration sends sanitized, derived context on tool requests. The Worker holds OAuth/installation routing state, not browser history. There is no Tabot account, cloud sync, typed-text capture, Tabot-hosted LLM, embedding store, or task/intent inference. Separate page-excerpt capture is off by default and requires exact-site consent. See [MCP relay development and connection](../apps/mcp-server/README.md).
 
 Normalized browser events and separately consented, privacy-processed page observations are durable local data. Page observations never enter event/session/behavioral metric reads. Derived outcomes must retain observation IDs and unknown-coverage limits. The separate relay persists authentication/installation state.
+
+TalaDB/OPFS is the intended sole authoritative event/page store; IndexedDB remains only as a migration reader for upgrading profiles. Verified migration retires legacy storage after copy checks. Per-profile migration and live search checks are deferred to human QA; see [technical status](./tech.md).
 
 ## Product loop and boundaries
 

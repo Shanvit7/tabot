@@ -29,7 +29,7 @@ import {
 	normalizePageCaptureOrigins,
 	PAGE_CAPTURE_ORIGINS_KEY,
 	pageCaptureSite,
-} from "~/page-capture-consent";
+} from "~/capture/consent";
 import {
 	contextDuration,
 	contextHomeUrl,
@@ -37,7 +37,7 @@ import {
 	popupSummary,
 	siteFavicon,
 	siteLabel,
-} from "~/popup-model";
+} from "~/popup/model";
 import "./popup.tailwind.css";
 
 const HOME_URL =

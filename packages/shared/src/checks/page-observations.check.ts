@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { logger } from "../lib/logger";
 import {
 	PAGE_MIN_INTERVAL_MS,
 	PAGE_RESOURCE_DAILY_BYTES,
@@ -85,4 +86,4 @@ assert.equal(
 	}),
 	"content-rate-limit",
 );
-console.log("page-observations: validation and redaction passed");
+logger.info("page-observations: validation and redaction passed");

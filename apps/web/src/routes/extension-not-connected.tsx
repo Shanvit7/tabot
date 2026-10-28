@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Puzzle, RefreshCw } from "lucide-react";
 import { useEffect } from "react";
-import { MobileView } from "~/components/extension-mobile-setup";
+import { MobileView } from "~/components/extension-setup/mobile-setup";
 import { Button } from "~/components/ui/button";
 import { Loading } from "~/components/ui/work-panels";
 import { useHomeData } from "~/hooks/use-home-data";

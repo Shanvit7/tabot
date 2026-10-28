@@ -144,6 +144,12 @@ export type {
 	RedactionResult,
 } from "./privacy/types";
 export {
+	type HistorySearchCitation,
+	type HistorySearchOptions,
+	type HistorySearchResult,
+	searchHistory,
+} from "./recall/history-search";
+export {
 	buildLiveContext,
 	getCurrentBrowserContext,
 	getLiveInteractionIntensity,

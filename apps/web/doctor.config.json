@@ -18,9 +18,7 @@
 			{
 				"files": [
 					"src/components/landing/privacy-first.tsx",
-					"src/components/ui/work-panels.tsx",
-					"src/lib/work-charts.tsx",
-					"src/lib/context-graph-panels.tsx"
+					"src/components/ui/work-panels.tsx"
 				],
 				"rules": ["react-doctor/no-multi-comp"]
 			},
@@ -32,22 +30,16 @@
 				"rules": ["react-doctor/use-lazy-motion"]
 			},
 			{
-				"files": [
-					"src/components/home-page.tsx",
-					"src/components/landing/browser-context-film.tsx"
-				],
+				"files": ["src/components/landing/browser-context-film.tsx"],
 				"rules": ["react-doctor/no-giant-component"]
 			},
 			{
-				"files": ["src/components/ui/button.tsx", "src/lib/work-charts.tsx"],
+				"files": ["src/components/ui/button.tsx"],
 				"rules": ["react-doctor/only-export-components"]
 			},
 			{
-				"files": [
-					"src/components/ui/command.tsx",
-					"src/components/ui/popover.tsx"
-				],
-				"rules": ["react-doctor/no-multi-comp"]
+				"files": ["src/lib/home-transport.check.mjs"],
+				"rules": ["react-doctor/rules-of-hooks"]
 			}
 		]
 	}

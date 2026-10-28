@@ -1,4 +1,4 @@
-import "./storage-owner";
+import "../storage/owner";
 
 const Offscreen = () => null;
 

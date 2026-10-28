@@ -1,4 +1,4 @@
-import type { PageEventType } from "@tabot/shared";
+import { logger, type PageEventType } from "@tabot/shared";
 import { Throttler } from "@tanstack/pacer";
 import type { PlasmoCSConfig } from "plasmo";
 import {
@@ -6,9 +6,9 @@ import {
 	normalizePageCaptureOrigins,
 	PAGE_CAPTURE_ORIGINS_KEY,
 	pageCaptureSite,
-} from "../page-capture-consent";
-import { createPageOutbox } from "../page-outbox";
-import { extractVisibleExcerpts } from "../visible-excerpts";
+} from "../capture/consent";
+import { createPageOutbox } from "../capture/outbox";
+import { extractVisibleExcerpts } from "../capture/visible-excerpts";
 
 export const config: PlasmoCSConfig = {
 	matches: ["<all_urls>"],
@@ -19,7 +19,7 @@ export const config: PlasmoCSConfig = {
 const outbox = createPageOutbox({
 	documentUrl: () => location.href,
 	send: (message) => chrome.runtime.sendMessage(message),
-	onFailure: (code) => console.warn("[Tabot] page event not confirmed", code),
+	onFailure: (code) => logger.warn("page event not confirmed", { code }),
 });
 let flushingHidden = false;
 let excerptTimer: ReturnType<typeof setTimeout> | undefined;

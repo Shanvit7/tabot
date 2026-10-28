@@ -122,7 +122,7 @@ const run = (events: StoredTabEvent[]) => {
 		visit(index, index < 2 ? "target" : "other"),
 	).flat();
 	const db = {
-		events: { toArray: async () => events },
+		readEvents: async () => events,
 	} as unknown as TabotDatabase;
 	const dashboard = derive(events);
 	assert.ok(dashboard.sessions.length > 500);

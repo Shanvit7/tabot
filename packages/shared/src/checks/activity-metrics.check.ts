@@ -5,6 +5,7 @@ import {
 	parseActivityMetricsInput,
 } from "../activities/metrics";
 import type { StoredTabEvent } from "../events/db";
+import { logger } from "../lib/logger";
 import { activityMetricsPrompt, chatGptPromptUrl } from "../share/targets";
 
 const from = new Date(2026, 0, 15, 9).getTime();
@@ -163,6 +164,6 @@ assert.ok(
 assert.ok(prompt.includes("get_activity_metrics"));
 assert.equal(new URL(chatGptPromptUrl(prompt)).searchParams.get("q"), prompt);
 assert.doesNotMatch(activityMetricsPrompt(from, to), /"origin"/);
-console.log(
+logger.info(
 	"Activity metrics checks passed: bounds, attribution, transition counts, privacy, caps, inputs, prompts.",
 );

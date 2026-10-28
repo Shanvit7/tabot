@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { NotFound } from "~/components/not-found";
 import { SITE_DESCRIPTION, siteUrl } from "~/lib/site";
+import ReactScan from "~/providers/react-scan";
 // Side-effect import (not `?url` + a manual <link>) so the router owns this
 // stylesheet and the prerender step can inline it — otherwise it stays a
 // render-blocking request ahead of first paint.
@@ -42,6 +43,7 @@ const RootLayout = () => {
 				<HeadContent />
 			</head>
 			<body>
+				<ReactScan />
 				<Outlet />
 				<Scripts />
 			</body>

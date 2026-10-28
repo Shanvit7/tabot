@@ -1,6 +1,6 @@
 # Tabot Technical Specification
 
-> **Technical source of truth for Tabot's architecture and deterministic derived layer.** Supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`) and incorporates the former v0.2 product plan with [`system.md`](./system.md). Audited against working-tree code on 2026-10-28. TalaDB migration is implemented and one user's profile passed full-Chrome-restart verification; broader failure qualification and release acceptance remain separate statuses. Release gaps and acceptance are documented below and in the companion walkthrough.
+> **Technical source of truth for Tabot's architecture and deterministic derived layer.** Supersedes the earlier split specifications (`metrics.md`, `sessions-spec.md`, `contexts-spec.md`, `memories-spec.md`, `retrieval-spec.md`, `liveContext-spec.md`) and incorporates the former v0.2 product plan with [`system.md`](./system.md). Audited against working-tree code on 2026-10-28. TalaDB migration is implemented and one Chrome profile passed full-restart verification. Per-profile upgrade and live search evaluation remain for human QA; broader qualification and search-quality evaluation are deferred, not blockers to the completed implementation.
 
 ---
 
@@ -156,7 +156,7 @@ IDs are generated once at capture and reused for retries. Committed duplicates a
 
 `StatsSnapshot` exposes health, collector/pending/active/held/outstanding rows, pending bytes and oldest age, observed/selected/queued/persisted/duplicate/ignored/coalesced/rejected counters, retry/failure counts, last commit/error code, and 128 bounded batch timing samples. Counters reset on worker activation, not lifetime loss totals. Compatibility `buffer*` fields mean queue admission budget/occupancy/peak, `eventsProcessed/totalEvents` mean committed inserts, `droppedEvents` means admission rejections. See the exact type in `packages/shared/src/lib/protocol.ts`.
 
-`GET_COUNTS` obtains authoritative committed count through `db.events.count()`. Popup/Home show plain degraded-state feedback; raw pipeline totals are not activity counts. Read failures are explicit, not empty history or zero counts; readers retain last successful data.
+`GET_COUNTS` obtains authoritative committed event/page counts from TalaDB. Popup/Home show plain degraded-state feedback; raw pipeline totals are not activity counts. Read failures are explicit, not empty history or zero counts; readers retain last successful data.
 
 ---
 
@@ -168,7 +168,7 @@ Native handlers snapshot their own tab/navigation payload or existing metadata b
 
 ### Bounded Pacer stages
 
-`apps/extension/event-pipeline.ts` owns 2,048 outstanding rows / 4 MiB conservative payload accounting across eligibility, collector, pending, active and held batches. Reserve 128 rows / 256 KiB for native/boundary events within that total. Each normalized payload is limited to 32 KiB; each in-flight ID permits four response waiters. Interaction overload receives retryable/busy, never eviction or persisted success.
+`apps/extension/ingestion/event-pipeline.ts` owns 2,048 outstanding rows / 4 MiB conservative payload accounting across eligibility, collector, pending, active and held batches. Reserve 128 rows / 256 KiB for native/boundary events within that total. Each normalized payload is limited to 32 KiB; each in-flight ID permits four response waiters. Interaction overload receives retryable/busy, never eviction or persisted success.
 
 `Batcher` collects at most 128 rows / 25 ms from first item. Function-valued remaining wait prevents later arrivals extending the deadline; semantic boundaries flush promptly. Synchronous transfer goes to `AsyncQueuer` FIFO, concurrency 1, wait 0. Never writer-flush: installed Pacer flush can bypass concurrency. No idle collection timer, drain polling, dedicated transport worker, SAB or Atomics in production bundles. Timing values are provisional scheduling targets, not durability guarantees.
 
@@ -176,7 +176,7 @@ Native handlers snapshot their own tab/navigation payload or existing metadata b
 
 `apps/extension/tabs/storage-owner.ts` hosts one OPFS-backed TalaDB database in an extension offscreen document. Events and page observations are envelopes in one `records` collection, separated by `recordKind`; source IDs and replay identities remain in the payload. One serialized owner mutation lane normalizes and deduplicates input, checks existing identities and page budgets, then calls atomic `records.insertMany()` for accepted rows. Conflicting reuse rejects before insert; matching replay never overwrites. ACK follows the durable call, then releases capacity.
 
-The existing writer retries classified transient failures three times (exponential 100 ms base, 1 s cap, 0.2 jitter). Permanent failure/exhaustion stops new starts and retains one bounded immutable held batch. Pending work remains owned; responses are not persisted ACKs. Recovery retries held work first after cooldown via suitable events/alarm, or explicit internal `RETRY_INGEST`. OPFS errors fail closed; an ambiguous owner response is reconciled by stable identity after reopening, not assumed uncommitted. The migration-only native IndexedDB reader imports old `tabot_events` profiles in verified batches and retires the database after verification; it is not a live write/read fallback.
+The existing writer retries classified transient failures three times (exponential 100 ms base, 1 s cap, 0.2 jitter). Permanent failure/exhaustion stops new starts and retains one bounded immutable held batch. Pending work remains owned; responses are not persisted ACKs. Recovery retries held work first after cooldown via suitable events/alarm, or explicit internal `RETRY_INGEST`. OPFS errors fail closed; an ambiguous owner response is reconciled by stable identity after reopening, not assumed uncommitted. The migration-only native IndexedDB reader imports old `tabot_events` profiles in verified batches and retires the database after verification; it is not a live write/read fallback. One profile passed manual full-Chrome-restart verification. Per-profile upgrade and live search validation remain for human QA; no additional profile migration was attempted.
 
 ### Protocol, readers and lifetime
 
@@ -184,7 +184,7 @@ Protocol v1 requires stable document-instance UUID + sequence, preserved capture
 
 `persisted` means commit or identical committed replay; `ignored`, `retryable` and `rejected` never mean durable. Queues, timers, held work and callbacks disappear on worker termination. Live page retry can recover an ambiguous ACK; native Chrome events have no general replay. Committed history survives ordinary restarts under browser storage guarantees, not deletion/uninstall/quota or universal hardware fsync. No exactly-once, physical-interaction losslessness or shutdown-flush guarantee.
 
-`GET_STATS` is a cheap synchronous scheduler snapshot. `GET_COUNTS` returns committed count with legacy rxdbCount alias; `GET_EVENTS` returns committed rows. Both internal/external read failures return `{ ok: false, code: 'storage-unavailable' }`, never zero/empty fallback. Dashboard/popup preserve last successful snapshots and show degraded status. Different-origin dashboard still reads via Chrome messaging. MCP authorization/sanitization is unchanged and reads committed rows without flushing ingestion. Full flow and failure ownership: [data-flow.md](./data-flow.md).
+`GET_STATS` is a cheap synchronous scheduler snapshot. `GET_COUNTS` returns committed event/page counts; `GET_EVENTS` returns committed event rows. Dashboard `SEARCH_HISTORY` is user-triggered and reads current TalaDB rows, returning bounded URL-grouped citations from event metadata and already-redacted page excerpts. It is restricted to Tabot's GitHub Pages path and `localhost:3000`/`:3001`; unauthorized origins return `unauthorized-sender`, query failures return `search-unavailable`. Dashboard/popup preserve last successful snapshots and show degraded status; storage-read failures remain explicit, never zero/empty fallback. No history or page excerpt leaves the device; MCP authorization/sanitization is unchanged and reads committed event rows without flushing ingestion. Full flow and failure ownership: [data-flow.md](./data-flow.md).
 
 ---
 
@@ -575,7 +575,9 @@ Do not add derived TalaDB collections, event caches/indexes, semantic enrichment
 
 ---
 
-## 13. Phase 7 Decision Gate
+## 13. Deferred Product-quality Evaluation
+
+This evaluation is not required to consider the TalaDB migration implementation complete. Run it before claiming representative real-browsing usefulness or expanding AI-facing behavior.
 
 For the existing ChatGPT MCP integration and any future AI-facing changes, evaluate representative real and constructed browsing scenarios:
 
@@ -592,7 +594,7 @@ The required decision is:
 
 If yes, retain the strongest evidence-grounded signals in tool results. If no, identify the minimum additional metadata required and why; do not expand collection simply because data is available.
 
-The current ChatGPT integration serves requested, sanitized activity summaries, bounded recurring-pattern evidence and origin-only metrics (§16), not raw history or the whole live snapshot. Sessions are inspectable locally but have no dedicated MCP tool. Source inspection and deterministic checks do not establish representative real-browsing usefulness; this evaluation remains open.
+The current ChatGPT integration serves requested, sanitized activity summaries, bounded recurring-pattern evidence and origin-only metrics (§16), not raw history or the whole live snapshot. Sessions are inspectable locally but have no dedicated MCP tool. Source inspection and deterministic checks do not establish representative real-browsing usefulness. This product-quality evaluation is deferred; it does not block the implemented storage migration.
 
 ---
 
@@ -709,7 +711,7 @@ Tool names are protocol contracts, not product labels. Every tool advertises `re
 | `get_memory({ id })` | ID 1–256 characters; one pattern from the recent-context scope, or `found: false`. Origin-only supporting occurrences and real `get_context` IDs. |
 | `get_activity_metrics({ from, to, origin? })` | Safe integer Unix milliseconds with `0 <= from < to <= now`; `[from,to)`, `from: 0` means retained history. Optional exact HTTP(S) origin, max 256 characters, with no credentials/path/query/fragment/trailing slash. Validated again locally. |
 
-Server is `apps/mcp-server/src/index.ts`; schemas/constants are in `src/schema/tools.schema.ts` and `src/lib/`; extension dispatch/projections are in `apps/extension/relay.ts`. Tools return one JSON text content block; relay failures become MCP `isError` results. `get_session` and `get_page_context` do not exist. Local `LiveBrowserContext` APIs are not directly exposed by MCP.
+Server entry is `apps/mcp-server/src/index.ts`; schemas are in `apps/mcp-server/src/mcp/schema/`, auth code in `apps/mcp-server/src/auth/`, and shared configuration in `apps/mcp-server/src/config.ts`. Extension relay dispatch/projections are in `apps/extension/relay/relay.ts`. Tools return one JSON text content block; relay failures become MCP `isError` results. `get_session` and `get_page_context` do not exist. Local `LiveBrowserContext` APIs are not directly exposed by MCP.
 
 Context IDs are derived, not durable database handles: changed source/algorithms and recent-memory scope can make a previously selected ID unavailable. Context discovery can include a still-growing ready summary; only notifications impose the settlement delay. Full-history lookup/discovery avoids IDs changed merely by slicing raw input, but still performs full local derivation and may exceed latency at scale. No pagination/cache/indexing guarantee is implied.
 

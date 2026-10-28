@@ -391,6 +391,6 @@ line("  existing same-session, same-window edges, only for real cross-window");
 line("  excursions (w -> -1 -> w focus regain is excluded). Episode");
 line("  divergence machinery is untouched.");
 
-console.log(lines.join("\n"));
+logger.info(lines.join("\n"));
 
 logger.info("sw-episodes.check: all assertions passed ✔");

@@ -5,25 +5,19 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { routePath } from "hono/route";
 import { rateLimiter } from "hono-rate-limiter";
-import { DEFAULT_SCOPES, type TabotAuth } from "./auth-store";
-import { consentPage } from "./consent-page";
-import { signInstallationToken, verifyInstallationToken } from "./lib/auth";
-import {
-	AUTH_CODE_TTL_MS,
-	MAX_HTTP_BODY_BYTES,
-	NAME,
-	VERSION,
-} from "./lib/constants";
-import { logEvent } from "./lib/log";
+import { consentPage } from "./auth/consent-page";
 import {
 	authorizationServerMetadata,
 	protectedResourceMetadata,
 	protectedResourceMetadataUrl,
 	randomToken,
 	sha256Base64Url,
-} from "./lib/oauth";
-import { ERROR_CODES, RelayError } from "./lib/protocol";
-import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./lib/tools";
+} from "./auth/oauth";
+import { DEFAULT_SCOPES, type TabotAuth } from "./auth/store";
+import { signInstallationToken, verifyInstallationToken } from "./auth/tokens";
+import { AUTH_CODE_TTL_MS, MAX_HTTP_BODY_BYTES, NAME, VERSION } from "./config";
+import { logEvent } from "./log";
+import { ERROR_CODES, RelayError } from "./mcp/protocol";
 import {
 	getActivityMetricsInputSchema,
 	getContextInputSchema,
@@ -32,10 +26,11 @@ import {
 	getRecentContextInputSchema,
 	listRecurringPatternsInputSchema,
 	searchContextInputSchema,
-} from "./schema";
+} from "./mcp/schema";
+import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./mcp/tools";
 
-export { TabotAuth } from "./auth-store";
-export { TabotInstallation } from "./installation";
+export { TabotInstallation } from "./auth/installation";
+export { TabotAuth } from "./auth/store";
 
 export interface Env {
 	MCP_PUBLIC_URL: string;

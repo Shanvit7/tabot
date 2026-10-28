@@ -9,7 +9,7 @@ Draft permission/privacy update for the 0.2.2 extension release, including TalaD
 - Category: Productivity
 - Language: English
 - Single purpose: Turn local browser activity into structured browsing context that users can review and share.
-- Feature update: Context durations count foreground browsing, excluding hidden tabs, idle/lock, sleep, and gaps between browsing stretches. Elapsed coverage remains separately available. Activities shows observation-based estimates and can send a selected period or site's aggregate metrics to an authorized ChatGPT connection. Recurring patterns can ask the connected assistant to discover repeated browsing patterns or explain selected evidence. Optional page excerpts are captured only on explicitly selected sites and remain local.
+- Feature update: Context durations count foreground browsing, excluding hidden tabs, idle/lock, sleep, and gaps between browsing stretches. Elapsed coverage remains separately available. Activities shows observation-based estimates and can send a selected period or site's aggregate metrics to an authorized ChatGPT connection. Recurring patterns can ask the connected assistant to discover repeated browsing patterns or explain selected evidence. Users can search recorded URLs and already-redacted, explicitly consented page excerpts on-device, with local source citations. Optional page excerpts are captured only on explicitly selected sites and remain local.
 
 ## Permissions justification
 

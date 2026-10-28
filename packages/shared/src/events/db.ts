@@ -1,6 +1,10 @@
 import { logger } from "../lib/logger";
 import type { StoredPageObservation } from "../pages/observations";
 import { sanitizeEventForIngestion } from "../privacy/ingest";
+import type {
+	HistorySearchOptions,
+	HistorySearchResult,
+} from "../recall/history-search";
 import type { TabEventMetadata, TabEventType } from "./events";
 import { normalizeEvent } from "./ingest";
 
@@ -97,8 +101,12 @@ export class TabotDatabase {
 					);
 				}),
 			])) as { ok?: boolean; code?: string; value?: T } | undefined;
-			if (!response?.ok)
-				throw new Error(response?.code ?? "storage-unavailable");
+			if (!response?.ok) {
+				const code = response?.code ?? "storage-unavailable";
+				const error = new Error(code);
+				error.name = code;
+				throw error;
+			}
 			return response.value as T;
 		} finally {
 			if (timeout) clearTimeout(timeout);
@@ -111,6 +119,7 @@ export class TabotDatabase {
 	commitIngest = (records: StoredIngestRecord[]) =>
 		this.request<InsertEventsResult>("commitIngest", [records]);
 	countEvents = () => this.request<number>("countEvents");
+	countPages = () => this.request<number>("countPages");
 	readEvents = (range?: EventRange) =>
 		this.request<StoredTabEvent[]>("readEvents", [range]);
 	findEvent = (id: string) =>
@@ -125,6 +134,16 @@ export class TabotDatabase {
 		]);
 	getPageCaptureSiteSummaries = () =>
 		this.request<PageCaptureSiteSummary[]>("getPageCaptureSiteSummaries");
+	searchHistory = (query: string, options?: HistorySearchOptions) =>
+		this.request<HistorySearchResult[]>("searchHistory", [query, options]);
+	getLegacyMigrationStatus = () =>
+		this.request<{
+			pendingRetirement: boolean;
+			events: number;
+			pages: number;
+		}>("getLegacyMigrationStatus");
+	confirmLegacyRetirement = () =>
+		this.request<{ retired: boolean }>("confirmLegacyRetirement");
 	deletePageObservations = (
 		filter?: { origin?: string; from?: number; to?: number },
 		limit?: number,

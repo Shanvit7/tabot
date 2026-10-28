@@ -18,30 +18,42 @@ import {
 	type TabEventMetadata,
 	type TabEventType,
 } from "@tabot/shared";
-import { createCaptureIdentity } from "./capture-identity";
-import { createEventPipeline } from "./event-pipeline";
-import { isForegroundTab, startForegroundTracking } from "./foreground";
+import {
+	isForegroundTab,
+	startForegroundTracking,
+} from "./background/foreground";
 import {
 	normalizePageCaptureOrigins,
 	PAGE_CAPTURE_ORIGINS_KEY,
 	pageCaptureSite,
-} from "./page-capture-consent";
+} from "./capture/consent";
+import { isDashboardSender } from "./dashboard/sender";
+import { createCaptureIdentity } from "./ingestion/capture-identity";
+import { createEventPipeline } from "./ingestion/event-pipeline";
 import {
 	ingestPageMessage,
 	ingestPageObservationMessage,
-} from "./page-ingress";
+} from "./ingestion/page-ingress";
 import {
 	approveAuthorizationTransaction,
 	getAssistantConnections,
 	getRelayStatus,
 	startRelay,
-} from "./relay";
-import { getStorageDb } from "./storage-client";
+} from "./relay/relay";
+import { getStorageDb } from "./storage/client";
 
 // One service worker, one bounded serial writer. Queued is not persisted.
 const RECOVERY_ALARM = "tabot-ingest-recovery";
 const PAGE_RETENTION_ALARM = "tabot-page-retention";
 const getDb = getStorageDb;
+const getStorageCounts = async () => {
+	const db = await getDb();
+	const [eventCount, pageCount] = await Promise.all([
+		countEvents(db),
+		db.countPages(),
+	]);
+	return { eventCount, pageCount };
+};
 const pipeline = createEventPipeline<StoredIngestRecord>({
 	commit: async (rows) => bulkInsertIngestRecords(await getDb(), rows),
 	onBlocked: (recoverable) => {
@@ -359,11 +371,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	}
 
 	if (message?.type === "GET_COUNTS") {
-		getDb()
-			.then((db) => countEvents(db))
-			.then((eventCount) => {
+		getStorageCounts()
+			.then((counts) => {
 				try {
-					sendResponse({ eventCount });
+					sendResponse(counts);
 				} catch {}
 			})
 			.catch(() => {
@@ -463,6 +474,26 @@ if (chrome.runtime.onMessageExternal) {
 				return true;
 			}
 
+			if (!isDashboardSender(sender.url)) {
+				sendResponse({ ok: false, code: "unauthorized-sender" });
+				return false;
+			}
+
+			if (message?.type === "SEARCH_HISTORY") {
+				getDb()
+					.then((db) =>
+						db.searchHistory(message.query, {
+							from: message.from,
+							to: message.to,
+							origin: message.origin,
+							limit: message.limit,
+						}),
+					)
+					.then((results) => sendResponse({ results }))
+					.catch(() => sendResponse({ ok: false, code: "search-unavailable" }));
+				return true;
+			}
+
 			if (message?.type === "GET_ASSISTANT_CONNECTIONS") {
 				respondAssistantConnections(sendResponse);
 				return true;
@@ -475,11 +506,10 @@ if (chrome.runtime.onMessageExternal) {
 				return false;
 			}
 			if (message?.type === "GET_COUNTS") {
-				getDb()
-					.then((db) => countEvents(db))
-					.then((eventCount) => {
+				getStorageCounts()
+					.then((counts) => {
 						try {
-							sendResponse({ eventCount });
+							sendResponse(counts);
 						} catch {}
 					})
 					.catch(() => {

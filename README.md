@@ -9,7 +9,7 @@
 Tabot is a Chrome extension that helps you pick up where you left off, without retracing every tab.
 
 - See which sites you visited and how you moved between them.
-- Find sites and browsing paths you keep returning to.
+- Search recorded URLs and already captured, redacted page excerpts locally.
 - Connect ChatGPT or Claude to ask about your browsing activity.
 
 ## Privacy

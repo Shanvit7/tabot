@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ActivityWorkspace } from "~/components/activity-workspace";
+import { ActivityWorkspace } from "~/components/activity/activity-workspace";
 
 export const Route = createFileRoute("/activities")({
 	head: () => ({

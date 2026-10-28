@@ -13,7 +13,7 @@ index a91f99f2aa0ebb24804a2797129c81c1133f4370..2cc99cec1297c1ac8054185509d62f06
 -  const wasm = await import(/* @vite-ignore */ '../pkg/taladb_web.js');
 -  await wasm.default();
 -  return wasm;
-+  await wasmModule.default();
++  await wasmModule.default(new URL('/taladb_web_bg.wasm', self.location.href));
 +  return wasmModule;
  })(); }
  let db = null;
