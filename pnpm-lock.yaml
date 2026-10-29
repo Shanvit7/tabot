@@ -215,10 +215,16 @@ importers:
       graphology:
         specifier: ^0.26.0
         version: 0.26.0(graphology-types@0.24.8)
+      handwired:
+        specifier: github:chenglou/handwired#257856e3b221140acb4cc4460626b850c0bd4ff1
+        version: https://codeload.github.com/chenglou/handwired/tar.gz/257856e3b221140acb4cc4460626b850c0bd4ff1
     devDependencies:
       '@types/node':
         specifier: ^22.20.1
         version: 22.20.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
 packages:
 
@@ -5744,6 +5750,10 @@ packages:
   graphql@15.10.2:
     resolution: {integrity: sha512-1PRqdDPAmViWr4h1GVBT8RoPZfWSGZa7kDzleTilOfVIslsgf+cia3Nl95v1KDmR4iERPaT7WzQ+tN4MJmbg3w==}
     engines: {node: '>= 10.x'}
+
+  handwired@https://codeload.github.com/chenglou/handwired/tar.gz/257856e3b221140acb4cc4460626b850c0bd4ff1:
+    resolution: {gitHosted: true, integrity: sha512-Bl+yX+gx5AzlRyENsX4KGz87gtN8j3fPJ/GzOP6CWzc+92uY79svNbil/a3nrWQyAhSBUCXJUGd3668R3E+Hcw==, tarball: https://codeload.github.com/chenglou/handwired/tar.gz/257856e3b221140acb4cc4460626b850c0bd4ff1}
+    version: 0.0.0
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -15251,6 +15261,8 @@ snapshots:
       graphql: 15.10.2
 
   graphql@15.10.2: {}
+
+  handwired@https://codeload.github.com/chenglou/handwired/tar.gz/257856e3b221140acb4cc4460626b850c0bd4ff1: {}
 
   has-flag@4.0.0: {}
 

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import type { StoredTabEvent } from "../events/db";
 import { logger } from "../lib/logger";
 import type { StoredPageObservation } from "../pages/observations";
-import { searchHistory } from "../recall/history-search";
+import {
+	projectEvidenceSearchResults,
+	searchHistory,
+} from "../recall/history-search";
 
 const event = (id: string, url: string, timestamp: number): StoredTabEvent => ({
 	id,
@@ -59,10 +62,10 @@ const pages = [
 		"Reset account password with a recovery code",
 	),
 	page(
-		"page-private",
+		"page-clean",
 		"https://example.com/private",
 		280,
-		"secret password token",
+		"Ordinary documentation text",
 		false,
 	),
 ];
@@ -75,6 +78,37 @@ assert.equal(exact[0]?.sourceCount, 4);
 assert.equal(exact[0]?.sources[0]?.url, "https://example.com/docs/pkce");
 assert.equal(exact[0]?.excerpt.includes("PKCE"), true);
 assert.equal(exact[0]?.url.includes("secret"), false);
+const paginationEvents = [
+	event("page-a", "https://a.example/pkce", 500),
+	event("page-b", "https://b.example/pkce", 501),
+];
+const firstPage = await searchHistory(paginationEvents, [], "PKCE", {
+	limit: 1,
+});
+const secondPage = await searchHistory(paginationEvents, [], "PKCE", {
+	limit: 1,
+	offset: 1,
+});
+assert.equal(firstPage.length, 1);
+assert.equal(secondPage.length, 1);
+assert.notEqual(firstPage[0]?.url, secondPage[0]?.url);
+const externalEvidence = projectEvidenceSearchResults(exact.slice(0, 1))[0];
+assert.equal(externalEvidence?.origin, "https://example.com");
+assert.equal(externalEvidence?.excerpt.includes("PKCE"), true);
+assert.equal(JSON.stringify(externalEvidence).includes("/docs/pkce"), false);
+assert.equal(Object.hasOwn(externalEvidence?.sources[0] ?? {}, "url"), false);
+const pathOnlyResult = projectEvidenceSearchResults(
+	await searchHistory(
+		[event("path-only", "https://private.example/account/internal", 400)],
+		[],
+		"internal",
+	),
+)[0];
+assert.equal(pathOnlyResult?.excerpt, "");
+assert.equal(
+	JSON.stringify(pathOnlyResult).includes("/account/internal"),
+	false,
+);
 
 const paraphrase = await searchHistory(
 	events,
@@ -88,6 +122,10 @@ const paraphrase = await searchHistory(
 );
 assert.equal(paraphrase[0]?.url, "https://docs.example.net/reset");
 assert.equal(paraphrase[0]?.sourceCount, 2);
+assert.equal(
+	(await searchHistory(events, pages, "ordinary documentation"))[0]?.url,
+	"https://example.com/private",
+);
 assert.equal(
 	await searchHistory(events, pages, "completely unrelated topic").then(
 		(r) => r.length,
@@ -132,6 +170,29 @@ const mrr =
 assert.equal(recallAt3, 1);
 assert.equal(mrr, 1);
 
+const matchingPage = page(
+	"old-match",
+	"https://evidence.example/article",
+	100,
+	`${"background ".repeat(30)}needle phrase appears in this exact source`,
+);
+const unrelatedPages = Array.from({ length: 6 }, (_, index) =>
+	page(
+		`new-${index}`,
+		"https://evidence.example/article",
+		200 + index,
+		"Recent page observation without matching content",
+	),
+);
+const evidence = (
+	await searchHistory([], [matchingPage, ...unrelatedPages], "needle phrase")
+)[0];
+assert.equal(
+	evidence?.sources.some(({ id }) => id === "old-match"),
+	true,
+);
+assert.equal(evidence?.excerpt.includes("needle phrase"), true);
+
 let searchYielded = false;
 const yieldCheck = new Promise<void>((resolve) =>
 	setTimeout(() => {
@@ -154,5 +215,5 @@ assert.equal(searchYielded, true);
 assert.equal(largeResult[0]?.url, "https://load.example/needle");
 assert.equal(largeResult[0]?.sourceCount, 1);
 logger.info(
-	`history-search: Recall@3=${recallAt3.toFixed(2)} MRR=${mrr.toFixed(2)}; privacy, provenance, filters, deletion, and no-answer passed`,
+	"history-search: synthetic fixture assertions passed (not product quality evidence); privacy, provenance, filters, deletion, and no-answer passed",
 );

@@ -3,13 +3,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ═══════════════════════════════════════════════════
-   Fonts — self-hosted (latin subset, woff2).
-   Loaded from our own origin instead of a render-blocking
-   fonts.googleapis.com stylesheet + fonts.gstatic.com, which
-   cost two extra DNS/TLS handshakes on the critical path.
-   IBM Plex Sans is a variable font: all four weights share one file.
-   ═══════════════════════════════════════════════════ */
 @font-face {
 	font-family: "IBM Plex Mono";
 	font-style: normal;
@@ -67,21 +60,14 @@
 	src: url("../assets/fonts/ibm-plex-sans-var.woff2") format("woff2");
 }
 
-/* ═══════════════════════════════════════════════════
-   Tabot Design System — Single source of truth
-   ═══════════════════════════════════════════════════ */
-
 @theme {
-	/* Fonts */
 	--font-sans: "IBM Plex Sans", system-ui, sans-serif;
 	--font-mono: "IBM Plex Mono", monospace;
 
-	/* Colors — map CSS vars to Tailwind */
 	--color-lime: var(--lime);
 	--color-landing-paper: #f5f6f0;
 	--color-landing-soft: #e9f4d6;
 	--color-landing-muted: #40584a;
-	/* Exact extension popup palette, scoped to its landing preview. */
 	--color-preview-ink: #15251b;
 	--color-preview-muted: #476151;
 	--color-preview-line: #d2ddd2;
@@ -98,17 +84,9 @@
 	--color-work-accent: var(--work-accent);
 	--color-black: #000000;
 	--color-white: #ffffff;
-
-	/* Neubrutalist radius — all zero */
-	--radius: 0rem;
-	--radius-sm: 0rem;
-	--radius-md: 0rem;
-	--radius-lg: 0rem;
-	--radius-xl: 0rem;
 }
 
 :root {
-	/* ── Brand ── */
 	--lime: #bfff00;
 	--work-canvas: #fff;
 	--work-surface: #f5f8f4;
@@ -120,7 +98,6 @@
 	--lime-hsl: 72 100% 50%;
 	--black: #000000;
 
-	/* ── Semantic aliases ── */
 	--background: var(--white);
 	--foreground: var(--black);
 	--primary: var(--lime);
@@ -137,152 +114,10 @@
 	--destructive-foreground: var(--white);
 	--border: var(--black);
 	--ring: var(--lime);
-
-	/* ── Neubrutalist shadows ── */
-	--shadow-hard: 4px 4px 0px var(--black);
-	--shadow-hard-sm: 2px 2px 0px var(--black);
-	--shadow-hard-lg: 6px 6px 0px var(--black);
-	--shadow-hard-xl: 8px 8px 0px var(--black);
-
-	/* ── Motion ── */
-	--transition-snap: 150ms cubic-bezier(0.22, 1, 0.3, 1.12);
-	--transition-base: 240ms cubic-bezier(0.22, 1, 0.3, 1.12);
-}
-
-/* ── Base ── */
-@layer base {
-	* {
-		border-color: var(--black);
-	}
 }
 
 body {
 	background: var(--background);
 	color: var(--foreground);
 	font-family: var(--font-sans);
-}
-
-/* ── Neubrutalist utilities ── */
-.border-hard {
-	border: 2px solid var(--black);
-}
-
-.border-hard-lg {
-	border: 3px solid var(--black);
-}
-
-.shadow-hard {
-	box-shadow: var(--shadow-hard);
-}
-
-.shadow-hard-sm {
-	box-shadow: var(--shadow-hard-sm);
-}
-
-.shadow-hard-lg {
-	box-shadow: var(--shadow-hard-lg);
-}
-
-.shadow-hard-xl {
-	box-shadow: var(--shadow-hard-xl);
-}
-
-.hover-lift {
-	transition:
-		transform var(--transition-snap),
-		box-shadow var(--transition-snap);
-}
-
-.hover-lift:hover {
-	transform: translate(-2px, -2px);
-	box-shadow: var(--shadow-hard-lg);
-}
-
-.hover-lift:active {
-	transform: translate(2px, 2px);
-	box-shadow: var(--shadow-hard-sm);
-}
-
-/* ── Loading indicator — tabs stamp in, one wave ── */
-.loading-tab {
-	width: 2.75rem;
-	height: 1.75rem;
-	border: 2px solid var(--black);
-	background: var(--white);
-	box-shadow: var(--shadow-hard-sm);
-	animation: loading-stamp 1.6s ease-in-out infinite;
-}
-
-.loading-tab:nth-child(2) {
-	animation-delay: 0.16s;
-}
-
-.loading-tab:nth-child(3) {
-	animation-delay: 0.32s;
-}
-
-.loading-tab:nth-child(4) {
-	animation-delay: 0.48s;
-}
-
-.loading-tab:nth-child(5) {
-	animation-delay: 0.64s;
-}
-
-@keyframes loading-stamp {
-	0% {
-		transform: translateY(-0.6rem);
-		opacity: 0;
-	}
-	18% {
-		transform: translateY(0);
-		opacity: 1;
-	}
-	42% {
-		background: var(--lime);
-	}
-	100% {
-		background: var(--lime);
-	}
-}
-
-/* Marketing-only refinements; dashboard and popup keep their own UI language. */
-.landing-page ::selection {
-	background: var(--lime);
-	color: var(--black);
-}
-
-.landing-page [id] {
-	scroll-margin-top: 6rem;
-}
-
-.landing-page :is(a, button, summary):focus-visible {
-	outline: 3px solid currentColor;
-	outline-offset: 5px;
-}
-
-.landing-page summary::-webkit-details-marker {
-	display: none;
-}
-
-.landing-page :is(a, button) {
-	transition:
-		color 150ms,
-		background-color 150ms,
-		box-shadow 150ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.landing-page :is(a, button) {
-		transition: none;
-		translate: none;
-		transform: none;
-	}
-
-	.loading-tab {
-		animation: none;
-	}
-	.loading-tab:first-child {
-		background: var(--lime);
-	}
 }

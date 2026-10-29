@@ -10,115 +10,33 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ActivitiesRouteImport } from './routes/activities'
-import { Route as ExtensionNotConnectedRouteImport } from './routes/extension-not-connected'
-import { Route as HomeRouteImport } from './routes/home'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as RecurringPatternsRouteImport } from './routes/recurring-patterns'
-import { Route as TermsRouteImport } from './routes/terms'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ActivitiesRoute = ActivitiesRouteImport.update({
-  id: '/activities',
-  path: '/activities',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ExtensionNotConnectedRoute = ExtensionNotConnectedRouteImport.update({
-  id: '/extension-not-connected',
-  path: '/extension-not-connected',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HomeRoute = HomeRouteImport.update({
-  id: '/home',
-  path: '/home',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecurringPatternsRoute = RecurringPatternsRouteImport.update({
-  id: '/recurring-patterns',
-  path: '/recurring-patterns',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TermsRoute = TermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/activities': typeof ActivitiesRoute
-  '/extension-not-connected': typeof ExtensionNotConnectedRoute
-  '/home': typeof HomeRoute
-  '/privacy': typeof PrivacyRoute
-  '/recurring-patterns': typeof RecurringPatternsRoute
-  '/terms': typeof TermsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/activities': typeof ActivitiesRoute
-  '/extension-not-connected': typeof ExtensionNotConnectedRoute
-  '/home': typeof HomeRoute
-  '/privacy': typeof PrivacyRoute
-  '/recurring-patterns': typeof RecurringPatternsRoute
-  '/terms': typeof TermsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/activities': typeof ActivitiesRoute
-  '/extension-not-connected': typeof ExtensionNotConnectedRoute
-  '/home': typeof HomeRoute
-  '/privacy': typeof PrivacyRoute
-  '/recurring-patterns': typeof RecurringPatternsRoute
-  '/terms': typeof TermsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/activities'
-    | '/extension-not-connected'
-    | '/home'
-    | '/privacy'
-    | '/recurring-patterns'
-    | '/terms'
+  fullPaths: '/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/activities'
-    | '/extension-not-connected'
-    | '/home'
-    | '/privacy'
-    | '/recurring-patterns'
-    | '/terms'
-  id:
-    | '__root__'
-    | '/'
-    | '/activities'
-    | '/extension-not-connected'
-    | '/home'
-    | '/privacy'
-    | '/recurring-patterns'
-    | '/terms'
+  to: '/'
+  id: '__root__' | '/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ActivitiesRoute: typeof ActivitiesRoute
-  ExtensionNotConnectedRoute: typeof ExtensionNotConnectedRoute
-  HomeRoute: typeof HomeRoute
-  PrivacyRoute: typeof PrivacyRoute
-  RecurringPatternsRoute: typeof RecurringPatternsRoute
-  TermsRoute: typeof TermsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -130,59 +48,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/activities': {
-      id: '/activities'
-      path: '/activities'
-      fullPath: '/activities'
-      preLoaderRoute: typeof ActivitiesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/extension-not-connected': {
-      id: '/extension-not-connected'
-      path: '/extension-not-connected'
-      fullPath: '/extension-not-connected'
-      preLoaderRoute: typeof ExtensionNotConnectedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/home': {
-      id: '/home'
-      path: '/home'
-      fullPath: '/home'
-      preLoaderRoute: typeof HomeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recurring-patterns': {
-      id: '/recurring-patterns'
-      path: '/recurring-patterns'
-      fullPath: '/recurring-patterns'
-      preLoaderRoute: typeof RecurringPatternsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/terms': {
-      id: '/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof TermsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ActivitiesRoute: ActivitiesRoute,
-  ExtensionNotConnectedRoute: ExtensionNotConnectedRoute,
-  HomeRoute: HomeRoute,
-  PrivacyRoute: PrivacyRoute,
-  RecurringPatternsRoute: RecurringPatternsRoute,
-  TermsRoute: TermsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

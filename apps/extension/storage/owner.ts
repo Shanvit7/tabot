@@ -11,6 +11,7 @@ import {
 	type PageObservationSummary,
 	pageObservationBudgetFailure,
 	pageObservationSizeBytes,
+	relatednessIdentityKeys,
 	type StoredIngestRecord,
 	type StoredPageObservation,
 	type StoredTabEvent,
@@ -531,6 +532,66 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			.then(
 				(row) => row?.payload as unknown as StoredPageObservation | undefined,
 			),
+	readRelatednessEvidence: async (
+		anchors: number[],
+		identityKeys: string[],
+		maxGapMs: number,
+		limit: number,
+		to: number,
+	) => {
+		if (
+			!Array.isArray(anchors) ||
+			anchors.length < 1 ||
+			anchors.length > 8 ||
+			anchors.some(
+				(timestamp) => !Number.isSafeInteger(timestamp) || timestamp < 0,
+			) ||
+			!Array.isArray(identityKeys) ||
+			identityKeys.length > 24 ||
+			identityKeys.some(
+				(key) => typeof key !== "string" || key.length > 2_048,
+			) ||
+			!Number.isSafeInteger(maxGapMs) ||
+			maxGapMs < 1 ||
+			maxGapMs > 30 * 24 * 60 * 60 * 1000 ||
+			!Number.isSafeInteger(limit) ||
+			limit < 1 ||
+			limit > 1_000 ||
+			!Number.isSafeInteger(to) ||
+			to < 1
+		)
+			throw new Error("invalid-relatedness-window");
+		const identityKeySet = new Set(identityKeys);
+		// ponytail: O(n) local scan supports all-time identity links; add indexed relatedness keys if latency grows.
+		const rows = await (await getDb()).records.find();
+		return rows
+			.filter(
+				(row) =>
+					(row.recordKind === "event" || row.recordKind === "page") &&
+					row.timestamp <= to,
+			)
+			.map((row) => {
+				const payload = row.payload as unknown as StoredIngestRecord;
+				const sharesIdentity = relatednessIdentityKeys(payload).some((key) =>
+					identityKeySet.has(key),
+				);
+				const timeGap = Math.min(
+					...anchors.map((time) => Math.abs(row.timestamp - time)),
+				);
+				return { payload, sharesIdentity, timeGap, timestamp: row.timestamp };
+			})
+			.filter(
+				({ sharesIdentity, timeGap }) => sharesIdentity || timeGap <= maxGapMs,
+			)
+			.sort(
+				(left, right) =>
+					Number(right.sharesIdentity) - Number(left.sharesIdentity) ||
+					left.timeGap - right.timeGap ||
+					left.timestamp - right.timestamp,
+			)
+			.slice(0, limit)
+			.map(({ payload }) => payload);
+	},
 	getPageSummaries: async (from: number, to: number, limit: number = 4) =>
 		(await getDb()).records.find({ recordKind: "page" }).then((rows) =>
 			rows
@@ -566,10 +627,27 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					options.limit > 20))
 		)
 			throw new Error("invalid-search-request");
-		const rows = await (await getDb()).records.find();
+		const { records } = await getDb();
+		const timeFilter =
+			options.from === undefined && options.to === undefined
+				? {}
+				: {
+						timestamp: {
+							...(options.from !== undefined ? { $gte: options.from } : {}),
+							...(options.to !== undefined ? { $lte: options.to } : {}),
+						},
+					};
+		const [eventRows, pageRows] = await Promise.all([
+			records.find({ recordKind: "event", ...timeFilter }),
+			records.find({
+				recordKind: "page",
+				...(options.origin ? { origin: options.origin } : {}),
+				...timeFilter,
+			}),
+		]);
 		return searchHistoryCore(
-			withPayload<StoredTabEvent>(rows, "event"),
-			withPayload<StoredPageObservation>(rows, "page"),
+			withPayload<StoredTabEvent>(eventRows, "event"),
+			withPayload<StoredPageObservation>(pageRows, "page"),
 			query,
 			options,
 		);
@@ -621,7 +699,6 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			return { deleted: rows.length, more: rows.length === limit };
 		}),
 	prunePageObservations: (
-		now: number = Date.now(),
 		maxBytes: number = 25 * 1024 * 1024,
 		maxDeletes: number = 500,
 	) =>
@@ -630,15 +707,6 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			const pages = (await records.find({ recordKind: "page" })).sort(
 				(a, b) => a.timestamp - b.timestamp,
 			);
-			const expired = pages
-				.filter((row) => row.timestamp < now - 7 * 86_400_000)
-				.slice(0, maxDeletes);
-			if (expired.length) {
-				await records.deleteMany({
-					_id: { $in: expired.map((row) => row._id) },
-				});
-				return { deleted: expired.length, more: expired.length === maxDeletes };
-			}
 			let bytes = pages.reduce(
 				(sum, row) => sum + JSON.stringify(row.payload).length * 2,
 				0,

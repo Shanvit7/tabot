@@ -22,11 +22,7 @@ import {
 	isForegroundTab,
 	startForegroundTracking,
 } from "./background/foreground";
-import {
-	normalizePageCaptureOrigins,
-	PAGE_CAPTURE_ORIGINS_KEY,
-	pageCaptureSite,
-} from "./capture/consent";
+import { pageCaptureSite } from "./capture/site-policy";
 import { isDashboardSender } from "./dashboard/sender";
 import { createCaptureIdentity } from "./ingestion/capture-identity";
 import { createEventPipeline } from "./ingestion/event-pipeline";
@@ -44,7 +40,11 @@ import { getStorageDb } from "./storage/client";
 
 // One service worker, one bounded serial writer. Queued is not persisted.
 const RECOVERY_ALARM = "tabot-ingest-recovery";
-const PAGE_RETENTION_ALARM = "tabot-page-retention";
+const PAGE_BUDGET_ALARM = "tabot-page-budget";
+void chrome.alarms.clear("tabot-page-retention").catch(() => {});
+void chrome.storage.local
+	.remove("tabot_page_capture_origins_v1")
+	.catch(() => {});
 const getDb = getStorageDb;
 const getStorageCounts = async () => {
 	const db = await getDb();
@@ -71,21 +71,21 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 // A retained batch cannot survive termination. Stale alarms never invent work.
 void chrome.alarms.clear(RECOVERY_ALARM).catch(() => {});
-const prunePageEvidence = async () => {
+const enforcePageBudget = async () => {
 	try {
 		const { more } = await prunePageObservations(await getDb());
 		await chrome.alarms.create(
-			PAGE_RETENTION_ALARM,
+			PAGE_BUDGET_ALARM,
 			more ? { delayInMinutes: 1 } : { periodInMinutes: 360 },
 		);
 	} catch {
-		await chrome.alarms.create(PAGE_RETENTION_ALARM, { delayInMinutes: 60 });
+		await chrome.alarms.create(PAGE_BUDGET_ALARM, { delayInMinutes: 60 });
 	}
 };
 chrome.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name === PAGE_RETENTION_ALARM) void prunePageEvidence();
+	if (alarm.name === PAGE_BUDGET_ALARM) void enforcePageBudget();
 });
-void prunePageEvidence();
+void enforcePageBudget();
 const nativeInstance = crypto.randomUUID();
 let nativeSequence = 0;
 
@@ -250,16 +250,9 @@ const isExtensionPageSender = (sender: chrome.runtime.MessageSender): boolean =>
 	sender.id === chrome.runtime.id &&
 	sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`) === true;
 const deletePageEvidence = async (origin?: string) => {
-	const origins = await chrome.storage.local
-		.get(PAGE_CAPTURE_ORIGINS_KEY)
-		.then((stored) =>
-			normalizePageCaptureOrigins(stored[PAGE_CAPTURE_ORIGINS_KEY]),
-		);
 	if (origin !== undefined && pageCaptureSite(origin)?.origin !== origin) {
 		return { ok: false as const, code: "invalid-origin" };
 	}
-	const remaining = origin ? origins.filter((item) => item !== origin) : [];
-	await chrome.storage.local.set({ [PAGE_CAPTURE_ORIGINS_KEY]: remaining });
 	pipeline.flush();
 	const deadline = Date.now() + 15_000;
 	while (pipeline.stats().outstandingRows > 0 && Date.now() < deadline)
@@ -273,7 +266,7 @@ const deletePageEvidence = async (origin?: string) => {
 		if (!result.more) break;
 		if (batch === 99) return { ok: false as const, code: "delete-incomplete" };
 	}
-	return { ok: true as const, deleted, consentedOrigins: remaining };
+	return { ok: true as const, deleted };
 };
 
 const respondAssistantConnections = (
@@ -315,10 +308,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			eligible: async (tabId) => {
 				await trackingReady;
 				return trackingEnabled && (await isForegroundTab(tabId));
-			},
-			consentedOrigins: async () => {
-				const stored = await chrome.storage.local.get(PAGE_CAPTURE_ORIGINS_KEY);
-				return stored[PAGE_CAPTURE_ORIGINS_KEY];
 			},
 			captureIdentity: createCaptureIdentity,
 		})

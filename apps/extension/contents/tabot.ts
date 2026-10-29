@@ -1,13 +1,11 @@
 import { logger, type PageEventType } from "@tabot/shared";
 import { Throttler } from "@tanstack/pacer";
 import type { PlasmoCSConfig } from "plasmo";
+import { createPageOutbox } from "../capture/outbox";
 import {
 	isPageCaptureExcludedUrl,
-	normalizePageCaptureOrigins,
-	PAGE_CAPTURE_ORIGINS_KEY,
 	pageCaptureSite,
-} from "../capture/consent";
-import { createPageOutbox } from "../capture/outbox";
+} from "../capture/site-policy";
 import { extractVisibleExcerpts } from "../capture/visible-excerpts";
 
 export const config: PlasmoCSConfig = {
@@ -137,23 +135,14 @@ requestViewportExcerpt = (delay: number) => {
 };
 const syncCapturePolicy = async () => {
 	const generation = ++policyGeneration;
-	const site = pageCaptureSite(location.href);
-	let allowed = false;
-	if (
-		site &&
+	let allowed =
+		pageCaptureSite(location.href) !== null &&
 		!chrome.extension.inIncognitoContext &&
-		!isPageCaptureExcludedUrl(location.href)
-	) {
+		!isPageCaptureExcludedUrl(location.href);
+	if (allowed) {
 		try {
-			const stored = await chrome.storage.local.get([
-				PAGE_CAPTURE_ORIGINS_KEY,
-				TRACKING_KEY,
-			]);
-			allowed =
-				stored[TRACKING_KEY] !== false &&
-				normalizePageCaptureOrigins(stored[PAGE_CAPTURE_ORIGINS_KEY]).includes(
-					site.origin,
-				);
+			const stored = await chrome.storage.local.get(TRACKING_KEY);
+			allowed = stored[TRACKING_KEY] !== false;
 		} catch {
 			allowed = false;
 		}
@@ -277,11 +266,7 @@ window.addEventListener("blur", () => {
 });
 window.addEventListener("focus", () => void syncCapturePolicy());
 chrome.storage.onChanged.addListener((changes, areaName) => {
-	if (
-		areaName !== "local" ||
-		(!changes[PAGE_CAPTURE_ORIGINS_KEY] && !changes[TRACKING_KEY])
-	)
-		return;
+	if (areaName !== "local" || !changes[TRACKING_KEY]) return;
 	captureAllowed = false;
 	clearTimeout(excerptTimer);
 	excerptTimer = undefined;

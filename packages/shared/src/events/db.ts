@@ -126,6 +126,20 @@ export class TabotDatabase {
 		this.request<StoredTabEvent | undefined>("findEvent", [id]);
 	getPageObservation = (id: string) =>
 		this.request<StoredPageObservation | undefined>("getPageObservation", [id]);
+	readRelatednessEvidence = (
+		anchors: number[],
+		identityKeys: string[],
+		maxGapMs: number,
+		limit: number,
+		to: number,
+	) =>
+		this.request<StoredIngestRecord[]>("readRelatednessEvidence", [
+			anchors,
+			identityKeys,
+			maxGapMs,
+			limit,
+			to,
+		]);
 	getPageSummaries = (from: number, to: number, limit?: number) =>
 		this.request<PageObservationSummary[]>("getPageSummaries", [
 			from,
@@ -152,13 +166,8 @@ export class TabotDatabase {
 			filter,
 			limit,
 		]);
-	prunePageObservations = (
-		now?: number,
-		maxBytes?: number,
-		maxDeletes?: number,
-	) =>
+	prunePageObservations = (maxBytes?: number, maxDeletes?: number) =>
 		this.request<{ deleted: number; more: boolean }>("prunePageObservations", [
-			now,
 			maxBytes,
 			maxDeletes,
 		]);
@@ -263,18 +272,16 @@ export const deletePageObservations = (
 };
 export const prunePageObservations = (
 	database: TabotDatabase,
-	now = Date.now(),
 	maxBytes = 25 * 1024 * 1024,
 	maxDeletes = 500,
 ) => {
 	if (
-		!Number.isFinite(now) ||
 		!Number.isSafeInteger(maxBytes) ||
 		maxBytes < 1 ||
 		!Number.isSafeInteger(maxDeletes) ||
 		maxDeletes < 1 ||
 		maxDeletes > 500
 	)
-		throw new Error("invalid-page-retention-limit");
-	return database.prunePageObservations(now, maxBytes, maxDeletes);
+		throw new Error("invalid-page-storage-budget");
+	return database.prunePageObservations(maxBytes, maxDeletes);
 };

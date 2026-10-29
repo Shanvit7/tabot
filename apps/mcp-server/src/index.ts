@@ -19,13 +19,8 @@ import { AUTH_CODE_TTL_MS, MAX_HTTP_BODY_BYTES, NAME, VERSION } from "./config";
 import { logEvent } from "./log";
 import { ERROR_CODES, RelayError } from "./mcp/protocol";
 import {
-	getActivityMetricsInputSchema,
-	getContextInputSchema,
-	getCurrentContextInputSchema,
-	getMemoryInputSchema,
-	getRecentContextInputSchema,
-	listRecurringPatternsInputSchema,
-	searchContextInputSchema,
+	findRelatedEvidenceInputSchema,
+	searchEvidenceInputSchema,
 } from "./mcp/schema";
 import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./mcp/tools";
 
@@ -96,80 +91,36 @@ const createMcpServer = (
 	};
 
 	server.registerTool(
-		TOOL_NAMES.SEARCH_CONTEXT,
+		TOOL_NAMES.SEARCH_EVIDENCE,
 		{
-			title: "Search Tabot activity",
-			description: TOOL_DESCRIPTIONS.SEARCH_CONTEXT,
+			title: "Search Tabot evidence",
+			description: TOOL_DESCRIPTIONS.SEARCH_EVIDENCE,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: searchContextInputSchema,
+			inputSchema: searchEvidenceInputSchema,
 		},
-		({ query, hours }) => call(TOOL_NAMES.SEARCH_CONTEXT, { query, hours }),
+		(params) => call(TOOL_NAMES.SEARCH_EVIDENCE, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_RECENT_CONTEXT,
+		TOOL_NAMES.FIND_RELATED_EVIDENCE,
 		{
-			title: "Recent Tabot activity summaries",
-			description: TOOL_DESCRIPTIONS.GET_RECENT_CONTEXT,
+			title: "Find related Tabot evidence",
+			description: TOOL_DESCRIPTIONS.FIND_RELATED_EVIDENCE,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getRecentContextInputSchema,
+			inputSchema: findRelatedEvidenceInputSchema,
 		},
-		({ hours }) => call(TOOL_NAMES.GET_RECENT_CONTEXT, { hours }),
+		(params) => call(TOOL_NAMES.FIND_RELATED_EVIDENCE, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_CURRENT_CONTEXT,
+		TOOL_NAMES.GET_EVIDENCE_TRAIL,
 		{
-			title: "Current Tabot activity summary",
-			description: TOOL_DESCRIPTIONS.GET_CURRENT_CONTEXT,
+			title: "Build a Tabot evidence trail",
+			description: TOOL_DESCRIPTIONS.GET_EVIDENCE_TRAIL,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getCurrentContextInputSchema,
+			inputSchema: findRelatedEvidenceInputSchema,
 		},
-		() => call(TOOL_NAMES.GET_CURRENT_CONTEXT, {}),
-	);
-
-	server.registerTool(
-		TOOL_NAMES.GET_CONTEXT,
-		{
-			title: "Specific Tabot activity summary",
-			description: TOOL_DESCRIPTIONS.GET_CONTEXT,
-			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getContextInputSchema,
-		},
-		({ id }) => call(TOOL_NAMES.GET_CONTEXT, { id }),
-	);
-
-	server.registerTool(
-		TOOL_NAMES.LIST_RECURRING_PATTERNS,
-		{
-			title: "Tabot recurring patterns",
-			description: TOOL_DESCRIPTIONS.LIST_RECURRING_PATTERNS,
-			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: listRecurringPatternsInputSchema,
-		},
-		(params) => call(TOOL_NAMES.LIST_RECURRING_PATTERNS, params),
-	);
-
-	server.registerTool(
-		TOOL_NAMES.GET_MEMORY,
-		{
-			title: "Tabot memory",
-			description: TOOL_DESCRIPTIONS.GET_MEMORY,
-			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getMemoryInputSchema,
-		},
-		({ id }) => call(TOOL_NAMES.GET_MEMORY, { id }),
-	);
-
-	server.registerTool(
-		TOOL_NAMES.GET_ACTIVITY_METRICS,
-		{
-			title: "Tabot activity metrics",
-			description: TOOL_DESCRIPTIONS.GET_ACTIVITY_METRICS,
-			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getActivityMetricsInputSchema,
-		},
-		(params) => call(TOOL_NAMES.GET_ACTIVITY_METRICS, params),
+		(params) => call(TOOL_NAMES.GET_EVIDENCE_TRAIL, params),
 	);
 
 	return server;

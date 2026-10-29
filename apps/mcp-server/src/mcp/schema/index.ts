@@ -1,9 +1,4 @@
 export {
-	getActivityMetricsInputSchema,
-	getContextInputSchema,
-	getCurrentContextInputSchema,
-	getMemoryInputSchema,
-	getRecentContextInputSchema,
-	listRecurringPatternsInputSchema,
-	searchContextInputSchema,
+	findRelatedEvidenceInputSchema,
+	searchEvidenceInputSchema,
 } from "./tools.schema";

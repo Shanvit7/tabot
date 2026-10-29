@@ -13,7 +13,6 @@ const sender = {
 	tab: { id: 7, windowId: 2, url, incognito: false },
 };
 const records = new Map<string, StoredPageObservation>();
-let allowed = true;
 const pipeline = createEventPipeline<StoredIngestRecord>({
 	commit: async (rows) => {
 		const pages = rows.filter(
@@ -33,7 +32,6 @@ const deps = {
 	pipeline,
 	find: async (id: string) => records.get(id),
 	eligible: async () => true,
-	consentedOrigins: async () => (allowed ? ["https://github.com"] : []),
 	captureIdentity: async (value: unknown) =>
 		createHmac("sha256", "test-install-key")
 			.update(JSON.stringify(value))
@@ -67,14 +65,16 @@ assert.deepEqual(await ingestPageObservationMessage(message, sender, deps), {
 	id: message.id,
 });
 assert.equal(records.size, 1, "replay wrote duplicate page evidence");
-allowed = false;
-const denied = await ingestPageObservationMessage(
+const secondCapture = await ingestPageObservationMessage(
 	{ ...message, id: "12345678-1234-4234-8234-123456789013" },
 	sender,
 	deps,
 );
-assert.equal(denied.status, "ignored");
-assert.equal(records.size, 1);
+assert.deepEqual(secondCapture, {
+	status: "persisted",
+	id: "12345678-1234-4234-8234-123456789013",
+});
+assert.equal(records.size, 2, "capture does not require per-origin consent");
 assert.equal(
 	(
 		await ingestPageObservationMessage(
@@ -101,5 +101,5 @@ assert.equal(
 	"rejected",
 );
 console.log(
-	"page-capture: consent, redaction, replay and sender checks passed",
+	"page-capture: automatic capture, redaction, replay and sender checks passed",
 );

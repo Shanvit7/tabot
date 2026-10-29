@@ -17,9 +17,9 @@ Chrome tab APIs + content script
   └-> optional: extension relay -> Cloudflare MCP Worker -> ChatGPT
 ```
 
-Raw telemetry stays on device; the optional ChatGPT integration sends sanitized, derived context on tool requests. The Worker holds OAuth/installation routing state, not browser history. There is no Tabot account, cloud sync, typed-text capture, Tabot-hosted LLM, embedding store, or task/intent inference. Separate page-excerpt capture is off by default and requires exact-site consent. See [MCP relay development and connection](../apps/mcp-server/README.md).
+Raw telemetry stays on device; the optional ChatGPT integration sends sanitized, derived context on tool requests. The Worker holds OAuth/installation routing state, not browser history. There is no Tabot account, cloud sync, typed-text capture, Tabot-hosted LLM, embedding store, or task/intent inference. Visible page excerpts are captured automatically on eligible sites while tracking is active, then redacted and stored locally. Incognito, auth/password pages and form inputs remain excluded; no timed retention applies, with a 25 MiB storage budget. See [MCP relay development and connection](../apps/mcp-server/README.md).
 
-Normalized browser events and separately consented, privacy-processed page observations are durable local data. Page observations never enter event/session/behavioral metric reads. Derived outcomes must retain observation IDs and unknown-coverage limits. The separate relay persists authentication/installation state.
+Normalized browser events and separately captured, privacy-processed page observations are durable local data. Page observations never enter event/session/behavioral metric reads. Derived outcomes must retain observation IDs and unknown-coverage limits. The separate relay persists authentication/installation state.
 
 TalaDB/OPFS is the intended sole authoritative event/page store; IndexedDB remains only as a migration reader for upgrading profiles. Verified migration retires legacy storage after copy checks. Per-profile migration and live search checks are deferred to human QA; see [technical status](./tech.md).
 
@@ -274,8 +274,8 @@ pnpm --filter @tabot/shared run swDerivation
 pnpm --filter @tabot/shared run swGraph
 pnpm --filter @tabot/shared run swEpisodes
 pnpm --filter extension check:popup
-pnpm --filter extension check:metricsRelay
-pnpm --filter mcp-server check:activityMetrics
+pnpm --filter extension check:evidenceRelay
+pnpm --filter mcp-server check:evidenceSurface
 pnpm --filter extension build
 pnpm --filter web build
 ```

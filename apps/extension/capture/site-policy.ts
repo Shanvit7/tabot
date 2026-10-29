@@ -1,6 +1,3 @@
-export const PAGE_CAPTURE_ORIGINS_KEY = "tabot_page_capture_origins_v1";
-export const MAX_CONSENTED_ORIGINS = 100;
-
 const EXCLUDED_PASSWORD_HOSTS = [
 	"1password.com",
 	"bitwarden.com",
@@ -43,15 +40,4 @@ export const pageCaptureSite = (
 	} catch {
 		return null;
 	}
-};
-
-export const normalizePageCaptureOrigins = (value: unknown): string[] => {
-	if (!Array.isArray(value)) return [];
-	const origins = new Set<string>();
-	for (const candidate of value) {
-		const site = pageCaptureSite(candidate);
-		if (site?.origin === candidate) origins.add(site.origin);
-		if (origins.size >= MAX_CONSENTED_ORIGINS) break;
-	}
-	return [...origins];
 };

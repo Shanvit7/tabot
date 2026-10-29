@@ -25,12 +25,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
-	MAX_CONSENTED_ORIGINS,
-	normalizePageCaptureOrigins,
-	PAGE_CAPTURE_ORIGINS_KEY,
-	pageCaptureSite,
-} from "~/capture/consent";
-import {
 	contextDuration,
 	contextHomeUrl,
 	type PopupSummary,
@@ -171,15 +165,12 @@ const ActivitySites = ({
 const IndexPopup = () => {
 	const [summary, setSummary] = useState<PopupSummary | null>(null);
 	const [tracking, setTracking] = useState<boolean | null>(null);
-	const [captureSite, setCaptureSite] =
-		useState<ReturnType<typeof pageCaptureSite>>(null);
-	const [consentedOrigins, setConsentedOrigins] = useState<string[]>([]);
 	const [pageSummaries, setPageSummaries] = useState<PageCaptureSiteSummary[]>(
 		[],
 	);
-	const [consentLoading, setConsentLoading] = useState(true);
-	const [consentSaving, setConsentSaving] = useState(false);
-	const [consentError, setConsentError] = useState<string | null>(null);
+	const [pageSummariesLoading, setPageSummariesLoading] = useState(true);
+	const [pageCaptureBusy, setPageCaptureBusy] = useState(false);
+	const [pageCaptureError, setPageCaptureError] = useState<string | null>(null);
 	const [assistantConnections, setAssistantConnections] =
 		useState<AssistantConnections | null>(null);
 	const chatGptConnected = assistantConnections?.chatgpt ?? null;
@@ -194,28 +185,16 @@ const IndexPopup = () => {
 
 	useEffect(() => {
 		let active = true;
-		void Promise.all([
-			chrome.tabs.query({ active: true, currentWindow: true }),
-			chrome.storage.local.get(PAGE_CAPTURE_ORIGINS_KEY),
-		])
-			.then(([tabs, stored]) => {
-				if (!active) return;
-				setCaptureSite(pageCaptureSite(tabs[0]?.url, tabs[0]?.incognito));
-				setConsentedOrigins(
-					normalizePageCaptureOrigins(stored[PAGE_CAPTURE_ORIGINS_KEY]),
-				);
-				void chrome.runtime
-					.sendMessage({ type: "GET_PAGE_CAPTURE_SUMMARIES" })
-					.then((summaries: PageCaptureSiteSummary[] | { ok: false }) => {
-						if (active && Array.isArray(summaries)) setPageSummaries(summaries);
-					})
-					.catch(() => {});
+		void chrome.runtime
+			.sendMessage({ type: "GET_PAGE_CAPTURE_SUMMARIES" })
+			.then((summaries: PageCaptureSiteSummary[] | { ok: false }) => {
+				if (active && Array.isArray(summaries)) setPageSummaries(summaries);
 			})
 			.catch(() => {
-				if (active) setConsentError("Could not load page-capture choices.");
+				if (active) setPageCaptureError("Could not load saved page excerpts.");
 			})
 			.finally(() => {
-				if (active) setConsentLoading(false);
+				if (active) setPageSummariesLoading(false);
 			});
 		return () => {
 			active = false;
@@ -322,53 +301,25 @@ const IndexPopup = () => {
 			})) as PageCaptureSiteSummary[];
 			if (Array.isArray(summaries)) setPageSummaries(summaries);
 		} catch {
-			setConsentError("Could not load saved page excerpts.");
+			setPageCaptureError("Could not load saved page excerpts.");
 		}
 	};
 
 	const deletePageEvidence = async (origin?: string) => {
-		if (consentSaving) return;
-		setConsentSaving(true);
-		setConsentError(null);
+		if (pageCaptureBusy) return;
+		setPageCaptureBusy(true);
+		setPageCaptureError(null);
 		try {
 			const result = (await chrome.runtime.sendMessage({
 				type: "DELETE_PAGE_OBSERVATIONS",
 				...(origin ? { origin } : {}),
-			})) as
-				| { ok: true; deleted: number; consentedOrigins: string[] }
-				| { ok: false };
+			})) as { ok: true; deleted: number } | { ok: false };
 			if (!result?.ok) throw new Error("delete-failed");
-			setConsentedOrigins(result.consentedOrigins);
 			await refreshPageSummaries();
 		} catch {
-			setConsentError("Could not delete saved page excerpts. Try again.");
+			setPageCaptureError("Could not delete saved page excerpts. Try again.");
 		} finally {
-			setConsentSaving(false);
-		}
-	};
-
-	const setPageCaptureConsent = async (origin: string, allowed: boolean) => {
-		if (consentSaving) return;
-		setConsentError(null);
-		if (
-			allowed &&
-			!consentedOrigins.includes(origin) &&
-			consentedOrigins.length >= MAX_CONSENTED_ORIGINS
-		) {
-			setConsentError("Remove a site before adding another.");
-			return;
-		}
-		setConsentSaving(true);
-		const next = allowed
-			? [...consentedOrigins, origin]
-			: consentedOrigins.filter((item) => item !== origin);
-		try {
-			await chrome.storage.local.set({ [PAGE_CAPTURE_ORIGINS_KEY]: next });
-			setConsentedOrigins(next);
-		} catch {
-			setConsentError("Could not save this site choice. Try again.");
-		} finally {
-			setConsentSaving(false);
+			setPageCaptureBusy(false);
 		}
 	};
 
@@ -458,71 +409,21 @@ const IndexPopup = () => {
 					className="mb-5 border-y border-line py-4"
 				>
 					<h2 id="page-capture-heading" className="text-sm font-semibold">
-						Page-capture choices
+						Page evidence
 					</h2>
-					<p
-						id="page-capture-note"
-						className="mt-1 text-xs leading-5 text-muted"
-					>
-						Optional short excerpts from visible text, after a one-second dwell
-						or trusted interaction. Saved locally; not shared with AI
-						assistants.
+					<p className="mt-1 text-xs leading-5 text-muted">
+						Visible excerpts are captured automatically while tracking is
+						active, redacted, and stored locally. Oldest excerpts are removed
+						only when the 25 MiB storage budget is exceeded. Deleting stored
+						excerpts does not pause capture.
 					</p>
-					{consentLoading && (
+					{pageSummariesLoading && (
 						<p role="status" className="mt-2 text-xs text-muted">
-							Loading site choices…
+							Loading saved excerpts…
 						</p>
 					)}
-					{captureSite ? (
-						<label className="mt-3 flex min-h-11 items-center gap-3 text-sm">
-							<input
-								type="checkbox"
-								className="size-4 shrink-0 accent-lime-brand"
-								aria-describedby="page-capture-note"
-								checked={consentedOrigins.includes(captureSite.origin)}
-								disabled={consentLoading || consentSaving}
-								onChange={(event) =>
-									void setPageCaptureConsent(
-										captureSite.origin,
-										event.currentTarget.checked,
-									)
-								}
-							/>
-							<span className="min-w-0 flex-1">
-								Allow visible excerpts on <strong>{captureSite.label}</strong>
-							</span>
-						</label>
-					) : (
-						!consentLoading && (
-							<p role="status" className="mt-2 text-xs leading-5 text-muted">
-								Open a website in a regular tab to set its choice.
-							</p>
-						)
-					)}
-					{consentedOrigins.length > 0 && (
-						<div className="mt-3">
-							<p className="text-xs font-medium">Capture allowed on</p>
-							<ul className="mt-1 divide-y divide-line">
-								{consentedOrigins.map((origin) => (
-									<li
-										key={origin}
-										className="flex min-h-11 items-center justify-between gap-3 py-1"
-									>
-										<span className="min-w-0 truncate text-xs">
-											{new URL(origin).host}
-										</span>
-										<button
-											type="button"
-											disabled={consentSaving}
-											className="popup-row min-h-11 shrink-0 px-2 text-xs underline"
-											onClick={() => void setPageCaptureConsent(origin, false)}
-										>
-											Remove
-										</button>
-									</li>
-								))}
-							</ul>
-						</div>
+					{!pageSummariesLoading && pageSummaries.length === 0 && (
+						<p className="mt-2 text-xs text-muted">No saved excerpts.</p>
 					)}
 					{pageSummaries.length > 0 && (
 						<div className="mt-3 border-t border-line pt-3">
@@ -538,29 +439,29 @@ const IndexPopup = () => {
 										</span>
 										<button
 											type="button"
-											disabled={consentSaving}
-											aria-label={`Delete excerpts from ${new URL(origin).host} and pause capture`}
+											disabled={pageCaptureBusy}
+											aria-label={`Delete stored excerpts from ${new URL(origin).host}`}
 											className="popup-row min-h-11 shrink-0 px-2 text-xs underline"
 											onClick={() => void deletePageEvidence(origin)}
 										>
-											Delete & pause
+											Delete stored
 										</button>
 									</li>
 								))}
 							</ul>
 							<button
 								type="button"
-								disabled={consentSaving}
+								disabled={pageCaptureBusy}
 								className="popup-quiet mt-2 min-h-11 px-3 text-xs"
 								onClick={() => void deletePageEvidence()}
 							>
-								Delete all & turn off page capture
+								Delete all stored excerpts
 							</button>
 						</div>
 					)}
-					{consentError && (
+					{pageCaptureError && (
 						<p role="alert" className="mt-2 text-xs text-muted">
-							{consentError}
+							{pageCaptureError}
 						</p>
 					)}
 				</section>

@@ -17,9 +17,8 @@ import {
 } from "@tabot/shared";
 import {
 	isPageCaptureExcludedUrl,
-	normalizePageCaptureOrigins,
 	pageCaptureSite,
-} from "../capture/consent";
+} from "../capture/site-policy";
 import type { createEventPipeline } from "./event-pipeline";
 
 type Sender = {
@@ -188,7 +187,6 @@ export const ingestPageObservationMessage = async (
 		pipeline: ReturnType<typeof createEventPipeline<StoredIngestRecord>>;
 		find: (id: string) => Promise<StoredPageObservation | undefined>;
 		eligible: (tabId: number) => Promise<boolean>;
-		consentedOrigins: () => Promise<unknown>;
 		captureIdentity: (value: unknown) => Promise<string>;
 		now?: number;
 	},
@@ -300,10 +298,7 @@ export const ingestPageObservationMessage = async (
 			message.documentUrl !== currentUrl ||
 			isPageCaptureExcludedUrl(message.documentUrl) ||
 			now - row.timestamp > 10_000 ||
-			!(await deps.eligible(tabId)) ||
-			!normalizePageCaptureOrigins(await deps.consentedOrigins()).includes(
-				site.origin,
-			)
+			!(await deps.eligible(tabId))
 		)
 			return { status: "ignored", code: "capture-policy" };
 		return null;

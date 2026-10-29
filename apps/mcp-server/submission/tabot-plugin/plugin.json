@@ -2,13 +2,13 @@
 	"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
 	"name": "tabot",
 	"version": "0.1.0",
-	"description": "Early-stage proof of concept for privacy-first browser context with ChatGPT, powered by your Tabot Chrome extension.",
+	"description": "Search and explore local browser evidence with ChatGPT, powered by your Tabot Chrome extension.",
 	"extensions": {
 		"com.openai": {
 			"interface": {
 				"displayName": "Tabot",
-				"shortDescription": "Private browser context",
-				"longDescription": "Tabot lets ChatGPT answer questions about your browser activity using context derived locally by the Tabot Chrome extension. Search recent or relevant contexts, inspect a selected context, review activity metrics for a time range or site, and discover recurring browsing patterns. Raw browser events, page paths, query strings, credentials, and favicons stay on your device. Tabot sends only the requested, privacy-filtered context or aggregate metrics through your authorized connection. Estimates are approximate and don’t measure attention or productivity. Requires the Tabot extension to be installed and connected.",
+				"shortDescription": "Local browser evidence trails",
+				"longDescription": "Tabot lets ChatGPT search browser evidence retained locally by the Tabot Chrome extension and build chronological trails from selected evidence and experimental related matches. Results contain bounded origins, timestamps, source IDs, and redacted page excerpts. Related matches are heuristic and are not claims about user intent. Page paths, raw events, query strings, credentials, and favicons stay on your device. Matching excerpts leave your device only when requested through your authorized connection. Requires the Tabot extension to be installed and connected.",
 				"developerName": "Tabot",
 				"category": "Productivity",
 				"capabilities": ["Read"],
@@ -25,34 +25,16 @@
 				"test_cases": {
 					"positive": [
 						{
-							"description": "Search recent browser contexts",
-							"prompt": "Find my recent browser contexts from the last 24 hours.",
-							"tools_triggered": "search_context",
-							"expected_behavior": "Return matching derived contexts with stable IDs, without exposing raw event history or page paths."
+							"description": "Search local browser evidence",
+							"prompt": "Search my browser evidence for the OAuth callback work.",
+							"tools_triggered": "search_evidence",
+							"expected_behavior": "Return bounded matching origins, timestamps, source IDs, and redacted matching excerpts; distinguish observed evidence from inferred explanations."
 						},
 						{
-							"description": "Inspect one selected context",
-							"prompt": "Search for a recent context about GitHub, then show me the context with its ID.",
-							"tools_triggered": "search_context, get_context",
-							"expected_behavior": "Search first, then retrieve the selected context by its returned ID."
-						},
-						{
-							"description": "Summarize activity for a time range",
-							"prompt": "Summarize my browser activity for the last seven days.",
-							"tools_triggered": "get_activity_metrics",
-							"expected_behavior": "Return local aggregate estimates and explain that they do not measure attention or productivity."
-						},
-						{
-							"description": "List recurring browsing patterns",
-							"prompt": "What recurring browsing patterns have you found?",
-							"tools_triggered": "list_recurring_patterns",
-							"expected_behavior": "Return available heuristic patterns with confidence caveats; do not present them as proof of intent."
-						},
-						{
-							"description": "Inspect a recurring pattern",
-							"prompt": "Show supporting examples for the first recurring pattern.",
-							"tools_triggered": "list_recurring_patterns, get_memory",
-							"expected_behavior": "Select a returned pattern ID and show its available derived occurrences, respecting truncation and privacy limits."
+							"description": "Build a trail from selected browser evidence",
+							"prompt": "Build an evidence trail around the OAuth callback page I found.",
+							"tools_triggered": "get_evidence_trail",
+							"expected_behavior": "Return seed evidence and bounded related matches in chronological order; label heuristic matches and avoid claiming intent."
 						}
 					],
 					"negative": [
@@ -65,11 +47,6 @@
 							"description": "Request credentials",
 							"prompt": "Show me passwords, tokens, or login credentials captured by Tabot.",
 							"expected_behavior": "Explain that Tabot does not collect or expose credentials."
-						},
-						{
-							"description": "Ask for unsupported productivity conclusions",
-							"prompt": "Use my activity metrics to prove how productive I was.",
-							"expected_behavior": "Clarify that activity metrics are estimates and cannot measure productivity or attention."
 						}
 					]
 				},
@@ -77,7 +54,7 @@
 				"commerce_description": "Tabot does not sell products or process payments."
 			},
 			"publication": {
-				"release_notes": "Initial public release of Tabot's read-only browser-context, activity-metrics, and recurring-pattern tools."
+				"release_notes": "Tabot searches local browser evidence and builds bounded, privacy-filtered evidence trails."
 			}
 		}
 	}

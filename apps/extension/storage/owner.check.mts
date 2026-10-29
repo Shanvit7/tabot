@@ -46,17 +46,31 @@ const expectedMarkerId = deriveDocId(
 	"legacy-indexeddb-to-taladb:v1",
 );
 const storedRecords = new Map<string, Record<string, unknown>>();
+type RecordFilter = {
+	_id?: { $in?: string[] };
+	recordKind?: string;
+	timestamp?: { $gte?: number; $lte?: number };
+	origin?: string;
+};
+const recordFindQueries: RecordFilter[] = [];
 const records = {
 	createIndex: async () => {
 		if (failure === "index") throw new Error("index-check-failure");
 	},
 	count: async () => 7,
-	find: async (query: { _id?: { $in?: string[] }; recordKind?: string } = {}) =>
-		[...storedRecords.values()].filter(
+	find: async (query: RecordFilter = {}) => {
+		recordFindQueries.push(query);
+		return [...storedRecords.values()].filter(
 			(row) =>
 				(!query.recordKind || row.recordKind === query.recordKind) &&
-				(!query._id?.$in || query._id.$in.includes(row._id as string)),
-		),
+				(!query._id?.$in || query._id.$in.includes(row._id as string)) &&
+				(query.timestamp?.$gte === undefined ||
+					(row.timestamp as number) >= query.timestamp.$gte) &&
+				(query.timestamp?.$lte === undefined ||
+					(row.timestamp as number) <= query.timestamp.$lte) &&
+				(!query.origin || row.origin === query.origin),
+		);
+	},
 	insertMany: async (rows: Record<string, unknown>[]) => {
 		if (failure === "write-quota") {
 			failure = undefined;
@@ -372,13 +386,75 @@ try {
 		coverage: { truncated: false, partial: false },
 	};
 	await request("commitIngest", [[searchEvent, searchPage]]);
-	const searchResult = await request("searchHistory", ["callback nonce"]);
+	const searchTimestamp = searchPage.timestamp;
+	const searchResult = await request("searchHistory", [
+		"callback nonce",
+		{
+			from: searchTimestamp - 1,
+			to: searchTimestamp + 1,
+			origin: "https://docs.example.com",
+		},
+	]);
+	const [eventSearchFilter, pageSearchFilter] = recordFindQueries.slice(-2);
+	assert.deepEqual(eventSearchFilter?.timestamp, {
+		$gte: searchTimestamp - 1,
+		$lte: searchTimestamp + 1,
+	});
+	assert.equal(eventSearchFilter?.recordKind, "event");
+	assert.deepEqual(pageSearchFilter?.timestamp, eventSearchFilter?.timestamp);
+	assert.equal(pageSearchFilter?.recordKind, "page");
+	assert.equal(pageSearchFilter?.origin, "https://docs.example.com");
 	assert.equal(searchResult.value[0]?.pageCount, 1);
 	assert.equal(
 		searchResult.value[0]?.sources.some(
 			(source) => source.id === searchPage.id,
 		),
 		true,
+	);
+	const relatedEvidence = await request("readRelatednessEvidence", [
+		[searchTimestamp],
+		[],
+		1_000,
+		20,
+		Date.now(),
+	]);
+	assert.equal(relatedEvidence.ok, true);
+	assert.ok(
+		(relatedEvidence.value as { id: string }[]).some(
+			(row) => row.id === searchEvent.id,
+		),
+	);
+	assert.ok(
+		(relatedEvidence.value as { id: string }[]).some(
+			(row) => row.id === searchPage.id,
+		),
+	);
+	const identityRelated = await request("readRelatednessEvidence", [
+		[0],
+		["url:https://docs.example.com/guide"],
+		1,
+		20,
+		Date.now(),
+	]);
+	assert.equal(identityRelated.ok, true);
+	assert.ok(
+		(identityRelated.value as { id: string }[]).some(
+			(row) => row.id === searchEvent.id,
+		),
+		"exact identity can link evidence outside time window",
+	);
+	assert.equal(
+		(
+			await request("readRelatednessEvidence", [
+				[searchTimestamp],
+				[],
+				31 * 24 * 60 * 60 * 1_000,
+				20,
+				Date.now(),
+			])
+		).ok,
+		false,
+		"candidate windows must stay bounded",
 	);
 	await request("deletePageObservations", [
 		{ origin: "https://docs.example.com" },

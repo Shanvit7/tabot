@@ -6,12 +6,6 @@
 	"scripts": {
 		"dev": "rsbuild dev",
 		"build": "rsbuild build && tsc --noEmit",
-		"check:home": "node src/lib/home-transport.check.mjs",
-		"check:activityMetrics": "node src/components/activity/activity-metrics-ui.check.mjs",
-		"check:activityFlow": "node --import ../../packages/shared/resolve-hook.mjs src/components/activity/activity-flow.check.mjs",
-		"check:activityExplorer": "node --import ../../packages/shared/resolve-hook.mjs src/components/activity/activity-explorer.check.mjs",
-		"check:memoryMap": "node --experimental-strip-types src/components/recurring-patterns/memory-map.check.mjs",
-		"check": "pnpm check:home && pnpm check:activityMetrics && pnpm check:activityFlow && pnpm check:activityExplorer && pnpm check:memoryMap",
 		"preview": "rsbuild preview",
 		"doctor": "react-doctor",
 		"start": "rsbuild preview"

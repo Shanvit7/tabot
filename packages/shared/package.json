@@ -18,6 +18,11 @@
 		"check:contexts": "node --import ./resolve-hook.mjs src/checks/contexts.check.ts",
 		"check:memories": "node --import ./resolve-hook.mjs src/checks/memories.check.ts",
 		"check:retrieval": "node --import ./resolve-hook.mjs src/checks/retrieval.check.ts",
+		"check:relatedness": "node --import ./resolve-hook.mjs src/checks/relatedness.check.ts && node --import ./resolve-hook.mjs src/checks/handwired-relatedness.check.ts && pnpm check:relatednessExperiment",
+		"check:localLabeler": "node --import ./resolve-hook.mjs src/checks/local-labeler.check.ts",
+		"label:local": "node --import ./resolve-hook.mjs src/recall/local-labeler.ts",
+		"relatedness:local": "node --import ./resolve-hook.mjs src/recall/relatedness-experiment.ts",
+		"check:relatednessExperiment": "node --import ./resolve-hook.mjs src/checks/relatedness-experiment.check.ts",
 		"check:historySearch": "node --import ./resolve-hook.mjs src/checks/history-search.check.ts",
 		"check:liveContext": "node --import ./resolve-hook.mjs src/checks/live-context.check.ts",
 		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/checks/meaningful-events.check.ts",
@@ -29,7 +34,7 @@
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
 		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
 		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts",
-		"check": "pnpm check:activityMetrics && pnpm check:foreground && pnpm check:sessions && pnpm check:contexts && pnpm check:memories && pnpm check:retrieval && pnpm check:historySearch && pnpm check:liveContext && pnpm check:meaningfulEvents && pnpm check:pipeline && pnpm check:privacy && pnpm check:pageObservations && pnpm check:exportFilename && pnpm check:connectTargets && pnpm check:activityGraph && pnpm check:stabilization && pnpm check:v5regression && pnpm swSemantics && pnpm swDerivation && pnpm swGraph && pnpm swEpisodes",
+		"check": "pnpm check:activityMetrics && pnpm check:foreground && pnpm check:sessions && pnpm check:contexts && pnpm check:memories && pnpm check:retrieval && pnpm check:relatedness && pnpm check:localLabeler && pnpm check:historySearch && pnpm check:liveContext && pnpm check:meaningfulEvents && pnpm check:pipeline && pnpm check:privacy && pnpm check:pageObservations && pnpm check:exportFilename && pnpm check:connectTargets && pnpm check:activityGraph && pnpm check:stabilization && pnpm check:v5regression && pnpm swSemantics && pnpm swDerivation && pnpm swGraph && pnpm swEpisodes",
 		"swSemantics": "node --import ./resolve-hook.mjs src/checks/sw-semantics.check.ts",
 		"swDerivation": "node --import ./resolve-hook.mjs src/checks/sw-derivation.check.ts",
 		"swGraph": "node --import ./resolve-hook.mjs src/checks/sw-graph.check.ts",
@@ -38,9 +43,11 @@
 	},
 	"dependencies": {
 		"@openredaction/core": "^1.1.5",
-		"graphology": "^0.26.0"
+		"graphology": "^0.26.0",
+		"handwired": "github:chenglou/handwired#257856e3b221140acb4cc4460626b850c0bd4ff1"
 	},
 	"devDependencies": {
-		"@types/node": "^22.20.1"
+		"@types/node": "^22.20.1",
+		"typescript": "^5.9.3"
 	}
 }
