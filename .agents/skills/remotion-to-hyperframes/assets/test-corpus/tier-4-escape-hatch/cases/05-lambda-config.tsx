@@ -16,23 +16,23 @@ import { renderMediaOnLambda } from "@remotion/lambda";
 import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 
 export const LambdaConfigured: React.FC = () => {
-  const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 30], [0, 1]);
-  return (
-    <AbsoluteFill style={{ opacity }}>
-      <div>frame {frame}</div>
-    </AbsoluteFill>
-  );
+	const frame = useCurrentFrame();
+	const opacity = interpolate(frame, [0, 30], [0, 1]);
+	return (
+		<AbsoluteFill style={{ opacity }}>
+			<div>frame {frame}</div>
+		</AbsoluteFill>
+	);
 };
 
 // Rendered at scale via Lambda — no HF equivalent.
 export async function renderViaLambda() {
-  return renderMediaOnLambda({
-    region: "us-east-1",
-    functionName: "remotion-render",
-    composition: "LambdaConfigured",
-    serveUrl: "https://example.com/bundle",
-    inputProps: {},
-    codec: "h264",
-  });
+	return renderMediaOnLambda({
+		region: "us-east-1",
+		functionName: "remotion-render",
+		composition: "LambdaConfigured",
+		serveUrl: "https://example.com/bundle",
+		inputProps: {},
+		codec: "h264",
+	});
 }

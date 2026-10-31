@@ -3,17 +3,24 @@ import type { StoredTabEvent } from "../events/db";
 import { logger } from "../lib/logger";
 import type { StoredPageObservation } from "../pages/observations";
 import {
-	projectEvidenceSearchResults,
+	parseRecentSearchQuestion,
+	projectActivitySearchResults,
 	searchHistory,
 } from "../recall/history-search";
 
-const event = (id: string, url: string, timestamp: number): StoredTabEvent => ({
+const event = (
+	id: string,
+	url: string,
+	timestamp: number,
+	favicon?: string,
+): StoredTabEvent => ({
 	id,
 	type: "TAB_UPDATED",
 	tabId: 1,
 	windowId: 1,
 	timestamp,
 	url,
+	...(favicon ? { favicon } : {}),
 });
 const page = (
 	id: string,
@@ -21,6 +28,7 @@ const page = (
 	timestamp: number,
 	text: string,
 	redacted = true,
+	title?: string,
 ): StoredPageObservation => ({
 	id,
 	kind: "page-observation",
@@ -31,13 +39,19 @@ const page = (
 	captureIdentity: id,
 	url,
 	trigger: "interaction",
-	segments: [text],
+	...(title ? { title } : {}),
+	segments: text ? [text] : [],
 	privacy: { policyVersion: 1, redacted, findings: [] },
 	coverage: { truncated: false, partial: false },
 });
 
 const events = [
-	event("event-1", "https://example.com/docs/pkce?secret=redacted", 100),
+	event(
+		"event-1",
+		"https://example.com/docs/pkce?secret=redacted",
+		100,
+		"https://example.com/favicon.svg?token=redacted",
+	),
 	event("event-2", "https://example.com/docs/pkce#private", 150),
 	event("event-3", "https://docs.example.net/reset", 250),
 	event("event-4", "https://news.example.org/today", 350),
@@ -72,12 +86,57 @@ const pages = [
 
 const exact = await searchHistory(events, pages, "PKCE verifier");
 assert.equal(exact[0]?.url, "https://example.com/docs/pkce");
+assert.equal(exact[0]?.favicon, "https://example.com/favicon.svg");
 assert.equal(exact[0]?.pageCount, 2);
 assert.equal(exact[0]?.eventCount, 2);
 assert.equal(exact[0]?.sourceCount, 4);
 assert.equal(exact[0]?.sources[0]?.url, "https://example.com/docs/pkce");
 assert.equal(exact[0]?.excerpt.includes("PKCE"), true);
 assert.equal(exact[0]?.url.includes("secret"), false);
+
+const titleOnly = page(
+	"title-only",
+	"https://taladb.dev/guide",
+	400,
+	"",
+	true,
+	"Database in the browser",
+);
+const titleMatch = await searchHistory([], [titleOnly], "database");
+assert.equal(titleMatch[0]?.pageTitle, "Database in the browser");
+assert.equal(titleMatch[0]?.pageExcerptAvailable, false);
+assert.deepEqual(titleMatch[0]?.evidenceKinds, ["title-only"]);
+
+const searchNow = 1_800_000_000_000;
+const recentSearch = parseRecentSearchQuestion(
+	"what did i search 5 mins ago",
+	searchNow,
+);
+assert.ok(recentSearch);
+assert.deepEqual(recentSearch, {
+	from: searchNow - 6 * 60_000,
+	to: searchNow - 4 * 60_000,
+	nearestTo: searchNow - 5 * 60_000,
+});
+const timedSearch = await searchHistory(
+	[
+		event(
+			"google-search",
+			"https://www.google.com/search?q=database&client=chrome",
+			searchNow - 5 * 60_000 + 15_000,
+		),
+		event(
+			"outside-window",
+			"https://www.google.com/search?q=weather",
+			searchNow - 8 * 60_000,
+		),
+	],
+	[],
+	"",
+	{ ...recentSearch, limit: 5 },
+);
+assert.equal(timedSearch.length, 1);
+assert.deepEqual(timedSearch[0]?.searchQueries, ["database"]);
 const paginationEvents = [
 	event("page-a", "https://a.example/pkce", 500),
 	event("page-b", "https://b.example/pkce", 501),
@@ -92,19 +151,52 @@ const secondPage = await searchHistory(paginationEvents, [], "PKCE", {
 assert.equal(firstPage.length, 1);
 assert.equal(secondPage.length, 1);
 assert.notEqual(firstPage[0]?.url, secondPage[0]?.url);
-const externalEvidence = projectEvidenceSearchResults(exact.slice(0, 1))[0];
-assert.equal(externalEvidence?.origin, "https://example.com");
-assert.equal(externalEvidence?.excerpt.includes("PKCE"), true);
-assert.equal(JSON.stringify(externalEvidence).includes("/docs/pkce"), false);
-assert.equal(Object.hasOwn(externalEvidence?.sources[0] ?? {}, "url"), false);
-const pathOnlyResult = projectEvidenceSearchResults(
+const semanticPage = pages[0];
+assert.ok(semanticPage);
+const semanticOnly = await searchHistory(
+	[],
+	[semanticPage],
+	"a saved technical reference",
+	{
+		candidateOrder: ["https://example.com/docs/pkce"],
+	},
+);
+assert.equal(semanticOnly[0]?.url, "https://example.com/docs/pkce");
+assert.deepEqual(semanticOnly[0]?.matchedTerms, []);
+assert.equal(semanticOnly[0]?.pageExcerptAvailable, true);
+
+const externalActivity = projectActivitySearchResults(exact.slice(0, 1))[0];
+assert.equal(externalActivity?.site, "https://example.com");
+assert.equal(externalActivity?.preview?.includes("PKCE"), true);
+assert.equal(JSON.stringify(externalActivity).includes("/docs/pkce"), false);
+assert.equal(Object.hasOwn(externalActivity?.anchors[0] ?? {}, "url"), false);
+const titleOnlyActivity = projectActivitySearchResults(
+	await searchHistory(
+		[],
+		[
+			page(
+				"title-only",
+				"https://example.org/settings",
+				500,
+				"",
+				true,
+				"OAuth callback settings",
+			),
+		],
+		"OAuth callback settings",
+	),
+)[0];
+assert.equal(titleOnlyActivity?.title, "OAuth callback settings");
+assert.equal(titleOnlyActivity?.preview, null);
+assert.deepEqual(titleOnlyActivity?.matchedFrom, ["title-only"]);
+const pathOnlyResult = projectActivitySearchResults(
 	await searchHistory(
 		[event("path-only", "https://private.example/account/internal", 400)],
 		[],
 		"internal",
 	),
 )[0];
-assert.equal(pathOnlyResult?.excerpt, "");
+assert.equal(pathOnlyResult?.preview, null);
 assert.equal(
 	JSON.stringify(pathOnlyResult).includes("/account/internal"),
 	false,

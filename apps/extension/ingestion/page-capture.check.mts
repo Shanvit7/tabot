@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import type { StoredIngestRecord, StoredPageObservation } from "@tabot/shared";
+import {
+	PAGE_OBSERVATION_PROTOCOL_VERSION,
+	type StoredIngestRecord,
+	type StoredPageObservation,
+} from "@tabot/shared";
 import { createEventPipeline } from "./event-pipeline";
 import { ingestPageObservationMessage } from "./page-ingress";
 
@@ -39,11 +43,12 @@ const deps = {
 };
 const message = {
 	kind: "TABOT_PAGE_OBSERVATION",
-	version: 1,
+	version: PAGE_OBSERVATION_PROTOCOL_VERSION,
 	id: "12345678-1234-4234-8234-123456789012",
 	timestamp: Date.now(),
 	documentUrl: url,
-	trigger: "viewport-dwell",
+	trigger: "auto-dwell",
+	title: "Pull request 42 — contact john@example.com",
 	segments: ["Pull request 42, contact john@example.com"],
 	truncated: false,
 	partial: false,
@@ -57,7 +62,8 @@ assert.ok(stored);
 assert.equal(stored.url, "https://github.com/acme/project/pull/42");
 assert.equal(stored.segments.join(" ").includes("john@example.com"), false);
 assert.equal(JSON.stringify(stored).includes("private=remove"), false);
-assert.equal(stored.trigger, "viewport-dwell");
+assert.equal(stored.trigger, "auto-dwell");
+assert.equal(stored.title?.includes("john@example.com"), false);
 assert.equal(stored.privacy.redacted, true);
 assert.match(stored.pageKey, /^[0-9a-f]{64}$/);
 assert.deepEqual(await ingestPageObservationMessage(message, sender, deps), {

@@ -2,7 +2,7 @@ import { eventBytes, UUID_PATTERN } from "../events/ingest";
 import { sanitizeUrlForIngestion } from "../privacy/ingest";
 import { piiRedactor } from "../privacy/pii-redactor";
 
-export const PAGE_OBSERVATION_PROTOCOL_VERSION = 1;
+export const PAGE_OBSERVATION_PROTOCOL_VERSION = 2;
 export const MAX_PAGE_OBSERVATION_BYTES = 32 * 1024;
 export const MAX_PAGE_SEGMENTS = 4;
 export const MAX_PAGE_SEGMENT_CHARS = 1000;
@@ -14,7 +14,10 @@ const SECRET_PATTERNS = [
 	/-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----[\s\S]{0,4000}?-----END [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----/g,
 ];
 
-export type PageObservationTrigger = "viewport-dwell" | "interaction";
+export type PageObservationTrigger =
+	| "auto-dwell"
+	| "viewport-dwell"
+	| "interaction";
 export interface StoredPageObservation {
 	id: string;
 	kind: "page-observation";
@@ -25,6 +28,7 @@ export interface StoredPageObservation {
 	pageKey: string;
 	captureIdentity: string;
 	url?: string;
+	title?: string;
 	trigger: PageObservationTrigger;
 	segments: string[];
 	privacy: {
@@ -53,9 +57,13 @@ export const normalizePageObservation = (
 				observation.documentId.length > 128)) ||
 		!/^[0-9a-f]{64}$/.test(observation.pageKey) ||
 		!/^[0-9a-f]{64}$/.test(observation.captureIdentity) ||
-		!["viewport-dwell", "interaction"].includes(observation.trigger) ||
+		!["auto-dwell", "viewport-dwell", "interaction"].includes(
+			observation.trigger,
+		) ||
+		(observation.title !== undefined &&
+			(typeof observation.title !== "string" ||
+				observation.title.length > 512)) ||
 		!Array.isArray(observation.segments) ||
-		observation.segments.length < 1 ||
 		observation.segments.length > MAX_PAGE_SEGMENTS ||
 		observation.segments.some(
 			(segment) =>
@@ -71,6 +79,7 @@ export const normalizePageObservation = (
 		observation.privacy.findings.some(
 			(type) => typeof type !== "string" || type.length > 64,
 		) ||
+		(!observation.title && observation.segments.length === 0) ||
 		!observation.coverage ||
 		typeof observation.coverage.truncated !== "boolean" ||
 		typeof observation.coverage.partial !== "boolean"
@@ -88,6 +97,7 @@ export const normalizePageObservation = (
 		pageKey: observation.pageKey,
 		captureIdentity: observation.captureIdentity,
 		...(observation.url ? { url: observation.url } : {}),
+		...(observation.title ? { title: observation.title } : {}),
 		trigger: observation.trigger,
 		segments: [...observation.segments],
 		privacy: {
@@ -112,46 +122,49 @@ export const sanitizePageObservationForIngestion = async (
 ): Promise<StoredPageObservation> => {
 	const url = await sanitizeUrlForIngestion(input.url);
 	if (!url) throw new Error("page-url-rejected");
-	const segments = await Promise.all(
-		input.segments.map(async (segment) => {
-			if (segment.length > MAX_PAGE_SEGMENT_CHARS)
-				throw new Error("page-segment-too-large");
-			let text = segment;
-			const findings: string[] = [];
-			for (const pattern of SECRET_PATTERNS) {
+	const sanitizeText = async (value: string) => {
+		if (value.length > MAX_PAGE_SEGMENT_CHARS)
+			throw new Error("page-segment-too-large");
+		let text = value;
+		const findings: string[] = [];
+		for (const pattern of SECRET_PATTERNS) {
+			pattern.lastIndex = 0;
+			if (pattern.test(text)) {
+				findings.push("SECRET");
 				pattern.lastIndex = 0;
-				if (pattern.test(text)) {
-					findings.push("SECRET");
-					pattern.lastIndex = 0;
-					text = text.replace(pattern, "[SECRET]");
-				}
+				text = text.replace(pattern, "[SECRET]");
 			}
-			const result = await piiRedactor.redact(text);
-			return {
-				text: result.redacted.trim(),
-				findings: [
-					...findings,
-					...result.findings.map((finding) => finding.type),
-				],
-			};
-		}),
-	);
-	const sanitized = normalizePageObservation({
+		}
+		const result = await piiRedactor.redact(text);
+		return {
+			text: result.redacted.trim(),
+			findings: [
+				...findings,
+				...result.findings.map((finding) => finding.type),
+			],
+		};
+	};
+	const [title, segments] = await Promise.all([
+		input.title ? sanitizeText(input.title) : Promise.resolve(undefined),
+		Promise.all(input.segments.map(sanitizeText)),
+	] as const);
+	const textResults = [...(title ? [title] : []), ...segments];
+	return normalizePageObservation({
 		...input,
 		url,
+		...(title?.text ? { title: title.text } : { title: undefined }),
 		segments: segments.map(({ text }) => text).filter(Boolean),
 		privacy: {
 			policyVersion: PAGE_PRIVACY_POLICY_VERSION,
 			redacted:
 				input.privacy?.redacted === true ||
-				segments.some(({ findings }) => findings.length > 0),
+				textResults.some(({ findings }) => findings.length > 0),
 			findings: [
 				...new Set([
 					...(input.privacy?.findings ?? []),
-					...segments.flatMap(({ findings }) => findings),
+					...textResults.flatMap(({ findings }) => findings),
 				]),
 			],
 		},
 	});
-	return sanitized;
 };

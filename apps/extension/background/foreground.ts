@@ -47,9 +47,9 @@ export const startForegroundTracking = (emit: Emit) => {
 					? {
 							...savedPrevious,
 							url: savedPrevious.url
-								? await sanitizeUrlForIngestion(savedPrevious.url).catch(
-										() => undefined,
-									)
+								? await sanitizeUrlForIngestion(savedPrevious.url, {
+										retainSearchQuery: true,
+									}).catch(() => undefined)
 								: undefined,
 						}
 					: undefined;
@@ -72,7 +72,9 @@ export const startForegroundTracking = (emit: Emit) => {
 					(await chrome.idle.queryState(IDLE_SECONDS)) === "active";
 				const cleanUrl =
 					active && tab?.url
-						? await sanitizeUrlForIngestion(tab.url).catch(() => undefined)
+						? await sanitizeUrlForIngestion(tab.url, {
+								retainSearchQuery: true,
+							}).catch(() => undefined)
 						: undefined;
 				const next: ForegroundState | undefined =
 					active && tab

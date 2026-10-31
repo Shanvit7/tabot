@@ -19,20 +19,25 @@ import { agentWritePath } from "./media-record.mjs";
 import { pythonInvocation } from "./python.mjs";
 
 const r3 = (x) => Number(x.toFixed(3));
-const lyriaKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+const lyriaKey = () =>
+	process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
 
 import { bgmDefaultVolume } from "./bgm-volume.mjs";
-export { BGM_BED_VOLUME, BGM_SILENT_VOLUME, bgmDefaultVolume } from "./bgm-volume.mjs";
+export {
+	BGM_BED_VOLUME,
+	BGM_SILENT_VOLUME,
+	bgmDefaultVolume,
+} from "./bgm-volume.mjs";
 
 const BGM_PY_DEPS = ["transformers", "torch", "soundfile", "numpy"];
 const BGM_PY_PROBE =
-  "import transformers, soundfile, torch, numpy; from transformers import MusicgenForConditionalGeneration";
+	"import transformers, soundfile, torch, numpy; from transformers import MusicgenForConditionalGeneration";
 const LYRIA_PY_DEPS = ["google-genai", "python-dotenv"];
 const LYRIA_PY_PROBE = "import google.genai";
 
 function pyOk(probe) {
-  const { cmd, args } = pythonInvocation(["-c", probe]);
-  return spawnSync(cmd, args, { stdio: "ignore" }).status === 0;
+	const { cmd, args } = pythonInvocation(["-c", probe]);
+	return spawnSync(cmd, args, { stdio: "ignore" }).status === 0;
 }
 // `python -m pip`, not a bare `pip` binary: a Homebrew/system Python often
 // exposes only `python3`/`pip3` on PATH, so a plain `pip` spawn silently
@@ -41,66 +46,97 @@ function pyOk(probe) {
 // interpreter pyOk() probes — a bare `pip`/`pip3` could resolve to a
 // different Python installation than `python3` if more than one is on PATH.
 function pipInstall(deps) {
-  const { cmd, args } = pythonInvocation(["-m", "pip", "install", "-q", ...deps]);
-  return spawnSync(cmd, args, { stdio: "ignore" }).status === 0;
+	const { cmd, args } = pythonInvocation([
+		"-m",
+		"pip",
+		"install",
+		"-q",
+		...deps,
+	]);
+	return spawnSync(cmd, args, { stdio: "ignore" }).status === 0;
 }
 
 // ── retrieval (HeyGen music library) ──────────────────────────────────────────
-export async function retrieveBgm({ query, headers, hyperframesDir, hasVoice, anomalies }) {
-  const q = query || "calm cinematic underscore";
-  const results = await searchSounds(q, "music", headers, { limit: 5 });
-  if (!results.length) return null;
-  const top = results[0];
-  const rel = agentWritePath(hyperframesDir, "assets/bgm/track.mp3", { anomalies });
-  await downloadTo(top.audio_url, join(hyperframesDir, rel));
-  return {
-    path: rel,
-    volume: bgmDefaultVolume(hasVoice),
-    query: q,
-    mode: "retrieve",
-    duration_s: typeof top.duration === "number" ? r3(top.duration) : null,
-  };
+export async function retrieveBgm({
+	query,
+	headers,
+	hyperframesDir,
+	hasVoice,
+	anomalies,
+}) {
+	const q = query || "calm cinematic underscore";
+	const results = await searchSounds(q, "music", headers, { limit: 5 });
+	if (!results.length) return null;
+	const top = results[0];
+	const rel = agentWritePath(hyperframesDir, "assets/bgm/track.mp3", {
+		anomalies,
+	});
+	await downloadTo(top.audio_url, join(hyperframesDir, rel));
+	return {
+		path: rel,
+		volume: bgmDefaultVolume(hasVoice),
+		query: q,
+		mode: "retrieve",
+		duration_s: typeof top.duration === "number" ? r3(top.duration) : null,
+	};
 }
 
 // ── mood inference (for the generate path's prompt) ──────────────────────────
 // Industry base → archetype shape → emotional-arc tiebreaker. Exported so a
 // workflow adapter can build a rich prompt from its own narrative metadata; the
 // engine also calls it when generate has only a plain mood query.
-export function inferBgmPrompt({ blob = "", archetype = "", arc = "", userPrompt = "" } = {}) {
-  if (userPrompt) return userPrompt;
-  const b = String(blob).toLowerCase();
-  let base;
-  let bpm;
-  if (/\b(crypto|nft|web3|defi|token|blockchain|exchange|wallet|dao)\b/.test(b)) {
-    base = "atmospheric electronic, deep bass, futuristic synths, restrained percussion";
-    bpm = 100;
-  } else if (/\b(finance|fintech|bank|payment|invest|wealth|insurance|treasury)\b/.test(b)) {
-    base = "calm cinematic, soft strings, subtle piano, restrained percussion";
-    bpm = 92;
-  } else if (/\b(creative|agency|design|studio|art|brand|marketing|content)\b/.test(b)) {
-    base = "playful electronic, warm pads, light percussion";
-    bpm = 115;
-  } else {
-    base = "uplifting corporate tech, bright modern piano with synth pads";
-    bpm = 108;
-  }
-  const at = String(archetype).toLowerCase();
-  const ar = String(arc).toLowerCase();
-  if (/\bpas\b|pain.agitate|pain.+solve/.test(at))
-    return `${base}, starts with subtle tension then builds to resolution, BPM ${bpm}, transitions from MINOR to MAJOR`;
-  if (/\bbab\b|before.after|future.pac|vision/.test(at))
-    return `${base}, cinematic and aspirational, steady build with rising energy, BPM ${bpm}, MAJOR`;
-  if (/cascade|feature.benefit/.test(at))
-    return `${base}, energetic and driving, consistent momentum, BPM ${Math.min(bpm + 10, 128)}, MAJOR`;
-  if (/demo.loop|question.+answer/.test(at))
-    return `${base}, clean and focused, minimal arrangement, BPM ${Math.max(bpm - 8, 88)}`;
-  if (/frustrat|anxiety|overwhelm|tension/.test(ar) && /relief|excite|triumph/.test(ar))
-    return `${base}, builds from understated tension to uplifting resolution, BPM ${bpm}, MINOR to MAJOR`;
-  if (/excit|awe|power|triumph/.test(ar))
-    return `${base}, energetic and confident, BPM ${bpm}, MAJOR`;
-  if (/trust|ease|clarity|reassur/.test(ar))
-    return `${base}, warm and reassuring, BPM ${Math.max(bpm - 5, 85)}`;
-  return `${base}, BPM ${bpm}, MAJOR`;
+export function inferBgmPrompt({
+	blob = "",
+	archetype = "",
+	arc = "",
+	userPrompt = "",
+} = {}) {
+	if (userPrompt) return userPrompt;
+	const b = String(blob).toLowerCase();
+	let base;
+	let bpm;
+	if (
+		/\b(crypto|nft|web3|defi|token|blockchain|exchange|wallet|dao)\b/.test(b)
+	) {
+		base =
+			"atmospheric electronic, deep bass, futuristic synths, restrained percussion";
+		bpm = 100;
+	} else if (
+		/\b(finance|fintech|bank|payment|invest|wealth|insurance|treasury)\b/.test(
+			b,
+		)
+	) {
+		base = "calm cinematic, soft strings, subtle piano, restrained percussion";
+		bpm = 92;
+	} else if (
+		/\b(creative|agency|design|studio|art|brand|marketing|content)\b/.test(b)
+	) {
+		base = "playful electronic, warm pads, light percussion";
+		bpm = 115;
+	} else {
+		base = "uplifting corporate tech, bright modern piano with synth pads";
+		bpm = 108;
+	}
+	const at = String(archetype).toLowerCase();
+	const ar = String(arc).toLowerCase();
+	if (/\bpas\b|pain.agitate|pain.+solve/.test(at))
+		return `${base}, starts with subtle tension then builds to resolution, BPM ${bpm}, transitions from MINOR to MAJOR`;
+	if (/\bbab\b|before.after|future.pac|vision/.test(at))
+		return `${base}, cinematic and aspirational, steady build with rising energy, BPM ${bpm}, MAJOR`;
+	if (/cascade|feature.benefit/.test(at))
+		return `${base}, energetic and driving, consistent momentum, BPM ${Math.min(bpm + 10, 128)}, MAJOR`;
+	if (/demo.loop|question.+answer/.test(at))
+		return `${base}, clean and focused, minimal arrangement, BPM ${Math.max(bpm - 8, 88)}`;
+	if (
+		/frustrat|anxiety|overwhelm|tension/.test(ar) &&
+		/relief|excite|triumph/.test(ar)
+	)
+		return `${base}, builds from understated tension to uplifting resolution, BPM ${bpm}, MINOR to MAJOR`;
+	if (/excit|awe|power|triumph/.test(ar))
+		return `${base}, energetic and confident, BPM ${bpm}, MAJOR`;
+	if (/trust|ease|clarity|reassur/.test(ar))
+		return `${base}, warm and reassuring, BPM ${Math.max(bpm - 5, 85)}`;
+	return `${base}, BPM ${bpm}, MAJOR`;
 }
 
 // ── generation (Lyria → MusicGen, detached) ──────────────────────────────────
@@ -108,89 +144,103 @@ export function inferBgmPrompt({ blob = "", archetype = "", arc = "", userPrompt
 //   { path, mode, volume, provider, pid, log, target_duration_s, seed_duration_s,
 //     loop_count, pending:true }  on success, or  { disabled:true, reason }.
 export function generateBgmDetached({
-  prompt,
-  durationS,
-  hyperframesDir,
-  lyriaRecipe,
-  seedSeconds = 28,
-  hasVoice,
-  anomalies,
+	prompt,
+	durationS,
+	hyperframesDir,
+	lyriaRecipe,
+	seedSeconds = 28,
+	hasVoice,
+	anomalies,
 }) {
-  const rel = agentWritePath(hyperframesDir, "assets/bgm/track.wav", { anomalies });
-  const abs = join(hyperframesDir, rel);
-  mkdirSync(join(hyperframesDir, "assets", "bgm"), { recursive: true });
-  const log = join(hyperframesDir, "assets", "bgm", `bgm-${Date.now()}.log`);
-  const targetS = Math.max(1, durationS);
-  const baseMeta = { path: rel, mode: null, volume: bgmDefaultVolume(hasVoice), pending: true };
+	const rel = agentWritePath(hyperframesDir, "assets/bgm/track.wav", {
+		anomalies,
+	});
+	const abs = join(hyperframesDir, rel);
+	mkdirSync(join(hyperframesDir, "assets", "bgm"), { recursive: true });
+	const log = join(hyperframesDir, "assets", "bgm", `bgm-${Date.now()}.log`);
+	const targetS = Math.max(1, durationS);
+	const baseMeta = {
+		path: rel,
+		mode: null,
+		volume: bgmDefaultVolume(hasVoice),
+		pending: true,
+	};
 
-  const lyriaConfigured = !!lyriaKey() && !!lyriaRecipe && existsSync(lyriaRecipe);
+	const lyriaConfigured =
+		!!lyriaKey() && !!lyriaRecipe && existsSync(lyriaRecipe);
 
-  // Make a backend runnable: prefer Lyria when configured (install google-genai
-  // on demand), else ensure local MusicGen deps. Installs are synchronous here —
-  // generation itself is detached, so the engine still returns promptly.
-  if (lyriaConfigured && !pyOk(LYRIA_PY_PROBE)) pipInstall(LYRIA_PY_DEPS);
-  const useLyria = lyriaConfigured && pyOk(LYRIA_PY_PROBE);
-  if (!useLyria && !pyOk(BGM_PY_PROBE)) pipInstall(BGM_PY_DEPS);
+	// Make a backend runnable: prefer Lyria when configured (install google-genai
+	// on demand), else ensure local MusicGen deps. Installs are synchronous here —
+	// generation itself is detached, so the engine still returns promptly.
+	if (lyriaConfigured && !pyOk(LYRIA_PY_PROBE)) pipInstall(LYRIA_PY_DEPS);
+	const useLyria = lyriaConfigured && pyOk(LYRIA_PY_PROBE);
+	if (!useLyria && !pyOk(BGM_PY_PROBE)) pipInstall(BGM_PY_DEPS);
 
-  const fd = openSync(log, "w");
-  if (useLyria) {
-    const { cmd, args } = pythonInvocation([
-      lyriaRecipe,
-      "--output",
-      abs,
-      "--duration",
-      String(targetS),
-      "--prompt",
-      prompt,
-    ]);
-    rmSync(abs, { force: true }); // wait-bgm takes any file here as the finished track
-    const proc = spawn(cmd, args, { detached: true, stdio: ["ignore", fd, fd] });
-    proc.unref();
-    closeSync(fd);
-    return {
-      ...baseMeta,
-      mode: "detached-single",
-      provider: "lyria",
-      pid: proc.pid,
-      log,
-      target_duration_s: r3(targetS),
-    };
-  }
+	const fd = openSync(log, "w");
+	if (useLyria) {
+		const { cmd, args } = pythonInvocation([
+			lyriaRecipe,
+			"--output",
+			abs,
+			"--duration",
+			String(targetS),
+			"--prompt",
+			prompt,
+		]);
+		rmSync(abs, { force: true }); // wait-bgm takes any file here as the finished track
+		const proc = spawn(cmd, args, {
+			detached: true,
+			stdio: ["ignore", fd, fd],
+		});
+		proc.unref();
+		closeSync(fd);
+		return {
+			...baseMeta,
+			mode: "detached-single",
+			provider: "lyria",
+			pid: proc.pid,
+			log,
+			target_duration_s: r3(targetS),
+		};
+	}
 
-  if (pyOk(BGM_PY_PROBE)) {
-    const seedS = Math.min(Math.max(seedSeconds, 10), 30);
-    const loops = targetS > seedS ? Math.ceil(targetS / seedS) : 1;
-    const script = musicgenScript({ prompt, abs, targetS, seedS });
-    const { cmd, args } = pythonInvocation(["-c", script]);
-    rmSync(abs, { force: true });
-    const proc = spawn(cmd, args, { detached: true, stdio: ["ignore", fd, fd] });
-    proc.unref();
-    closeSync(fd);
-    return {
-      ...baseMeta,
-      mode: targetS > seedS ? "detached-seed-loop" : "detached-seed-trim",
-      provider: "musicgen",
-      pid: proc.pid,
-      log,
-      target_duration_s: r3(targetS),
-      seed_duration_s: seedS,
-      loop_count: loops,
-    };
-  }
+	if (pyOk(BGM_PY_PROBE)) {
+		const seedS = Math.min(Math.max(seedSeconds, 10), 30);
+		const loops = targetS > seedS ? Math.ceil(targetS / seedS) : 1;
+		const script = musicgenScript({ prompt, abs, targetS, seedS });
+		const { cmd, args } = pythonInvocation(["-c", script]);
+		rmSync(abs, { force: true });
+		const proc = spawn(cmd, args, {
+			detached: true,
+			stdio: ["ignore", fd, fd],
+		});
+		proc.unref();
+		closeSync(fd);
+		return {
+			...baseMeta,
+			mode: targetS > seedS ? "detached-seed-loop" : "detached-seed-trim",
+			provider: "musicgen",
+			pid: proc.pid,
+			log,
+			target_duration_s: r3(targetS),
+			seed_duration_s: seedS,
+			loop_count: loops,
+		};
+	}
 
-  closeSync(fd);
-  return {
-    disabled: true,
-    reason: lyriaConfigured
-      ? `Lyria configured but google-genai uninstallable, and local MusicGen unavailable (pip install ${BGM_PY_DEPS.join(" ")})`
-      : `no Lyria key/recipe and local MusicGen deps unavailable (pip install ${BGM_PY_DEPS.join(" ")})`,
-  };
+	closeSync(fd);
+	return {
+		disabled: true,
+		reason: lyriaConfigured
+			? `Lyria configured but google-genai uninstallable, and local MusicGen unavailable (pip install ${BGM_PY_DEPS.join(" ")})`
+			: `no Lyria key/recipe and local MusicGen deps unavailable (pip install ${BGM_PY_DEPS.join(" ")})`,
+	};
 }
 
 // Inline MusicGen: generate ONE seed clip (≤30s to stay under the decoder's
 // positional limit), then trim it down or crossfade-loop it up to the target.
 function musicgenScript({ prompt, abs, targetS, seedS }) {
-  return `
+	return `
 import math, os, sys, traceback
 from pathlib import Path
 import numpy as np

@@ -19,52 +19,54 @@ import { parseArgs } from "node:util";
 import { mergedPreferences, recordPreference } from "./lib/prefs-store.mjs";
 
 const { values: args, positionals } = parseArgs({
-  options: {
-    hyperframes: { type: "string", default: "." },
-    key: { type: "string" },
-    value: { type: "string" },
-    workflow: { type: "string" },
-    json: { type: "boolean", default: false },
-  },
-  allowPositionals: true,
+	options: {
+		hyperframes: { type: "string", default: "." },
+		key: { type: "string" },
+		value: { type: "string" },
+		workflow: { type: "string" },
+		json: { type: "boolean", default: false },
+	},
+	allowPositionals: true,
 });
 
 const verb = positionals[0];
 
 function fail(message) {
-  console.error(message);
-  process.exit(1);
+	console.error(message);
+	process.exit(1);
 }
 
 if (verb === "get") {
-  const merged = mergedPreferences(args.hyperframes);
-  if (args.json) {
-    console.log(JSON.stringify(merged, null, 2));
-  } else if (Object.keys(merged).length === 0) {
-    console.log("no remembered preferences yet");
-  } else {
-    for (const [key, entry] of Object.entries(merged)) {
-      console.log(
-        `${key} = ${entry.value}  (${entry.source}; confirmed in ${entry.confirmed_in.join(", ")})`,
-      );
-    }
-  }
+	const merged = mergedPreferences(args.hyperframes);
+	if (args.json) {
+		console.log(JSON.stringify(merged, null, 2));
+	} else if (Object.keys(merged).length === 0) {
+		console.log("no remembered preferences yet");
+	} else {
+		for (const [key, entry] of Object.entries(merged)) {
+			console.log(
+				`${key} = ${entry.value}  (${entry.source}; confirmed in ${entry.confirmed_in.join(", ")})`,
+			);
+		}
+	}
 } else if (verb === "record") {
-  if (!args.key || !args.value) fail("record needs --key and --value");
-  try {
-    const result = recordPreference({
-      projectDir: args.hyperframes,
-      key: args.key,
-      value: args.value,
-      workflow: args.workflow,
-    });
-    const promotion = result.promoted ? "; promoted to user tier" : "";
-    console.log(`recorded ${result.key} = ${result.value} (project${promotion})`);
-  } catch (err) {
-    fail(err instanceof Error ? err.message : String(err));
-  }
+	if (!args.key || !args.value) fail("record needs --key and --value");
+	try {
+		const result = recordPreference({
+			projectDir: args.hyperframes,
+			key: args.key,
+			value: args.value,
+			workflow: args.workflow,
+		});
+		const promotion = result.promoted ? "; promoted to user tier" : "";
+		console.log(
+			`recorded ${result.key} = ${result.value} (project${promotion})`,
+		);
+	} catch (err) {
+		fail(err instanceof Error ? err.message : String(err));
+	}
 } else {
-  fail(
-    "usage: prefs.mjs <get|record> --hyperframes . [--key <k> --value <v> --workflow <w>] [--json]",
-  );
+	fail(
+		"usage: prefs.mjs <get|record> --hyperframes . [--key <k> --value <v> --workflow <w>] [--json]",
+	);
 }

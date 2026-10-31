@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { MAX_QUERY_CHARS } from "../tools";
 
-/** Input shape for `search_evidence`. */
-export const searchEvidenceInputSchema = {
+/** Input shape for `search_activity`. */
+export const searchActivityInputSchema = {
 	query: z.string().trim().min(1).max(MAX_QUERY_CHARS),
 	limit: z.number().int().min(1).max(8).optional(),
 	cursor: z
@@ -11,9 +11,9 @@ export const searchEvidenceInputSchema = {
 		.optional(),
 };
 
-/** Input shape for `find_related_evidence`. */
-export const findRelatedEvidenceInputSchema = {
-	sources: z
+/** Input shape for `find_activity_matches`. */
+export const findActivityMatchesInputSchema = {
+	anchors: z
 		.array(
 			z.object({
 				kind: z.enum(["event", "page"]),

@@ -11,7 +11,7 @@ export const prettySite = (domain: string): string => {
 	return word ? word.charAt(0).toUpperCase() + word.slice(1) : host;
 };
 
-// Derive favicon locally; visited domains never go to a third-party service.
+// Same-origin fallback used when a captured tab favicon is unavailable.
 export const faviconOf = (origin: string): string | undefined => {
 	const bare = origin.replace(/\/+$/, "");
 	return /^https?:\/\//.test(bare) ? `${bare}/favicon.ico` : undefined;

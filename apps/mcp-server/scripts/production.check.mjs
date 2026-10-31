@@ -500,7 +500,7 @@ try {
 		});
 	const discovery = await mcp(tokens.access_token);
 	assert.equal(discovery.status, 200);
-	assert.match(await discovery.text(), /search_evidence/);
+	assert.match(await discovery.text(), /search_activity/);
 	for (const [resource, scopes, expected] of [
 		["https://other.invalid/mcp", ["tabot.context"], 401],
 		["https://test.invalid/mcp", [], 403],
@@ -516,7 +516,7 @@ try {
 	assert.equal(dispatches, 0, "wrong audience/scope never dispatch");
 	const toolResponse = await mcp(tokens.access_token, {
 		method: "tools/call",
-		params: { name: "search_evidence", arguments: { query: "test" } },
+		params: { name: "search_activity", arguments: { query: "test" } },
 	});
 	assert.match(await toolResponse.text(), /private-error-sentinel/);
 	const toolLog = logs.find((entry) => entry.event === "tool_call");

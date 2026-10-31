@@ -1,4 +1,4 @@
 {
-  "client": ["Acorn", "ArrowLeft", "IconContext"],
-  "ssr": ["Acorn", "ArrowLeft"]
+	"client": ["Acorn", "ArrowLeft", "IconContext"],
+	"ssr": ["Acorn", "ArrowLeft"]
 }

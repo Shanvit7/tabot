@@ -13,24 +13,35 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-export function padFrameInternalDuration(hyperframesDir, frameSrc, frameId, newDuration) {
-  const framePath = resolve(hyperframesDir, frameSrc);
-  let html;
-  try {
-    html = readFileSync(framePath, "utf8");
-  } catch (err) {
-    if (err?.code === "ENOENT") return;
-    throw err;
-  }
-  const tagRe = /<[a-z][\w:-]*\s[^<>]*?>/gi;
-  let m;
-  while ((m = tagRe.exec(html)) !== null) {
-    const tag = m[0];
-    if (!tag.includes(`data-composition-id="${frameId}"`)) continue;
-    if (!/data-duration="[\d.]+"/.test(tag)) continue;
-    const newTag = tag.replace(/data-duration="[\d.]+"/, `data-duration="${newDuration}"`);
-    if (newTag === tag) return;
-    writeFileSync(framePath, html.slice(0, m.index) + newTag + html.slice(m.index + tag.length));
-    return;
-  }
+export function padFrameInternalDuration(
+	hyperframesDir,
+	frameSrc,
+	frameId,
+	newDuration,
+) {
+	const framePath = resolve(hyperframesDir, frameSrc);
+	let html;
+	try {
+		html = readFileSync(framePath, "utf8");
+	} catch (err) {
+		if (err?.code === "ENOENT") return;
+		throw err;
+	}
+	const tagRe = /<[a-z][\w:-]*\s[^<>]*?>/gi;
+	let m;
+	while ((m = tagRe.exec(html)) !== null) {
+		const tag = m[0];
+		if (!tag.includes(`data-composition-id="${frameId}"`)) continue;
+		if (!/data-duration="[\d.]+"/.test(tag)) continue;
+		const newTag = tag.replace(
+			/data-duration="[\d.]+"/,
+			`data-duration="${newDuration}"`,
+		);
+		if (newTag === tag) return;
+		writeFileSync(
+			framePath,
+			html.slice(0, m.index) + newTag + html.slice(m.index + tag.length),
+		);
+		return;
+	}
 }

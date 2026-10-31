@@ -6,21 +6,30 @@ import {
 	type InsertEventsResult,
 	logger,
 	normalizeEvent,
-	normalizePageObservation,
 	type PageCaptureSiteSummary,
 	type PageObservationSummary,
 	pageObservationBudgetFailure,
 	pageObservationSizeBytes,
-	relatednessIdentityKeys,
+	parseRecentSearchQuestion,
+	type SearchAvailability,
 	type StoredIngestRecord,
 	type StoredPageObservation,
 	type StoredTabEvent,
+	safeRecallUrl,
 	sanitizeEventForIngestion,
 	sanitizePageObservationForIngestion,
 	searchHistory as searchHistoryCore,
+	searchQueryFromUrl,
 	storageErrorCode,
 } from "@tabot/shared";
-import type { Collection, Document, openDB as openTalaDB } from "taladb";
+import type {
+	Collection,
+	Document,
+	openDB as openTalaDB,
+	Filter as TalaFilter,
+} from "taladb";
+import { embedSearchText } from "./search-embedding";
+import { fuseCandidateUrls } from "./search-ranking";
 
 const DB_NAME = "tabot_events";
 const loadTalaDB = async () =>
@@ -43,23 +52,67 @@ const isHttpOrigin = (value: string) => {
 };
 const LEGACY_DATABASE = "tabot_events";
 const MIGRATION_ID = "legacy-indexeddb-to-taladb:v1";
+const SEARCH_BACKFILL_ID = "semantic-search-backfill:v3";
+const SEARCH_MODEL_VERSION = "multi-qa-MiniLM-L6-cos-v1:3c96c1df:chunks-v1";
+const SEARCH_DIMENSIONS = 384;
+// search-quality.check.mts: 0.20 improves recall without no-answer hits on labeled cases.
+const SEARCH_MIN_COSINE_SIMILARITY = 0.2;
 let deriveDocumentId: (kind: Kind, id: string) => string;
+let deriveSearchJobId: (kind: Kind, id: string) => string;
+let deriveSearchPassageId: (id: string) => string;
+let deriveSearchCacheId: (id: string) => string;
+let deriveSearchBackfillId: () => string;
 type Kind = "event" | "page";
 type Envelope = Document & {
 	_id: string;
-	recordKind: Kind;
+	recordKind: Kind | "search-job";
 	originalId: string;
 	timestamp: number;
 	pageKey?: string;
 	origin?: string;
+	searchText?: string;
+	searchTextVersion?: number;
+	searchIndexVersion?: number;
+	searchSourceKind?: Kind;
+	searchSourceId?: string;
 	identity: string;
 	payload: Document;
+};
+type SearchPassage = Document & {
+	_id: string;
+	modelVersion: string;
+	embeddingCacheId: string;
+	sourceKind: Kind;
+	sourceId: string;
+	segmentIndex: number;
+	url: string;
+	origin: string;
+	timestamp: number;
+	text: string;
+	embedding: number[];
+	eventCount?: number;
+	lastEventId?: string;
+};
+type SearchEmbeddingCache = Document & {
+	_id: string;
+	modelVersion: string;
+	embedding: number[];
 };
 type Filter = { origin?: string; from?: number; to?: number };
 type TalaDatabase = Awaited<ReturnType<typeof openTalaDB>>;
 let database:
-	| Promise<{ db: TalaDatabase; records: Collection<Envelope> }>
+	| Promise<{
+			db: TalaDatabase;
+			records: Collection<Envelope>;
+			passages: Collection<SearchPassage>;
+			embeddings: Collection<SearchEmbeddingCache>;
+			meta: Collection<Document>;
+	  }>
 	| undefined;
+let searchBackfillReady = false;
+let searchModelStatus: SearchAvailability["model"] = "not-loaded";
+let semanticSearchAvailable = true;
+let searchIndexer: Promise<void> | undefined;
 let mutations = Promise.resolve();
 let queuedMutations = 0;
 let legacyMigration: Promise<void> | undefined;
@@ -110,12 +163,10 @@ const prepareLegacyRows = async (
 				return normalizeEvent(
 					await sanitizeEventForIngestion(raw as unknown as StoredTabEvent),
 				);
-			return normalizePageObservation(
-				await sanitizePageObservationForIngestion({
-					...(raw as unknown as StoredPageObservation),
-					url: typeof raw.url === "string" ? raw.url : "",
-				}),
-			);
+			return sanitizePageObservationForIngestion({
+				...(raw as unknown as StoredPageObservation),
+				url: typeof raw.url === "string" ? raw.url : "",
+			});
 		}),
 	);
 
@@ -236,6 +287,12 @@ const getDb = () => {
 		const { openDB, deriveDocId } = await loadTalaDB();
 		deriveDocumentId = (kind, id) =>
 			deriveDocId("tabot:records:v1", `${kind}:${id}`);
+		deriveSearchJobId = (kind, id) =>
+			deriveDocId("tabot:search-job:v1", `${kind}:${id}`);
+		deriveSearchPassageId = (id) => deriveDocId("tabot:search-passage:v2", id);
+		deriveSearchCacheId = (id) => deriveDocId("tabot:search-embedding:v1", id);
+		deriveSearchBackfillId = () =>
+			deriveDocId("tabot:meta:v1", SEARCH_BACKFILL_ID);
 		const db = await openDB(DB_NAME);
 		try {
 			const info = await db.storageInfo?.();
@@ -258,13 +315,23 @@ const getDb = () => {
 			await records.createIndex("originalId");
 			await records.createIndex("pageKey");
 			await records.createIndex("origin");
+			await records.createFtsIndex("searchText");
+			const passages = db.collection<SearchPassage>("search_passages");
+			await passages.createFtsIndex("text");
+			await passages.createVectorIndex("embedding", {
+				dimensions: SEARCH_DIMENSIONS,
+				metric: "cosine",
+				indexType: "flat",
+			});
+			const embeddings =
+				db.collection<SearchEmbeddingCache>("search_embeddings");
 			const meta = db.collection<Document>("meta");
 			await runLegacyMigration(
 				records,
 				meta,
 				deriveDocId("tabot:meta:v1", MIGRATION_ID),
 			);
-			return { db, records };
+			return { db, records, passages, embeddings, meta };
 		} catch (error) {
 			// Initialization can fail after openDB has acquired its worker/OPFS lock.
 			await db.close().catch(() => undefined);
@@ -294,15 +361,32 @@ const serializeMutation = <T>(work: () => Promise<T>): Promise<T> => {
 
 const isPage = (row: StoredIngestRecord): row is StoredPageObservation =>
 	"kind" in row && row.kind === "page-observation";
+const searchTextFor = (row: StoredIngestRecord) => {
+	const url = safeRecallUrl(row.url);
+	if (!url) return "";
+	const body = isPage(row)
+		? `${row.title ?? ""} ${row.segments.join(" ")}`
+		: `${row.type.replaceAll("_", " ")} ${searchQueryFromUrl(row.url) ?? ""}`;
+	return `${url.hostname} ${url.pathname} ${body}`.slice(0, 8_000);
+};
+const toSearchJobEnvelope = (row: StoredIngestRecord): Envelope => {
+	const kind: Kind = isPage(row) ? "page" : "event";
+	return {
+		_id: deriveSearchJobId(kind, row.id),
+		recordKind: "search-job",
+		originalId: row.id,
+		timestamp: row.timestamp,
+		searchSourceKind: kind,
+		searchSourceId: row.id,
+		identity: `${kind}:${row.id}`,
+		payload: {},
+	};
+};
 const toEnvelope = (row: StoredIngestRecord): Envelope => {
 	const recordKind: Kind = isPage(row) ? "page" : "event";
 	const originalId = row.id;
-	let origin: string | undefined;
-	if (isPage(row)) {
-		try {
-			origin = new URL(row.url ?? "").origin;
-		} catch {}
-	}
+	const url = safeRecallUrl(row.url);
+	const origin = url?.origin;
 	return {
 		_id: deriveDocumentId(recordKind, originalId),
 		recordKind,
@@ -310,9 +394,293 @@ const toEnvelope = (row: StoredIngestRecord): Envelope => {
 		timestamp: row.timestamp,
 		...(isPage(row) ? { pageKey: row.pageKey } : {}),
 		...(origin ? { origin } : {}),
+		searchText: searchTextFor(row),
+		searchTextVersion: 2,
 		identity: isPage(row) ? row.captureIdentity : eventIdentity(row),
 		payload: JSON.parse(JSON.stringify(row)) as Document,
 	};
+};
+
+const splitSearchText = (text: string) => {
+	const chunks: string[] = [];
+	const size = 400;
+	const overlap = 64;
+	for (let start = 0; start < text.length; start += size - overlap) {
+		const chunk = text.slice(start, start + size).trim();
+		if (chunk) chunks.push(chunk);
+	}
+	return chunks;
+};
+const encodeSearchText = async (text: string) => {
+	searchModelStatus = "loading";
+	try {
+		const vector = await embedSearchText(text);
+		searchModelStatus = "ready";
+		return vector;
+	} catch (error) {
+		searchModelStatus = "unavailable";
+		throw error;
+	}
+};
+
+const embeddingFor = async (
+	text: string,
+	embeddings: Collection<SearchEmbeddingCache>,
+) => {
+	const bytes = await crypto.subtle.digest(
+		"SHA-256",
+		new TextEncoder().encode(`${SEARCH_MODEL_VERSION}\0${text}`),
+	);
+	const hash = Array.from(new Uint8Array(bytes), (value) =>
+		value.toString(16).padStart(2, "0"),
+	).join("");
+	const _id = deriveSearchCacheId(hash);
+	const existing = await embeddings.findOne({ _id });
+	if (existing) return { id: _id, vector: existing.embedding };
+	const vector = await encodeSearchText(text);
+	await serializeMutation(async () => {
+		if (!(await embeddings.findOne({ _id })))
+			await embeddings.insert({
+				_id,
+				modelVersion: SEARCH_MODEL_VERSION,
+				embedding: vector,
+			});
+	});
+	return { id: _id, vector };
+};
+
+const ensureSearchBackfill = async (
+	records: Collection<Envelope>,
+	meta: Collection<Document>,
+) => {
+	if (searchBackfillReady) return;
+	const marker = await meta.findOne({ _id: deriveSearchBackfillId() });
+	if (marker) {
+		searchBackfillReady = marker.state === "complete";
+		return;
+	}
+	const rows = await records.find();
+	for (const row of rows) {
+		if (
+			(row.recordKind !== "event" && row.recordKind !== "page") ||
+			row.searchTextVersion === 2
+		)
+			continue;
+		const payload = row.payload as unknown as StoredIngestRecord;
+		await serializeMutation(() =>
+			records.updateOne(
+				{ _id: row._id },
+				{
+					$set: {
+						searchText: searchTextFor(payload),
+						searchTextVersion: 2,
+						...(safeRecallUrl(payload.url)
+							? { origin: safeRecallUrl(payload.url)?.origin }
+							: {}),
+					},
+				},
+			),
+		);
+	}
+	const jobs = await records.find({ recordKind: "search-job" });
+	const queuedIds = new Set(
+		jobs.map((job) => `${job.searchSourceKind}:${job.searchSourceId}`),
+	);
+	const missing = rows
+		.filter(
+			(row) =>
+				(row.recordKind === "event" || row.recordKind === "page") &&
+				row.searchIndexVersion !== 2 &&
+				!queuedIds.has(`${row.recordKind}:${row.originalId}`),
+		)
+		.map((row) =>
+			toSearchJobEnvelope(row.payload as unknown as StoredIngestRecord),
+		);
+	for (let start = 0; start < missing.length; start += 128) {
+		const batch = missing.slice(start, start + 128);
+		await serializeMutation(() =>
+			records.insertMany(batch).then(() => undefined),
+		);
+	}
+	await meta.insert({
+		_id: deriveSearchBackfillId(),
+		state: "running",
+		version: 2,
+	});
+};
+
+const deleteSearchPassages = async (
+	passages: Collection<SearchPassage>,
+	embeddings: Collection<SearchEmbeddingCache>,
+	sourceIds: string[],
+) => {
+	const removed = await passages.find({ sourceId: { $in: sourceIds } });
+	await passages.deleteMany({ sourceId: { $in: sourceIds } });
+	for (const cacheId of new Set(removed.map((row) => row.embeddingCacheId)))
+		if (!(await passages.findOne({ embeddingCacheId: cacheId })))
+			await embeddings.deleteOne({ _id: cacheId });
+};
+
+const nextSearchJob = async (records: Collection<Envelope>) => {
+	const rows = await records.aggregate([
+		{ $match: { recordKind: "search-job" } },
+		{ $sort: { timestamp: 1 } },
+		{ $limit: 1 },
+	]);
+	return rows[0] as Envelope | undefined;
+};
+
+const runSearchIndexer = async () => {
+	const { records, passages, embeddings, meta } = await getDb();
+	await ensureSearchBackfill(records, meta);
+	while (true) {
+		const job = await nextSearchJob(records);
+		if (!job) {
+			const backfillId = deriveSearchBackfillId();
+			await meta.updateOne(
+				{ _id: backfillId },
+				{ $set: { state: "complete", completedAt: Date.now() } },
+			);
+			searchBackfillReady = true;
+			return;
+		}
+		const sourceKind = job.searchSourceKind ?? "page";
+		const source = await records.findOne({
+			recordKind: sourceKind,
+			originalId: job.searchSourceId,
+		});
+		if (!source || !job.searchSourceId) {
+			await serializeMutation(() =>
+				records.deleteOne({ _id: job._id }).then(() => undefined),
+			);
+			continue;
+		}
+		const payload = source.payload as unknown as StoredIngestRecord;
+		const url = safeRecallUrl(payload.url);
+		if (!url) {
+			await serializeMutation(() =>
+				records.deleteOne({ _id: job._id }).then(() => undefined),
+			);
+			continue;
+		}
+		if (sourceKind === "event") {
+			const event = payload as StoredTabEvent;
+			const searchQuery = searchQueryFromUrl(event.url);
+			const passageId = deriveSearchPassageId(
+				searchQuery
+					? `${SEARCH_MODEL_VERSION}:url:${url.href}:query:${searchQuery}`
+					: `${SEARCH_MODEL_VERSION}:url:${url.href}`,
+			);
+			const existing = await passages.findOne({ _id: passageId });
+			const text = `${url.hostname} ${url.pathname} ${searchQuery ?? ""}`;
+			const cached = existing
+				? undefined
+				: await embeddingFor(text, embeddings);
+			await serializeMutation(async () => {
+				const currentSource = await records.findOne({ _id: source._id });
+				const currentJob = await records.findOne({ _id: job._id });
+				if (currentSource && currentJob) {
+					if (existing) {
+						await passages.updateOne(
+							{ _id: passageId, lastEventId: { $ne: event.id } },
+							{
+								$set: {
+									sourceId: event.id,
+									timestamp: event.timestamp,
+									text,
+									lastEventId: event.id,
+								},
+								$inc: { eventCount: 1 },
+							},
+						);
+					} else if (cached) {
+						await passages.insert({
+							_id: passageId,
+							modelVersion: SEARCH_MODEL_VERSION,
+							embeddingCacheId: cached.id,
+							sourceKind: "event",
+							sourceId: event.id,
+							segmentIndex: -1,
+							url: url.href,
+							origin: url.origin,
+							timestamp: event.timestamp,
+							text,
+							embedding: cached.vector,
+							eventCount: 1,
+							lastEventId: event.id,
+						});
+					}
+					await records.updateOne(
+						{ _id: source._id },
+						{ $set: { searchIndexVersion: 2 } },
+					);
+				}
+				if (currentJob) await records.deleteOne({ _id: job._id });
+			});
+			continue;
+		}
+		const page = payload as StoredPageObservation;
+		const chunks = [
+			...(page.title ? [{ text: page.title, segmentIndex: -1 }] : []),
+			...page.segments.flatMap((segment, segmentIndex) =>
+				splitSearchText(segment).map((text) => ({ text, segmentIndex })),
+			),
+		].map(({ text, segmentIndex }) => ({
+			text: `${url.hostname} ${url.pathname} ${text}`,
+			segmentIndex,
+		}));
+		const indexed: SearchPassage[] = [];
+		for (let index = 0; index < chunks.length; index++) {
+			const chunk = chunks[index];
+			if (!chunk) continue;
+			const cached = await embeddingFor(chunk.text, embeddings);
+			indexed.push({
+				_id: deriveSearchPassageId(
+					`${SEARCH_MODEL_VERSION}:${page.id}:${index}`,
+				),
+				modelVersion: SEARCH_MODEL_VERSION,
+				embeddingCacheId: cached.id,
+				sourceKind: "page",
+				sourceId: page.id,
+				segmentIndex: chunk.segmentIndex,
+				url: url.href,
+				origin: url.origin,
+				timestamp: page.timestamp,
+				text: chunk.text,
+				embedding: cached.vector,
+			});
+			await new Promise<void>((resolve) => setTimeout(resolve, 0));
+		}
+		await serializeMutation(async () => {
+			const currentSource = await records.findOne({ _id: source._id });
+			const currentJob = await records.findOne({ _id: job._id });
+			if (currentSource && currentJob) {
+				await passages.deleteMany({ sourceKind: "page", sourceId: page.id });
+				for (const passage of indexed) {
+					if (!(await passages.findOne({ _id: passage._id })))
+						await passages.insert(passage);
+				}
+				await records.updateOne(
+					{ _id: source._id },
+					{ $set: { searchIndexVersion: 2 } },
+				);
+			}
+			if (currentJob) await records.deleteOne({ _id: job._id });
+		});
+	}
+};
+
+const scheduleSearchIndexer = (force = false) => {
+	if (searchIndexer || (!force && searchBackfillReady)) return;
+	searchIndexer = runSearchIndexer()
+		.catch((error: unknown) => {
+			logger.warn("TalaDB search indexing paused", {
+				code: error instanceof Error ? error.message : "indexing-failed",
+			});
+		})
+		.finally(() => {
+			searchIndexer = undefined;
+		});
 };
 
 const commitIngest = async (
@@ -323,12 +691,10 @@ const commitIngest = async (
 		const pages = new Map<string, StoredPageObservation>();
 		for (const item of input) {
 			if (isPage(item)) {
-				const row = normalizePageObservation(
-					await sanitizePageObservationForIngestion({
-						...item,
-						url: item.url ?? "",
-					}),
-				);
+				const row = await sanitizePageObservationForIngestion({
+					...item,
+					url: item.url ?? "",
+				});
 				const previous = pages.get(row.id);
 				if (previous && previous.captureIdentity !== row.captureIdentity)
 					throw new EventConflictError("id-conflict");
@@ -454,8 +820,13 @@ const commitIngest = async (
 			accepted.push(row);
 			storedPages.push(row);
 		}
-		const inserts = [...missingEvents, ...accepted].map(toEnvelope);
+		const sources = [...missingEvents, ...accepted];
+		const inserts = [
+			...sources.map(toEnvelope),
+			...sources.map(toSearchJobEnvelope),
+		];
 		if (inserts.length) await records.insertMany(inserts);
+		if (sources.length) scheduleSearchIndexer(true);
 		return {
 			inserted: missingEvents.length,
 			duplicates:
@@ -517,6 +888,14 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 	countEvents: async () =>
 		(await getDb()).records.count({ recordKind: "event" }),
 	countPages: async () => (await getDb()).records.count({ recordKind: "page" }),
+	getFirstEventTimestamp: async () => {
+		const rows = await (await getDb()).records.aggregate([
+			{ $match: { recordKind: "event" } },
+			{ $sort: { timestamp: 1 } },
+			{ $limit: 1 },
+		]);
+		return rows[0]?.timestamp ?? null;
+	},
 	readEvents: async (range) =>
 		withPayload<StoredTabEvent>(
 			eventRange(await (await getDb()).records.find(), range),
@@ -532,11 +911,14 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			.then(
 				(row) => row?.payload as unknown as StoredPageObservation | undefined,
 			),
-	readRelatednessEvidence: async (
+	readRelatedActivity: async (
 		anchors: number[],
-		identityKeys: string[],
+		pageKeys: string[],
+		origins: string[],
+		seedIds: string[],
 		maxGapMs: number,
 		limit: number,
+		offset: number,
 		to: number,
 	) => {
 		if (
@@ -546,51 +928,59 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			anchors.some(
 				(timestamp) => !Number.isSafeInteger(timestamp) || timestamp < 0,
 			) ||
-			!Array.isArray(identityKeys) ||
-			identityKeys.length > 24 ||
-			identityKeys.some(
-				(key) => typeof key !== "string" || key.length > 2_048,
+			!Array.isArray(pageKeys) ||
+			pageKeys.length > 8 ||
+			pageKeys.some((key) => typeof key !== "string" || key.length > 2_048) ||
+			!Array.isArray(origins) ||
+			origins.length > 8 ||
+			origins.some(
+				(origin) => typeof origin !== "string" || !isHttpOrigin(origin),
 			) ||
+			!Array.isArray(seedIds) ||
+			seedIds.length < 1 ||
+			seedIds.length > 8 ||
+			seedIds.some((id) => typeof id !== "string" || id.length > 64) ||
 			!Number.isSafeInteger(maxGapMs) ||
 			maxGapMs < 1 ||
 			maxGapMs > 30 * 24 * 60 * 60 * 1000 ||
 			!Number.isSafeInteger(limit) ||
 			limit < 1 ||
-			limit > 1_000 ||
+			limit > 8 ||
+			!Number.isSafeInteger(offset) ||
+			offset < 0 ||
+			offset > 999_999 ||
 			!Number.isSafeInteger(to) ||
 			to < 1
 		)
-			throw new Error("invalid-relatedness-window");
-		const identityKeySet = new Set(identityKeys);
-		// ponytail: O(n) local scan supports all-time identity links; add indexed relatedness keys if latency grows.
-		const rows = await (await getDb()).records.find();
-		return rows
-			.filter(
-				(row) =>
-					(row.recordKind === "event" || row.recordKind === "page") &&
-					row.timestamp <= to,
-			)
-			.map((row) => {
-				const payload = row.payload as unknown as StoredIngestRecord;
-				const sharesIdentity = relatednessIdentityKeys(payload).some((key) =>
-					identityKeySet.has(key),
-				);
-				const timeGap = Math.min(
-					...anchors.map((time) => Math.abs(row.timestamp - time)),
-				);
-				return { payload, sharesIdentity, timeGap, timestamp: row.timestamp };
-			})
-			.filter(
-				({ sharesIdentity, timeGap }) => sharesIdentity || timeGap <= maxGapMs,
-			)
-			.sort(
-				(left, right) =>
-					Number(right.sharesIdentity) - Number(left.sharesIdentity) ||
-					left.timeGap - right.timeGap ||
-					left.timestamp - right.timestamp,
-			)
-			.slice(0, limit)
-			.map(({ payload }) => payload);
+			throw new Error("invalid-related-evidence-query");
+		const identityFilters: TalaFilter<Envelope>[] = [
+			...pageKeys.map((pageKey) => ({ pageKey })),
+			...origins.map((origin) => ({ origin })),
+		];
+		const timeFilters = anchors.map(
+			(timestamp): TalaFilter<Envelope> => ({
+				timestamp: {
+					$gte: Math.max(0, timestamp - maxGapMs),
+					$lte: Math.min(to, timestamp + maxGapMs),
+				},
+			}),
+		);
+		const rows = await (await getDb()).records.aggregate<Envelope>([
+			{
+				$match: {
+					$and: [
+						{ recordKind: { $in: ["event", "page"] } },
+						{ timestamp: { $lte: to } },
+						{ originalId: { $nin: seedIds } },
+						{ $or: [...identityFilters, ...timeFilters] },
+					],
+				},
+			},
+			{ $sort: { timestamp: -1, _id: 1 } },
+			{ $skip: offset },
+			{ $limit: limit + 1 },
+		]);
+		return rows.map((row) => row.payload as unknown as StoredIngestRecord);
 	},
 	getPageSummaries: async (from: number, to: number, limit: number = 4) =>
 		(await getDb()).records.find({ recordKind: "page" }).then((rows) =>
@@ -624,33 +1014,178 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			(options.limit !== undefined &&
 				(!Number.isSafeInteger(options.limit) ||
 					options.limit < 1 ||
-					options.limit > 20))
+					options.limit > 20)) ||
+			(options.offset !== undefined &&
+				(!Number.isSafeInteger(options.offset) || options.offset < 0))
 		)
 			throw new Error("invalid-search-request");
-		const { records } = await getDb();
-		const timeFilter =
-			options.from === undefined && options.to === undefined
-				? {}
-				: {
+		const temporal = parseRecentSearchQuestion(query);
+		if (temporal) {
+			const { records } = await getDb();
+			const from = Math.max(temporal.from, options.from ?? 0);
+			const to = Math.min(temporal.to, options.to ?? Number.MAX_SAFE_INTEGER);
+			if (from > to) return [];
+			const rows = await records.find({
+				recordKind: "event",
+				timestamp: { $gte: from, $lte: to },
+				...(options.origin ? { origin: options.origin } : {}),
+			});
+			const events = withPayload<StoredTabEvent>(rows, "event").filter(
+				(event) => Boolean(searchQueryFromUrl(event.url)),
+			);
+			return searchHistoryCore(events, [], "", {
+				...options,
+				...temporal,
+				from,
+				to,
+				candidateOrder: undefined,
+			});
+		}
+		const { records, passages, meta } = await getDb();
+		if (!searchBackfillReady) {
+			const marker = await meta.findOne({ _id: deriveSearchBackfillId() });
+			searchBackfillReady = marker?.state === "complete";
+		}
+		if (!searchBackfillReady) {
+			scheduleSearchIndexer();
+			const timeFilter =
+				options.from === undefined && options.to === undefined
+					? {}
+					: {
+							timestamp: {
+								...(options.from !== undefined ? { $gte: options.from } : {}),
+								...(options.to !== undefined ? { $lte: options.to } : {}),
+							},
+						};
+			const [eventRows, pageRows] = await Promise.all([
+				records.find({ recordKind: "event", ...timeFilter }),
+				records.find({
+					recordKind: "page",
+					...(options.origin ? { origin: options.origin } : {}),
+					...timeFilter,
+				}),
+			]);
+			return searchHistoryCore(
+				withPayload<StoredTabEvent>(eventRows, "event"),
+				withPayload<StoredPageObservation>(pageRows, "page"),
+				query,
+				options,
+			);
+		}
+		scheduleSearchIndexer();
+		const limit = options.limit ?? 20;
+		const candidateLimit = Math.min(
+			500,
+			Math.max(100, ((options.offset ?? 0) + limit) * 10),
+		);
+		const filter = {
+			...(options.origin ? { origin: options.origin } : {}),
+			...(options.from !== undefined || options.to !== undefined
+				? {
 						timestamp: {
 							...(options.from !== undefined ? { $gte: options.from } : {}),
 							...(options.to !== undefined ? { $lte: options.to } : {}),
 						},
-					};
-		const [eventRows, pageRows] = await Promise.all([
-			records.find({ recordKind: "event", ...timeFilter }),
-			records.find({
-				recordKind: "page",
-				...(options.origin ? { origin: options.origin } : {}),
-				...timeFilter,
-			}),
+					}
+				: {}),
+		};
+		const [textHits, passageCount] = await Promise.all([
+			records.searchText("searchText", query, candidateLimit, filter),
+			passages.count({ modelVersion: SEARCH_MODEL_VERSION, ...filter }),
 		]);
+		let semanticHits: Awaited<ReturnType<typeof passages.hybridSearch>> = [];
+		if (passageCount) {
+			try {
+				const vector = await encodeSearchText(query);
+				const vectorFilter = { modelVersion: SEARCH_MODEL_VERSION, ...filter };
+				const [hybridHits, vectorHits] = await Promise.all([
+					passages.hybridSearch(
+						{ textField: "text", text: query },
+						{ vectorField: "embedding", vector },
+						candidateLimit,
+						vectorFilter,
+						{ candidates: candidateLimit },
+					),
+					passages.findNearest(
+						"embedding",
+						vector,
+						candidateLimit,
+						vectorFilter,
+					),
+				]);
+				const similarity = new Map(
+					vectorHits.map(({ document, score }) => [document._id, score]),
+				);
+				semanticHits = hybridHits.filter(
+					(hit) =>
+						hit.textRank !== null ||
+						(similarity.get(hit.document._id) ?? -1) >=
+							SEARCH_MIN_COSINE_SIMILARITY,
+				);
+				semanticSearchAvailable = true;
+			} catch (error) {
+				semanticSearchAvailable = false;
+				logger.warn("Semantic search unavailable; using TalaDB text search", {
+					code:
+						error instanceof Error ? error.message : "embedding-unavailable",
+				});
+			}
+		}
+		const sourceIds = new Set<string>();
+		for (const { document } of textHits)
+			if (document.recordKind === "event" || document.recordKind === "page")
+				sourceIds.add(document._id);
+		for (const { document } of semanticHits)
+			sourceIds.add(deriveDocumentId(document.sourceKind, document.sourceId));
+		const sourceRows = sourceIds.size
+			? await records.find({ _id: { $in: [...sourceIds] } })
+			: [];
+		const sourceById = new Map(sourceRows.map((row) => [row._id, row]));
+		const rankedUrls = [
+			semanticHits.map(({ document }) =>
+				sourceById.get(
+					deriveDocumentId(document.sourceKind, document.sourceId),
+				),
+			),
+			textHits.map(({ document }) => sourceById.get(document._id)),
+		].map((rows) =>
+			rows.flatMap((row) => {
+				if (!row || (row.recordKind !== "event" && row.recordKind !== "page"))
+					return [];
+				const url = safeRecallUrl((row.payload as { url?: string }).url)?.href;
+				return url ? [url] : [];
+			}),
+		);
+		const candidateOrder = fuseCandidateUrls(rankedUrls);
+		const eventRows = sourceRows.filter((row) => row.recordKind === "event");
+		const pageRows = sourceRows.filter((row) => row.recordKind === "page");
 		return searchHistoryCore(
 			withPayload<StoredTabEvent>(eventRows, "event"),
 			withPayload<StoredPageObservation>(pageRows, "page"),
 			query,
-			options,
+			{ ...options, candidateOrder },
 		);
+	},
+	getSearchStatus: async (): Promise<SearchAvailability> => {
+		const { records, passages, meta } = await getDb();
+		const [marker, pendingJobs, indexedPassages] = await Promise.all([
+			meta.findOne({ _id: deriveSearchBackfillId() }),
+			records.count({ recordKind: "search-job" }),
+			passages.count({ modelVersion: SEARCH_MODEL_VERSION }),
+		]);
+		const indexing =
+			!searchBackfillReady || marker?.state === "running" || pendingJobs > 0;
+		return {
+			mode:
+				!indexing &&
+				indexedPassages > 0 &&
+				searchModelStatus === "ready" &&
+				semanticSearchAvailable
+					? "hybrid"
+					: "keyword",
+			indexing,
+			model: searchModelStatus,
+		};
 	},
 	getPageCaptureSiteSummaries: async () => {
 		const summaries = new Map<string, PageCaptureSiteSummary>();
@@ -677,7 +1212,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 	},
 	deletePageObservations: (filter: Filter = {}, limit: number = 500) =>
 		serializeMutation(async () => {
-			const { records } = await getDb();
+			const { records, passages, embeddings } = await getDb();
 			const rows = (await records.find({ recordKind: "page" }))
 				.filter((row) => {
 					const page = row.payload as unknown as StoredPageObservation;
@@ -694,8 +1229,15 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				})
 				.sort((a, b) => a.timestamp - b.timestamp)
 				.slice(0, limit);
-			if (rows.length)
+			if (rows.length) {
+				const ids = rows.map((row) => row.originalId);
 				await records.deleteMany({ _id: { $in: rows.map((row) => row._id) } });
+				await records.deleteMany({
+					recordKind: "search-job",
+					searchSourceId: { $in: ids },
+				});
+				await deleteSearchPassages(passages, embeddings, ids);
+			}
 			return { deleted: rows.length, more: rows.length === limit };
 		}),
 	prunePageObservations: (
@@ -703,7 +1245,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		maxDeletes: number = 500,
 	) =>
 		serializeMutation(async () => {
-			const { records } = await getDb();
+			const { records, passages, embeddings } = await getDb();
 			const pages = (await records.find({ recordKind: "page" })).sort(
 				(a, b) => a.timestamp - b.timestamp,
 			);
@@ -717,7 +1259,17 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				remove.push(row._id);
 				bytes -= JSON.stringify(row.payload).length * 2;
 			}
-			if (remove.length) await records.deleteMany({ _id: { $in: remove } });
+			if (remove.length) {
+				const ids = pages
+					.filter((row) => remove.includes(row._id))
+					.map((row) => row.originalId);
+				await records.deleteMany({ _id: { $in: remove } });
+				await records.deleteMany({
+					recordKind: "search-job",
+					searchSourceId: { $in: ids },
+				});
+				await deleteSearchPassages(passages, embeddings, ids);
+			}
 			return { deleted: remove.length, more: bytes > maxBytes };
 		}),
 };

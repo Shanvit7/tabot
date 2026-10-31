@@ -6,9 +6,9 @@
 // the river reaches it. See references/map-explainer-architecture.md §2.
 // Render with: bunx remotion render src/index.ts MapExplainer out.mp4 --gl=angle --concurrency=1 --timeout=120000
 
-import React from 'react';
-import {Composition} from 'remotion';
-import {RiverReveal} from './RiverReveal'; // → src/components/RiverReveal.tsx in your project
+import React from "react";
+import { Composition } from "remotion";
+import { RiverReveal } from "./RiverReveal"; // → src/components/RiverReveal.tsx in your project
 
 export const RemotionRoot: React.FC = () => (
 	<Composition

@@ -11,19 +11,19 @@ import React, { useEffect, useRef } from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 
 export const SideEffectDriven: React.FC = () => {
-  const frame = useCurrentFrame();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+	const frame = useCurrentFrame();
+	const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx?.fillRect(frame, frame, 10, 10);
-  }, [frame]);
+	useEffect(() => {
+		const canvas = canvasRef.current;
+		if (!canvas) return;
+		const ctx = canvas.getContext("2d");
+		ctx?.fillRect(frame, frame, 10, 10);
+	}, [frame]);
 
-  return (
-    <AbsoluteFill>
-      <canvas ref={canvasRef} width={1280} height={720} />
-    </AbsoluteFill>
-  );
+	return (
+		<AbsoluteFill>
+			<canvas ref={canvasRef} width={1280} height={720} />
+		</AbsoluteFill>
+	);
 };

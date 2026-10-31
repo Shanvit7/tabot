@@ -132,6 +132,7 @@ export {
 export {
 	sanitizeEventForIngestion,
 	sanitizeUrlForIngestion,
+	searchQueryFromUrl,
 } from "./privacy/ingest";
 export {
 	PII_REDACTION_DEFAULT_ENABLED,
@@ -144,18 +145,13 @@ export type {
 	RedactionResult,
 } from "./privacy/types";
 export {
-	createRelatednessScorer,
-	type HandwiredRelatednessModel,
-	type RelatednessTrainingExample,
-	scoreRelatedness,
-	trainRelatednessModel,
-} from "./recall/handwired-relatedness";
-export {
-	type EvidenceSearchResult,
+	type ActivitySearchResult,
 	type HistorySearchCitation,
 	type HistorySearchOptions,
 	type HistorySearchResult,
-	projectEvidenceSearchResults,
+	parseRecentSearchQuestion,
+	projectActivitySearchResults,
+	type SearchAvailability,
 	safeRecallUrl,
 	searchHistory,
 } from "./recall/history-search";
@@ -166,20 +162,6 @@ export {
 	getLiveNavigationSequence,
 	type LiveBrowserContext,
 } from "./recall/live-context";
-export {
-	type CandidateLimits,
-	extractRelatednessFeatures,
-	generateRelatednessCandidates,
-	generateRelatednessCandidatesForSeeds,
-	RELATEDNESS_FEATURE_NAMES,
-	RELATEDNESS_FEATURE_VERSION,
-	type RelatednessEvidence,
-	type RelatednessFeatures,
-	type RelatednessPair,
-	relatednessIdentityKeys,
-	relatednessMatchSignals,
-	scoreRelatednessHeuristic,
-} from "./recall/relatedness";
 export {
 	annotateTimelineCore,
 	type ContextSearchResult,

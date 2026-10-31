@@ -102,8 +102,8 @@ const stopMutationObserver = () => {
 	mutationObserver = undefined;
 };
 const captureExcerpt = (
-	trigger: "viewport-dwell" | "interaction",
-	root: Element = document.body,
+	trigger: "auto-dwell" | "viewport-dwell" | "interaction",
+	root: Element | undefined,
 	url = location.href,
 ) => {
 	if (
@@ -113,11 +113,13 @@ const captureExcerpt = (
 	)
 		return;
 	const result = extractVisibleExcerpts(document, root);
-	if (!result.segments.length || location.href !== url) return;
+	const title = document.title.trim().slice(0, 512);
+	if ((!result.segments.length && !title) || location.href !== url) return;
 	lastExcerptAt = Date.now();
 	outbox.addObservation({
 		timestamp: lastExcerptAt,
 		documentUrl: url,
+		title,
 		trigger,
 		segments: result.segments,
 		truncated: result.truncated,
@@ -130,7 +132,7 @@ requestViewportExcerpt = (delay: number) => {
 	const url = location.href;
 	excerptTimer = setTimeout(() => {
 		excerptTimer = undefined;
-		void captureExcerpt("viewport-dwell", document.body, url);
+		void captureExcerpt("viewport-dwell", undefined, url);
 	}, delay);
 };
 const syncCapturePolicy = async () => {
@@ -157,7 +159,12 @@ const syncCapturePolicy = async () => {
 		return;
 	}
 	startMutationObserver();
-	requestViewportExcerpt(1000);
+	clearTimeout(excerptTimer);
+	const url = location.href;
+	excerptTimer = setTimeout(() => {
+		excerptTimer = undefined;
+		void captureExcerpt("auto-dwell", undefined, url);
+	}, 1000);
 };
 const send = (
 	type: PageEventType,

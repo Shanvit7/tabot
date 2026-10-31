@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
 	AbsoluteFill,
 	cancelRender,
@@ -6,12 +6,12 @@ import {
 	delayRender,
 	useCurrentFrame,
 	useVideoConfig,
-} from 'remotion';
-import terrainPath from './cesium-path.json';
-import {smoothFlightPath, type LngLat} from './flight-path';
+} from "remotion";
+import terrainPath from "./cesium-path.json";
+import { smoothFlightPath, type LngLat } from "./flight-path";
 
-export type FlyoverMode = 'landscape' | 'city';
-export type {LngLat} from './flight-path';
+export type FlyoverMode = "landscape" | "city";
+export type { LngLat } from "./flight-path";
 
 export type CesiumFlythroughProps = {
 	mode?: FlyoverMode;
@@ -28,7 +28,7 @@ export type CesiumFlythroughProps = {
 
 const MAPTILER_KEY = process.env.REMOTION_MAPTILER_KEY;
 const GOOGLE_MAPS_API_KEY = process.env.REMOTION_GOOGLE_MAPS_API_KEY;
-const CESIUM_VER = '1.143';
+const CESIUM_VER = "1.143";
 const CDN = `https://cesium.com/downloads/cesiumjs/releases/${CESIUM_VER}/Build/Cesium/`;
 const R = 6371;
 const MAX_BANK = 0.13;
@@ -46,7 +46,7 @@ const havKm = (a: number[], b: number[]) => {
 
 const makePathWalker = (path: LngLat[]) => {
 	if (path.length < 2)
-		throw new Error('Flyover path needs at least two points');
+		throw new Error("Flyover path needs at least two points");
 	const cumulative = [0];
 	for (let i = 1; i < path.length; i++) {
 		cumulative.push(cumulative[i - 1] + havKm(path[i - 1], path[i]));
@@ -64,7 +64,7 @@ const makePathWalker = (path: LngLat[]) => {
 			path[i - 1][1] + (path[i][1] - path[i - 1][1]) * t,
 		];
 	};
-	return {along, lengthKm};
+	return { along, lengthKm };
 };
 
 const bearing = (a: number[], b: number[]) => {
@@ -84,11 +84,11 @@ const loadCesium = () =>
 	new Promise<any>((resolve, reject) => {
 		if ((window as any).Cesium) return resolve((window as any).Cesium);
 		(window as any).CESIUM_BASE_URL = CDN;
-		const css = document.createElement('link');
-		css.rel = 'stylesheet';
+		const css = document.createElement("link");
+		css.rel = "stylesheet";
 		css.href = `${CDN}Widgets/widgets.css`;
 		document.head.appendChild(css);
-		const script = document.createElement('script');
+		const script = document.createElement("script");
 		script.src = `${CDN}Cesium.js`;
 		script.onload = () => resolve((window as any).Cesium);
 		script.onerror = () =>
@@ -97,7 +97,7 @@ const loadCesium = () =>
 	});
 
 export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
-	mode = 'landscape',
+	mode = "landscape",
 	path = terrainPath as LngLat[],
 	pathSmoothingPasses = 3,
 	altitudeStart = 4600,
@@ -113,10 +113,10 @@ export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
 	const viewerRef = useRef<any>(null);
 	const tilesetRef = useRef<any>(null);
 	const frame = useCurrentFrame();
-	const {durationInFrames, fps, width, height} = useVideoConfig();
+	const { durationInFrames, fps, width, height } = useVideoConfig();
 	const [ready, setReady] = useState(false);
 	const [handle] = useState(() =>
-		delayRender(`cesium init: ${mode}`, {timeoutInMilliseconds: 120000}),
+		delayRender(`cesium init: ${mode}`, { timeoutInMilliseconds: 120000 }),
 	);
 	const walker = useMemo(
 		() => makePathWalker(smoothFlightPath(path, pathSmoothingPasses)),
@@ -148,7 +148,7 @@ export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
 	};
 
 	const tilesAreLoaded = (viewer: any) => {
-		if (mode === 'landscape') return viewer.scene.globe.tilesLoaded;
+		if (mode === "landscape") return viewer.scene.globe.tilesLoaded;
 		return Boolean(tilesetRef.current?.tilesLoaded);
 	};
 
@@ -174,19 +174,19 @@ export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
 		if (started.current) return;
 		started.current = true;
 		(async () => {
-			if (mode === 'landscape' && !MAPTILER_KEY) {
+			if (mode === "landscape" && !MAPTILER_KEY) {
 				throw new Error(
-					'Set REMOTION_MAPTILER_KEY. Create a key at https://cloud.maptiler.com/account/keys/',
+					"Set REMOTION_MAPTILER_KEY. Create a key at https://cloud.maptiler.com/account/keys/",
 				);
 			}
-			if (mode === 'city' && !GOOGLE_MAPS_API_KEY) {
+			if (mode === "city" && !GOOGLE_MAPS_API_KEY) {
 				throw new Error(
-					'Set REMOTION_GOOGLE_MAPS_API_KEY. Create a Map Tiles API key at https://developers.google.com/maps/documentation/tile/get-api-key',
+					"Set REMOTION_GOOGLE_MAPS_API_KEY. Create a Map Tiles API key at https://developers.google.com/maps/documentation/tile/get-api-key",
 				);
 			}
-			if (mode === 'city' && durationInFrames / fps > 30) {
+			if (mode === "city" && durationInFrames / fps > 30) {
 				throw new Error(
-					'Google Photorealistic 3D Tiles compositions must not exceed 30 seconds',
+					"Google Photorealistic 3D Tiles compositions must not exceed 30 seconds",
 				);
 			}
 
@@ -203,9 +203,9 @@ export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
 				fullscreenButton: false,
 				infoBox: false,
 				selectionIndicator: false,
-				contextOptions: {webgl: {preserveDrawingBuffer: true}},
+				contextOptions: { webgl: { preserveDrawingBuffer: true } },
 			});
-			if (mode === 'landscape') {
+			if (mode === "landscape") {
 				viewer.imageryLayers.addImageryProvider(
 					new C.UrlTemplateImageryProvider({
 						url: `https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`,
@@ -214,7 +214,7 @@ export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
 				);
 				viewer.terrainProvider = await C.CesiumTerrainProvider.fromUrl(
 					`https://api.maptiler.com/tiles/terrain-quantized-mesh-v2/?key=${MAPTILER_KEY}`,
-					{requestVertexNormals: true},
+					{ requestVertexNormals: true },
 				);
 				viewer.creditDisplay.addStaticCredit(
 					new C.Credit(
@@ -223,7 +223,7 @@ export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
 					),
 				);
 			}
-			if (mode === 'city') {
+			if (mode === "city") {
 				viewer.scene.globe.show = false;
 				const tileset = await C.Cesium3DTileset.fromUrl(
 					`https://tile.googleapis.com/v1/3dtiles/root.json?key=${GOOGLE_MAPS_API_KEY}`,
@@ -241,7 +241,7 @@ export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
 			viewer.scene.fog.enabled = true;
 			viewer.scene.globe.enableLighting = false;
 			viewer.scene.verticalExaggeration = verticalExaggeration;
-			(window as any).__CESIUM_FLYOVER__ = {C, mode};
+			(window as any).__CESIUM_FLYOVER__ = { C, mode };
 			viewerRef.current = viewer;
 			setCamera(C, viewer, 0);
 			await settle(viewer);
@@ -263,17 +263,17 @@ export const CesiumFlythrough: React.FC<CesiumFlythroughProps> = ({
 	}, [ready, frame, durationInFrames, mode]);
 
 	return (
-		<AbsoluteFill style={{backgroundColor: '#000'}}>
-			<div ref={containerRef} style={{width, height, position: 'absolute'}} />
-			{mode === 'city' ? (
+		<AbsoluteFill style={{ backgroundColor: "#000" }}>
+			<div ref={containerRef} style={{ width, height, position: "absolute" }} />
+			{mode === "city" ? (
 				<div
 					style={{
-						position: 'absolute',
+						position: "absolute",
 						top: 20,
 						right: 24,
-						color: 'white',
-						font: '500 18px/1.2 sans-serif',
-						textShadow: '0 1px 4px black',
+						color: "white",
+						font: "500 18px/1.2 sans-serif",
+						textShadow: "0 1px 4px black",
 					}}
 				>
 					For promotional purposes only

@@ -31,13 +31,19 @@
 // Usage (orchestrator already cd'd into PROJECT_DIR, so --project-dir defaults to "."):
 //   node fetch-people-avatars.mjs --people ./capture/extracted/people.json
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	writeFileSync,
+	statSync,
+} from "node:fs";
 import { resolve, join, dirname, sep } from "node:path";
 
 const argv = process.argv.slice(2);
 const flag = (name, def) => {
-  const i = argv.indexOf(`--${name}`);
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
+	const i = argv.indexOf(`--${name}`);
+	return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
 };
 
 const peoplePath = resolve(flag("people", "./capture/extracted/people.json"));
@@ -48,87 +54,94 @@ const TIMEOUT = parseInt(flag("timeout", "8000"), 10);
 // other URL rather than fetching whatever string people.json happens to carry.
 // `github.com/<login>.png` 302s to avatars.githubusercontent.com (redirect stays
 // on-host, controlled by GitHub).
-const AVATAR_HOSTS = new Set(["avatars.githubusercontent.com", "github.com", "www.github.com"]);
+const AVATAR_HOSTS = new Set([
+	"avatars.githubusercontent.com",
+	"github.com",
+	"www.github.com",
+]);
 function isAllowedAvatarUrl(u) {
-  let parsed;
-  try {
-    parsed = new URL(u);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "https:") return false;
-  const host = parsed.hostname.toLowerCase();
-  return AVATAR_HOSTS.has(host) || host.endsWith(".githubusercontent.com");
+	let parsed;
+	try {
+		parsed = new URL(u);
+	} catch {
+		return false;
+	}
+	if (parsed.protocol !== "https:") return false;
+	const host = parsed.hostname.toLowerCase();
+	return AVATAR_HOSTS.has(host) || host.endsWith(".githubusercontent.com");
 }
 
 // Path guard: the written file must stay inside the project dir, so a crafted
 // avatarFile ("../../etc/…") can't escape via join().
 function isUnderProject(p) {
-  const r = resolve(p);
-  return r === projectDir || r.startsWith(projectDir + sep);
+	const r = resolve(p);
+	return r === projectDir || r.startsWith(projectDir + sep);
 }
 
 // Soft-exit helper — avatars are optional, so every early-out is exit 0.
 function softExit(msg) {
-  console.log(`• fetch-avatars: ${msg}`);
-  process.exit(0);
+	console.log(`• fetch-avatars: ${msg}`);
+	process.exit(0);
 }
 
-if (!existsSync(peoplePath)) softExit(`no people.json at ${peoplePath} — skipping (no avatars)`);
+if (!existsSync(peoplePath))
+	softExit(`no people.json at ${peoplePath} — skipping (no avatars)`);
 
 let doc;
 try {
-  doc = JSON.parse(readFileSync(peoplePath, "utf8"));
+	doc = JSON.parse(readFileSync(peoplePath, "utf8"));
 } catch (e) {
-  softExit(`people.json unreadable (${e.message}) — skipping`);
+	softExit(`people.json unreadable (${e.message}) — skipping`);
 }
 
 const people = Array.isArray(doc.people) ? doc.people : [];
 if (!people.length) softExit("no contributors in people.json — skipping");
 
 async function fetchOne(person) {
-  const { login, avatarUrl } = person;
-  if (!login || !avatarUrl) return "skip";
-  if (!isAllowedAvatarUrl(avatarUrl)) {
-    person.avatarFetched = false;
-    console.log(`  (skip avatar @${login}: not a GitHub avatar URL)`);
-    return "fail";
-  }
-  // avatarFile is project-root-relative ("assets/<login>.png"); anchor on the
-  // project root so it stays under the project's assets/ dir.
-  const dest = join(projectDir, person.avatarFile || `assets/${login}.png`);
-  if (!isUnderProject(dest)) {
-    person.avatarFetched = false;
-    console.log(`  (skip avatar @${login}: avatar path escapes the project dir)`);
-    return "fail";
-  }
-  mkdirSync(dirname(dest), { recursive: true });
-  // Idempotent: a non-empty file from a prior run is reused (re-runs are free).
-  if (existsSync(dest) && statSync(dest).size > 0) {
-    person.avatarFetched = true;
-    return "cached";
-  }
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
-  try {
-    const res = await fetch(avatarUrl, {
-      signal: ctrl.signal,
-      redirect: "follow", // github.com/<login>.png redirects to avatars.githubusercontent.com
-      headers: { "User-Agent": "hyperframes-pr-to-video" },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length) throw new Error("empty body");
-    writeFileSync(dest, buf);
-    person.avatarFetched = true;
-    return "ok";
-  } catch (e) {
-    person.avatarFetched = false;
-    console.log(`  (skip avatar @${login}: ${e.message})`);
-    return "fail";
-  } finally {
-    clearTimeout(timer);
-  }
+	const { login, avatarUrl } = person;
+	if (!login || !avatarUrl) return "skip";
+	if (!isAllowedAvatarUrl(avatarUrl)) {
+		person.avatarFetched = false;
+		console.log(`  (skip avatar @${login}: not a GitHub avatar URL)`);
+		return "fail";
+	}
+	// avatarFile is project-root-relative ("assets/<login>.png"); anchor on the
+	// project root so it stays under the project's assets/ dir.
+	const dest = join(projectDir, person.avatarFile || `assets/${login}.png`);
+	if (!isUnderProject(dest)) {
+		person.avatarFetched = false;
+		console.log(
+			`  (skip avatar @${login}: avatar path escapes the project dir)`,
+		);
+		return "fail";
+	}
+	mkdirSync(dirname(dest), { recursive: true });
+	// Idempotent: a non-empty file from a prior run is reused (re-runs are free).
+	if (existsSync(dest) && statSync(dest).size > 0) {
+		person.avatarFetched = true;
+		return "cached";
+	}
+	const ctrl = new AbortController();
+	const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
+	try {
+		const res = await fetch(avatarUrl, {
+			signal: ctrl.signal,
+			redirect: "follow", // github.com/<login>.png redirects to avatars.githubusercontent.com
+			headers: { "User-Agent": "hyperframes-pr-to-video" },
+		});
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		const buf = Buffer.from(await res.arrayBuffer());
+		if (!buf.length) throw new Error("empty body");
+		writeFileSync(dest, buf);
+		person.avatarFetched = true;
+		return "ok";
+	} catch (e) {
+		person.avatarFetched = false;
+		console.log(`  (skip avatar @${login}: ${e.message})`);
+		return "fail";
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 let ok = 0;
@@ -137,21 +150,21 @@ let fail = 0;
 // Sequential keeps it simple and gentle on github.com; the list is tiny (a PR's
 // contributors), so latency is not a concern.
 for (const person of people) {
-  const r = await fetchOne(person);
-  if (r === "ok") ok++;
-  else if (r === "cached") cached++;
-  else if (r === "fail") fail++;
+	const r = await fetchOne(person);
+	if (r === "ok") ok++;
+	else if (r === "cached") cached++;
+	else if (r === "fail") fail++;
 }
 
 // Persist avatarFetched flags so story-design can reference only real avatars.
 try {
-  writeFileSync(peoplePath, JSON.stringify(doc, null, 2) + "\n");
+	writeFileSync(peoplePath, JSON.stringify(doc, null, 2) + "\n");
 } catch (e) {
-  console.log(`  (warn: could not rewrite people.json flags: ${e.message})`);
+	console.log(`  (warn: could not rewrite people.json flags: ${e.message})`);
 }
 
 console.log(
-  `✓ fetch-avatars: ${ok + cached}/${people.length} avatar(s) in assets/` +
-    ` (${ok} new, ${cached} cached, ${fail} failed)`,
+	`✓ fetch-avatars: ${ok + cached}/${people.length} avatar(s) in assets/` +
+		` (${ok} new, ${cached} cached, ${fail} failed)`,
 );
 process.exit(0);

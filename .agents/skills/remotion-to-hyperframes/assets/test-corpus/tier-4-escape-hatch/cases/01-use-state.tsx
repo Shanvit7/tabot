@@ -12,18 +12,18 @@ import React, { useState } from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 
 export const StateDriven: React.FC = () => {
-  const frame = useCurrentFrame();
-  const [hue, setHue] = useState(0);
+	const frame = useCurrentFrame();
+	const [hue, setHue] = useState(0);
 
-  // Even if this looks innocuous, the setHue call breaks determinism: HF
-  // can't reproduce React state mutations across seeks.
-  if (frame % 30 === 0 && hue < 360) {
-    setHue((h) => h + 30);
-  }
+	// Even if this looks innocuous, the setHue call breaks determinism: HF
+	// can't reproduce React state mutations across seeks.
+	if (frame % 30 === 0 && hue < 360) {
+		setHue((h) => h + 30);
+	}
 
-  return (
-    <AbsoluteFill style={{ background: `hsl(${hue}, 80%, 50%)` }}>
-      <div>frame {frame}</div>
-    </AbsoluteFill>
-  );
+	return (
+		<AbsoluteFill style={{ background: `hsl(${hue}, 80%, 50%)` }}>
+			<div>frame {frame}</div>
+		</AbsoluteFill>
+	);
 };

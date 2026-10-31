@@ -4,14 +4,14 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"check:evidenceSurface": "node --import ../../packages/shared/resolve-hook.mjs --import ./scripts/tsx-hook.mjs scripts/evidence-surface.check.mjs",
+		"check:activitySurface": "node --import ../../packages/shared/resolve-hook.mjs --import ./scripts/tsx-hook.mjs scripts/activity-surface.check.mjs",
 		"check:production": "node --import ../../packages/shared/resolve-hook.mjs --import ./scripts/tsx-hook.mjs scripts/production.check.mjs",
-		"check": "pnpm typecheck && pnpm check:production && pnpm check:evidenceSurface",
-		"deploy:check": "pnpm typecheck && pnpm check:production && pnpm check:evidenceSurface && wrangler deploy --config wrangler.toml --dry-run",
+		"check": "pnpm typecheck && pnpm check:production && pnpm check:activitySurface",
+		"deploy:check": "pnpm typecheck && pnpm check:production && pnpm check:activitySurface && wrangler deploy --config wrangler.toml --dry-run",
 		"dev": "node scripts/dev.mjs",
 		"dev:local": "wrangler dev --config wrangler.local.toml --local --ip 127.0.0.1 --persist-to .wrangler/local-state",
 		"dev:inspector": "pnpm dlx @modelcontextprotocol/inspector@2.10.1",
-		"deploy": "pnpm typecheck && pnpm check:production && pnpm check:evidenceSurface && wrangler deploy --config wrangler.toml",
+		"deploy": "pnpm typecheck && pnpm check:production && pnpm check:activitySurface && wrangler deploy --config wrangler.toml",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {

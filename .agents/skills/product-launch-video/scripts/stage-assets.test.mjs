@@ -14,39 +14,55 @@ import { stageAssets } from "./lib/assets.mjs";
 // non-fatal anomaly, and the frame 404'd the logo it had been told to use.
 
 function projectWithCapturedSvg() {
-  const dir = mkdtempSync(join(tmpdir(), "product-launch-stage-assets-"));
-  mkdirSync(join(dir, "capture/assets/svgs"), { recursive: true });
-  mkdirSync(join(dir, "capture/screenshots"), { recursive: true });
-  writeFileSync(join(dir, "capture/assets/svgs/brand-mark.svg"), "<svg/>");
-  writeFileSync(join(dir, "capture/screenshots/hero.png"), "png");
-  return dir;
+	const dir = mkdtempSync(join(tmpdir(), "product-launch-stage-assets-"));
+	mkdirSync(join(dir, "capture/assets/svgs"), { recursive: true });
+	mkdirSync(join(dir, "capture/screenshots"), { recursive: true });
+	writeFileSync(join(dir, "capture/assets/svgs/brand-mark.svg"), "<svg/>");
+	writeFileSync(join(dir, "capture/screenshots/hero.png"), "png");
+	return dir;
 }
 
 const frames = [
-  { extra: { asset_candidates: "assets/svgs/brand-mark.svg — the mark; assets/hero.png — hero" } },
+	{
+		extra: {
+			asset_candidates:
+				"assets/svgs/brand-mark.svg — the mark; assets/hero.png — hero",
+		},
+	},
 ];
 
 test("stages an SVG that capture wrote into capture/assets/svgs/", () => {
-  const dir = projectWithCapturedSvg();
+	const dir = projectWithCapturedSvg();
 
-  const { staged, wanted, anomalies } = stageAssets({ hyperframesDir: dir, frames });
+	const { staged, wanted, anomalies } = stageAssets({
+		hyperframesDir: dir,
+		frames,
+	});
 
-  assert.equal(wanted.size, 2);
-  assert.equal(staged, 2, `expected both assets staged, got anomalies: ${anomalies.join("; ")}`);
-  assert.deepEqual(anomalies, []);
-  assert.ok(existsSync(join(dir, "assets/brand-mark.svg")));
-  assert.ok(existsSync(join(dir, "assets/hero.png")));
+	assert.equal(wanted.size, 2);
+	assert.equal(
+		staged,
+		2,
+		`expected both assets staged, got anomalies: ${anomalies.join("; ")}`,
+	);
+	assert.deepEqual(anomalies, []);
+	assert.ok(existsSync(join(dir, "assets/brand-mark.svg")));
+	assert.ok(existsSync(join(dir, "assets/hero.png")));
 });
 
 test("still reports an asset that exists nowhere under capture/", () => {
-  const dir = projectWithCapturedSvg();
+	const dir = projectWithCapturedSvg();
 
-  const { staged, anomalies } = stageAssets({
-    hyperframesDir: dir,
-    frames: [{ extra: { asset_candidates: "assets/svgs/absent.svg — never captured" } }],
-  });
+	const { staged, anomalies } = stageAssets({
+		hyperframesDir: dir,
+		frames: [
+			{
+				extra: { asset_candidates: "assets/svgs/absent.svg — never captured" },
+			},
+		],
+	});
 
-  assert.equal(staged, 0);
-  assert.equal(anomalies.length, 1);
-  assert.match(anomalies[0], /absent\.svg/);
+	assert.equal(staged, 0);
+	assert.equal(anomalies.length, 1);
+	assert.match(anomalies[0], /absent\.svg/);
 });

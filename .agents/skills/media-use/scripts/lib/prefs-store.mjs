@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	writeFileSync,
+} from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { globalMediaDir } from "./media-home.mjs";
 
@@ -24,65 +30,67 @@ const PREFS_FILE = "preferences.json";
 
 /** Keys the brief contract records; `style_preset` is stored per workflow. */
 export const PREFERENCE_KEYS = [
-  "destination",
-  "aspect",
-  "language",
-  "flow",
-  "storyboard",
-  "voice",
-  "style_preset",
+	"destination",
+	"aspect",
+	"language",
+	"flow",
+	"storyboard",
+	"voice",
+	"style_preset",
 ];
 
 /** A value must be confirmed in this many distinct projects to go user-tier. */
 export const PROMOTE_AT = 2;
 
 export function projectPrefsPath(projectDir) {
-  return join(resolve(projectDir), ".media", PREFS_FILE);
+	return join(resolve(projectDir), ".media", PREFS_FILE);
 }
 
 export function userPrefsPath() {
-  return join(globalMediaDir(), PREFS_FILE);
+	return join(globalMediaDir(), PREFS_FILE);
 }
 
 function emptyFile() {
-  return { version: 1, preferences: {}, sightings: {} };
+	return { version: 1, preferences: {}, sightings: {} };
 }
 
 function isRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Tolerant read — a missing or malformed file counts as empty. */
 function readPrefsFile(path) {
-  try {
-    if (!existsSync(path)) return emptyFile();
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
-    if (!isRecord(parsed)) return emptyFile();
-    return {
-      version: 1,
-      preferences: isRecord(parsed.preferences) ? parsed.preferences : {},
-      sightings: isRecord(parsed.sightings) ? parsed.sightings : {},
-    };
-  } catch {
-    return emptyFile();
-  }
+	try {
+		if (!existsSync(path)) return emptyFile();
+		const parsed = JSON.parse(readFileSync(path, "utf8"));
+		if (!isRecord(parsed)) return emptyFile();
+		return {
+			version: 1,
+			preferences: isRecord(parsed.preferences) ? parsed.preferences : {},
+			sightings: isRecord(parsed.sightings) ? parsed.sightings : {},
+		};
+	} catch {
+		return emptyFile();
+	}
 }
 
 /** Atomic write (tmp + rename) so a crash never leaves a torn file. */
 function writePrefsFile(path, file) {
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(file, null, 2)}\n`);
-  renameSync(tmp, path);
+	mkdirSync(dirname(path), { recursive: true });
+	const tmp = `${path}.tmp`;
+	writeFileSync(tmp, `${JSON.stringify(file, null, 2)}\n`);
+	renameSync(tmp, path);
 }
 
 /** `style_preset` entries are stored per workflow as `style_preset.<workflow>`. */
 export function preferenceKeyFor(key, workflow) {
-  return key === "style_preset" && workflow ? `style_preset.${workflow}` : key;
+	return key === "style_preset" && workflow ? `style_preset.${workflow}` : key;
 }
 
 function validEntry(entry) {
-  return isRecord(entry) && typeof entry.value === "string" && entry.value.length > 0;
+	return (
+		isRecord(entry) && typeof entry.value === "string" && entry.value.length > 0
+	);
 }
 
 /**
@@ -91,20 +99,20 @@ function validEntry(entry) {
  * material (`confirmed_in`, `updated_at`).
  */
 export function mergedPreferences(projectDir) {
-  const user = readPrefsFile(userPrefsPath());
-  const project = readPrefsFile(projectPrefsPath(projectDir));
-  const merged = {};
-  for (const [key, entry] of Object.entries(user.preferences)) {
-    if (validEntry(entry)) merged[key] = { ...entry, source: "user" };
-  }
-  for (const [key, entry] of Object.entries(project.preferences)) {
-    if (validEntry(entry)) merged[key] = { ...entry, source: "project" };
-  }
-  return merged;
+	const user = readPrefsFile(userPrefsPath());
+	const project = readPrefsFile(projectPrefsPath(projectDir));
+	const merged = {};
+	for (const [key, entry] of Object.entries(user.preferences)) {
+		if (validEntry(entry)) merged[key] = { ...entry, source: "user" };
+	}
+	for (const [key, entry] of Object.entries(project.preferences)) {
+		if (validEntry(entry)) merged[key] = { ...entry, source: "project" };
+	}
+	return merged;
 }
 
 function dedupe(list) {
-  return [...new Set(list)];
+	return [...new Set(list)];
 }
 
 /**
@@ -112,16 +120,23 @@ function dedupe(list) {
  * provenance over (the old confirmations vouched for the old value).
  */
 function recordProjectTier(projectDir, fullKey, value, projectName, now) {
-  const path = projectPrefsPath(projectDir);
-  const file = readPrefsFile(path);
-  const previous = file.preferences[fullKey];
-  const keepProvenance = validEntry(previous) && previous.value === value;
-  const confirmedIn = keepProvenance
-    ? dedupe([...(Array.isArray(previous.confirmed_in) ? previous.confirmed_in : []), projectName])
-    : [projectName];
-  file.preferences[fullKey] = { value, confirmed_in: confirmedIn, updated_at: now };
-  writePrefsFile(path, file);
-  return confirmedIn;
+	const path = projectPrefsPath(projectDir);
+	const file = readPrefsFile(path);
+	const previous = file.preferences[fullKey];
+	const keepProvenance = validEntry(previous) && previous.value === value;
+	const confirmedIn = keepProvenance
+		? dedupe([
+				...(Array.isArray(previous.confirmed_in) ? previous.confirmed_in : []),
+				projectName,
+			])
+		: [projectName];
+	file.preferences[fullKey] = {
+		value,
+		confirmed_in: confirmedIn,
+		updated_at: now,
+	};
+	writePrefsFile(path, file);
+	return confirmedIn;
 }
 
 /**
@@ -129,21 +144,27 @@ function recordProjectTier(projectDir, fullKey, value, projectName, now) {
  * the same value has been confirmed in PROMOTE_AT distinct projects.
  */
 function recordUserSighting(fullKey, value, projectName, now) {
-  const path = userPrefsPath();
-  const file = readPrefsFile(path);
-  const keySightings = isRecord(file.sightings[fullKey]) ? file.sightings[fullKey] : {};
-  const seenIn = dedupe([
-    ...(Array.isArray(keySightings[value]) ? keySightings[value] : []),
-    projectName,
-  ]);
-  keySightings[value] = seenIn;
-  file.sightings[fullKey] = keySightings;
-  const promoted = seenIn.length >= PROMOTE_AT;
-  if (promoted) {
-    file.preferences[fullKey] = { value, confirmed_in: seenIn, updated_at: now };
-  }
-  writePrefsFile(path, file);
-  return promoted;
+	const path = userPrefsPath();
+	const file = readPrefsFile(path);
+	const keySightings = isRecord(file.sightings[fullKey])
+		? file.sightings[fullKey]
+		: {};
+	const seenIn = dedupe([
+		...(Array.isArray(keySightings[value]) ? keySightings[value] : []),
+		projectName,
+	]);
+	keySightings[value] = seenIn;
+	file.sightings[fullKey] = keySightings;
+	const promoted = seenIn.length >= PROMOTE_AT;
+	if (promoted) {
+		file.preferences[fullKey] = {
+			value,
+			confirmed_in: seenIn,
+			updated_at: now,
+		};
+	}
+	writePrefsFile(path, file);
+	return promoted;
 }
 
 /**
@@ -152,29 +173,39 @@ function recordUserSighting(fullKey, value, projectName, now) {
  * confirmed in PROMOTE_AT distinct projects. Idempotent per project.
  */
 export function recordPreference({ projectDir, key, value, workflow }) {
-  if (!PREFERENCE_KEYS.includes(key)) {
-    throw new Error(`unknown preference key: "${key}" (known: ${PREFERENCE_KEYS.join(", ")})`);
-  }
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error("a preference needs a non-empty string value");
-  }
-  if (key === "style_preset" && (!workflow || !String(workflow).trim())) {
-    throw new Error("style_preset is stored per workflow — pass --workflow <w>");
-  }
-  const fullKey = preferenceKeyFor(key, workflow);
-  const projectName = basename(resolve(projectDir));
-  const trimmed = value.trim();
-  const now = new Date().toISOString();
+	if (!PREFERENCE_KEYS.includes(key)) {
+		throw new Error(
+			`unknown preference key: "${key}" (known: ${PREFERENCE_KEYS.join(", ")})`,
+		);
+	}
+	if (typeof value !== "string" || !value.trim()) {
+		throw new Error("a preference needs a non-empty string value");
+	}
+	if (key === "style_preset" && (!workflow || !String(workflow).trim())) {
+		throw new Error(
+			"style_preset is stored per workflow — pass --workflow <w>",
+		);
+	}
+	const fullKey = preferenceKeyFor(key, workflow);
+	const projectName = basename(resolve(projectDir));
+	const trimmed = value.trim();
+	const now = new Date().toISOString();
 
-  const confirmedIn = recordProjectTier(projectDir, fullKey, trimmed, projectName, now);
+	const confirmedIn = recordProjectTier(
+		projectDir,
+		fullKey,
+		trimmed,
+		projectName,
+		now,
+	);
 
-  // Best-effort — a read-only home directory must never fail a brief.
-  let promoted = false;
-  try {
-    promoted = recordUserSighting(fullKey, trimmed, projectName, now);
-  } catch {
-    // The project record already landed; promotion just waits for next time.
-  }
+	// Best-effort — a read-only home directory must never fail a brief.
+	let promoted = false;
+	try {
+		promoted = recordUserSighting(fullKey, trimmed, projectName, now);
+	} catch {
+		// The project record already landed; promotion just waits for next time.
+	}
 
-  return { key: fullKey, value: trimmed, confirmed_in: confirmedIn, promoted };
+	return { key: fullKey, value: trimmed, confirmed_in: confirmedIn, promoted };
 }

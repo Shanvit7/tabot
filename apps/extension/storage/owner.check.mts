@@ -46,30 +46,118 @@ const expectedMarkerId = deriveDocId(
 	"legacy-indexeddb-to-taladb:v1",
 );
 const storedRecords = new Map<string, Record<string, unknown>>();
+const storedPassages = new Map<string, Record<string, unknown>>();
+const storedEmbeddings = new Map<string, Record<string, unknown>>();
 type RecordFilter = {
-	_id?: { $in?: string[] };
-	recordKind?: string;
+	_id?: { $in?: string[] } | string;
+	$and?: RecordFilter[];
+	$or?: RecordFilter[];
+	recordKind?: string | { $in?: string[] };
+	originalId?: { $nin?: string[] };
+	pageKey?: string;
+	searchSourceId?: { $in?: string[] };
 	timestamp?: { $gte?: number; $lte?: number };
-	origin?: string;
+	origin?: string | { $in?: string[] };
+	modelVersion?: string;
+	embeddingCacheId?: string;
+	lastEventId?: { $ne?: string };
+	sourceId?: { $in?: string[] } | string;
 };
 const recordFindQueries: RecordFilter[] = [];
+const matches = (row: Record<string, unknown>, query: RecordFilter): boolean =>
+	(!query.$and || query.$and.every((item) => matches(row, item))) &&
+	(!query.$or || query.$or.some((item) => matches(row, item))) &&
+	(!query.recordKind ||
+		(typeof query.recordKind === "string"
+			? row.recordKind === query.recordKind
+			: !query.recordKind.$in ||
+				query.recordKind.$in.includes(row.recordKind as string))) &&
+	!query.originalId?.$nin?.includes(row.originalId as string) &&
+	(!query.pageKey || row.pageKey === query.pageKey) &&
+	(!query._id ||
+		(typeof query._id === "string"
+			? row._id === query._id
+			: !query._id.$in || query._id.$in.includes(row._id as string))) &&
+	(!query.searchSourceId?.$in ||
+		query.searchSourceId.$in.includes(row.searchSourceId as string)) &&
+	(!query.sourceId ||
+		(typeof query.sourceId === "string"
+			? row.sourceId === query.sourceId
+			: !query.sourceId.$in ||
+				query.sourceId.$in.includes(row.sourceId as string))) &&
+	(query.timestamp?.$gte === undefined ||
+		(row.timestamp as number) >= query.timestamp.$gte) &&
+	(query.timestamp?.$lte === undefined ||
+		(row.timestamp as number) <= query.timestamp.$lte) &&
+	(!query.origin ||
+		(typeof query.origin === "string"
+			? row.origin === query.origin
+			: !query.origin.$in ||
+				query.origin.$in.includes(row.origin as string))) &&
+	(!query.modelVersion || row.modelVersion === query.modelVersion) &&
+	(!query.embeddingCacheId ||
+		row.embeddingCacheId === query.embeddingCacheId) &&
+	(!query.lastEventId?.$ne || row.lastEventId !== query.lastEventId.$ne);
 const records = {
 	createIndex: async () => {
 		if (failure === "index") throw new Error("index-check-failure");
 	},
+	createFtsIndex: async () => {},
 	count: async () => 7,
 	find: async (query: RecordFilter = {}) => {
 		recordFindQueries.push(query);
-		return [...storedRecords.values()].filter(
-			(row) =>
-				(!query.recordKind || row.recordKind === query.recordKind) &&
-				(!query._id?.$in || query._id.$in.includes(row._id as string)) &&
-				(query.timestamp?.$gte === undefined ||
-					(row.timestamp as number) >= query.timestamp.$gte) &&
-				(query.timestamp?.$lte === undefined ||
-					(row.timestamp as number) <= query.timestamp.$lte) &&
-				(!query.origin || row.origin === query.origin),
-		);
+		return [...storedRecords.values()].filter((row) => matches(row, query));
+	},
+	findOne: async (query: RecordFilter) =>
+		[...storedRecords.values()].find((row) => matches(row, query)) ?? null,
+	aggregate: async (pipeline: Record<string, unknown>[] = []) => {
+		let rows = [...storedRecords.values()];
+		for (const stage of pipeline) {
+			if ("$match" in stage)
+				rows = rows.filter((row) => matches(row, stage.$match as RecordFilter));
+			if ("$sort" in stage) {
+				const sort = stage.$sort as Record<string, 1 | -1>;
+				rows.sort((left, right) => {
+					for (const [key, direction] of Object.entries(sort)) {
+						const a = left[key];
+						const b = right[key];
+						if (a === b) continue;
+						if (a === undefined || a === null) return 1;
+						if (b === undefined || b === null) return -1;
+						const comparison =
+							typeof a === "number" && typeof b === "number"
+								? a - b
+								: String(a).localeCompare(String(b));
+						if (comparison) return comparison * direction;
+					}
+					return 0;
+				});
+			}
+			if ("$skip" in stage) rows = rows.slice(stage.$skip as number);
+			if ("$limit" in stage) rows = rows.slice(0, stage.$limit as number);
+		}
+		return rows;
+	},
+	searchText: async (
+		_field: string,
+		query: string,
+		topK: number,
+		filter: RecordFilter = {},
+	) =>
+		[...storedRecords.values()]
+			.filter(
+				(row) =>
+					typeof row.searchText === "string" &&
+					matches(row, filter) &&
+					(row.searchText as string)
+						.toLowerCase()
+						.includes(query.toLowerCase()),
+			)
+			.slice(0, topK)
+			.map((document) => ({ document, score: 1 })),
+	insert: async (row: Record<string, unknown>) => {
+		storedRecords.set(row._id as string, row);
+		return row._id;
 	},
 	insertMany: async (rows: Record<string, unknown>[]) => {
 		if (failure === "write-quota") {
@@ -92,21 +180,117 @@ const records = {
 			throw new Error("write-after-check");
 		}
 	},
-	deleteMany: async ({ _id }: { _id: { $in: string[] } }) => {
-		for (const id of _id.$in) storedRecords.delete(id);
+	updateOne: async (
+		query: RecordFilter,
+		update: {
+			$set?: Record<string, unknown>;
+			$inc?: Record<string, number>;
+		},
+	) => {
+		const row = [...storedRecords.values()].find((item) =>
+			matches(item, query),
+		);
+		if (!row) return false;
+		Object.assign(row, update.$set);
+		for (const [key, amount] of Object.entries(update.$inc ?? {}))
+			row[key] = ((row[key] as number | undefined) ?? 0) + amount;
+		return true;
+	},
+	deleteOne: async ({ _id }: { _id: string }) => storedRecords.delete(_id),
+	deleteMany: async (query: RecordFilter) => {
+		for (const [id, row] of storedRecords)
+			if (matches(row, query)) storedRecords.delete(id);
 	},
 };
+const passages = {
+	createFtsIndex: async () => {},
+	createVectorIndex: async () => {},
+	find: async (query: RecordFilter = {}) =>
+		[...storedPassages.values()].filter((row) => matches(row, query)),
+	findOne: async (query: RecordFilter) =>
+		[...storedPassages.values()].find((row) => matches(row, query)) ?? null,
+	count: async (query: RecordFilter = {}) =>
+		[...storedPassages.values()].filter((row) => matches(row, query)).length,
+	insert: async (row: Record<string, unknown>) => {
+		storedPassages.set(row._id as string, row);
+		return row._id;
+	},
+	updateOne: async (
+		query: RecordFilter,
+		update: { $set?: Record<string, unknown>; $inc?: Record<string, number> },
+	) => {
+		const row = [...storedPassages.values()].find((item) =>
+			matches(item, query),
+		);
+		if (!row) return false;
+		Object.assign(row, update.$set);
+		for (const [key, amount] of Object.entries(update.$inc ?? {}))
+			row[key] = ((row[key] as number | undefined) ?? 0) + amount;
+		return true;
+	},
+	hybridSearch: async (
+		{ text }: { text: string },
+		_vector: { vector: number[] },
+		topK: number,
+		filter: RecordFilter = {},
+	) =>
+		[...storedPassages.values()]
+			.filter((row) => matches(row, filter))
+			.slice(0, topK)
+			.map((document) => ({
+				document,
+				score: 1,
+				textRank:
+					typeof document.text === "string" &&
+					document.text.toLowerCase().includes(text.toLowerCase())
+						? 0
+						: null,
+				vectorRank: 0,
+			})),
+	findNearest: async (
+		_field: string,
+		_vector: number[],
+		topK: number,
+		filter: RecordFilter = {},
+	) =>
+		[...storedPassages.values()]
+			.filter((row) => matches(row, filter))
+			.slice(0, topK)
+			.map((document) => ({ document, score: 0.19 })),
+	deleteMany: async (query: RecordFilter) => {
+		for (const [id, row] of storedPassages)
+			if (matches(row, query)) storedPassages.delete(id);
+	},
+};
+const metaRows = new Map<string, Record<string, unknown>>();
 const meta = {
-	findOne: async ({ _id }: { _id: string }) => {
-		assert.equal(_id, expectedMarkerId);
-		return marker;
+	findOne: async ({ _id }: { _id: string }) =>
+		_id === expectedMarkerId ? marker : (metaRows.get(_id) ?? null),
+	updateOne: async (
+		{ _id }: { _id: string },
+		update: { $set?: Record<string, unknown> },
+	) => {
+		const row = metaRows.get(_id);
+		if (!row) return false;
+		Object.assign(row, update.$set);
+		return true;
 	},
 	insert: async (row: Record<string, unknown>) => {
-		assert.equal(row._id, expectedMarkerId);
-		assert.ok(isDocId(row._id), "migration marker must use valid TalaDB ULID");
-		if (failure === "migration") throw new Error("migration-check-failure");
-		marker = row;
+		assert.ok(isDocId(row._id), "metadata marker must use valid TalaDB ULID");
+		if (row._id === expectedMarkerId) {
+			if (failure === "migration") throw new Error("migration-check-failure");
+			marker = row;
+		} else metaRows.set(row._id as string, row);
 	},
+};
+const embeddings = {
+	findOne: async ({ _id }: { _id: string }) =>
+		storedEmbeddings.get(_id) ?? null,
+	insert: async (row: Record<string, unknown>) => {
+		storedEmbeddings.set(row._id as string, row);
+		return row._id;
+	},
+	deleteOne: async ({ _id }: { _id: string }) => storedEmbeddings.delete(_id),
 };
 mock.module("../node_modules/taladb/dist/index.browser.mjs", {
 	namedExports: {
@@ -126,7 +310,14 @@ mock.module("../node_modules/taladb/dist/index.browser.mjs", {
 					durableWrites: failure !== "not-durable",
 					owner: failure !== "not-owner",
 				}),
-				collection: (name: string) => (name === "meta" ? meta : records),
+				collection: (name: string) =>
+					name === "meta"
+						? meta
+						: name === "search_passages"
+							? passages
+							: name === "search_embeddings"
+								? embeddings
+								: records,
 				close: async () => {
 					closes++;
 					activeHandles--;
@@ -137,6 +328,22 @@ mock.module("../node_modules/taladb/dist/index.browser.mjs", {
 	},
 });
 const originalChrome = globalThis.chrome;
+const originalWorker = globalThis.Worker;
+class TestWorker {
+	onmessage:
+		| ((event: MessageEvent<{ id: number; vector: number[] }>) => void)
+		| null = null;
+	onerror: ((event: ErrorEvent) => void) | null = null;
+	postMessage({ id }: { id: number }) {
+		queueMicrotask(() =>
+			this.onmessage?.({
+				data: { id, vector: Array(384).fill(0.2) },
+			} as MessageEvent<{ id: number; vector: number[] }>),
+		);
+	}
+	terminate() {}
+}
+globalThis.Worker = TestWorker as unknown as typeof Worker;
 const originalIndexedDB = globalThis.indexedDB;
 const originalIDBKeyRange = globalThis.IDBKeyRange;
 const originalError = console.error;
@@ -318,6 +525,15 @@ try {
 	assert.equal(opens, 7);
 	await requestCount();
 	assert.equal(opens, 7, "successful startup must reuse handle");
+	const searchBackfillId = deriveDocId(
+		"tabot:meta:v1",
+		"semantic-search-backfill:v3",
+	);
+	metaRows.set(searchBackfillId, {
+		_id: searchBackfillId,
+		state: "complete",
+		version: 2,
+	});
 	const event = {
 		id: "12345678-1234-1234-1234-123456789012:100",
 		type: "CLICK",
@@ -360,9 +576,11 @@ try {
 		ignoredPages: {},
 	});
 	assert.equal(
-		storedRecords.size,
+		[...storedRecords.values()].filter(
+			(row) => row.recordKind === "event" || row.recordKind === "page",
+		).length,
 		133,
-		"replayed commit must not duplicate record",
+		"replayed commit must not duplicate source record",
 	);
 	const searchEvent = {
 		...event,
@@ -380,12 +598,33 @@ try {
 		pageKey: "c".repeat(64),
 		captureIdentity: "d".repeat(64),
 		url: "https://docs.example.com/guide",
+		title: "OAuth callback guide",
 		trigger: "interaction",
 		segments: ["OAuth callback nonce exchange"],
 		privacy: { policyVersion: 1, redacted: true, findings: [] },
 		coverage: { truncated: false, partial: false },
 	};
 	await request("commitIngest", [[searchEvent, searchPage]]);
+	for (let attempt = 0; attempt < 100; attempt++) {
+		if (
+			![...storedRecords.values()].some(
+				(row) => row.recordKind === "search-job",
+			)
+		)
+			break;
+		await new Promise((resolve) => setTimeout(resolve, 1));
+	}
+	assert.equal(
+		[...storedRecords.values()].filter((row) => row.recordKind === "search-job")
+			.length,
+		0,
+		"search jobs finish after durable capture",
+	);
+	assert.ok(
+		[...storedPassages.values()].some((row) => row.sourceKind === "event") &&
+			[...storedPassages.values()].some((row) => row.sourceKind === "page"),
+		"both URL-only events and page passages get vectors",
+	);
 	const searchTimestamp = searchPage.timestamp;
 	const searchResult = await request("searchHistory", [
 		"callback nonce",
@@ -395,15 +634,6 @@ try {
 			origin: "https://docs.example.com",
 		},
 	]);
-	const [eventSearchFilter, pageSearchFilter] = recordFindQueries.slice(-2);
-	assert.deepEqual(eventSearchFilter?.timestamp, {
-		$gte: searchTimestamp - 1,
-		$lte: searchTimestamp + 1,
-	});
-	assert.equal(eventSearchFilter?.recordKind, "event");
-	assert.deepEqual(pageSearchFilter?.timestamp, eventSearchFilter?.timestamp);
-	assert.equal(pageSearchFilter?.recordKind, "page");
-	assert.equal(pageSearchFilter?.origin, "https://docs.example.com");
 	assert.equal(searchResult.value[0]?.pageCount, 1);
 	assert.equal(
 		searchResult.value[0]?.sources.some(
@@ -411,11 +641,14 @@ try {
 		),
 		true,
 	);
-	const relatedEvidence = await request("readRelatednessEvidence", [
+	const relatedEvidence = await request("readRelatedActivity", [
 		[searchTimestamp],
 		[],
+		[],
+		[searchPage.id],
 		1_000,
-		20,
+		8,
+		0,
 		Date.now(),
 	]);
 	assert.equal(relatedEvidence.ok, true);
@@ -424,16 +657,14 @@ try {
 			(row) => row.id === searchEvent.id,
 		),
 	);
-	assert.ok(
-		(relatedEvidence.value as { id: string }[]).some(
-			(row) => row.id === searchPage.id,
-		),
-	);
-	const identityRelated = await request("readRelatednessEvidence", [
+	const identityRelated = await request("readRelatedActivity", [
 		[0],
-		["url:https://docs.example.com/guide"],
+		[searchPage.pageKey],
+		["https://docs.example.com"],
+		["seed-page"],
 		1,
-		20,
+		8,
+		0,
 		Date.now(),
 	]);
 	assert.equal(identityRelated.ok, true);
@@ -441,15 +672,18 @@ try {
 		(identityRelated.value as { id: string }[]).some(
 			(row) => row.id === searchEvent.id,
 		),
-		"exact identity can link evidence outside time window",
+		"TalaDB page-key query links evidence outside time window",
 	);
 	assert.equal(
 		(
-			await request("readRelatednessEvidence", [
+			await request("readRelatedActivity", [
 				[searchTimestamp],
 				[],
+				[],
+				[searchPage.id],
 				31 * 24 * 60 * 60 * 1_000,
-				20,
+				8,
+				0,
 				Date.now(),
 			])
 		).ok,
@@ -464,6 +698,29 @@ try {
 		[],
 		"query-time search must not retain deleted evidence",
 	);
+	const recentGoogleSearch = {
+		...event,
+		id: `${event.source.instanceId}:104`,
+		timestamp: Date.now() - 5 * 60_000 + 15_000,
+		url: "https://www.google.com/search?q=database&client=chrome",
+		source: { ...event.source, sequence: 104 },
+	};
+	await request("commitIngest", [[recentGoogleSearch]]);
+	for (let attempt = 0; attempt < 100; attempt++) {
+		if (
+			![...storedRecords.values()].some(
+				(row) => row.recordKind === "search-job",
+			)
+		)
+			break;
+		await new Promise((resolve) => setTimeout(resolve, 1));
+	}
+	const exactGoogleSearch = await request("searchHistory", ["database"]);
+	assert.deepEqual(exactGoogleSearch.value[0]?.searchQueries, ["database"]);
+	const timeGoogleSearch = await request("searchHistory", [
+		"what did i search 5 mins ago",
+	]);
+	assert.deepEqual(timeGoogleSearch.value[0]?.searchQueries, ["database"]);
 	failure = "write-quota";
 	assert.equal(
 		(
@@ -478,6 +735,7 @@ try {
 	);
 } finally {
 	globalThis.chrome = originalChrome;
+	globalThis.Worker = originalWorker;
 	globalThis.indexedDB = originalIndexedDB;
 	globalThis.IDBKeyRange = originalIDBKeyRange;
 	console.error = originalError;

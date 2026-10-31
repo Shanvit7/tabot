@@ -82,7 +82,15 @@ const db = {
 		id === seedEvent.id ? seedEvent : undefined,
 	getPageObservation: async (id: string) =>
 		id === seedPage.id ? seedPage : undefined,
-	readRelatednessEvidence: async () => [relatedEvent, relatedPage],
+	readRelatedActivity: async (
+		_anchors: number[],
+		_pageKeys: string[],
+		_origins: string[],
+		_seedIds: string[],
+		_gap: number,
+		_limit: number,
+		offset: number,
+	) => (offset ? [relatedPage] : [relatedEvent, relatedPage]),
 };
 mock.module("@tabot/shared", { namedExports: shared });
 mock.module("../storage/client", {
@@ -132,7 +140,7 @@ try {
 	const { startRelay } = await import("./relay");
 	startRelay();
 	await nextTurn();
-	const response = await request("search_evidence", {
+	const response = await request("search_activity", {
 		query: "OAuth",
 		limit: 1,
 	});
@@ -147,7 +155,7 @@ try {
 	const json = JSON.stringify(firstPage.results);
 	assert.match(json, /example\.test/);
 	assert.doesNotMatch(json, /private|secret|relatedEvidence/);
-	const nextPage = await request("search_evidence", {
+	const nextPage = await request("search_activity", {
 		query: "OAuth",
 		limit: 1,
 		cursor: firstPage.nextCursor,
@@ -161,8 +169,8 @@ try {
 	assert.equal(searchOptions[0]?.limit, 2);
 	assert.equal(searchOptions[1]?.offset, 1);
 	assert.equal(searchOptions[0]?.to, searchOptions[1]?.to);
-	const relatedPage1 = await request("find_related_evidence", {
-		sources: [
+	const relatedPage1 = await request("find_activity_matches", {
+		anchors: [
 			{ kind: "event", id: "event-1" },
 			{ kind: "page", id: "page-1" },
 		],
@@ -170,32 +178,40 @@ try {
 	});
 	assert.ok(relatedPage1?.result, JSON.stringify(relatedPage1));
 	const related = relatedPage1.result as {
-		ranker: string;
 		count: number;
 		nextCursor: string | null;
-		results: { id: string; signals: string[]; score: number }[];
+		matches: {
+			id: string;
+			kind: "event" | "page";
+			matchedBy: string[];
+			matchedAnchorIds: string[];
+		}[];
 	};
-	assert.equal(related.ranker, "heuristic-v1");
 	assert.equal(related.count, 1);
 	assert.match(related.nextCursor ?? "", /^\d{1,16}:1$/);
-	assert.ok(related.results[0]?.signals.includes("same_url"));
-	assert.ok(related.results[0]?.score > 0);
-	assert.ok(related.results[0]?.matchedSeedIds.includes("event-1"));
-	assert.doesNotMatch(JSON.stringify(related.results), /private|secret/);
-	assert.equal(related.results[0]?.kind, "event");
-	const trailResponse = await request("get_evidence_trail", {
-		sources: [{ kind: "event", id: "event-1" }],
+	assert.ok(related.matches[0]?.matchedBy.includes("same_site"));
+	assert.ok(related.matches[0]?.matchedAnchorIds.includes("event-1"));
+	assert.doesNotMatch(JSON.stringify(related.matches), /private|secret/);
+	assert.equal(related.matches[0]?.kind, "event");
+	const trailResponse = await request("get_activity_timeline", {
+		anchors: [{ kind: "event", id: "event-1" }],
 		limit: 1,
 	});
 	assert.ok(trailResponse?.result);
 	const trail = trailResponse.result as {
-		trail: { id: string; role: string; timestamp: number }[];
+		items: { id: string; role: string; timestamp: number }[];
 	};
-	assert.deepEqual(trail.trail.map(({ id }) => id), ["event-1", "event-2"]);
-	assert.deepEqual(trail.trail.map(({ role }) => role), ["seed", "related"]);
+	assert.deepEqual(
+		trail.items.map(({ id }) => id),
+		["event-1", "event-2"],
+	);
+	assert.deepEqual(
+		trail.items.map(({ role }) => role),
+		["anchor", "match"],
+	);
 	assert.doesNotMatch(JSON.stringify(trail), /private|secret/);
-	const relatedPage2 = await request("find_related_evidence", {
-		sources: [
+	const relatedPage2 = await request("find_activity_matches", {
+		anchors: [
 			{ kind: "event", id: "event-1" },
 			{ kind: "page", id: "page-1" },
 		],
@@ -209,15 +225,15 @@ try {
 	};
 	assert.equal(secondRelated.count, 1);
 	assert.equal(secondRelated.nextCursor, null);
-	const invalidRelatedCursor = await request("find_related_evidence", {
-		sources: [{ kind: "event", id: "event-1" }],
+	const invalidRelatedCursor = await request("find_activity_matches", {
+		anchors: [{ kind: "event", id: "event-1" }],
 		cursor: `${Date.now() + 100_000}:1`,
 	});
 	assert.equal(
 		invalidRelatedCursor?.error?.message,
 		"cursor must be a valid next-page cursor.",
 	);
-	const invalidCursor = await request("search_evidence", {
+	const invalidCursor = await request("search_activity", {
 		query: "OAuth",
 		cursor: `${Date.now() + 100_000}:1`,
 	});
@@ -232,7 +248,7 @@ try {
 		"Method not implemented: get_current_context",
 	);
 	console.log(
-		"Extension evidence relay passed: direct search projection and legacy dispatch removal.",
+		"Extension activity relay passed: local search, explicit matches, and legacy dispatch removal.",
 	);
 } finally {
 	mock.restoreAll();

@@ -1,3 +1,5 @@
+declare module "*.css";
+
 interface ImportMetaEnv {
 	readonly BASE_URL: string;
 	readonly VITE_CHROME_WEB_STORE_URL?: string;

@@ -8,7 +8,10 @@ import type { BrowserContext } from "../contexts/contexts.ts";
 import type { StoredTabEvent } from "../events/db.ts";
 import { logger } from "../lib/logger.ts";
 import type { Memory } from "../memories/memories.ts";
-import { sanitizeEventForIngestion } from "../privacy/ingest.ts";
+import {
+	sanitizeEventForIngestion,
+	sanitizeUrlForIngestion,
+} from "../privacy/ingest.ts";
 import { piiRedactor } from "../privacy/pii-redactor.ts";
 import { sanitizeDerived } from "../privacy/sanitize.ts";
 import { buildExportJsonl, derive } from "../share/export.ts";
@@ -73,9 +76,60 @@ const redact = async (input: string): Promise<string> =>
 	assert.ok(!serialized.toLowerCase().includes("john"));
 	assert.ok(!serialized.includes("secret"));
 	assert.ok(!serialized.includes("private"));
-	assert.equal(clean.favicon, undefined);
+	assert.equal(clean.favicon, "https://example.com/favicon.ico");
 	assert.equal(new URL(clean.url as string).search, "");
 	assert.equal(new URL(clean.url as string).hash, "");
+	const externalIcon = await sanitizeEventForIngestion({
+		...event,
+		favicon: "https://cdn.example.net/favicon.ico?token=secret",
+	});
+	assert.equal(externalIcon.favicon, "https://cdn.example.net/favicon.ico");
+	const google = await sanitizeEventForIngestion({
+		...ev(
+			T0,
+			"NAVIGATION",
+			1,
+			"https://www.google.com/search?q=database&client=chrome&token=secret#fragment",
+		),
+	});
+	assert.equal(
+		google.url,
+		"https://www.google.com/search?q=database",
+		"retain only Google search text, not unrelated query params",
+	);
+	const redactedGoogle = await sanitizeEventForIngestion({
+		...ev(
+			T0 + 1,
+			"NAVIGATION",
+			1,
+			"https://www.google.com/search?q=john%40example.com",
+		),
+	});
+	assert.ok(!redactedGoogle.url?.includes("john"));
+	assert.match(
+		new URL(redactedGoogle.url as string).searchParams.get("q") ?? "",
+		/EMAIL_/,
+	);
+	const nonSearchGoogle = await sanitizeUrlForIngestion(
+		"https://www.google.com/?q=database",
+		{ retainSearchQuery: true },
+	);
+	assert.equal(nonSearchGoogle, "https://www.google.com/");
+	const bing = await sanitizeUrlForIngestion(
+		"https://www.bing.com/search?q=database&form=QBLH",
+		{ retainSearchQuery: true },
+	);
+	assert.equal(bing, "https://www.bing.com/search?q=database");
+	const duckDuckGo = await sanitizeUrlForIngestion(
+		"https://duckduckgo.com/?q=database&t=ffab",
+		{ retainSearchQuery: true },
+	);
+	assert.equal(duckDuckGo, "https://duckduckgo.com/?q=database");
+	const yahoo = await sanitizeUrlForIngestion(
+		"https://search.yahoo.com/search?p=database&fr=top",
+		{ retainSearchQuery: true },
+	);
+	assert.equal(yahoo, "https://search.yahoo.com/search?p=database");
 }
 
 // --- 1. primitives ---

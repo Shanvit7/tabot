@@ -15,24 +15,26 @@ export const DEFAULT_REGISTRY_PATH = resolve(here, "./transitions.json");
 let _cache = null;
 
 export function loadTransitionRegistry(registryPath = DEFAULT_REGISTRY_PATH) {
-  if (_cache && _cache.path === registryPath) return _cache.data;
-  let data;
-  try {
-    data = JSON.parse(readFileSync(registryPath, "utf8"));
-  } catch (e) {
-    throw new Error(`transition registry not loadable at ${registryPath}: ${e.message}`);
-  }
-  if (!Array.isArray(data.transitions) || data.transitions.length === 0) {
-    throw new Error(`transition registry ${registryPath} has no transitions[]`);
-  }
-  _cache = { path: registryPath, data };
-  return data;
+	if (_cache && _cache.path === registryPath) return _cache.data;
+	let data;
+	try {
+		data = JSON.parse(readFileSync(registryPath, "utf8"));
+	} catch (e) {
+		throw new Error(
+			`transition registry not loadable at ${registryPath}: ${e.message}`,
+		);
+	}
+	if (!Array.isArray(data.transitions) || data.transitions.length === 0) {
+		throw new Error(`transition registry ${registryPath} has no transitions[]`);
+	}
+	_cache = { path: registryPath, data };
+	return data;
 }
 
 // Convenience: a Map name -> transition record.
 export function transitionsByName(registryPath = DEFAULT_REGISTRY_PATH) {
-  const data = loadTransitionRegistry(registryPath);
-  const map = new Map();
-  for (const t of data.transitions) map.set(t.name, t);
-  return map;
+	const data = loadTransitionRegistry(registryPath);
+	const map = new Map();
+	for (const t of data.transitions) map.set(t.name, t);
+	return map;
 }

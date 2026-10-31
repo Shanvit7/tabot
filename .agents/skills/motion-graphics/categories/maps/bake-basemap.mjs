@@ -28,33 +28,37 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // --- resolve Chrome dynamically (no hardcoded machine path) ---
 function resolveChrome() {
-  if (process.env.CHROME && existsSync(process.env.CHROME)) return process.env.CHROME;
-  const exe = process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
-  const base = join(homedir(), ".cache", "puppeteer", "chrome-headless-shell");
-  if (existsSync(base)) {
-    for (const v of readdirSync(base).sort().reverse()) {
-      // lexical sort; any working binary is fine
-      try {
-        for (const inner of readdirSync(join(base, v))) {
-          const bin = join(base, v, inner, exe);
-          if (existsSync(bin)) return bin;
-        }
-      } catch {
-        /* skip */
-      }
-    }
-  }
-  for (const c of [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-  ])
-    if (existsSync(c)) return c;
-  throw new Error(
-    "Chrome not found. Set CHROME=/path/to/chrome-headless-shell, or install one:\n" +
-      "  npx puppeteer browsers install chrome-headless-shell",
-  );
+	if (process.env.CHROME && existsSync(process.env.CHROME))
+		return process.env.CHROME;
+	const exe =
+		process.platform === "win32"
+			? "chrome-headless-shell.exe"
+			: "chrome-headless-shell";
+	const base = join(homedir(), ".cache", "puppeteer", "chrome-headless-shell");
+	if (existsSync(base)) {
+		for (const v of readdirSync(base).sort().reverse()) {
+			// lexical sort; any working binary is fine
+			try {
+				for (const inner of readdirSync(join(base, v))) {
+					const bin = join(base, v, inner, exe);
+					if (existsSync(bin)) return bin;
+				}
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	for (const c of [
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/usr/bin/google-chrome",
+		"/usr/bin/chromium",
+		"/usr/bin/chromium-browser",
+	])
+		if (existsSync(c)) return c;
+	throw new Error(
+		"Chrome not found. Set CHROME=/path/to/chrome-headless-shell, or install one:\n" +
+			"  npx puppeteer browsers install chrome-headless-shell",
+	);
 }
 
 // --- params (all overridable by env) ---
@@ -66,47 +70,47 @@ const ZEND = +(process.env.ZEND || 5.4);
 const PITCH = +(process.env.PITCH || 0);
 const BEARING = +(process.env.BEARING || 0);
 const FPS = +(process.env.FPS || 30),
-  DUR = +(process.env.DUR || 5),
-  N = Math.max(1, Math.round(FPS * DUR));
+	DUR = +(process.env.DUR || 5),
+	N = Math.max(1, Math.round(FPS * DUR));
 const HOLD = +(process.env.HOLD || 0.5); // p∈[0,1] at which the zoom finishes; camera holds after
 const MARGIN = (process.env.KEEPMARGIN || "16,13").split(",").map(Number); // [lon°,lat°] keep-box around each country's mainland
 // COUNTRIES="Name:#hex,Name:#hex" — borders to project (optional; omit for a pure zoom-to / pin shot)
 const COUNTRIES = (process.env.COUNTRIES || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean)
-  .map((s) => {
-    const [name, color] = s.split(":");
-    return { name, color: color || "#38bdf8" };
-  });
+	.split(",")
+	.map((s) => s.trim())
+	.filter(Boolean)
+	.map((s) => {
+		const [name, color] = s.split(":");
+		return { name, color: color || "#38bdf8" };
+	});
 
 // fail fast on bad numeric env — otherwise NaN silently bakes zero/garbage frames and still prints "done"
 for (const [k, v] of Object.entries({
-  "CENTER.lng": CENTER[0],
-  "CENTER.lat": CENTER[1],
-  ZSTART,
-  ZEND,
-  PITCH,
-  BEARING,
-  FPS,
-  DUR,
-  HOLD,
+	"CENTER.lng": CENTER[0],
+	"CENTER.lat": CENTER[1],
+	ZSTART,
+	ZEND,
+	PITCH,
+	BEARING,
+	FPS,
+	DUR,
+	HOLD,
 }))
-  if (!Number.isFinite(v))
-    throw new Error(
-      `bad numeric env: ${k}=${v} — check CENTER="lng,lat" / ZSTART / ZEND / FPS / DUR`,
-    );
+	if (!Number.isFinite(v))
+		throw new Error(
+			`bad numeric env: ${k}=${v} — check CENTER="lng,lat" / ZSTART / ZEND / FPS / DUR`,
+		);
 
 // IMPORTANT: tileSize:256 matches Esri/CARTO raster endpoints. MapLibre's INTERNAL world width is
 // 512·2^zoom regardless — a 512px (@2x/retina/vector) tile source needs tileSize:512 or every zoom
 // level is off by one. Keep 256 for these raster sources.
 const TILES =
-  {
-    satellite:
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    dark: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-    light: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-  }[STYLE] || STYLE; // STYLE may also be a raw {z}/{x}/{y} template
+	{
+		satellite:
+			"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+		dark: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+		light: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+	}[STYLE] || STYLE; // STYLE may also be a raw {z}/{x}/{y} template
 
 const OUT = process.env.OUT || process.cwd(); // artifacts → workspace (cwd), NOT the installed skill dir
 const framesDir = join(OUT, "frames-" + NAME);
@@ -183,91 +187,96 @@ window.__project=function(){ return {
 
 // --no-sandbox is intentional: trusted Source-time bake, headless, often root/CI; deps are version-pinned above.
 const browser = await puppeteer.launch({
-  executablePath: resolveChrome(),
-  headless: true,
-  args: [
-    "--no-sandbox",
-    "--hide-scrollbars",
-    "--use-gl=angle",
-    "--use-angle=swiftshader",
-    "--enable-unsafe-swiftshader",
-    "--enable-webgl",
-    "--window-size=1920,1080",
-  ],
+	executablePath: resolveChrome(),
+	headless: true,
+	args: [
+		"--no-sandbox",
+		"--hide-scrollbars",
+		"--use-gl=angle",
+		"--use-angle=swiftshader",
+		"--enable-unsafe-swiftshader",
+		"--enable-webgl",
+		"--window-size=1920,1080",
+	],
 });
 try {
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
-  await page.setContent(PAGE, { waitUntil: "load" });
-  await page.evaluate(() => window.__ready);
-  for (const w of await page.evaluate(() => window.__warn)) console.warn(`[${NAME}] WARN: ${w}`);
-  console.log(
-    `[${NAME}] ready (${STYLE}); baking ${N} frames, zoom ${ZSTART}→${ZEND} hold@p=${HOLD}, ${COUNTRIES.length} border(s)`,
-  );
-  let coords = null;
-  const timeouts = [];
-  for (let i = 0; i < N; i++) {
-    const p = N === 1 ? 1 : i / (N - 1);
-    await page.evaluate((pp) => window.__setCam(pp), p);
-    const timedOut = await page.evaluate((ms) => window.__waitIdle(ms), 9000);
-    if (timedOut) {
-      timeouts.push(i);
-      console.warn(`[${NAME}] idle TIMEOUT at frame ${i} — tiles may be incomplete`);
-    }
-    await page.screenshot({
-      path: join(framesDir, `f${String(i).padStart(4, "0")}.png`),
-      clip: { x: 0, y: 0, width: 1920, height: 1080 },
-      optimizeForSpeed: true,
-    });
-    if (p >= HOLD && !coords && COUNTRIES.length)
-      coords = await page.evaluate(() => window.__project()); // capture at first hold frame
-    if (i % 20 === 0 || i === N - 1) console.log(`  [${NAME}] ${i + 1}/${N}`);
-  }
-  // encode frames → all-intra MP4 (every frame seekable for HF); fall back to printing the command if ffmpeg is absent
-  const mp4 = join(OUT, NAME + ".mp4"),
-    pat = join(framesDir, "f%04d.png");
-  const ff = spawnSync(
-    "ffmpeg",
-    [
-      "-y",
-      "-framerate",
-      String(FPS),
-      "-i",
-      pat,
-      "-c:v",
-      "libx264",
-      "-pix_fmt",
-      "yuv420p",
-      "-g",
-      "1",
-      "-crf",
-      "16",
-      "-movflags",
-      "+faststart",
-      mp4,
-    ],
-    { stdio: "ignore" },
-  );
-  if (ff.status === 0) console.log(`[${NAME}] encoded → ${mp4}`);
-  else
-    console.warn(
-      `[${NAME}] ffmpeg unavailable (status ${ff.status}) — encode manually:\n  ffmpeg -y -framerate ${FPS} -i ${pat} -c:v libx264 -pix_fmt yuv420p -g 1 -crf 16 -movflags +faststart ${mp4}`,
-    );
-  if (coords) {
-    writeFileSync(join(OUT, NAME + "-coords.json"), JSON.stringify(coords));
-    console.log(
-      `[${NAME}] coords written: ${coords.countries.map((c) => c.name + "(" + c.d.length + "ch)").join(", ")}`,
-    );
-  }
-  if (timeouts.length) {
-    // FAIL LOUD: the asset exists but is suspect — don't let a half-loaded bake pass silently
-    console.error(
-      `[${NAME}] ${timeouts.length}/${N} frame(s) hit the idle timeout (frames ${timeouts.slice(0, 8).join(",")}${timeouts.length > 8 ? "…" : ""}). The basemap MP4 may have INCOMPLETE tiles. Re-run with a slower zoom / larger timeout / check the tile server.`,
-    );
-    process.exitCode = 1;
-  } else {
-    console.log(`[${NAME}] done — all ${N} frames reached map idle (complete tiles).`);
-  }
+	const page = await browser.newPage();
+	await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
+	await page.setContent(PAGE, { waitUntil: "load" });
+	await page.evaluate(() => window.__ready);
+	for (const w of await page.evaluate(() => window.__warn))
+		console.warn(`[${NAME}] WARN: ${w}`);
+	console.log(
+		`[${NAME}] ready (${STYLE}); baking ${N} frames, zoom ${ZSTART}→${ZEND} hold@p=${HOLD}, ${COUNTRIES.length} border(s)`,
+	);
+	let coords = null;
+	const timeouts = [];
+	for (let i = 0; i < N; i++) {
+		const p = N === 1 ? 1 : i / (N - 1);
+		await page.evaluate((pp) => window.__setCam(pp), p);
+		const timedOut = await page.evaluate((ms) => window.__waitIdle(ms), 9000);
+		if (timedOut) {
+			timeouts.push(i);
+			console.warn(
+				`[${NAME}] idle TIMEOUT at frame ${i} — tiles may be incomplete`,
+			);
+		}
+		await page.screenshot({
+			path: join(framesDir, `f${String(i).padStart(4, "0")}.png`),
+			clip: { x: 0, y: 0, width: 1920, height: 1080 },
+			optimizeForSpeed: true,
+		});
+		if (p >= HOLD && !coords && COUNTRIES.length)
+			coords = await page.evaluate(() => window.__project()); // capture at first hold frame
+		if (i % 20 === 0 || i === N - 1) console.log(`  [${NAME}] ${i + 1}/${N}`);
+	}
+	// encode frames → all-intra MP4 (every frame seekable for HF); fall back to printing the command if ffmpeg is absent
+	const mp4 = join(OUT, NAME + ".mp4"),
+		pat = join(framesDir, "f%04d.png");
+	const ff = spawnSync(
+		"ffmpeg",
+		[
+			"-y",
+			"-framerate",
+			String(FPS),
+			"-i",
+			pat,
+			"-c:v",
+			"libx264",
+			"-pix_fmt",
+			"yuv420p",
+			"-g",
+			"1",
+			"-crf",
+			"16",
+			"-movflags",
+			"+faststart",
+			mp4,
+		],
+		{ stdio: "ignore" },
+	);
+	if (ff.status === 0) console.log(`[${NAME}] encoded → ${mp4}`);
+	else
+		console.warn(
+			`[${NAME}] ffmpeg unavailable (status ${ff.status}) — encode manually:\n  ffmpeg -y -framerate ${FPS} -i ${pat} -c:v libx264 -pix_fmt yuv420p -g 1 -crf 16 -movflags +faststart ${mp4}`,
+		);
+	if (coords) {
+		writeFileSync(join(OUT, NAME + "-coords.json"), JSON.stringify(coords));
+		console.log(
+			`[${NAME}] coords written: ${coords.countries.map((c) => c.name + "(" + c.d.length + "ch)").join(", ")}`,
+		);
+	}
+	if (timeouts.length) {
+		// FAIL LOUD: the asset exists but is suspect — don't let a half-loaded bake pass silently
+		console.error(
+			`[${NAME}] ${timeouts.length}/${N} frame(s) hit the idle timeout (frames ${timeouts.slice(0, 8).join(",")}${timeouts.length > 8 ? "…" : ""}). The basemap MP4 may have INCOMPLETE tiles. Re-run with a slower zoom / larger timeout / check the tile server.`,
+		);
+		process.exitCode = 1;
+	} else {
+		console.log(
+			`[${NAME}] done — all ${N} frames reached map idle (complete tiles).`,
+		);
+	}
 } finally {
-  await browser.close();
+	await browser.close();
 }

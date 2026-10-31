@@ -23,6 +23,7 @@ import {
 	startForegroundTracking,
 } from "./background/foreground";
 import { pageCaptureSite } from "./capture/site-policy";
+import { readDashboardHistory } from "./dashboard/history";
 import { isDashboardSender } from "./dashboard/sender";
 import { createCaptureIdentity } from "./ingestion/capture-identity";
 import { createEventPipeline } from "./ingestion/event-pipeline";
@@ -46,13 +47,19 @@ void chrome.storage.local
 	.remove("tabot_page_capture_origins_v1")
 	.catch(() => {});
 const getDb = getStorageDb;
-const getStorageCounts = async () => {
+const getStorageCounts = async (includeFirstEventTimestamp = false) => {
 	const db = await getDb();
 	const [eventCount, pageCount] = await Promise.all([
 		countEvents(db),
 		db.countPages(),
 	]);
-	return { eventCount, pageCount };
+	return includeFirstEventTimestamp
+		? {
+				eventCount,
+				pageCount,
+				firstEventTimestamp: await db.getFirstEventTimestamp(),
+			}
+		: { eventCount, pageCount };
 };
 const pipeline = createEventPipeline<StoredIngestRecord>({
 	commit: async (rows) => bulkInsertIngestRecords(await getDb(), rows),
@@ -463,24 +470,19 @@ if (chrome.runtime.onMessageExternal) {
 				return true;
 			}
 
+			if (
+				message?.type === "SEARCH_HISTORY" ||
+				message?.type === "GET_PAGE_PREVIEW"
+			) {
+				void (async () => {
+					sendResponse(await readDashboardHistory(message, sender.url, getDb));
+				})();
+				return true;
+			}
+
 			if (!isDashboardSender(sender.url)) {
 				sendResponse({ ok: false, code: "unauthorized-sender" });
 				return false;
-			}
-
-			if (message?.type === "SEARCH_HISTORY") {
-				getDb()
-					.then((db) =>
-						db.searchHistory(message.query, {
-							from: message.from,
-							to: message.to,
-							origin: message.origin,
-							limit: message.limit,
-						}),
-					)
-					.then((results) => sendResponse({ results }))
-					.catch(() => sendResponse({ ok: false, code: "search-unavailable" }));
-				return true;
 			}
 
 			if (message?.type === "GET_ASSISTANT_CONNECTIONS") {
@@ -495,7 +497,7 @@ if (chrome.runtime.onMessageExternal) {
 				return false;
 			}
 			if (message?.type === "GET_COUNTS") {
-				getStorageCounts()
+				getStorageCounts(true)
 					.then((counts) => {
 						try {
 							sendResponse(counts);

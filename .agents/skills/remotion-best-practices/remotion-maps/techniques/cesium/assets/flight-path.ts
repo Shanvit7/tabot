@@ -4,7 +4,7 @@ export type LngLat = [number, number];
 // direction changes into deliberate swerves instead of left-right heading bumps.
 export const smoothFlightPath = (source: LngLat[], passes = 3): LngLat[] => {
 	if (source.length < 2)
-		throw new Error('Flyover path needs at least two points');
+		throw new Error("Flyover path needs at least two points");
 
 	// Keep adjacent longitudes continuous for routes that cross the antimeridian.
 	const unwrapped: LngLat[] = [source[0]];

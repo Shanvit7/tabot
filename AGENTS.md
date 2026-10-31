@@ -52,6 +52,16 @@ Chrome Extension (Plasmo)
 
 ---
 
+## 🧠 Agent Skill Index
+
+Skills in `.agents/skills/` are shared discovery/install locations. App-level `AGENTS.md` files point agents to relevant skills; do not relocate skill directories under apps unless all supported agents discover nested skills. Keep general tools (for example `agent-browser`) and repo-wide workflows indexed here.
+
+- General browser automation: `.agents/skills/agent-browser/SKILL.md`
+- Shared repo workflows: `.agents/skills/changesets/`, `.agents/skills/codebase-design/`, `.agents/skills/improve-codebase-architecture/`
+- Web UI skills: indexed in `apps/web/AGENTS.md`
+- Extension skills: indexed in `apps/extension/AGENTS.md`
+- Video skills: indexed in `videos/AGENTS.md`
+
 ## 🧹 Code Style (Enforced by Biome)
 
 ### ES6+ Syntax Only

@@ -1,12 +1,12 @@
 # Tabot MCP relay
 
-Tabot exposes three read-only MCP tools. `search_evidence` searches browser events and visible-page excerpts retained locally by the Chrome extension, returning up to 8 matching origins per page with timestamps, source IDs, and redacted excerpts. Pass `nextCursor` with the same query to fetch the next page; `null` means no more results. Cursor pins a timestamp snapshot to avoid ordinary new activity reshuffling pages.
+Tabot exposes three read-only MCP tools. `search_activity` searches locally retained browser activity and redacted page previews, returning up to 8 results with site, time range, activity IDs, and reusable `anchors`. Pass `nextCursor` with the same query to continue; `null` means no more results. Pages use a fixed timestamp snapshot.
 
-`find_related_evidence` accepts 1–8 `{kind,id}` source references (usually from search), finds identity and nearby candidates, and returns up to 8 per page. It exposes match signals and a transparent `heuristic-v1` ranking score. Score is uncalibrated, not a probability, and links are experimental—not claims about user intent. `maxGapHours` defaults to 168 and is capped at 720; exact URL/page/document identity can connect evidence outside that window. Candidate search is capped at 1,000 local records and marks when pool reaches cap. Pass `nextCursor` with the same sources/options to paginate; it reuses the first-page event-time cutoff. Late-arriving records with older timestamps can shift offset-based pages.
+`find_activity_matches` accepts 1–8 `{kind,id}` anchors from search and returns up to 8 matches for the same page, same site, or timestamps within `maxGapHours`. Each match lists `matchedBy` and `matchedAnchorIds`; this is literal matching, not a relevance score or inferred intent. `maxGapHours` defaults to 168 and is capped at 720.
 
-`get_evidence_trail` accepts the same source references and options, then combines seed evidence with one page of related candidates in chronological order. Seed entries are marked `role: "seed"`; heuristic matches are `role: "related"` and retain their score/signals. Pagination applies to related candidates; seed evidence appears on every page. These trails inherit the same experimental, unvalidated relationship limitations.
+`get_activity_timeline` accepts the same anchors and options, then returns selected anchors plus one page of matches in chronological order. Items use `role: "anchor"` or `role: "match"`; pagination applies to matches, while anchors repeat on each page.
 
-Page paths and raw events stay on-device; only selected origins, timestamps, source IDs, redacted excerpts, scores, and match signals leave the device on explicit tool calls. No result means no matching retained evidence, not proof of absence. The MCP client owns conversation and orchestration. Tabot does not expose legacy context, memory, recurring-pattern, or activity-metric tools. No human evaluation has been run yet; do not treat browser activity or heuristic links as intent or attention.
+Full URL paths and raw browser events stay on-device. Only selected sites, timestamps, activity IDs, redacted previews, and match conditions leave the device on explicit tool calls. No results mean no matching retained activity, not proof of absence. The MCP client owns conversation and orchestration. Tabot does not expose legacy context, memory, recurring-pattern, or activity-metric tools.
 
 ## Development
 
@@ -21,7 +21,7 @@ Dev Worker settings are in gitignored `apps/mcp-server/.dev.vars`; never copy pr
 
 ## Connect ChatGPT or Claude
 
-Use the full MCP URL ending in `/mcp`. ChatGPT developer connections and Claude custom connectors each require OAuth consent in the same Chrome profile where the Tabot extension is installed and running. After deploying a tool schema/name change, refresh the connector's tool list. Confirm `search_evidence`, `find_related_evidence`, and `get_evidence_trail` are discovered.
+Use the full MCP URL ending in `/mcp`. ChatGPT developer connections and Claude custom connectors each require OAuth consent in the same Chrome profile where the Tabot extension is installed and running. After deploying a tool schema/name change, refresh the connector's tool list. Confirm `search_activity`, `find_activity_matches`, and `get_activity_timeline` are discovered.
 
 The extension must stay connected while calls are served. `/health` and OAuth discovery prove only Worker availability; they do not prove extension connectivity. Check relay state in the extension service-worker console:
 
@@ -35,11 +35,11 @@ Expect `state: 'connected'` and the intended relay URL. Production and dev crede
 
 ```bash
 pnpm --filter mcp-server check
-pnpm --filter extension check:evidenceRelay
+pnpm --filter extension check:activityRelay
 pnpm --filter @tabot/shared check:historySearch
 ```
 
-Checks use synthetic fixtures and local mocks; they do not deploy or establish relatedness quality on real browser history. Human evaluation remains a later step.
+Checks use synthetic fixtures and local mocks; they do not deploy or establish whether database-query matches are useful on real browser history.
 
 ## Security and operations
 

@@ -16,24 +16,30 @@ import { stageAssets } from "./lib/assets.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, def) => {
-  const i = argv.indexOf(`--${name}`);
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
+	const i = argv.indexOf(`--${name}`);
+	return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
 };
 function die(msg) {
-  console.error(`✗ stage-assets.mjs: ${msg}`);
-  process.exit(1);
+	console.error(`✗ stage-assets.mjs: ${msg}`);
+	process.exit(1);
 }
 
 const hyperframesDir = resolve(flag("hyperframes", "."));
-const storyboardPath = resolve(flag("storyboard", join(hyperframesDir, "STORYBOARD.md")));
+const storyboardPath = resolve(
+	flag("storyboard", join(hyperframesDir, "STORYBOARD.md")),
+);
 
-if (!existsSync(storyboardPath)) die(`STORYBOARD.md not found at ${storyboardPath}`);
+if (!existsSync(storyboardPath))
+	die(`STORYBOARD.md not found at ${storyboardPath}`);
 const manifest = parseStoryboard(readFileSync(storyboardPath, "utf8"));
 
-const { staged, wanted, anomalies } = stageAssets({ hyperframesDir, frames: manifest.frames });
+const { staged, wanted, anomalies } = stageAssets({
+	hyperframesDir,
+	frames: manifest.frames,
+});
 
 console.log(`✓ staged ${staged}/${wanted.size} asset(s) into assets/`);
 if (anomalies.length) {
-  console.log(`\nanomalies (non-fatal):`);
-  for (const a of anomalies) console.log(`  - ${a}`);
+	console.log(`\nanomalies (non-fatal):`);
+	for (const a of anomalies) console.log(`  - ${a}`);
 }

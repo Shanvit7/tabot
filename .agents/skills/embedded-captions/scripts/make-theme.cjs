@@ -43,48 +43,56 @@ const SKILL = path.resolve(__dirname, "..");
 const F = 1 / 24;
 
 // ---------- load inputs ----------
-const theme = JSON.parse(fs.readFileSync(path.join(PROJECT, "theme.json"), "utf8"));
-const dna = JSON.parse(fs.readFileSync(path.join(SKILL, "themes", theme.dna + ".json"), "utf8"));
-const transcript = JSON.parse(fs.readFileSync(path.join(PROJECT, "transcript.json"), "utf8"));
+const theme = JSON.parse(
+	fs.readFileSync(path.join(PROJECT, "theme.json"), "utf8"),
+);
+const dna = JSON.parse(
+	fs.readFileSync(path.join(SKILL, "themes", theme.dna + ".json"), "utf8"),
+);
+const transcript = JSON.parse(
+	fs.readFileSync(path.join(PROJECT, "transcript.json"), "utf8"),
+);
 const W = theme.width || 1280,
-  H = theme.height || 720;
+	H = theme.height || 720;
 
 // FPS: matte.fps is AUTHORITATIVE (written by matte.cjs at the source's native
 // rate; the matte overlay + postfx zoompan must run at this rate or the output
 // retimes). theme.fps only overrides when matte.fps is absent.
 function readMatteFps() {
-  try {
-    const v = parseInt(
-      fs.readFileSync(path.join(PROJECT, "matte.fps"), "utf8").replace(/\D/g, ""),
-      10,
-    );
-    return v > 0 ? v : null;
-  } catch {
-    return null;
-  }
+	try {
+		const v = parseInt(
+			fs
+				.readFileSync(path.join(PROJECT, "matte.fps"), "utf8")
+				.replace(/\D/g, ""),
+			10,
+		);
+		return v > 0 ? v : null;
+	} catch {
+		return null;
+	}
 }
 const FPS = readMatteFps() || theme.fps || 24;
 
 function probeDuration() {
-  try {
-    const out = execFileSync(
-      "ffprobe",
-      [
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "csv=p=0",
-        path.join(PROJECT, "source.mp4"),
-      ],
-      { encoding: "utf8" },
-    );
-    return parseFloat(out.trim());
-  } catch {
-    const n = fs.readdirSync(path.join(PROJECT, "frames_fg")).length;
-    return n / FPS;
-  }
+	try {
+		const out = execFileSync(
+			"ffprobe",
+			[
+				"-v",
+				"error",
+				"-show_entries",
+				"format=duration",
+				"-of",
+				"csv=p=0",
+				path.join(PROJECT, "source.mp4"),
+			],
+			{ encoding: "utf8" },
+		);
+		return parseFloat(out.trim());
+	} catch {
+		const n = fs.readdirSync(path.join(PROJECT, "frames_fg")).length;
+		return n / FPS;
+	}
 }
 const DUR = +(theme.duration || probeDuration()).toFixed(6);
 
@@ -94,74 +102,79 @@ const DUR = +(theme.duration || probeDuration()).toFixed(6);
 // clearer side, and hero font size is width-fit to the actual word. Explicit
 // theme.json values > scene auto > DNA fallback.
 function readJson2(p) {
-  try {
-    return JSON.parse(fs.readFileSync(p, "utf8"));
-  } catch {
-    return null;
-  }
+	try {
+		return JSON.parse(fs.readFileSync(p, "utf8"));
+	} catch {
+		return null;
+	}
 }
 const sz = readJson2(path.join(PROJECT, "safe-zones.json"));
 
 // per-setpiece preferred band (topPct of the hero's TOP edge)
 const SETPIECE_PREF_TOP = {
-  detonation: 28,
-  decode: 26,
-  drawon: 18,
-  cpslam: 27,
-  settle: 27,
-  flapboard: 25,
-  ledwipe: 52,
-  vhsosd: 26,
-  bossintro: 30,
-  rubberstamp: 29,
-  lasercage: 33,
-  boltstrike: 24,
-  holoboot: 28,
-  biobloom: 33,
-  silkribbon: 18,
-  scopetrace: 25,
-  papermat: 26,
-  centerfold: 21,
-  chalkwrite: 44,
-  spraytag: 26,
-  brushwrite: 19,
-  inkbloom: 25,
-  ransomnote: 31,
+	detonation: 28,
+	decode: 26,
+	drawon: 18,
+	cpslam: 27,
+	settle: 27,
+	flapboard: 25,
+	ledwipe: 52,
+	vhsosd: 26,
+	bossintro: 30,
+	rubberstamp: 29,
+	lasercage: 33,
+	boltstrike: 24,
+	holoboot: 28,
+	biobloom: 33,
+	silkribbon: 18,
+	scopetrace: 25,
+	papermat: 26,
+	centerfold: 21,
+	chalkwrite: 44,
+	spraytag: 26,
+	brushwrite: 19,
+	inkbloom: 25,
+	ransomnote: 31,
 };
 
 function sceneHeroXY(setpiece, fontPx) {
-  const exX = theme.hero && theme.hero.x,
-    exY = theme.hero && theme.hero.y;
-  let x = exX ?? null,
-    y = exY ?? null;
-  if (x == null && sz && sz.heroAnchor && sz.heroAnchor.centerXPct != null)
-    x = (W * sz.heroAnchor.centerXPct) / 100;
-  if (x == null) x = dna.hero.x ?? W / 2;
-  if (y == null && sz && sz.heroBands && Array.isArray(sz.heroBands.profile)) {
-    const pref = SETPIECE_PREF_TOP[setpiece] ?? 28;
-    const ok = sz.heroBands.profile.filter((b) => b.occPct >= 18 && b.occPct <= 55);
-    const pool = ok.length ? ok : sz.heroBands.profile;
-    const best = pool.reduce((a, b) =>
-      Math.abs(b.topPct - pref) < Math.abs(a.topPct - pref) ? b : a,
-    );
-    y = (H * best.topPct) / 100 + fontPx * 0.55; // band top → glyph center
-  }
-  if (y == null) y = dna.hero.y ?? H * 0.37;
-  return { x: Math.round(x), y: Math.round(y) };
+	const exX = theme.hero && theme.hero.x,
+		exY = theme.hero && theme.hero.y;
+	let x = exX ?? null,
+		y = exY ?? null;
+	if (x == null && sz && sz.heroAnchor && sz.heroAnchor.centerXPct != null)
+		x = (W * sz.heroAnchor.centerXPct) / 100;
+	if (x == null) x = dna.hero.x ?? W / 2;
+	if (y == null && sz && sz.heroBands && Array.isArray(sz.heroBands.profile)) {
+		const pref = SETPIECE_PREF_TOP[setpiece] ?? 28;
+		const ok = sz.heroBands.profile.filter(
+			(b) => b.occPct >= 18 && b.occPct <= 55,
+		);
+		const pool = ok.length ? ok : sz.heroBands.profile;
+		const best = pool.reduce((a, b) =>
+			Math.abs(b.topPct - pref) < Math.abs(a.topPct - pref) ? b : a,
+		);
+		y = (H * best.topPct) / 100 + fontPx * 0.55; // band top → glyph center
+	}
+	if (y == null) y = dna.hero.y ?? H * 0.37;
+	return { x: Math.round(x), y: Math.round(y) };
 }
 
 // width-fit: hero font size from the actual word (never overflow, never timid)
 function fitHeroPx(text, basePx, emPerChar, maxFrac) {
-  const est = (px) => text.length * emPerChar * px;
-  let px = basePx;
-  const maxW = W * (maxFrac || 0.92);
-  if (est(px) > maxW) px = Math.floor(maxW / (text.length * emPerChar));
-  // short words: allow growth toward the poster fill, capped — except in the
-  // calm register, where the DNA base size IS the ceiling (quiet briefs got a
-  // 188px hero from this growth in the cold-start E2E)
-  else if (est(px) < W * 0.55 && dna.register !== "calm")
-    px = Math.min(Math.floor(maxW / (text.length * emPerChar)), Math.round(basePx * 1.25));
-  return Math.max(64, px);
+	const est = (px) => text.length * emPerChar * px;
+	let px = basePx;
+	const maxW = W * (maxFrac || 0.92);
+	if (est(px) > maxW) px = Math.floor(maxW / (text.length * emPerChar));
+	// short words: allow growth toward the poster fill, capped — except in the
+	// calm register, where the DNA base size IS the ceiling (quiet briefs got a
+	// 188px hero from this growth in the cold-start E2E)
+	else if (est(px) < W * 0.55 && dna.register !== "calm")
+		px = Math.min(
+			Math.floor(maxW / (text.length * emPerChar)),
+			Math.round(basePx * 1.25),
+		);
+	return Math.max(64, px);
 }
 
 // clearer side for docked furniture (panel / poem): away from the subject
@@ -174,65 +187,75 @@ const CLEARER = (sz && sz.subject && sz.subject.clearerSide) || "left";
 // compile time (beam aim, flare centers) so font-load timing in the render
 // browser can never skew it (kerning ignored: ≤3px/word vs ground truth).
 const CHARW = (() => {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(SKILL, "assets/fonts/char-widths.json"), "utf8"));
-  } catch {
-    return null;
-  }
+	try {
+		return JSON.parse(
+			fs.readFileSync(
+				path.join(SKILL, "assets/fonts/char-widths.json"),
+				"utf8",
+			),
+		);
+	} catch {
+		return null;
+	}
 })();
 function famMetrics(fam) {
-  return (CHARW && CHARW[fam]) || null;
+	return (CHARW && CHARW[fam]) || null;
 }
 function wordPx(text, fam, px, lsEm) {
-  const m = famMetrics(fam);
-  if (!m) console.error(`[make-theme] WARN no measured widths for "${fam}" -> 0.6em/char estimate`);
-  const adv = m
-    ? [...text].reduce((a, c) => a + (m.widths[c] ?? m.widths["0"] ?? 0.6), 0)
-    : text.length * 0.6;
-  return adv * px + (lsEm || 0) * px * text.length;
+	const m = famMetrics(fam);
+	if (!m)
+		console.error(
+			`[make-theme] WARN no measured widths for "${fam}" -> 0.6em/char estimate`,
+		);
+	const adv = m
+		? [...text].reduce((a, c) => a + (m.widths[c] ?? m.widths["0"] ?? 0.6), 0)
+		: text.length * 0.6;
+	return adv * px + (lsEm || 0) * px * text.length;
 }
 
 // ---------- word timing: sequential matcher (verbatim completeness) ----------
 const norm = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
 const tWords = transcript.words.map((w) => ({
-  text: w.text ?? w.word,
-  start: w.start,
-  end: w.end,
-  used: false,
+	text: w.text ?? w.word,
+	start: w.start,
+	end: w.end,
+	used: false,
 }));
 let cursor = 0;
 function takeWord(authored) {
-  const target = norm(authored);
-  for (let i = cursor; i < Math.min(cursor + 3, tWords.length); i++) {
-    if (norm(tWords[i].text) === target) {
-      if (tWords[i].used)
-        throw new Error(
-          `[make-theme] "${authored}" is already claimed by hero.match — embed setpieces own the hero word: leave it OUT of lines (rail↔climax hand-off)`,
-        );
-      tWords[i].used = true;
-      cursor = i + 1;
-      return tWords[i];
-    }
-  }
-  throw new Error(
-    `[make-theme] cannot match authored word "${authored}" near transcript position ${cursor} ("${(tWords[cursor] || {}).text}") — lines must follow transcript order verbatim`,
-  );
+	const target = norm(authored);
+	for (let i = cursor; i < Math.min(cursor + 3, tWords.length); i++) {
+		if (norm(tWords[i].text) === target) {
+			if (tWords[i].used)
+				throw new Error(
+					`[make-theme] "${authored}" is already claimed by hero.match — embed setpieces own the hero word: leave it OUT of lines (rail↔climax hand-off)`,
+				);
+			tWords[i].used = true;
+			cursor = i + 1;
+			return tWords[i];
+		}
+	}
+	throw new Error(
+		`[make-theme] cannot match authored word "${authored}" near transcript position ${cursor} ("${(tWords[cursor] || {}).text}") — lines must follow transcript order verbatim`,
+	);
 }
 
 // hero phrase: located independently in the transcript (it may sit between lines)
 function findPhrase(phrase) {
-  const parts = phrase.trim().split(/\s+/).map(norm);
-  for (let i = 0; i <= tWords.length - parts.length; i++) {
-    if (parts.every((p, k) => norm(tWords[i + k].text) === p)) {
-      return {
-        start: tWords[i].start,
-        end: tWords[i + parts.length - 1].end,
-        idx: i,
-        len: parts.length,
-      };
-    }
-  }
-  throw new Error(`[make-theme] hero phrase "${phrase}" not found in transcript`);
+	const parts = phrase.trim().split(/\s+/).map(norm);
+	for (let i = 0; i <= tWords.length - parts.length; i++) {
+		if (parts.every((p, k) => norm(tWords[i + k].text) === p)) {
+			return {
+				start: tWords[i].start,
+				end: tWords[i + parts.length - 1].end,
+				idx: i,
+				len: parts.length,
+			};
+		}
+	}
+	throw new Error(
+		`[make-theme] hero phrase "${phrase}" not found in transcript`,
+	);
 }
 const heroInline = !!dna.hero.inline;
 // theme.hero is OPTIONAL: a heroless theme runs pure-body (the right authoring
@@ -241,9 +264,9 @@ const HEROLESS = !theme.hero;
 if (HEROLESS) theme.hero = {};
 const hero = theme.hero.match ? findPhrase(theme.hero.match) : null;
 if (!hero && !HEROLESS)
-  throw new Error(
-    "[make-theme] theme.json requires hero:{match} (omit hero entirely for a quiet pure-body run)",
-  );
+	throw new Error(
+		"[make-theme] theme.json requires hero:{match} (omit hero entirely for a quiet pure-body run)",
+	);
 const heroText = (theme.hero.text || theme.hero.match || "").toUpperCase();
 const heroDisplay = theme.hero.text || theme.hero.match; // case preserved for drawon/assembly
 
@@ -252,270 +275,307 @@ const heroDisplay = theme.hero.text || theme.hero.match; // case preserved for d
 // with redact linkage (panel shows them redacted — author includes them).
 const redactLinkage = (dna.linkages || []).includes("redact-until-hero");
 if (!heroInline && !HEROLESS && !redactLinkage) {
-  for (let k = 0; k < hero.len; k++) tWords[hero.idx + k].used = true;
+	for (let k = 0; k < hero.len; k++) tWords[hero.idx + k].used = true;
 }
 
 // resolve lines: every entry gets word objects with timings + role flags
 const minors = new Set((theme.minors || []).map(norm));
 const LINES = (theme.lines || []).map((arr, li) => {
-  const words = arr.map((a) => {
-    const tw = takeWord(a);
-    return {
-      display: a,
-      start: tw.start,
-      end: tw.end,
-      minor: minors.has(norm(a)),
-      isHero:
-        !!hero &&
-        norm(a) === norm((theme.hero.match || "").split(/\s+/)[0]) &&
-        tw.start >= hero.start - 0.01 &&
-        tw.start <= hero.end + 0.01,
-    };
-  });
-  return { id: li, words };
+	const words = arr.map((a) => {
+		const tw = takeWord(a);
+		return {
+			display: a,
+			start: tw.start,
+			end: tw.end,
+			minor: minors.has(norm(a)),
+			isHero:
+				!!hero &&
+				norm(a) === norm((theme.hero.match || "").split(/\s+/)[0]) &&
+				tw.start >= hero.start - 0.01 &&
+				tw.start <= hero.end + 0.01,
+		};
+	});
+	return { id: li, words };
 });
 // completeness gate
 const unused = tWords.filter((w) => !w.used);
 if (unused.length)
-  throw new Error(
-    `[make-theme] transcript words not covered by lines/hero: ${unused.map((w) => w.text).join(" ")}`,
-  );
+	throw new Error(
+		`[make-theme] transcript words not covered by lines/hero: ${unused.map((w) => w.text).join(" ")}`,
+	);
 
 // per-line windows
 LINES.forEach((L, i) => {
-  L.in = L.words[0].start - 0.02;
-  L.out = i + 1 < LINES.length ? LINES[i + 1].words[0].start - 0.02 : DUR - 0.1;
+	L.in = L.words[0].start - 0.02;
+	L.out = i + 1 < LINES.length ? LINES[i + 1].words[0].start - 0.02 : DUR - 0.1;
 });
-const LASTWORD = LINES[LINES.length - 1].words[LINES[LINES.length - 1].words.length - 1];
+const LASTWORD =
+	LINES[LINES.length - 1].words[LINES[LINES.length - 1].words.length - 1];
 
 // hero window: onset → bounded hold (maxHold; 0 = to clip end — neonsign's
 // lit-sign design). Unbounded default holds turned short clips into wallpaper.
 const heroIn = hero ? hero.start : -999;
 const MAXHOLD = dna.hero.maxHold ?? 3.2;
 const heroOut = hero
-  ? Math.min(DUR - 0.06, theme.hero.out ?? (MAXHOLD > 0 ? heroIn + MAXHOLD : DUR - 0.1))
-  : -999;
+	? Math.min(
+			DUR - 0.06,
+			theme.hero.out ?? (MAXHOLD > 0 ? heroIn + MAXHOLD : DUR - 0.1),
+		)
+	: -999;
 
 // ---------- hero geometry: scene-aware position + width-fit size (computed ONCE,
 // shared by the setpiece and the front fx so flash/rings/sparks stay centered) ----
-const HG = { x: dna.hero.x ?? W / 2, y: dna.hero.y ?? H * 0.37, fontPx: dna.hero.fontPx || 178 };
+const HG = {
+	x: dna.hero.x ?? W / 2,
+	y: dna.hero.y ?? H * 0.37,
+	fontPx: dna.hero.fontPx || 178,
+};
 if (!heroInline && !HEROLESS) {
-  if (dna.hero.setpiece === "detonation") {
-    HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 178, 0.56, 0.92);
-    Object.assign(HG, sceneHeroXY("detonation", HG.fontPx));
-    HG.halfW = (heroText.length * 0.56 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "decode") {
-    const units = [...heroText].reduce((a, c) => a + (c === " " ? 0.38 : 0.82), 0);
-    HG.fontPx = Math.min(dna.hero.fontPx || 112, Math.floor((W * 0.94) / units));
-    Object.assign(HG, sceneHeroXY("decode", HG.fontPx));
-    HG.halfW = (units * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "drawon") {
-    Object.assign(HG, sceneHeroXY("drawon", 130));
-    HG.halfW = Math.min(dna.hero.params.targetWidth || 640, W - 200) / 2;
-  } else if (dna.hero.setpiece === "cpslam") {
-    HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 168, 0.56, 0.9);
-    Object.assign(HG, sceneHeroXY("cpslam", HG.fontPx));
-    HG.halfW = (heroText.length * 0.56 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "settle") {
-    HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 150, 0.58, 0.9);
-    Object.assign(HG, sceneHeroXY("settle", HG.fontPx));
-    HG.halfW = (heroText.length * 0.58 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "flapboard") {
-    // one flap tile per char; tile geometry derives from fontPx (demo ratio
-    // 100px tile @ 138px Anton), width-fit shrinks both together
-    const gap = dna.hero.params.gap || 7;
-    const n = heroText.length;
-    let fpx = dna.hero.fontPx || 138;
-    let tw = Math.round(fpx * 0.725);
-    const fitW = W * 0.94 - 40 - (n - 1) * gap;
-    if (n * tw > fitW) {
-      tw = Math.floor(fitW / n);
-      fpx = Math.round(tw / 0.725);
-    }
-    HG.fontPx = fpx;
-    Object.assign(HG, sceneHeroXY("flapboard", fpx));
-    HG.tileW = tw;
-    HG.tileH = Math.round(tw * 1.48);
-    HG.halfW = (n * tw + (n - 1) * gap + 40) / 2;
-  } else if (dna.hero.setpiece === "ledwipe") {
-    // LED transit panel: the word lights inside a fixed departure-board panel
-    // (demo 1080×232 @ 120px VT323 ≈ 0.50em/char incl tracking) — width-fit
-    // shrinks the type, never the panel; panel height derives from the type
-    const panelW = Math.min(dna.hero.params.panelW || 1080, W - 120);
-    const units = heroText.length * 0.5;
-    HG.fontPx = Math.min(dna.hero.fontPx || 120, Math.floor((panelW - 80) / units));
-    Object.assign(HG, sceneHeroXY("ledwipe", HG.fontPx));
-    HG.panelW = panelW;
-    HG.panelH = 44 + Math.round(HG.fontPx * 1.42) + 18;
-    HG.halfW = panelW / 2;
-  } else if (dna.hero.setpiece === "vhsosd") {
-    // camcorder OSD readout (demo: VT323 150px ≈ 0.47em/char incl 0.02em tracking)
-    HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 150, 0.47, 0.92);
-    Object.assign(HG, sceneHeroXY("vhsosd", HG.fontPx));
-    HG.halfW = (heroText.length * 0.47 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "bossintro") {
-    // 8-bit boss word (demo: Press Start 2P 84px ≈ 1.0em/char); the pixel-block
-    // matrix derives from the word rect (cell 0.7×/0.5× fontPx, ~50px side pad)
-    HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 84, 1.0, 0.92);
-    Object.assign(HG, sceneHeroXY("bossintro", HG.fontPx));
-    HG.halfW = (heroText.length * 1.0 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "rubberstamp") {
-    // bordered rubber-stamp face (demo: Special Elite 120px REMARKABLE ≈
-    // 0.60em/char + 0.015em tracking); the face adds padding + border that
-    // scale with fontPx (80px + 12px at the demo size)
-    HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 120, 0.615, 0.86);
-    Object.assign(HG, sceneHeroXY("rubberstamp", HG.fontPx));
-    HG.halfW = (heroText.length * 0.615 * HG.fontPx + (92 * HG.fontPx) / 120) / 2;
-  } else if (dna.hero.setpiece === "lasercage") {
-    // beam-cage word (demo: Audiowide 100px): exact em width from the measured
-    // char table — the converging beams, cage lines and glow stack all derive
-    // from the word rect, so the fit must not guess
-    const em1 = wordPx(heroText, dna.fonts.hero, 1, 0.02) || heroText.length * 0.8;
-    HG.fontPx = Math.min(dna.hero.fontPx || 100, Math.floor((W * 0.9) / em1));
-    Object.assign(HG, sceneHeroXY("lasercage", HG.fontPx));
-    HG.halfW = (em1 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "boltstrike") {
-    // storm slam (demo: Anton 145px REMARKABLE): exact em width from the
-    // measured char table — the bolt offsets, word scrim and ozone glow all
-    // derive from the word rect (demo rect: 720×145 → halfW 360)
-    const em1 = wordPx(heroText, dna.fonts.hero, 1, 0.012) || heroText.length * 0.56;
-    HG.fontPx = Math.min(dna.hero.fontPx || 145, Math.floor((W * 0.92) / em1));
-    Object.assign(HG, sceneHeroXY("boltstrike", HG.fontPx));
-    HG.halfW = (em1 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "holoboot") {
-    // volumetric projection word (demo: Orbitron 700 118px, letter-spacing 0):
-    // exact em width from the measured char table — the projection cone, seed
-    // beam, emitter dot and scrim all derive from the word rect
-    const em1 = wordPx(heroText, dna.fonts.hero, 1, 0) || heroText.length * 0.8;
-    HG.fontPx = Math.min(dna.hero.fontPx || 118, Math.floor((W * 0.9) / em1));
-    Object.assign(HG, sceneHeroXY("holoboot", HG.fontPx));
-    HG.halfW = (em1 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "biobloom") {
-    // abyss bloom word (demo: Fredoka 700 120px RECOVER, 0.01em tracking):
-    // exact em width from the measured char table — the tendril anchors,
-    // pocket scrim, pre-glow and spill all derive from the word rect
-    const em1 = wordPx(heroText, dna.fonts.hero, 1, 0.01) || heroText.length * 0.66;
-    HG.fontPx = Math.min(dna.hero.fontPx || 120, Math.floor((W * 0.9) / em1));
-    Object.assign(HG, sceneHeroXY("biobloom", HG.fontPx));
-    HG.halfW = (em1 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "silkribbon") {
-    // silk ribbon draw-on (demo: HersheyScript "recover" w=880 on a 1010×280
-    // canvas, ink center ≈ canvas center): the canvas, aurora-gradient span
-    // and spill all derive from targetWidth; 115 ≈ the ribbon's ink height
-    // (sky band top → ribbon center, same registration as the demo)
-    Object.assign(HG, sceneHeroXY("silkribbon", 115));
-    HG.ribbonW = Math.min(dna.hero.params.targetWidth || 880, W - 240);
-    HG.halfW = (HG.ribbonW + 130) / 2;
-  } else if (dna.hero.setpiece === "scopetrace") {
-    // phosphor trace word (demo: HersheyScript "pixel size" ≈705px ink, ink
-    // center ≈ baseline − 28): the surge column, flatline flash, spill and
-    // write window all derive from targetWidth; 115 ≈ the trace's ink height
-    Object.assign(HG, sceneHeroXY("scopetrace", 115));
-    HG.traceW = Math.min(dna.hero.params.targetWidth || 720, W - 200);
-    HG.halfW = (HG.traceW + 50) / 2;
-  } else if (dna.hero.setpiece === "papermat") {
-    // torn-paper letter chips glued on a kraft mat (demo: Anton 130px ink on
-    // 118×170 chips, pitch tileW+14, mat N*pitch+80 wide × 240 tall): chip
-    // geometry derives from fontPx (demo ratios), width-fit shrinks both
-    const n = heroText.length;
-    let fpx = dna.hero.fontPx || 130;
-    let tw = Math.round(fpx * 0.91);
-    const fitW = W * 0.94 - 80 - n * 14;
-    if (n * tw > fitW) {
-      tw = Math.floor(fitW / n);
-      fpx = Math.round(tw / 0.91);
-    }
-    HG.fontPx = fpx;
-    Object.assign(HG, sceneHeroXY("papermat", fpx));
-    HG.tileW = tw;
-    HG.tileH = Math.round(fpx * 1.31);
-    HG.pitch = tw + 14;
-    HG.matW = n * HG.pitch + 80;
-    HG.matH = Math.round(fpx * 1.846);
-    HG.halfW = HG.matW / 2;
-  } else if (dna.hero.setpiece === "centerfold") {
-    // pop-up book centerfold (demo: Baloo 2 800 120px STARS over a 12-point
-    // paper starburst, outer R 220 ≈ 0.59×wordW, box 620×560 = 2R+180 × 2R+fontPx):
-    // the bursts, blob shadow, struts and the confetti hinge all derive from
-    // the word rect; width-fit shrinks the type, the burst follows the word
-    // but is capped so the unfold stays inside the frame
-    const em1 = wordPx(heroText, dna.fonts.hero, 1, 0.02) || heroText.length * 0.62;
-    HG.fontPx = Math.min(dna.hero.fontPx || 120, Math.floor((W * 0.5) / em1));
-    Object.assign(HG, sceneHeroXY("centerfold", HG.fontPx));
-    HG.wordW = Math.round(em1 * HG.fontPx);
-    HG.burstR = Math.round(Math.min(Math.max(1.83 * HG.fontPx, 0.59 * HG.wordW), H * 0.42));
-    HG.boxW = Math.max(2 * HG.burstR + 180, HG.wordW + 24);
-    HG.boxH = 2 * HG.burstR + HG.fontPx;
-    HG.halfW = HG.boxW / 2;
-  } else if (dna.hero.setpiece === "chalkwrite") {
-    // hand-written chalk word (demo: HersheyScript "remarkable" ≈860px ink,
-    // ink 130 tall, ink CENTER on HG.y): the writing starts at the board's
-    // LEFT margin — a hand writes from the left, never centered on the
-    // subject — so x derives from the body strip, not the hero anchor; the
-    // stroke path is parsed at compile time inside the setpiece and the
-    // board rect / underlines / fg dust clap all register on the measured
-    // ink box. 130 ≈ the chalk ink height (band top → ink center).
-    const stripW9 = (dna.body.strip && dna.body.strip.w) || 1200;
-    const SX9 = (dna.body.strip && dna.body.strip.x) ?? Math.round((W - stripW9) / 2);
-    HG.chalkW = Math.min(dna.hero.params.targetWidth || 860, stripW9 - 28);
-    HG.fontPx = 130;
-    Object.assign(HG, sceneHeroXY("chalkwrite", 130));
-    if ((theme.hero && theme.hero.x) == null) HG.x = SX9 + 12 + Math.round(HG.chalkW / 2);
-    HG.halfW = Math.round(HG.chalkW / 2);
-  } else if (dna.hero.setpiece === "spraytag") {
-    // spray-painted tag (demo: HersheyScript "recover" w=1000 → ink ≈1010×120,
-    // ink center (646,252)): the tag CENTERS on the hero anchor in the sky
-    // band — crossing the subject silhouette is the point; the stroke path is
-    // parsed at compile time inside the setpiece, which registers the
-    // pen-finish point on HG for the fg paint splat (fx.paintsplat). 120 ≈ the
-    // tag's ink height (band top → ink center); halfW adds the halo overspray.
-    HG.sprayW = Math.min(dna.hero.params.targetWidth || 1000, W - 140);
-    HG.fontPx = 120;
-    Object.assign(HG, sceneHeroXY("spraytag", 120));
-    HG.halfW = Math.round(HG.sprayW / 2) + 30;
-  } else if (dna.hero.setpiece === "brushwrite") {
-    // sumi-e gesture (demo: HersheyScript "remarkable" w=760 → ink ≈760×115,
-    // ink center (863,202)): the gesture CENTERS on the hero anchor in the sky
-    // band — crossing the subject silhouette is the point; the stroke path is
-    // parsed at compile time inside the setpiece, which registers the
-    // pen-START point on HG for the fg ink flecks (fx.brushflecks). 120 ≈ the
-    // gesture's ink height (band top → ink center); halfW adds spatter margin.
-    HG.brushW = Math.min(dna.hero.params.targetWidth || 760, W - 240);
-    HG.fontPx = 120;
-    Object.assign(HG, sceneHeroXY("brushwrite", 120));
-    HG.halfW = Math.round(HG.brushW / 2) + 40;
-  } else if (dna.hero.setpiece === "inkbloom") {
-    // sumi drop in still water (demo: Shippori Mincho 700 132px "pixel size.",
-    // 0.02em tracking, case preserved): exact em width from the measured char
-    // table — the blob stack, ripple rings and wisp anchors all derive from
-    // the word rect (kx/ky scale units inside the setpiece)
-    const em1 = wordPx(heroDisplay, dna.fonts.hero, 1, 0.02) || heroDisplay.length * 0.5;
-    HG.fontPx = Math.min(dna.hero.fontPx || 132, Math.floor((W * 0.9) / em1));
-    Object.assign(HG, sceneHeroXY("inkbloom", HG.fontPx));
-    HG.halfW = (em1 * HG.fontPx) / 2;
-  } else if (dna.hero.setpiece === "ransomnote") {
-    // ransom-note letter chips (demo: 10 chips, 4 recipes/fonts cycled, base
-    // 130px with seeded ±13% sizes): width-fit uses the measured advance of
-    // each glyph IN ITS OWN recipe font + 0.20em chip padding + 6px margins,
-    // so the crooked collage never overflows the frame
-    const fams4 = [dna.fonts.body, dna.fonts.dark, dna.fonts.news, dna.fonts.accent];
-    let k4 = 0;
-    const em1 = [...heroText].reduce((a, c) => {
-      if (c === " ") return a + 0.3;
-      const fam = fams4[k4++ % 4];
-      return a + (famMetrics(fam) ? wordPx(c, fam, 1, 0) : 0.62) + 0.2;
-    }, 0);
-    const n = heroText.length;
-    HG.fontPx = Math.min(dna.hero.fontPx || 130, Math.floor((W * 0.92 - n * 6) / em1));
-    Object.assign(HG, sceneHeroXY("ransomnote", HG.fontPx));
-    HG.halfW = (em1 * HG.fontPx + n * 6) / 2;
-  }
-  // keep the word on frame (when wider than the frame, CENTER it — an inverted
-  // Math.max/Math.min clamp would silently pin to the lower bound off-center)
-  if (HG.halfW)
-    HG.x =
-      2 * HG.halfW + 24 > W ? W / 2 : Math.max(HG.halfW + 12, Math.min(W - HG.halfW - 12, HG.x));
-  HG.y = Math.max(HG.fontPx * 0.55 + 8, Math.min(H * 0.62, HG.y));
+	if (dna.hero.setpiece === "detonation") {
+		HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 178, 0.56, 0.92);
+		Object.assign(HG, sceneHeroXY("detonation", HG.fontPx));
+		HG.halfW = (heroText.length * 0.56 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "decode") {
+		const units = [...heroText].reduce(
+			(a, c) => a + (c === " " ? 0.38 : 0.82),
+			0,
+		);
+		HG.fontPx = Math.min(
+			dna.hero.fontPx || 112,
+			Math.floor((W * 0.94) / units),
+		);
+		Object.assign(HG, sceneHeroXY("decode", HG.fontPx));
+		HG.halfW = (units * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "drawon") {
+		Object.assign(HG, sceneHeroXY("drawon", 130));
+		HG.halfW = Math.min(dna.hero.params.targetWidth || 640, W - 200) / 2;
+	} else if (dna.hero.setpiece === "cpslam") {
+		HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 168, 0.56, 0.9);
+		Object.assign(HG, sceneHeroXY("cpslam", HG.fontPx));
+		HG.halfW = (heroText.length * 0.56 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "settle") {
+		HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 150, 0.58, 0.9);
+		Object.assign(HG, sceneHeroXY("settle", HG.fontPx));
+		HG.halfW = (heroText.length * 0.58 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "flapboard") {
+		// one flap tile per char; tile geometry derives from fontPx (demo ratio
+		// 100px tile @ 138px Anton), width-fit shrinks both together
+		const gap = dna.hero.params.gap || 7;
+		const n = heroText.length;
+		let fpx = dna.hero.fontPx || 138;
+		let tw = Math.round(fpx * 0.725);
+		const fitW = W * 0.94 - 40 - (n - 1) * gap;
+		if (n * tw > fitW) {
+			tw = Math.floor(fitW / n);
+			fpx = Math.round(tw / 0.725);
+		}
+		HG.fontPx = fpx;
+		Object.assign(HG, sceneHeroXY("flapboard", fpx));
+		HG.tileW = tw;
+		HG.tileH = Math.round(tw * 1.48);
+		HG.halfW = (n * tw + (n - 1) * gap + 40) / 2;
+	} else if (dna.hero.setpiece === "ledwipe") {
+		// LED transit panel: the word lights inside a fixed departure-board panel
+		// (demo 1080×232 @ 120px VT323 ≈ 0.50em/char incl tracking) — width-fit
+		// shrinks the type, never the panel; panel height derives from the type
+		const panelW = Math.min(dna.hero.params.panelW || 1080, W - 120);
+		const units = heroText.length * 0.5;
+		HG.fontPx = Math.min(
+			dna.hero.fontPx || 120,
+			Math.floor((panelW - 80) / units),
+		);
+		Object.assign(HG, sceneHeroXY("ledwipe", HG.fontPx));
+		HG.panelW = panelW;
+		HG.panelH = 44 + Math.round(HG.fontPx * 1.42) + 18;
+		HG.halfW = panelW / 2;
+	} else if (dna.hero.setpiece === "vhsosd") {
+		// camcorder OSD readout (demo: VT323 150px ≈ 0.47em/char incl 0.02em tracking)
+		HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 150, 0.47, 0.92);
+		Object.assign(HG, sceneHeroXY("vhsosd", HG.fontPx));
+		HG.halfW = (heroText.length * 0.47 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "bossintro") {
+		// 8-bit boss word (demo: Press Start 2P 84px ≈ 1.0em/char); the pixel-block
+		// matrix derives from the word rect (cell 0.7×/0.5× fontPx, ~50px side pad)
+		HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 84, 1.0, 0.92);
+		Object.assign(HG, sceneHeroXY("bossintro", HG.fontPx));
+		HG.halfW = (heroText.length * 1.0 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "rubberstamp") {
+		// bordered rubber-stamp face (demo: Special Elite 120px REMARKABLE ≈
+		// 0.60em/char + 0.015em tracking); the face adds padding + border that
+		// scale with fontPx (80px + 12px at the demo size)
+		HG.fontPx = fitHeroPx(heroText, dna.hero.fontPx || 120, 0.615, 0.86);
+		Object.assign(HG, sceneHeroXY("rubberstamp", HG.fontPx));
+		HG.halfW =
+			(heroText.length * 0.615 * HG.fontPx + (92 * HG.fontPx) / 120) / 2;
+	} else if (dna.hero.setpiece === "lasercage") {
+		// beam-cage word (demo: Audiowide 100px): exact em width from the measured
+		// char table — the converging beams, cage lines and glow stack all derive
+		// from the word rect, so the fit must not guess
+		const em1 =
+			wordPx(heroText, dna.fonts.hero, 1, 0.02) || heroText.length * 0.8;
+		HG.fontPx = Math.min(dna.hero.fontPx || 100, Math.floor((W * 0.9) / em1));
+		Object.assign(HG, sceneHeroXY("lasercage", HG.fontPx));
+		HG.halfW = (em1 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "boltstrike") {
+		// storm slam (demo: Anton 145px REMARKABLE): exact em width from the
+		// measured char table — the bolt offsets, word scrim and ozone glow all
+		// derive from the word rect (demo rect: 720×145 → halfW 360)
+		const em1 =
+			wordPx(heroText, dna.fonts.hero, 1, 0.012) || heroText.length * 0.56;
+		HG.fontPx = Math.min(dna.hero.fontPx || 145, Math.floor((W * 0.92) / em1));
+		Object.assign(HG, sceneHeroXY("boltstrike", HG.fontPx));
+		HG.halfW = (em1 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "holoboot") {
+		// volumetric projection word (demo: Orbitron 700 118px, letter-spacing 0):
+		// exact em width from the measured char table — the projection cone, seed
+		// beam, emitter dot and scrim all derive from the word rect
+		const em1 = wordPx(heroText, dna.fonts.hero, 1, 0) || heroText.length * 0.8;
+		HG.fontPx = Math.min(dna.hero.fontPx || 118, Math.floor((W * 0.9) / em1));
+		Object.assign(HG, sceneHeroXY("holoboot", HG.fontPx));
+		HG.halfW = (em1 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "biobloom") {
+		// abyss bloom word (demo: Fredoka 700 120px RECOVER, 0.01em tracking):
+		// exact em width from the measured char table — the tendril anchors,
+		// pocket scrim, pre-glow and spill all derive from the word rect
+		const em1 =
+			wordPx(heroText, dna.fonts.hero, 1, 0.01) || heroText.length * 0.66;
+		HG.fontPx = Math.min(dna.hero.fontPx || 120, Math.floor((W * 0.9) / em1));
+		Object.assign(HG, sceneHeroXY("biobloom", HG.fontPx));
+		HG.halfW = (em1 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "silkribbon") {
+		// silk ribbon draw-on (demo: HersheyScript "recover" w=880 on a 1010×280
+		// canvas, ink center ≈ canvas center): the canvas, aurora-gradient span
+		// and spill all derive from targetWidth; 115 ≈ the ribbon's ink height
+		// (sky band top → ribbon center, same registration as the demo)
+		Object.assign(HG, sceneHeroXY("silkribbon", 115));
+		HG.ribbonW = Math.min(dna.hero.params.targetWidth || 880, W - 240);
+		HG.halfW = (HG.ribbonW + 130) / 2;
+	} else if (dna.hero.setpiece === "scopetrace") {
+		// phosphor trace word (demo: HersheyScript "pixel size" ≈705px ink, ink
+		// center ≈ baseline − 28): the surge column, flatline flash, spill and
+		// write window all derive from targetWidth; 115 ≈ the trace's ink height
+		Object.assign(HG, sceneHeroXY("scopetrace", 115));
+		HG.traceW = Math.min(dna.hero.params.targetWidth || 720, W - 200);
+		HG.halfW = (HG.traceW + 50) / 2;
+	} else if (dna.hero.setpiece === "papermat") {
+		// torn-paper letter chips glued on a kraft mat (demo: Anton 130px ink on
+		// 118×170 chips, pitch tileW+14, mat N*pitch+80 wide × 240 tall): chip
+		// geometry derives from fontPx (demo ratios), width-fit shrinks both
+		const n = heroText.length;
+		let fpx = dna.hero.fontPx || 130;
+		let tw = Math.round(fpx * 0.91);
+		const fitW = W * 0.94 - 80 - n * 14;
+		if (n * tw > fitW) {
+			tw = Math.floor(fitW / n);
+			fpx = Math.round(tw / 0.91);
+		}
+		HG.fontPx = fpx;
+		Object.assign(HG, sceneHeroXY("papermat", fpx));
+		HG.tileW = tw;
+		HG.tileH = Math.round(fpx * 1.31);
+		HG.pitch = tw + 14;
+		HG.matW = n * HG.pitch + 80;
+		HG.matH = Math.round(fpx * 1.846);
+		HG.halfW = HG.matW / 2;
+	} else if (dna.hero.setpiece === "centerfold") {
+		// pop-up book centerfold (demo: Baloo 2 800 120px STARS over a 12-point
+		// paper starburst, outer R 220 ≈ 0.59×wordW, box 620×560 = 2R+180 × 2R+fontPx):
+		// the bursts, blob shadow, struts and the confetti hinge all derive from
+		// the word rect; width-fit shrinks the type, the burst follows the word
+		// but is capped so the unfold stays inside the frame
+		const em1 =
+			wordPx(heroText, dna.fonts.hero, 1, 0.02) || heroText.length * 0.62;
+		HG.fontPx = Math.min(dna.hero.fontPx || 120, Math.floor((W * 0.5) / em1));
+		Object.assign(HG, sceneHeroXY("centerfold", HG.fontPx));
+		HG.wordW = Math.round(em1 * HG.fontPx);
+		HG.burstR = Math.round(
+			Math.min(Math.max(1.83 * HG.fontPx, 0.59 * HG.wordW), H * 0.42),
+		);
+		HG.boxW = Math.max(2 * HG.burstR + 180, HG.wordW + 24);
+		HG.boxH = 2 * HG.burstR + HG.fontPx;
+		HG.halfW = HG.boxW / 2;
+	} else if (dna.hero.setpiece === "chalkwrite") {
+		// hand-written chalk word (demo: HersheyScript "remarkable" ≈860px ink,
+		// ink 130 tall, ink CENTER on HG.y): the writing starts at the board's
+		// LEFT margin — a hand writes from the left, never centered on the
+		// subject — so x derives from the body strip, not the hero anchor; the
+		// stroke path is parsed at compile time inside the setpiece and the
+		// board rect / underlines / fg dust clap all register on the measured
+		// ink box. 130 ≈ the chalk ink height (band top → ink center).
+		const stripW9 = (dna.body.strip && dna.body.strip.w) || 1200;
+		const SX9 =
+			(dna.body.strip && dna.body.strip.x) ?? Math.round((W - stripW9) / 2);
+		HG.chalkW = Math.min(dna.hero.params.targetWidth || 860, stripW9 - 28);
+		HG.fontPx = 130;
+		Object.assign(HG, sceneHeroXY("chalkwrite", 130));
+		if ((theme.hero && theme.hero.x) == null)
+			HG.x = SX9 + 12 + Math.round(HG.chalkW / 2);
+		HG.halfW = Math.round(HG.chalkW / 2);
+	} else if (dna.hero.setpiece === "spraytag") {
+		// spray-painted tag (demo: HersheyScript "recover" w=1000 → ink ≈1010×120,
+		// ink center (646,252)): the tag CENTERS on the hero anchor in the sky
+		// band — crossing the subject silhouette is the point; the stroke path is
+		// parsed at compile time inside the setpiece, which registers the
+		// pen-finish point on HG for the fg paint splat (fx.paintsplat). 120 ≈ the
+		// tag's ink height (band top → ink center); halfW adds the halo overspray.
+		HG.sprayW = Math.min(dna.hero.params.targetWidth || 1000, W - 140);
+		HG.fontPx = 120;
+		Object.assign(HG, sceneHeroXY("spraytag", 120));
+		HG.halfW = Math.round(HG.sprayW / 2) + 30;
+	} else if (dna.hero.setpiece === "brushwrite") {
+		// sumi-e gesture (demo: HersheyScript "remarkable" w=760 → ink ≈760×115,
+		// ink center (863,202)): the gesture CENTERS on the hero anchor in the sky
+		// band — crossing the subject silhouette is the point; the stroke path is
+		// parsed at compile time inside the setpiece, which registers the
+		// pen-START point on HG for the fg ink flecks (fx.brushflecks). 120 ≈ the
+		// gesture's ink height (band top → ink center); halfW adds spatter margin.
+		HG.brushW = Math.min(dna.hero.params.targetWidth || 760, W - 240);
+		HG.fontPx = 120;
+		Object.assign(HG, sceneHeroXY("brushwrite", 120));
+		HG.halfW = Math.round(HG.brushW / 2) + 40;
+	} else if (dna.hero.setpiece === "inkbloom") {
+		// sumi drop in still water (demo: Shippori Mincho 700 132px "pixel size.",
+		// 0.02em tracking, case preserved): exact em width from the measured char
+		// table — the blob stack, ripple rings and wisp anchors all derive from
+		// the word rect (kx/ky scale units inside the setpiece)
+		const em1 =
+			wordPx(heroDisplay, dna.fonts.hero, 1, 0.02) || heroDisplay.length * 0.5;
+		HG.fontPx = Math.min(dna.hero.fontPx || 132, Math.floor((W * 0.9) / em1));
+		Object.assign(HG, sceneHeroXY("inkbloom", HG.fontPx));
+		HG.halfW = (em1 * HG.fontPx) / 2;
+	} else if (dna.hero.setpiece === "ransomnote") {
+		// ransom-note letter chips (demo: 10 chips, 4 recipes/fonts cycled, base
+		// 130px with seeded ±13% sizes): width-fit uses the measured advance of
+		// each glyph IN ITS OWN recipe font + 0.20em chip padding + 6px margins,
+		// so the crooked collage never overflows the frame
+		const fams4 = [
+			dna.fonts.body,
+			dna.fonts.dark,
+			dna.fonts.news,
+			dna.fonts.accent,
+		];
+		let k4 = 0;
+		const em1 = [...heroText].reduce((a, c) => {
+			if (c === " ") return a + 0.3;
+			const fam = fams4[k4++ % 4];
+			return a + (famMetrics(fam) ? wordPx(c, fam, 1, 0) : 0.62) + 0.2;
+		}, 0);
+		const n = heroText.length;
+		HG.fontPx = Math.min(
+			dna.hero.fontPx || 130,
+			Math.floor((W * 0.92 - n * 6) / em1),
+		);
+		Object.assign(HG, sceneHeroXY("ransomnote", HG.fontPx));
+		HG.halfW = (em1 * HG.fontPx + n * 6) / 2;
+	}
+	// keep the word on frame (when wider than the frame, CENTER it — an inverted
+	// Math.max/Math.min clamp would silently pin to the lower bound off-center)
+	if (HG.halfW)
+		HG.x =
+			2 * HG.halfW + 24 > W
+				? W / 2
+				: Math.max(HG.halfW + 12, Math.min(W - HG.halfW - 12, HG.x));
+	HG.y = Math.max(HG.fontPx * 0.55 + 8, Math.min(H * 0.62, HG.y));
 }
 
 // ---------- shared emit helpers ----------
@@ -525,44 +585,51 @@ const MULBERRY = `function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)
 // auto-supplies its canonical fonts; anything else silently falls back unless
 // the page ships a local @font-face (same determinism contract as Standard).
 const FONT_FACES = (() => {
-  let css = "";
-  try {
-    css = fs.readFileSync(path.join(SKILL, "modes/standard/fonts/fonts.css"), "utf8");
-  } catch {
-    return null;
-  }
-  return css
-    .split("@font-face")
-    .slice(1)
-    .map((b) => "@font-face" + b.slice(0, b.indexOf("}") + 1));
+	let css = "";
+	try {
+		css = fs.readFileSync(
+			path.join(SKILL, "modes/standard/fonts/fonts.css"),
+			"utf8",
+		);
+	} catch {
+		return null;
+	}
+	return css
+		.split("@font-face")
+		.slice(1)
+		.map((b) => "@font-face" + b.slice(0, b.indexOf("}") + 1));
 })();
 // per-page: embed only families this page's markup actually references
 function fontCssFor(pageParts) {
-  if (!FONT_FACES) return "";
-  const fams = [...new Set(Object.values(dna.fonts || {}))].filter((f) => !/^Hiragino/.test(f));
-  const out = [];
-  for (const fam of fams) {
-    if (!pageParts.includes(fam)) continue;
-    // quote-agnostic: fonts.css has shipped with both 'single' and "double"
-    // quoted family names (formatters flip them); a literal match silently
-    // skipped EVERY embed and warned on bundled fonts.
-    const famRe = new RegExp(
-      `font-family\\s*:\\s*['"]` + fam.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + `['"]`,
-    );
-    const hits = FONT_FACES.filter((b) => famRe.test(b));
-    if (!hits.length)
-      console.error(
-        `[make-theme] WARN font "${fam}" not in bundled fonts.css -> renderer fallback risk`,
-      );
-    out.push(...hits);
-  }
-  return out.join("\n");
+	if (!FONT_FACES) return "";
+	const fams = [...new Set(Object.values(dna.fonts || {}))].filter(
+		(f) => !/^Hiragino/.test(f),
+	);
+	const out = [];
+	for (const fam of fams) {
+		if (!pageParts.includes(fam)) continue;
+		// quote-agnostic: fonts.css has shipped with both 'single' and "double"
+		// quoted family names (formatters flip them); a literal match silently
+		// skipped EVERY embed and warned on bundled fonts.
+		const famRe = new RegExp(
+			`font-family\\s*:\\s*['"]` +
+				fam.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+				`['"]`,
+		);
+		const hits = FONT_FACES.filter((b) => famRe.test(b));
+		if (!hits.length)
+			console.error(
+				`[make-theme] WARN font "${fam}" not in bundled fonts.css -> renderer fallback risk`,
+			);
+		out.push(...hits);
+	}
+	return out.join("\n");
 }
 const GSAP = `<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>`;
 
 function bgSkeleton(stageHtml, css, js) {
-  const FONT_CSS = fontCssFor(stageHtml + css);
-  return `<!doctype html>
+	const FONT_CSS = fontCssFor(stageHtml + css);
+	return `<!doctype html>
 <!-- generated by make-theme.cjs — theme DNA "${dna.name}" (bg layer) -->
 <html lang="en">
 <head>
@@ -600,8 +667,8 @@ ${js}
 }
 
 function fgSkeleton(stageHtml, css, js) {
-  const FONT_CSS = fontCssFor(stageHtml + css);
-  return `<!doctype html>
+	const FONT_CSS = fontCssFor(stageHtml + css);
+	return `<!doctype html>
 <!-- generated by make-theme.cjs — theme DNA "${dna.name}" (fg alpha layer) -->
 <html lang="en">
 <head>
@@ -643,14 +710,18 @@ const J = JSON.stringify;
  * ===================================================================== */
 
 function paradigmRail() {
-  const b = dna.body;
-  const lineData = LINES.map((L) => ({
-    id: "r" + L.id,
-    in: +L.in.toFixed(3),
-    out: +L.out.toFixed(3),
-    words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-  }));
-  const css = `
+	const b = dna.body;
+	const lineData = LINES.map((L) => ({
+		id: "r" + L.id,
+		in: +L.in.toFixed(3),
+		out: +L.out.toFixed(3),
+		words: L.words.map((w) => [
+			w.display,
+			+w.start.toFixed(3),
+			w.minor ? 1 : 0,
+		]),
+	}));
+	const css = `
   .rail { position:absolute; left:${W / 2}px; top:${H - b.bottomPx}px; opacity:0; white-space:nowrap;
           font-family:'${dna.fonts.body}', sans-serif; font-size:${b.fontPx}px; line-height:1;
           letter-spacing:${b.letterSpacing || "0.02em"}; color:${dna.palette.body};
@@ -660,19 +731,20 @@ function paradigmRail() {
   .rail .w.minor { font-size:${Math.round(b.fontPx * (b.minorScale || 1.4))}px; }
   .rail .w.em { color:${dna.palette.em || dna.palette.accent}; font-weight:700; }
   ${
-    b.rule
-      ? `#rrule { position:absolute; left:${W / 2}px; top:${H - b.bottomPx + 38}px; width:0; height:2px;
+		b.rule
+			? `#rrule { position:absolute; left:${W / 2}px; top:${H - b.bottomPx + 38}px; width:0; height:2px;
           background:${b.rule.color}; opacity:0.5; transform:translateX(-50%);
           box-shadow: 0 0 12px ${dna.palette.accent}; }`
-      : ""
-  }`;
-  const html =
-    lineData.map((L) => `      <div class="rail" id="${L.id}"></div>`).join("\n") +
-    (b.rule ? `\n      <div id="rrule"></div>` : "");
-  const stamp = b.entrance === "stamp";
-  const boot = b.entrance === "bootflick";
-  const fade = b.entrance === "fade";
-  const js = `
+			: ""
+	}`;
+	const html =
+		lineData
+			.map((L) => `      <div class="rail" id="${L.id}"></div>`)
+			.join("\n") + (b.rule ? `\n      <div id="rrule"></div>` : "");
+	const stamp = b.entrance === "stamp";
+	const boot = b.entrance === "bootflick";
+	const fade = b.entrance === "fade";
+	const js = `
   // ---- body paradigm: RAIL (${b.entrance} in / ${b.exit} out) ----
   const HOT = ${J(dna.palette.hot || dna.palette.accent)}, BONE = ${J(dna.palette.body)};
   const RAIL = ${J(lineData)};
@@ -691,8 +763,8 @@ function paradigmRail() {
     L.words.forEach(([txt, st, minor], wi) => {
       const el = line.children[wi];
 ${
-  boot
-    ? `      // BOOTFLICK: corrupted-cyan boot 1-2f -> settles to UI color
+	boot
+		? `      // BOOTFLICK: corrupted-cyan boot 1-2f -> settles to UI color
       tl.set(el, { opacity: 0.6, color: "#00F0FF", x: 2 }, st);
       if (rrnd() < 0.45) { tl.set(el, { opacity: 0.15, x: -2 }, st + F); tl.set(el, { opacity: 1, color: BONE, x: 0 }, st + 2 * F); }
       else { tl.set(el, { opacity: 1, color: BONE, x: 0 }, st + F); }
@@ -700,12 +772,12 @@ ${
         tl.fromTo(el, { scale: 1.18 }, { scale: 1, duration: 0.25, ease: "power2.out" }, st + F);
         tl.set(el, { textShadow: "2px 0 0 #00F0FF, -2px 0 0 #FF003C, 0 2px 10px rgba(0,0,0,0.75)" }, st + 2 * F);
       }`
-    : fade
-      ? `      // FADE: 2-frame fade-up — the word simply reads (anchor register)
+		: fade
+			? `      // FADE: 2-frame fade-up — the word simply reads (anchor register)
       tl.fromTo(el, { opacity: 0, y: 4 }, { opacity: 1, y: 0, duration: 0.12, ease: "power2.out" }, st);
       if (minor) tl.fromTo(el, { scale: 1.07 }, { scale: 1, duration: 0.3, ease: "power2.out" }, st);`
-      : stamp
-        ? `      // STAMP: 1f appear oversized+hot, crush, recoil, cool to bone
+			: stamp
+				? `      // STAMP: 1f appear oversized+hot, crush, recoil, cool to bone
       tl.set(el, { opacity: 1, scale: minor ? 2.1 : 1.28, color: HOT, transformOrigin: "50% 80%" }, st);
       tl.to(el, { scale: 1, duration: 0.11, ease: "power3.in" }, st + 0.01);
       tl.set(el, { scaleX: 1.05, scaleY: 0.95 }, st + 0.12);
@@ -716,7 +788,7 @@ ${
         tl.to(line, { y: 0, duration: 0.18, ease: "power2.out" }, st + 0.06);
         lastB = st + 0.24;
       }`
-        : `      // FLICK: tube lights with seeded double-flicks
+				: `      // FLICK: tube lights with seeded double-flicks
       tl.set(el, { opacity: 0.35 }, st);
       if (rrnd() < 0.35) { tl.set(el, { opacity: 0.08 }, st + F); tl.set(el, { opacity: 1 }, st + 2 * F); }
       else { tl.set(el, { opacity: 1 }, st + F); }
@@ -724,28 +796,28 @@ ${
 }
     });
 ${
-  b.exit === "drop"
-    ? `    // DROP exit (completes before the next line stamps)
+	b.exit === "drop"
+		? `    // DROP exit (completes before the next line stamps)
     tl.to(line, { y: 34, opacity: 0, duration: 0.16, ease: "power2.in" }, XO);
     tl.set(line, { display: "none" }, XO + 0.18);`
-    : b.exit === "fade"
-      ? `    // FADE exit (quiet settle-down)
+		: b.exit === "fade"
+			? `    // FADE exit (quiet settle-down)
     tl.to(line, { opacity: 0, y: 6, duration: 0.15, ease: "power1.in" }, XO);
     tl.set(line, { display: "none" }, XO + 0.17);`
-      : `    // POWERCUT exit (completes before the next line)
+			: `    // POWERCUT exit (completes before the next line)
     tl.set(line, { opacity: 0.5 }, XO); tl.set(line, { opacity: 0.12 }, XO + F);
     tl.set(line, { opacity: 0 }, XO + 3 * F); tl.set(line, { display: "none" }, XO + 4 * F);`
 }
   });
 ${
-  b.rule
-    ? `  tl.fromTo("#rrule", { width: 0, opacity: 0 }, { width: ${b.rule.width}, opacity: 0.5, duration: 0.4, ease: "power2.out" }, 0.25);
+	b.rule
+		? `  tl.fromTo("#rrule", { width: 0, opacity: 0 }, { width: ${b.rule.width}, opacity: 0.5, duration: 0.4, ease: "power2.out" }, 0.25);
   tl.to("#rrule", { opacity: 0, duration: 0.3 }, ${(DUR - 0.2).toFixed(2)});`
-    : ""
+		: ""
 }
 ${
-  !HEROLESS && b.yield
-    ? `  // rail yields while the apex lands (furniture never contests the hero).
+	!HEROLESS && b.yield
+		? `  // rail yields while the apex lands (furniture never contests the hero).
   // Overlap guards: dim starts after the line is IN, never runs into the exit;
   // restore is emitted only with clear runway before the exit (else the line
   // simply exits dimmed — never two owners of one opacity).
@@ -760,30 +832,39 @@ ${
       }
     }
   });`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmPanel() {
-  const b = dna.body;
-  const lockT =
-    heroIn + 0.3 + (dna.hero.params.lockStagger || 0.045) * (heroText.length - 1) + 0.083;
-  const lineData = LINES.map((L) => ({
-    id: "ln" + L.id,
-    words: L.words.map((w) => [
-      w.display,
-      +w.start.toFixed(3),
-      // redaction: words inside the hero phrase window get blocks until lock
-      hero && redactLinkage && w.start >= hero.start - 0.01 && w.start <= hero.end + 0.01
-        ? +lockT.toFixed(3)
-        : 0,
-    ]),
-  }));
-  const lineH = Math.round(b.fontPx * 1.35);
-  const maxVis = Math.max(3, Math.floor((H * 0.48 - 60) / lineH));
-  const dockCss = CLEARER === "right" ? `right:${b.panel.left}px;` : `left:${b.panel.left}px;`;
-  const css = `
+	const b = dna.body;
+	const lockT =
+		heroIn +
+		0.3 +
+		(dna.hero.params.lockStagger || 0.045) * (heroText.length - 1) +
+		0.083;
+	const lineData = LINES.map((L) => ({
+		id: "ln" + L.id,
+		words: L.words.map((w) => [
+			w.display,
+			+w.start.toFixed(3),
+			// redaction: words inside the hero phrase window get blocks until lock
+			hero &&
+			redactLinkage &&
+			w.start >= hero.start - 0.01 &&
+			w.start <= hero.end + 0.01
+				? +lockT.toFixed(3)
+				: 0,
+		]),
+	}));
+	const lineH = Math.round(b.fontPx * 1.35);
+	const maxVis = Math.max(3, Math.floor((H * 0.48 - 60) / lineH));
+	const dockCss =
+		CLEARER === "right"
+			? `right:${b.panel.left}px;`
+			: `left:${b.panel.left}px;`;
+	const css = `
   #panel { position:absolute; ${dockCss} bottom:${b.panel.bottom}px; width:${b.panel.width}px;
            padding:18px 22px 22px; background:${dna.palette.panelBg};
            border:1px solid ${dna.palette.accent}59; border-radius:4px; opacity:0;
@@ -802,20 +883,20 @@ function paradigmPanel() {
            vertical-align:baseline; opacity:0; margin-left:4px; }
   #logclip { max-height:${maxVis * lineH}px; overflow:hidden; }
   #logwrap { position:relative; }`;
-  const html = `      <div id="panel">
+	const html = `      <div id="panel">
         <div class="hd">${esc(theme.panelHeader || "OBS-01 // " + (b.panel.header || "LOG_"))}</div>
         <div id="logclip"><div id="logwrap">
 ${lineData.map((L) => `        <div class="ln" id="${L.id}"></div>`).join("\n")}
         </div></div>
       </div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: PANEL (typed console log, accumulate) ----
   tl.fromTo("#panel", { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 0.05);
 ${
-  !HEROLESS && b.yield
-    ? `  tl.to("#panel", { opacity: ${b.yield.dim}, duration: 0.25, ease: "power1.in" }, ${(heroIn - 0.08).toFixed(3)});
+	!HEROLESS && b.yield
+		? `  tl.to("#panel", { opacity: ${b.yield.dim}, duration: 0.25, ease: "power1.in" }, ${(heroIn - 0.08).toFixed(3)});
   tl.to("#panel", { opacity: 1, duration: 0.3, ease: "power1.out" }, ${(lockT + 0.15).toFixed(3)});`
-    : ""
+		: ""
 }
   const LOG = ${J(lineData)};
   const MAXVIS = ${maxVis}, LINEH = ${lineH};
@@ -844,62 +925,62 @@ ${
       }
     });
 ${
-  b.caret
-    ? `    const c = document.createElement("span"); c.className = "caret"; line.appendChild(c);
+	b.caret
+		? `    const c = document.createElement("span"); c.className = "caret"; line.appendChild(c);
     const lastEnd = L.words[L.words.length - 1][1] + 0.25;
     for (let bk = 0; bk < 4; bk++) tl.set(c, { opacity: bk % 2 === 0 ? 1 : 0 }, lastEnd + bk * 0.22);
     tl.set(c, { opacity: 0 }, lastEnd + 0.9);`
-    : ""
+		: ""
 }
   });
 ${
-  (dna.linkages || []).includes("corrupt-on-last-word")
-    ? `  // the feed corrupts on the final word
+	(dna.linkages || []).includes("corrupt-on-last-word")
+		? `  // the feed corrupts on the final word
   const NZ = ${(LASTWORD.start + 0.04).toFixed(3)};
   [[3,0],[-4,1],[3,2],[-2,3],[0,4]].forEach(([dx, k]) => {
     tl.set("#panel", { x: dx, filter: dx ? "hue-rotate(" + dx * 8 + "deg)" : "none" }, NZ + k * F);
   });
   tl.set("#panel", { x: 0, filter: "none" }, NZ + 5 * F);`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmPoem() {
-  const b = dna.body;
-  const colLeft = CLEARER === "right" ? Math.round(W * 0.52) : b.left;
-  const scrimSide = CLEARER === "right" ? "right" : "left";
-  // stanza split: break after a line whose last word ends a sentence
-  const stanzas = [[]];
-  LINES.forEach((L) => {
-    stanzas[stanzas.length - 1].push(L);
-    const last = L.words[L.words.length - 1].display;
-    if (/[.!?]$/.test(last) && L !== LINES[LINES.length - 1]) stanzas.push([]);
-  });
-  if (stanzas.some((s) => s.length > b.stanzaTops.length))
-    console.warn(
-      "[make-theme] poem stanza exceeds available slots — extra lines share the last slot",
-    );
-  const stanzaData = stanzas.map((s, si) =>
-    s.map((L, li) => ({
-      id: "s" + si + "l" + L.id,
-      top: b.stanzaTops[Math.min(li, b.stanzaTops.length - 1)] + si * 16,
-      words: L.words.map((w) => [
-        w.display,
-        +w.start.toFixed(3),
-        w.isHero && heroInline ? "big" : w.minor ? "em" : "",
-      ]),
-    })),
-  );
-  const lastStanzaIdx = stanzaData.length - 1;
-  const css = `
+	const b = dna.body;
+	const colLeft = CLEARER === "right" ? Math.round(W * 0.52) : b.left;
+	const scrimSide = CLEARER === "right" ? "right" : "left";
+	// stanza split: break after a line whose last word ends a sentence
+	const stanzas = [[]];
+	LINES.forEach((L) => {
+		stanzas[stanzas.length - 1].push(L);
+		const last = L.words[L.words.length - 1].display;
+		if (/[.!?]$/.test(last) && L !== LINES[LINES.length - 1]) stanzas.push([]);
+	});
+	if (stanzas.some((s) => s.length > b.stanzaTops.length))
+		console.warn(
+			"[make-theme] poem stanza exceeds available slots — extra lines share the last slot",
+		);
+	const stanzaData = stanzas.map((s, si) =>
+		s.map((L, li) => ({
+			id: "s" + si + "l" + L.id,
+			top: b.stanzaTops[Math.min(li, b.stanzaTops.length - 1)] + si * 16,
+			words: L.words.map((w) => [
+				w.display,
+				+w.start.toFixed(3),
+				w.isHero && heroInline ? "big" : w.minor ? "em" : "",
+			]),
+		})),
+	);
+	const lastStanzaIdx = stanzaData.length - 1;
+	const css = `
   ${
-    b.scrim
-      ? `#pscrim { position:absolute; inset:0; opacity:0;
+		b.scrim
+			? `#pscrim { position:absolute; inset:0; opacity:0;
             background: linear-gradient(${scrimSide === "left" ? "100deg" : "260deg"},
               rgba(4,8,16,${b.scrim.opacity}) 0%, rgba(4,8,16,${b.scrim.opacity * 0.6}) 38%, rgba(4,8,16,0) 62%); }`
-      : ""
-  }
+			: ""
+	}
   .pline { position:absolute; left:${colLeft}px; white-space:nowrap;
            font-family:'${dna.fonts.body}', serif; font-weight:600; font-size:${b.fontPx}px;
            line-height:1; color:${dna.palette.body};
@@ -911,22 +992,25 @@ function paradigmPoem() {
   .pline .em  { font-size:${Math.round(b.fontPx * (b.emScale || 1.38))}px; font-style:italic; font-weight:700; }
   .star { position:absolute; border-radius:50%; background:#fff7e0; opacity:0;
           box-shadow: 0 0 8px rgba(255,247,224,0.9); }`;
-  const html =
-    (b.scrim ? `      <div id="pscrim"></div>\n` : "") +
-    stanzaData
-      .flat()
-      .map((L) => `      <div class="pline" id="${L.id}" style="top:${L.top}px"></div>`)
-      .join("\n");
-  const disperse = (dna.linkages || []).includes("disperse-on-last-word");
-  const js = `
+	const html =
+		(b.scrim ? `      <div id="pscrim"></div>\n` : "") +
+		stanzaData
+			.flat()
+			.map(
+				(L) =>
+					`      <div class="pline" id="${L.id}" style="top:${L.top}px"></div>`,
+			)
+			.join("\n");
+	const disperse = (dna.linkages || []).includes("disperse-on-last-word");
+	const js = `
   // ---- body paradigm: POEM (condense, accumulate, ${disperse ? "disperse" : "hold"}) ----
   const prnd = mulberry32(${b.seed || 777});
   const stage = document.getElementById("stage");
 ${
-  b.scrim
-    ? `  tl.fromTo("#pscrim", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power1.out" }, 0.15);
+	b.scrim
+		? `  tl.fromTo("#pscrim", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power1.out" }, 0.15);
   tl.to("#pscrim", { opacity: 0, duration: 0.4, ease: "power1.in" }, ${(LASTWORD.start + 0.15).toFixed(3)});`
-    : ""
+		: ""
 }
   const STANZAS = ${J(stanzaData)};
   const lastLetters = [];
@@ -981,8 +1065,8 @@ ${
     }
   });
 ${
-  disperse
-    ? `  // SEMANTIC EXIT: the whole visible poem disperses on the final word.
+	disperse
+		? `  // SEMANTIC EXIT: the whole visible poem disperses on the final word.
   // Clamped so the scatter COMPLETES before the clip ends (stagger included).
   const NZ = ${Math.min(LASTWORD.start + 0.06, DUR - 0.58).toFixed(3)};
   const DDUR = ${Math.min(0.42, Math.max(0.24, DUR - Math.min(LASTWORD.start + 0.06, DUR - 0.58) - 0.14)).toFixed(2)};
@@ -991,56 +1075,61 @@ ${
     tl.to(l, { x: dx, y: dy, opacity: 0, filter: "blur(7px)",
                duration: DDUR, ease: "power2.in" }, NZ + prnd() * 0.05);
   });`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmTakeover() {
-  const b = dna.body;
-  // each LINE is a card; minors hot; hero = colorflip apex inline
-  const cards = LINES.map((L, i) => {
-    const txt = L.words
-      .map((w) => w.display)
-      .join(" ")
-      .toUpperCase();
-    const isHero = L.words.some((w) => w.isHero);
-    const hot = isHero || L.words.some((w) => w.minor);
-    const _contentish = txt.replace(/[^A-Z]/g, "").length;
-    const px = isHero
-      ? dna.hero.fontPx || 196
-      : Math.min(
-          b.sizes.minor,
-          Math.round(Math.min(b.sizes.content, (W * 0.86) / (0.55 * Math.max(3, txt.length)))),
-        );
-    return {
-      id: "c" + i,
-      txt,
-      in: +L.in.toFixed(3),
-      out: +L.out.toFixed(3),
-      px,
-      hot: hot ? 1 : 0,
-      hero: isHero ? 1 : 0,
-      last: i === LINES.length - 1 ? 1 : 0,
-    };
-  });
-  // a held card before a silence ≥0.5s creeps, then VOID until the next card
-  for (let i = 0; i + 1 < cards.length; i++) {
-    const gap = cards[i + 1].in - LINES[i].words[LINES[i].words.length - 1].end;
-    if (gap > 0.5) {
-      cards[i].creep = 1;
-      cards[i].out = +(cards[i + 1].in - Math.min(0.6, gap * 0.45)).toFixed(3);
-    }
-  }
-  const css = `
+	const b = dna.body;
+	// each LINE is a card; minors hot; hero = colorflip apex inline
+	const cards = LINES.map((L, i) => {
+		const txt = L.words
+			.map((w) => w.display)
+			.join(" ")
+			.toUpperCase();
+		const isHero = L.words.some((w) => w.isHero);
+		const hot = isHero || L.words.some((w) => w.minor);
+		const _contentish = txt.replace(/[^A-Z]/g, "").length;
+		const px = isHero
+			? dna.hero.fontPx || 196
+			: Math.min(
+					b.sizes.minor,
+					Math.round(
+						Math.min(
+							b.sizes.content,
+							(W * 0.86) / (0.55 * Math.max(3, txt.length)),
+						),
+					),
+				);
+		return {
+			id: "c" + i,
+			txt,
+			in: +L.in.toFixed(3),
+			out: +L.out.toFixed(3),
+			px,
+			hot: hot ? 1 : 0,
+			hero: isHero ? 1 : 0,
+			last: i === LINES.length - 1 ? 1 : 0,
+		};
+	});
+	// a held card before a silence ≥0.5s creeps, then VOID until the next card
+	for (let i = 0; i + 1 < cards.length; i++) {
+		const gap = cards[i + 1].in - LINES[i].words[LINES[i].words.length - 1].end;
+		if (gap > 0.5) {
+			cards[i].creep = 1;
+			cards[i].out = +(cards[i + 1].in - Math.min(0.6, gap * 0.45)).toFixed(3);
+		}
+	}
+	const css = `
   #dim { position:absolute; inset:0; opacity:0; background:#05070c; }
   .card { position:absolute; opacity:0; white-space:nowrap;
           font-family:'${dna.fonts.body}', sans-serif; line-height:1; letter-spacing:0.015em;
           color:${dna.palette.body}; text-shadow: 0 4px 26px rgba(0,0,0,0.65); }
   .card.hot { color:${dna.palette.accent};
               text-shadow: 0 0 34px ${dna.palette.accent}73, 0 4px 26px rgba(0,0,0,0.65); }`;
-  const html = `      <div id="dim"></div>`;
-  const js = `
+	const html = `      <div id="dim"></div>`;
+	const js = `
   // ---- body paradigm: TAKEOVER (hard-cut full-frame cards) + colorflip apex ----
   const stage = document.getElementById("stage");
   const ANCH = ${J(b.anchors)};
@@ -1080,7 +1169,7 @@ function paradigmTakeover() {
     }
   });
   tl.to("#dim", { opacity: 0, duration: 0.3, ease: "power1.in" }, ${(DUR - 0.27).toFixed(2)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 /* =====================================================================
@@ -1088,11 +1177,11 @@ function paradigmTakeover() {
  * ===================================================================== */
 
 function setpieceDetonation() {
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const bw = Math.min(p.barWidth, W - 100, HG.halfW * 2 + 140);
-  const css = `
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const bw = Math.min(p.barWidth, W - 100, HG.halfW * 2 + 140);
+	const css = `
   #scrim { position:absolute; inset:0; opacity:0;
            background: radial-gradient(120% 105% at 50% 38%, rgba(0,0,0,0) 26%, rgba(0,0,0,0.8) 100%); }
   #dimP { position:absolute; inset:0; opacity:0; background:#000; }
@@ -1112,7 +1201,7 @@ function setpieceDetonation() {
              overflow:hidden; white-space:nowrap; }
   #tag { font-family:'${dna.fonts.tag}', monospace; font-size:21px; letter-spacing:0.34em;
          color:${dna.palette.hot}; white-space:nowrap; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }`;
-  const html = `      <div id="scrim"></div><div id="dimP"></div>
+	const html = `      <div id="scrim"></div><div id="dimP"></div>
       <div id="det">
         <div id="heat">${esc(heroText)}</div>
         ${p.slices.map((_, i) => `<div class="band" id="b${i + 1}">${esc(heroText)}</div>`).join("\n        ")}
@@ -1120,8 +1209,8 @@ function setpieceDetonation() {
         ${p.ticks ? `<div class="tick" id="tickL"></div><div class="tick" id="tickR"></div>` : ""}
         ${p.tag ? `<div id="tagwrap"><div id="tag">${esc(p.tag)}&nbsp;//&nbsp;T+${heroIn.toFixed(2)}S</div></div>` : ""}
       </div>`;
-  const bandIds = p.slices.map((_, i) => "#b" + (i + 1));
-  const js = `
+	const bandIds = p.slices.map((_, i) => "#b" + (i + 1));
+	const js = `
   // ---- setpiece: DETONATION (charge → sheared slices snap → cool → furniture) ----
   const I = ${I.toFixed(3)}, HOTC = ${J(dna.palette.hot)}, BONEC = ${J(dna.palette.body)};
   tl.fromTo("#scrim", { opacity: 0 }, { opacity: ${dna.plate.charge}, duration: 0.40, ease: "power2.in" }, I - 0.42);
@@ -1145,10 +1234,10 @@ function setpieceDetonation() {
   tl.to(BANDS, { color: BONEC, duration: 0.9, ease: "power1.in" }, I + 0.22);
 ${p.bars ? `  tl.fromTo(["#barT","#barB"], { scaleX: 0, opacity: 0.85 }, { scaleX: 1, duration: 0.34, ease: "expo.out" }, I + 0.16);` : ""}
 ${
-  p.ticks
-    ? `  tl.set(["#tickL","#tickR"], { opacity: 1 }, I + 0.42);
+	p.ticks
+		? `  tl.set(["#tickL","#tickR"], { opacity: 1 }, I + 0.42);
   tl.fromTo(["#tickL","#tickR"], { scaleY: 0 }, { scaleY: 1, duration: 0.14, ease: "back.out(2)" }, I + 0.42);`
-    : ""
+		: ""
 }
 ${p.tag ? `  tl.fromTo("#tagwrap", { width: 0 }, { width: 340, duration: 0.45, ease: "steps(16)" }, I + 0.5);` : ""}
   tl.fromTo("#heat", { opacity: 0 }, { opacity: 0.75, duration: 0.3 }, I + 0.06);
@@ -1160,19 +1249,19 @@ ${p.tag ? `  tl.fromTo("#tagwrap", { width: 0 }, { width: 340, duration: 0.45, e
   });
   tl.to(["#barT","#barB","#tickL","#tickR","#tagwrap","#heat"], { opacity: 0, duration: 0.13 }, ${(heroOut - 0.18).toFixed(3)});
   tl.set("#det", { display: "none" }, ${(heroOut + 0.02).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceDecode() {
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const lockStagger = p.lockStagger || 0.045;
-  const E = theme.hero.exitAt ?? Math.min(heroOut, I + 1.75);
-  const broom = Math.min(HG.x, W - HG.x) - HG.halfW; // room for brackets
-  const useBrackets = !!p.brackets && broom > 22;
-  const boff = Math.max(14, Math.min(40, Math.floor(broom - 8)));
-  const css = `
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const lockStagger = p.lockStagger || 0.045;
+	const E = theme.hero.exitAt ?? Math.min(heroOut, I + 1.75);
+	const broom = Math.min(HG.x, W - HG.x) - HG.halfW; // room for brackets
+	const useBrackets = !!p.brackets && broom > 22;
+	const boff = Math.max(14, Math.min(40, Math.floor(broom - 8)));
+	const css = `
   #dimP { position:absolute; inset:0; opacity:0; background:#021018; }
   #blk { position:absolute; left:${HG.x}px; top:${HG.y}px; transform:translate(-50%,-50%); opacity:0; }
   #word { display:flex; align-items:flex-start; justify-content:center;
@@ -1187,12 +1276,12 @@ function setpieceDecode() {
   .br.tr { right:-${boff}px; top:-30px; border-right:3px solid ${dna.palette.accent}; border-top:3px solid ${dna.palette.accent}; }
   .br.bl { left:-${boff}px; bottom:-34px; border-left:3px solid ${dna.palette.accent}; border-bottom:3px solid ${dna.palette.accent}; }
   .br.brr{ right:-${boff}px; bottom:-34px; border-right:3px solid ${dna.palette.accent}; border-bottom:3px solid ${dna.palette.accent}; }`;
-  const html = `      <div id="dimP"></div>
+	const html = `      <div id="dimP"></div>
       <div id="blk">
         <div id="word"></div>
         ${useBrackets ? `<div class="br tl"></div><div class="br tr"></div><div class="br bl"></div><div class="br brr"></div>` : ""}
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: DECODE (glyph reels lock left→right, CRT-off exit) ----
   const I = ${I.toFixed(3)}, TEXT = ${J(heroText)}, GLYPHS = ${J(p.glyphs)};
   const drnd = mulberry32(${p.seed || 99});
@@ -1233,34 +1322,41 @@ function setpieceDecode() {
   tl.set("#blk", { scale: 1.04 }, LOCKED - 0.083);
   tl.to("#blk", { scale: 1, duration: 0.3, ease: "elastic.out(1, 0.4)" }, LOCKED);
 ${
-  useBrackets
-    ? `  [".br.tl",".br.tr",".br.bl",".br.brr"].forEach((sel, k) => {
+	useBrackets
+		? `  [".br.tl",".br.tr",".br.bl",".br.brr"].forEach((sel, k) => {
     tl.fromTo(sel, { opacity: 0, scale: 0.3 }, { opacity: 0.95, scale: 1, duration: 0.22, ease: "expo.out" }, I - 0.12 + k * 0.05);
   });`
-    : ""
+		: ""
 }
   // EXIT: CRT power-off
   tl.to("#blk", { filter: "brightness(2.6)", duration: 0.07, ease: "power2.in" }, ${E.toFixed(3)});
   tl.to("#blk", { scaleY: 0.012, duration: 0.13, ease: "power4.in" }, ${(E + 0.06).toFixed(3)});
   tl.set("#blk", { opacity: 0, display: "none" }, ${(E + 0.2).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceDrawon() {
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  // generate the stroke path at COMPILE time — any word, zero tuning
-  const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
-  const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
-  const tw = Math.min(p.targetWidth || 640, W - 200);
-  const D = execFileSync(
-    "python3",
-    [gen, fontPath, heroDisplay.toLowerCase(), String(tw), "185", String(Math.round(380 - tw / 2))],
-    { encoding: "utf8" },
-  ).trim();
-  const WIN = p.window || 0.78;
-  const css = `
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	// generate the stroke path at COMPILE time — any word, zero tuning
+	const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
+	const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
+	const tw = Math.min(p.targetWidth || 640, W - 200);
+	const D = execFileSync(
+		"python3",
+		[
+			gen,
+			fontPath,
+			heroDisplay.toLowerCase(),
+			String(tw),
+			"185",
+			String(Math.round(380 - tw / 2)),
+		],
+		{ encoding: "utf8" },
+	).trim();
+	const WIN = p.window || 0.78;
+	const css = `
   #spill { position:absolute; left:${HG.x}px; top:${HG.y}px; width:820px; height:440px;
            margin-left:-410px; margin-top:-220px; border-radius:50%; opacity:0;
            background: radial-gradient(50% 50% at 50% 50%, ${dna.palette.accent}57 0%, ${dna.palette.accent}00 70%); }
@@ -1269,7 +1365,7 @@ function setpieceDrawon() {
              transform:rotate(${p.rotate || -3}deg); overflow:visible; }
   #coreG { filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 16px ${dna.palette.accent}); }
   #pen  { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 22px ${dna.palette.accent}); }`;
-  const html = `      <div id="spill"></div>
+	const html = `      <div id="spill"></div>
       <div id="sign">
         <svg id="neonsvg" width="760" height="300" viewBox="0 0 760 300">
           <defs><filter id="haloblur" x="-60%" y="-60%" width="220%" height="220%">
@@ -1281,7 +1377,7 @@ function setpieceDrawon() {
           <circle id="pen" r="6" fill="#fff" opacity="0"/>
         </svg>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: DRAWON (single-line font, SEQUENTIAL stroke reveal) ----
   // SVG dash restarts per subpath → one <path> per pen stroke, revealed in
   // writing order at constant pen speed; nib rides each stroke, hops at lifts.
@@ -1324,8 +1420,8 @@ function setpieceDrawon() {
   tl.set(pen, { opacity: 1 }, I - 0.01);
   tl.to(pen, { scale: 2.2, opacity: 0, duration: 0.12, ease: "power2.in", transformOrigin: "50% 50%" }, DRAWN);
 ${
-  p.hum
-    ? `  const humStart = DRAWN + 0.08, humDur = Math.max(0.2, ENDT - humStart);
+	p.hum
+		? `  const humStart = DRAWN + 0.08, humDur = Math.max(0.2, ENDT - humStart);
   const NN = Math.max(6, Math.round(humDur / (2 * F)));
   const humVals = [];
   for (let k = 0; k <= NN; k++) {
@@ -1335,49 +1431,49 @@ ${
   tl.to("#haloG", { keyframes: { opacity: humVals }, duration: humDur, ease: "none" }, humStart);
   tl.set("#coreG", { opacity: 0.45 }, ENDT + (${p.buzzDipAt || -0.18}));
   tl.set("#coreG", { opacity: 1 }, ENDT + (${p.buzzDipAt || -0.18}) + F);`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 /* =====================================================================
  * FRONT FX (fg layer additions) — flash / rings / sparks / scanband
  * ===================================================================== */
 function frontFx() {
-  const fx = dna.fx || {};
-  let css = "",
-    html = "",
-    js = "";
-  const I = heroIn;
-  if (fx.flash) {
-    css += `
+	const fx = dna.fx || {};
+	let css = "",
+		html = "",
+		js = "";
+	const I = heroIn;
+	if (fx.flash) {
+		css += `
   #fxflash { position:absolute; inset:0; opacity:0;
            background: radial-gradient(95% 80% at 50% 37%, rgba(255,250,240,0.95) 0%, rgba(255,235,210,0.7) 38%, rgba(120,90,60,0) 100%); }`;
-    html += `      <div id="fxflash"></div>\n`;
-    js += `
+		html += `      <div id="fxflash"></div>\n`;
+		js += `
   tl.set("#fxflash", { opacity: ${fx.flash} }, ${(I + 0.045).toFixed(3)});
   tl.to("#fxflash", { opacity: 0, duration: 0.17, ease: "expo.out" }, ${(I + 0.085).toFixed(3)});`;
-  }
-  if (fx.rings) {
-    css += `
+	}
+	if (fx.rings) {
+		css += `
   .fxring { position:absolute; left:${HG.x}px; top:${HG.y}px; width:90px; height:32px;
           margin-left:-45px; margin-top:-16px; border-radius:50%; opacity:0; }
   #fxr1 { border:4px solid rgba(255,228,196,0.95); filter:blur(1.5px); }
   #fxr2 { border:3px solid rgba(255,150,70,0.8); filter:blur(3px); }`;
-    html += `      <div class="fxring" id="fxr1"></div>\n      <div class="fxring" id="fxr2"></div>\n`;
-    js += `
+		html += `      <div class="fxring" id="fxr1"></div>\n      <div class="fxring" id="fxr2"></div>\n`;
+		js += `
   tl.set("#fxr1", { opacity: 1, scale: 1 }, ${(I + 0.05).toFixed(3)});
   tl.to("#fxr1", { scale: 16, opacity: 0, duration: 0.58, ease: "expo.out" }, ${(I + 0.05).toFixed(3)});
   tl.to("#fxr1", { filter: "blur(7px)", duration: 0.58, ease: "power1.in" }, ${(I + 0.05).toFixed(3)});
   tl.set("#fxr2", { opacity: 0.55, scale: 1 }, ${(I + 0.13).toFixed(3)});
   tl.to("#fxr2", { scale: 11, opacity: 0, duration: 0.72, ease: "expo.out" }, ${(I + 0.13).toFixed(3)});`;
-  }
-  if (fx.sparks) {
-    css += `
+	}
+	if (fx.sparks) {
+		css += `
   .fxspark { position:absolute; left:${HG.x}px; top:${HG.y}px; border-radius:2px;
            background:#ffd9a8; opacity:0; }
   .fxember { position:absolute; border-radius:50%; background:#ff9544; filter:blur(1px); opacity:0; }`;
-    js += `
+		js += `
   { const frnd = mulberry32(${fx.seed || 7});
     const stg = document.getElementById("stage");
     for (let i = 0; i < ${fx.sparks}; i++) {
@@ -1403,57 +1499,57 @@ function frontFx() {
                                x: [0, xA*0.5, xA, (xA+xB)/2, xB] }, duration: dr, ease: "power1.out" }, t0);
     }
   }`;
-  }
-  if (fx.crowdflash) {
-    // two stadium camera-flash pops: lock start / lock end (flapboard rhythm)
-    const [fa, fb] = fx.crowdflash;
-    const lockEnd = I + ((dna.hero.params || {}).lockWindow || 0.34);
-    css += `
+	}
+	if (fx.crowdflash) {
+		// two stadium camera-flash pops: lock start / lock end (flapboard rhythm)
+		const [fa, fb] = fx.crowdflash;
+		const lockEnd = I + ((dna.hero.params || {}).lockWindow || 0.34);
+		css += `
   #fxcrowd { position:absolute; inset:0; opacity:0;
             background: radial-gradient(85% 70% at 50% 34%, rgba(255,250,238,0.85) 0%,
                         rgba(255,238,210,0.45) 45%, rgba(60,50,35,0) 100%); }`;
-    html += `      <div id="fxcrowd"></div>\n`;
-    js += `
+		html += `      <div id="fxcrowd"></div>\n`;
+		js += `
   tl.set("#fxcrowd", { opacity: ${fa} }, ${I.toFixed(3)});
   tl.to("#fxcrowd", { opacity: 0, duration: 0.10, ease: "expo.out" }, ${(I + 0.042).toFixed(3)});
   tl.set("#fxcrowd", { opacity: ${fb} }, ${lockEnd.toFixed(3)});
   tl.to("#fxcrowd", { opacity: 0, duration: 0.12, ease: "expo.out" }, ${(lockEnd + 0.042).toFixed(3)});`;
-  }
-  if (fx.paflash) {
-    // PA-system flash over the board glow at apex contact (ledwipe completes)
-    const C2 = I + ((dna.hero.params || {}).wipeDur || 0.3);
-    const pw = (HG.panelW || 900) - 180,
-      ph = Math.round((HG.panelH || 232) * 1.9);
-    css += `
+	}
+	if (fx.paflash) {
+		// PA-system flash over the board glow at apex contact (ledwipe completes)
+		const C2 = I + ((dna.hero.params || {}).wipeDur || 0.3);
+		const pw = (HG.panelW || 900) - 180,
+			ph = Math.round((HG.panelH || 232) * 1.9);
+		css += `
   #fxpa { position:absolute; left:${Math.round(HG.x - pw / 2)}px; top:${Math.round(HG.y - ph / 2)}px;
           width:${pw}px; height:${ph}px; opacity:0;
           background: radial-gradient(closest-side, rgba(255,200,100,0.55), ${dna.palette.accent}00 70%); }`;
-    html += `      <div id="fxpa"></div>\n`;
-    js += `
+		html += `      <div id="fxpa"></div>\n`;
+		js += `
   tl.set("#fxpa", { opacity: ${fx.paflash} }, ${C2.toFixed(3)});
   tl.to("#fxpa", { opacity: 0, duration: 0.22, ease: "expo.out" }, ${(C2 + 0.042).toFixed(3)});`;
-  }
-  if (fx.coinflash) {
-    // 1-frame arcade impact flash at the boss-word strike (the coin blip at
-    // max amplitude) — vertical center rides the hero band
-    const FT = I + ((dna.hero.params || {}).flashDelay ?? 0.14);
-    const cyP = Math.round((HG.y / H) * 100);
-    css += `
+	}
+	if (fx.coinflash) {
+		// 1-frame arcade impact flash at the boss-word strike (the coin blip at
+		// max amplitude) — vertical center rides the hero band
+		const FT = I + ((dna.hero.params || {}).flashDelay ?? 0.14);
+		const cyP = Math.round((HG.y / H) * 100);
+		css += `
   #fxcoin { position:absolute; inset:0; opacity:0; z-index:16;
             background: radial-gradient(58% 38% at 50% ${cyP}%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 70%); }`;
-    html += `      <div id="fxcoin"></div>\n`;
-    js += `
+		html += `      <div id="fxcoin"></div>\n`;
+		js += `
   tl.set("#fxcoin", { opacity: ${fx.coinflash} }, ${FT.toFixed(3)});
   tl.to("#fxcoin", { opacity: 0, duration: 0.12, ease: "expo.out" }, ${(FT + 0.042).toFixed(3)});`;
-  }
-  if (fx.inkflecks) {
-    // red ink flecks spatter off the rubber-stamp contact (fg layer, ballistic
-    // with gravity) — fires at C = heroIn + params.crush, the punch anchor
-    const C4 = I + ((dna.hero.params || {}).crush ?? 0.074);
-    css += `
+	}
+	if (fx.inkflecks) {
+		// red ink flecks spatter off the rubber-stamp contact (fg layer, ballistic
+		// with gravity) — fires at C = heroIn + params.crush, the punch anchor
+		const C4 = I + ((dna.hero.params || {}).crush ?? 0.074);
+		css += `
   .fxfleck { position:absolute; left:${HG.x}px; top:${HG.y}px; border-radius:50%;
            background:${dna.palette.fleck || dna.palette.accent}; opacity:0; }`;
-    js += `
+		js += `
   { const frnd = mulberry32(${fx.seed || 18});
     const stg = document.getElementById("stage");
     for (let i = 0; i < ${fx.inkflecks}; i++) {
@@ -1469,57 +1565,57 @@ function frontFx() {
                  duration: d, ease: "power2.out" }, ${(C4 + 0.01).toFixed(3)});
     }
   }`;
-  }
-  if (fx.laserflash) {
-    // apex contact flash in FRONT of everything (the laser ignite pop, 4
-    // frames) — sized from the hero rect, tinted with the accent
-    const fw = Math.round(2 * (HG.halfW || 330) + 80),
-      fh = Math.round((HG.fontPx || 100) * 4.8);
-    css += `
+	}
+	if (fx.laserflash) {
+		// apex contact flash in FRONT of everything (the laser ignite pop, 4
+		// frames) — sized from the hero rect, tinted with the accent
+		const fw = Math.round(2 * (HG.halfW || 330) + 80),
+			fh = Math.round((HG.fontPx || 100) * 4.8);
+		css += `
   #fxlaser { position:absolute; left:${HG.x - Math.round(fw / 2)}px; top:${HG.y - Math.round(fh / 2)}px;
            width:${fw}px; height:${fh}px; opacity:0;
            background: radial-gradient(50% 50% at 50% 50%, rgba(235,255,244,0.9) 0%, ${dna.palette.accent}73 38%, rgba(0,0,0,0) 72%); }`;
-    html += `      <div id="fxlaser"></div>\n`;
-    js += `
+		html += `      <div id="fxlaser"></div>\n`;
+		js += `
   tl.set("#fxlaser", { opacity: ${fx.laserflash} }, ${(I + 0.03).toFixed(3)});
   tl.to("#fxlaser",  { opacity: 0, duration: 0.16, ease: "expo.out" }, ${(I + 0.075).toFixed(3)});`;
-  }
-  if (fx.strikeflash) {
-    // full-frame lightning flash in FRONT of everything: leader blink 2 frames
-    // before contact (bright / dim alternation), return stroke at contact + 1f,
-    // expo-out decay — same flicker grammar as the bg bolt
-    css += `
+	}
+	if (fx.strikeflash) {
+		// full-frame lightning flash in FRONT of everything: leader blink 2 frames
+		// before contact (bright / dim alternation), return stroke at contact + 1f,
+		// expo-out decay — same flicker grammar as the bg bolt
+		css += `
   #fxstrike { position:absolute; inset:0; opacity:0;
            background: radial-gradient(80% 65% at 50% 38%, rgba(245,250,255,0.9) 0%, rgba(205,228,252,0.5) 40%, rgba(110,140,180,0) 100%); }`;
-    html += `      <div id="fxstrike"></div>\n`;
-    js += `
+		html += `      <div id="fxstrike"></div>\n`;
+		js += `
   tl.set("#fxstrike", { opacity: ${(fx.strikeflash * 0.45).toFixed(3)} }, ${(I - 2 * F).toFixed(3)});
   tl.set("#fxstrike", { opacity: ${(fx.strikeflash * 0.18).toFixed(3)} }, ${(I - F).toFixed(3)});
   tl.set("#fxstrike", { opacity: ${fx.strikeflash} }, ${(I + 0.02).toFixed(3)});
   tl.to("#fxstrike",  { opacity: 0, duration: 0.16, ease: "expo.out" }, ${(I + 0.06).toFixed(3)});`;
-  }
-  if (fx.holoflash) {
-    // cyan LOCK flash in front of everything when the projection boots to
-    // full brightness — a radial centered on the hero (frame-fraction anchor)
-    const hxP = ((HG.x / W) * 100).toFixed(1),
-      hyP = ((HG.y / H) * 100).toFixed(1);
-    css += `
+	}
+	if (fx.holoflash) {
+		// cyan LOCK flash in front of everything when the projection boots to
+		// full brightness — a radial centered on the hero (frame-fraction anchor)
+		const hxP = ((HG.x / W) * 100).toFixed(1),
+			hyP = ((HG.y / H) * 100).toFixed(1);
+		css += `
   #fxholo { position:absolute; inset:0; opacity:0;
            background: radial-gradient(58% 44% at ${hxP}% ${hyP}%, ${dna.palette.accent}8c 0%, rgba(80,160,200,0.18) 45%, rgba(40,80,110,0) 72%); }`;
-    html += `      <div id="fxholo"></div>\n`;
-    js += `
+		html += `      <div id="fxholo"></div>\n`;
+		js += `
   tl.set("#fxholo", { opacity: ${fx.holoflash} }, ${(I + 0.075).toFixed(3)});
   tl.to("#fxholo", { opacity: 0, duration: 0.22, ease: "expo.out" }, ${(I + 0.105).toFixed(3)});`;
-  }
-  if (fx.sporeburst) {
-    // bioluminescent spores burst PAST the bloom at contact (fg, in front of
-    // the subject) — seeded radial puffs from the hero center, slight sink
-    const C6 = I + ((dna.hero.params || {}).crush ?? 0.11);
-    css += `
+	}
+	if (fx.sporeburst) {
+		// bioluminescent spores burst PAST the bloom at contact (fg, in front of
+		// the subject) — seeded radial puffs from the hero center, slight sink
+		const C6 = I + ((dna.hero.params || {}).crush ?? 0.11);
+		css += `
   .fxspore { position:absolute; left:${HG.x}px; top:${HG.y}px; border-radius:50%;
            background:${dna.palette.spore || dna.palette.accent};
            box-shadow: 0 0 6px 1px ${dna.palette.accent}cc; opacity:0; }`;
-    js += `
+		js += `
   { const frnd = mulberry32(${fx.seed || 12});
     const stg = document.getElementById("stage");
     for (let i = 0; i < ${fx.sporeburst}; i++) {
@@ -1533,15 +1629,15 @@ function frontFx() {
                  duration: 0.45 + frnd() * 0.15, ease: "power2.out" }, ${(C6 + 0.01).toFixed(3)} + i * 0.012);
     }
   }`;
-  }
-  if (fx.silkmotes) {
-    // gentle aurora light motes drifting up near the ribbon during its hold
-    // (fg layer) — seeded along the ribbon span at the demo's spread fractions
-    // (the gap around 0.4 keeps them off the subject's face)
-    const halfW = HG.halfW || 440;
-    css += `
+	}
+	if (fx.silkmotes) {
+		// gentle aurora light motes drifting up near the ribbon during its hold
+		// (fg layer) — seeded along the ribbon span at the demo's spread fractions
+		// (the gap around 0.4 keeps them off the subject's face)
+		const halfW = HG.halfW || 440;
+		css += `
   .fxmote { position:absolute; border-radius:50%; opacity:0; filter:blur(1.5px); }`;
-    js += `
+		js += `
   { const frnd = mulberry32(${fx.seed || 9});
     const stg9 = document.getElementById("stage");
     const PALM = [${J(dna.palette.rose)}, ${J(dna.palette.accent)}, ${J(dna.palette.violet)}];
@@ -1560,26 +1656,26 @@ function frontFx() {
           duration: 0.75, ease: "sine.out" }, Math.min(t0, ${(DUR - 0.79).toFixed(3)}));
     }
   }`;
-  }
-  if (fx.paperscraps) {
-    // torn paper scraps puff PAST the subject at each apex chip contact (fg,
-    // in front) — ballistic steps(4) arcs, one accent scrap per puff
-    // (the papermat landing rhythm); centers baked from the chip geometry
-    const N9 = heroText.length;
-    const pitch9 = HG.pitch || 132,
-      step9 = (dna.hero.params || {}).step ?? 0.09;
-    const y9 = Math.round(HG.y + (HG.tileH || 170) / 2 - 9);
-    const puffs = [];
-    for (let i = 0; i < N9; i++)
-      if (heroText[i] !== " ")
-        puffs.push([
-          Math.round(HG.x + (i - (N9 - 1) / 2) * pitch9),
-          +(I + i * step9).toFixed(3),
-          +((i - (N9 - 1) / 2) * 22).toFixed(1),
-        ]);
-    css += `
+	}
+	if (fx.paperscraps) {
+		// torn paper scraps puff PAST the subject at each apex chip contact (fg,
+		// in front) — ballistic steps(4) arcs, one accent scrap per puff
+		// (the papermat landing rhythm); centers baked from the chip geometry
+		const N9 = heroText.length;
+		const pitch9 = HG.pitch || 132,
+			step9 = (dna.hero.params || {}).step ?? 0.09;
+		const y9 = Math.round(HG.y + (HG.tileH || 170) / 2 - 9);
+		const puffs = [];
+		for (let i = 0; i < N9; i++)
+			if (heroText[i] !== " ")
+				puffs.push([
+					Math.round(HG.x + (i - (N9 - 1) / 2) * pitch9),
+					+(I + i * step9).toFixed(3),
+					+((i - (N9 - 1) / 2) * 22).toFixed(1),
+				]);
+		css += `
   .fxscrap { position:absolute; opacity:0; border-radius:1px; }`;
-    js += `
+		js += `
   { const frnd = mulberry32(${fx.seed || 150372});
     const stg = document.getElementById("stage");
     const PUFFS = ${J(puffs)};
@@ -1602,22 +1698,22 @@ function frontFx() {
       }
     });
   }`;
-  }
-  if (fx.confetti) {
-    // paper confetti flicks up PAST the subject when the apex word pops (fg,
-    // in front) — seeded ballistic arcs with card tumble; launch line baked
-    // from the centerfold hinge (90% of the burst box, where the paper folds)
-    const u0 = (HG.burstR || 220) / 220;
-    const boxH0 = HG.boxH || 560;
-    const hingeY = Math.round(HG.y + 24 * u0 - boxH0 / 2 + 0.9 * boxH0);
-    const CC = dna.palette.conf || [
-      dna.palette.cream || "#f6ecd4",
-      dna.palette.accent,
-      dna.palette.body,
-    ];
-    css += `
+	}
+	if (fx.confetti) {
+		// paper confetti flicks up PAST the subject when the apex word pops (fg,
+		// in front) — seeded ballistic arcs with card tumble; launch line baked
+		// from the centerfold hinge (90% of the burst box, where the paper folds)
+		const u0 = (HG.burstR || 220) / 220;
+		const boxH0 = HG.boxH || 560;
+		const hingeY = Math.round(HG.y + 24 * u0 - boxH0 / 2 + 0.9 * boxH0);
+		const CC = dna.palette.conf || [
+			dna.palette.cream || "#f6ecd4",
+			dna.palette.accent,
+			dna.palette.body,
+		];
+		css += `
   .fxconf { position:absolute; opacity:0; border-radius:1px; }`;
-    js += `
+		js += `
   { const frnd = mulberry32(${fx.seed || 360372});
     const stg = document.getElementById("stage");
     const CCOL = ${J(CC)};
@@ -1636,24 +1732,24 @@ function frontFx() {
                   duration: d, ease: "power1.out" }, t0);
     }
   }`;
-  }
-  if (fx.chalkclap) {
-    // hand-slap dust CLAP in FRONT of the subject the instant the chalk word
-    // completes (the bg board shakes the same frame) — seeded radial specks +
-    // a soft blurred puff, centered on the pen's final contact point (baked
-    // by setpieceChalkwrite into HG.clapX/Y/T)
-    const cx9 = Math.round(HG.clapX ?? HG.x + (HG.halfW || 80)),
-      cy9 = Math.round(HG.clapY ?? HG.y),
-      ct9 = +(HG.clapT ?? I + 0.5).toFixed(3);
-    const DUST9 = dna.palette.dust || "#f7f5ea";
-    css += `
+	}
+	if (fx.chalkclap) {
+		// hand-slap dust CLAP in FRONT of the subject the instant the chalk word
+		// completes (the bg board shakes the same frame) — seeded radial specks +
+		// a soft blurred puff, centered on the pen's final contact point (baked
+		// by setpieceChalkwrite into HG.clapX/Y/T)
+		const cx9 = Math.round(HG.clapX ?? HG.x + (HG.halfW || 80)),
+			cy9 = Math.round(HG.clapY ?? HG.y),
+			ct9 = +(HG.clapT ?? I + 0.5).toFixed(3);
+		const DUST9 = dna.palette.dust || "#f7f5ea";
+		css += `
   #fxclap { position:absolute; left:${cx9}px; top:${cy9}px; width:0; height:0; }
   #fxclap .cd { position:absolute; left:0; top:0; border-radius:50%; background:${DUST9}; opacity:0; }
   #fxpuff { position:absolute; left:-48px; top:-48px; width:96px; height:96px; border-radius:50%; opacity:0;
             background: radial-gradient(50% 50% at 50% 50%, ${DUST9}80 0%, ${DUST9}00 70%);
             filter: blur(4px); }`;
-    html += `      <div id="fxclap"><div id="fxpuff"></div></div>\n`;
-    js += `
+		html += `      <div id="fxclap"><div id="fxpuff"></div></div>\n`;
+		js += `
   { const frnd = mulberry32(${fx.seed || 13});
     const clap = document.getElementById("fxclap");
     for (let i = 0; i < ${fx.chalkclap}; i++) {
@@ -1672,26 +1768,29 @@ function frontFx() {
     tl.fromTo("#fxpuff", { opacity: 0.55, scale: 0.35 },
               { opacity: 0, scale: 1.8, duration: 0.5, ease: "power2.out" }, ${ct9});
   }`;
-  }
-  if (fx.paintsplat) {
-    // paint SPLAT in FRONT of the subject the instant the spray tag completes
-    // — a hot magenta ring + a soft paint-color ring + seeded droplets with
-    // gravity, centered on the pen-finish point (baked by setpieceSpraytag
-    // into HG.splatX/Y/T)
-    const sx = Math.max(60, Math.min(W - 60, Math.round(HG.splatX ?? HG.x + (HG.halfW || 80))));
-    const sy = Math.round(HG.splatY ?? HG.y);
-    const st9 = +Math.min(HG.splatT ?? I + 0.5, DUR - 0.5).toFixed(3);
-    const HOT9 = dna.palette.em2 || dna.palette.hot || "#ff2e88";
-    const PAINT9 = dna.palette.accent || "#ffd23f";
-    css += `
+	}
+	if (fx.paintsplat) {
+		// paint SPLAT in FRONT of the subject the instant the spray tag completes
+		// — a hot magenta ring + a soft paint-color ring + seeded droplets with
+		// gravity, centered on the pen-finish point (baked by setpieceSpraytag
+		// into HG.splatX/Y/T)
+		const sx = Math.max(
+			60,
+			Math.min(W - 60, Math.round(HG.splatX ?? HG.x + (HG.halfW || 80))),
+		);
+		const sy = Math.round(HG.splatY ?? HG.y);
+		const st9 = +Math.min(HG.splatT ?? I + 0.5, DUR - 0.5).toFixed(3);
+		const HOT9 = dna.palette.em2 || dna.palette.hot || "#ff2e88";
+		const PAINT9 = dna.palette.accent || "#ffd23f";
+		css += `
   .fxsplat { position:absolute; left:${sx}px; top:${sy}px; border-radius:50%; opacity:0; }
   #fxsp1 { width:40px; height:30px; border:5px solid ${HOT9}; margin-left:-20px; margin-top:-15px; }
   #fxsp2 { width:26px; height:20px; border:4px solid ${PAINT9}; margin-left:-13px; margin-top:-10px;
            filter: blur(1.5px); }
   .fxsdrop { position:absolute; left:${sx}px; top:${sy}px; background:${HOT9};
              border-radius:50%; opacity:0; }`;
-    html += `      <div class="fxsplat" id="fxsp1"></div>\n      <div class="fxsplat" id="fxsp2"></div>\n`;
-    js += `
+		html += `      <div class="fxsplat" id="fxsp1"></div>\n      <div class="fxsplat" id="fxsp2"></div>\n`;
+		js += `
   tl.set("#fxsp1", { opacity: 1, scale: 0.3 }, ${st9});
   tl.to("#fxsp1", { scale: 4.6, opacity: 0, duration: 0.42, ease: "expo.out" }, ${st9});
   tl.to("#fxsp1", { filter: "blur(4px)", duration: 0.42, ease: "power1.in" }, ${st9});
@@ -1714,18 +1813,21 @@ function frontFx() {
                   duration: d, ease: "power2.out" }, ${st9});
     }
   }`;
-  }
-  if (fx.brushflecks) {
-    // ink flecks kicked PAST the subject at the brush's first contact (the
-    // start-splat depth pass) — seeded upward ballistic arcs from the pen-START
-    // point (baked by setpieceBrushwrite into HG.fleckX/Y/T)
-    const bx = Math.max(40, Math.min(W - 40, Math.round(HG.fleckX ?? HG.x - (HG.halfW || 80))));
-    const by = Math.round(HG.fleckY ?? HG.y);
-    const bt = +Math.min(HG.fleckT ?? I + 0.01, DUR - 0.4).toFixed(3);
-    css += `
+	}
+	if (fx.brushflecks) {
+		// ink flecks kicked PAST the subject at the brush's first contact (the
+		// start-splat depth pass) — seeded upward ballistic arcs from the pen-START
+		// point (baked by setpieceBrushwrite into HG.fleckX/Y/T)
+		const bx = Math.max(
+			40,
+			Math.min(W - 40, Math.round(HG.fleckX ?? HG.x - (HG.halfW || 80))),
+		);
+		const by = Math.round(HG.fleckY ?? HG.y);
+		const bt = +Math.min(HG.fleckT ?? I + 0.01, DUR - 0.4).toFixed(3);
+		css += `
   .fxbfleck { position:absolute; left:${bx}px; top:${by}px; border-radius:50%;
            background:${dna.palette.ink || "#1a130c"}; opacity:0; }`;
-    js += `
+		js += `
   { const frnd = mulberry32(${fx.seed || 20260611});
     const stg = document.getElementById("stage");
     for (let i = 0; i < ${fx.brushflecks}; i++) {
@@ -1740,89 +1842,93 @@ function frontFx() {
                   duration: 0.36, ease: "power2.out" }, ${bt});
     }
   }`;
-  }
-  if (fx.scanband) {
-    const lockT =
-      heroIn + 0.3 + (dna.hero.params.lockStagger || 0.045) * (heroText.length - 1) + 0.083;
-    css += `
+	}
+	if (fx.scanband) {
+		const lockT =
+			heroIn +
+			0.3 +
+			(dna.hero.params.lockStagger || 0.045) * (heroText.length - 1) +
+			0.083;
+		css += `
   #fxband { position:absolute; left:0; top:-80px; width:100%; height:70px; opacity:0;
           background: linear-gradient(180deg, ${dna.palette.accent}00 0%, ${dna.palette.accent}66 50%, ${dna.palette.accent}00 100%); }
   #fxlock { position:absolute; inset:0; opacity:0;
                background: radial-gradient(80% 60% at 52% 35%, ${dna.palette.accent}99 0%, ${dna.palette.accent}00 70%); }`;
-    html += `      <div id="fxband"></div>\n      <div id="fxlock"></div>\n`;
-    js += `
+		html += `      <div id="fxband"></div>\n      <div id="fxlock"></div>\n`;
+		js += `
   tl.set("#fxband", { opacity: 0.5 }, ${(I - 0.05).toFixed(3)});
   tl.fromTo("#fxband", { y: 0 }, { y: ${H + 160}, duration: 0.5, ease: "power1.in" }, ${(I - 0.05).toFixed(3)});
   tl.set("#fxband", { opacity: 0 }, ${(I + 0.46).toFixed(3)});
   tl.set("#fxlock", { opacity: ${fx.lockflash || 0.55} }, ${(lockT - 0.083).toFixed(3)});
   tl.to("#fxlock", { opacity: 0, duration: 0.2, ease: "expo.out" }, ${lockT.toFixed(3)});`;
-  }
-  return { css, html, js };
+	}
+	return { css, html, js };
 }
 
 /* =====================================================================
  * ASSEMBLE + POSTFX
  * ===================================================================== */
 function paradigmLastpage() {
-  // THE LAST PAGE: a blurred "future manuscript" haunts the room all video;
-  // at the apex one rack-focus reveals every faint line was the apex word.
-  const b = dna.body,
-    I = heroIn;
-  const prnd = (() => {
-    let a = b.seed || 4242;
-    return () => {
-      a |= 0;
-      a = (a + 0x6d2b79f5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  })();
-  // field instances: seeded positions in the upper room, away from the subject column
-  const subjX = sz && sz.heroAnchor ? (W * sz.heroAnchor.centerXPct) / 100 : W * 0.5;
-  const inst = [];
-  for (let i = 0; i < (b.fieldCount || 9); i++) {
-    let x = 80 + prnd() * (W - 160),
-      y = 60 + prnd() * (H * 0.55);
-    if (Math.abs(x - subjX) < 170)
-      x = x < subjX ? subjX - 180 - prnd() * 120 : subjX + 180 + prnd() * 120;
-    inst.push({
-      x: Math.round(Math.max(70, Math.min(W - 70, x))),
-      y: Math.round(y),
-      px: Math.round(34 + prnd() * 96),
-      rot: +((prnd() - 0.5) * 8).toFixed(1),
-      op: +(0.26 + prnd() * 0.2).toFixed(2),
-    });
-  }
-  const main = inst.reduce((a, c) => (c.px > a.px ? c : a), inst[0]);
-  const lineData = LINES.map((L) => ({
-    id: "m" + L.id,
-    in: +L.in.toFixed(3),
-    out: +L.out.toFixed(3),
-    words: L.words.map((w) => [w.display, +w.start.toFixed(3)]),
-  }));
-  const css = `
+	// THE LAST PAGE: a blurred "future manuscript" haunts the room all video;
+	// at the apex one rack-focus reveals every faint line was the apex word.
+	const b = dna.body,
+		I = heroIn;
+	const prnd = (() => {
+		let a = b.seed || 4242;
+		return () => {
+			a |= 0;
+			a = (a + 0x6d2b79f5) | 0;
+			let t = Math.imul(a ^ (a >>> 15), 1 | a);
+			t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+			return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+		};
+	})();
+	// field instances: seeded positions in the upper room, away from the subject column
+	const subjX =
+		sz && sz.heroAnchor ? (W * sz.heroAnchor.centerXPct) / 100 : W * 0.5;
+	const inst = [];
+	for (let i = 0; i < (b.fieldCount || 9); i++) {
+		let x = 80 + prnd() * (W - 160),
+			y = 60 + prnd() * (H * 0.55);
+		if (Math.abs(x - subjX) < 170)
+			x = x < subjX ? subjX - 180 - prnd() * 120 : subjX + 180 + prnd() * 120;
+		inst.push({
+			x: Math.round(Math.max(70, Math.min(W - 70, x))),
+			y: Math.round(y),
+			px: Math.round(34 + prnd() * 96),
+			rot: +((prnd() - 0.5) * 8).toFixed(1),
+			op: +(0.26 + prnd() * 0.2).toFixed(2),
+		});
+	}
+	const main = inst.reduce((a, c) => (c.px > a.px ? c : a), inst[0]);
+	const lineData = LINES.map((L) => ({
+		id: "m" + L.id,
+		in: +L.in.toFixed(3),
+		out: +L.out.toFixed(3),
+		words: L.words.map((w) => [w.display, +w.start.toFixed(3)]),
+	}));
+	const css = `
 ${
-  HEROLESS
-    ? ""
-    : `  .fld { position:absolute; white-space:nowrap; font-family:'${dna.fonts.body}', serif;
+	HEROLESS
+		? ""
+		: `  .fld { position:absolute; white-space:nowrap; font-family:'${dna.fonts.body}', serif;
          font-weight:600; color:${dna.palette.body}; filter: blur(${b.fieldBlur || 9}px); }`
 }
   .ms  { position:absolute; left:${W / 2}px; top:${H - (b.bottomPx || 96)}px; opacity:0; white-space:nowrap;
          font-family:'${dna.fonts.body}', serif; font-size:${b.fontPx}px; line-height:1;
          color:${dna.palette.body}; text-shadow: 0 2px 12px rgba(0,0,0,0.6); }
   .ms .w { display:inline-block; opacity:0; margin:0 0.14em; overflow:hidden; vertical-align:bottom; white-space:nowrap; }`;
-  const html =
-    (HEROLESS
-      ? ""
-      : inst
-          .map(
-            (f, i) =>
-              `      <div class="fld" id="f${i}" style="left:${f.x}px; top:${f.y}px; font-size:${f.px}px; opacity:${f.op}; transform:translate(-50%,-50%) rotate(${f.rot}deg)">${esc(heroDisplay)}</div>`,
-          )
-          .join("\n") + "\n") +
-    lineData.map((L) => `      <div class="ms" id="${L.id}"></div>`).join("\n");
-  const js = `
+	const html =
+		(HEROLESS
+			? ""
+			: inst
+					.map(
+						(f, i) =>
+							`      <div class="fld" id="f${i}" style="left:${f.x}px; top:${f.y}px; font-size:${f.px}px; opacity:${f.op}; transform:translate(-50%,-50%) rotate(${f.rot}deg)">${esc(heroDisplay)}</div>`,
+					)
+					.join("\n") + "\n") +
+		lineData.map((L) => `      <div class="ms" id="${L.id}"></div>`).join("\n");
+	const js = `
   // ---- THE LAST PAGE ----
 ${!HEROLESS ? `  const I = ${I.toFixed(3)};` : ""}
   const MS = ${J(lineData)};
@@ -1844,50 +1950,54 @@ ${!HEROLESS ? `  const I = ${I.toFixed(3)};` : ""}
     tl.set(line, { display: "none" }, xo + 0.18);
   });
 ${
-  !HEROLESS
-    ? `  // the field breathes imperceptibly (alive, unreadable)
+	!HEROLESS
+		? `  // the field breathes imperceptibly (alive, unreadable)
   ${inst.map((f, i) => `tl.to("#f${i}", { y: ${prnd() - 0.5 > 0 ? "+" : "-"}${(3 + prnd() * 5).toFixed(1)}, duration: ${(2.4 + prnd() * 2).toFixed(1)}, ease: "sine.inOut" }, 0);`).join("\n  ")}
   // APEX: rack focus — the future was only ever one sentence
   tl.to(".fld", { filter: "blur(0px)", duration: 0.38, ease: "power3.inOut" }, I - 0.1);
   ${inst
-    .map((f, i) =>
-      i === inst.indexOf(main)
-        ? `tl.to("#f${i}", { opacity: 1, scale: 1.22, duration: 0.5, ease: "power2.out" }, I + 0.15);
+		.map((f, i) =>
+			i === inst.indexOf(main)
+				? `tl.to("#f${i}", { opacity: 1, scale: 1.22, duration: 0.5, ease: "power2.out" }, I + 0.15);
   tl.to("#f${i}", { textShadow: "0 0 28px rgba(255,244,220,0.5)", duration: 0.5 }, I + 0.15);`
-        : `tl.to("#f${i}", { opacity: ${(f.op * 0.85).toFixed(2)}, duration: 0.5 }, I + 0.3);`,
-    )
-    .join("\n  ")}
+				: `tl.to("#f${i}", { opacity: ${(f.op * 0.85).toFixed(2)}, duration: 0.5 }, I + 0.3);`,
+		)
+		.join("\n  ")}
   // hold revealed ~1.2s, then the future blurs back except the main instance
   tl.to(".fld", { filter: "blur(${b.fieldBlur || 9}px)", duration: 0.6, ease: "power2.inOut" }, I + 1.5);
   tl.to("#f${inst.indexOf(main)}", { filter: "blur(0px)", duration: 0.01 }, I + 1.5);
   ${inst.map((f, i) => (i === inst.indexOf(main) ? "" : `tl.to("#f${i}", { opacity: 0, duration: 0.6 }, I + 1.6);`)).join("\n  ")}
   tl.to("#f${inst.indexOf(main)}", { opacity: 0, duration: 0.3, ease: "power2.in" }, ${(heroOut - 0.3).toFixed(3)});`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmFlaprail() {
-  // FLAPRAIL: stadium-departures chyron bar; body words flip in on split-flap
-  // tiles (2 seeded wrong-word flickers then the real word clacks on), exits
-  // flip to blank cascading left→right. Furniture: bar tag + ROW flip counter
-  // (+ optional odometer chip pinned to the first emphasis line).
-  const b = dna.body;
-  const barH = b.barH || 96;
-  const stagger = 0.025,
-    exDu = 0.075;
-  const lineData = LINES.map((L) => ({
-    id: "fl" + L.id,
-    in: +L.in.toFixed(3),
-    out: +L.out.toFixed(3),
-    words: L.words.map((w) => [w.display.toUpperCase(), +w.start.toFixed(3), w.minor ? 1 : 0]),
-  }));
-  const chy = b.chyron || {};
-  const ctrVals = lineData.map((_, i) => String(i + 1).padStart(2, "0"));
-  // odometer chip docks above the bar while the FIRST emphasis line reads
-  const chipL = b.chip ? LINES.find((L) => L.words.some((w) => w.minor)) : null;
-  const chipParts = chipL ? String(b.chip.value).split(".") : [];
-  const css = `
+	// FLAPRAIL: stadium-departures chyron bar; body words flip in on split-flap
+	// tiles (2 seeded wrong-word flickers then the real word clacks on), exits
+	// flip to blank cascading left→right. Furniture: bar tag + ROW flip counter
+	// (+ optional odometer chip pinned to the first emphasis line).
+	const b = dna.body;
+	const barH = b.barH || 96;
+	const stagger = 0.025,
+		exDu = 0.075;
+	const lineData = LINES.map((L) => ({
+		id: "fl" + L.id,
+		in: +L.in.toFixed(3),
+		out: +L.out.toFixed(3),
+		words: L.words.map((w) => [
+			w.display.toUpperCase(),
+			+w.start.toFixed(3),
+			w.minor ? 1 : 0,
+		]),
+	}));
+	const chy = b.chyron || {};
+	const ctrVals = lineData.map((_, i) => String(i + 1).padStart(2, "0"));
+	// odometer chip docks above the bar while the FIRST emphasis line reads
+	const chipL = b.chip ? LINES.find((L) => L.words.some((w) => w.minor)) : null;
+	const chipParts = chipL ? String(b.chip.value).split(".") : [];
+	const css = `
   #flwrap { position:absolute; inset:0; }
   #flbar { position:absolute; left:0; right:0; top:${H - barH}px; height:${barH}px;
            background: linear-gradient(180deg, rgba(26,29,35,0.93) 0%, rgba(15,17,21,0.96) 100%);
@@ -1921,8 +2031,8 @@ function paradigmFlaprail() {
   .fflap .wv { position:absolute; left:0; right:0; top:8px; text-align:center; display:none;
                color:${dna.palette.grey || "#B9BEC7"}; }
 ${
-  chipL
-    ? `  #flchip { position:absolute; left:${b.chip.x}px; top:${b.chip.y}px; perspective:300px; opacity:0; }
+	chipL
+		? `  #flchip { position:absolute; left:${b.chip.x}px; top:${b.chip.y}px; perspective:300px; opacity:0; }
   #chipflap { display:block; transform-origin:50% 0%; backface-visibility:hidden; white-space:nowrap;
               background: linear-gradient(180deg,#2B3038 0%,#22262D 50%,#1A1E24 100%);
               border-radius:4px; border:1px solid rgba(0,0,0,0.6); padding:5px 12px 3px;
@@ -1938,27 +2048,27 @@ ${
   #bdot { display:inline-block; width:9px; height:9px; border-radius:50%;
           background:${dna.palette.accent}; margin-left:9px; vertical-align:14px; opacity:0.15;
           box-shadow: 0 0 7px ${dna.palette.accent}cc; }`
-    : ""
+		: ""
 }`;
-  const html = `      <div id="flwrap">
+	const html = `      <div id="flwrap">
         <div id="flbar">
           <div id="fltag">${esc(chy.tag || "DEPARTURES")}</div>
           <div id="flctr"><span class="clab">${esc(chy.counter || "ROW")}</span><span id="ctrbox"><span id="ctrflap">${ctrVals
-            .map((v, i) => `<span class="nv" id="n${i}">${v}</span>`)
-            .join("")}</span></span></div>
+						.map((v, i) => `<span class="nv" id="n${i}">${v}</span>`)
+						.join("")}</span></span></div>
         </div>
 ${lineData.map((L) => `        <div class="flline" id="${L.id}"></div>`).join("\n")}
 ${
-  chipL
-    ? `        <div id="flchip"><div id="chipflap"><span class="clab">${esc(b.chip.label)}</span>${chipParts
-        .map((_, i) => `<span class="dcol" id="dc${i}"></span>`)
-        .join(
-          `<span class="cfix">.</span>`,
-        )}<span class="cfix" id="cunit">${esc(b.chip.unit || "")}</span><span id="bdot"></span></div></div>`
-    : ""
+	chipL
+		? `        <div id="flchip"><div id="chipflap"><span class="clab">${esc(b.chip.label)}</span>${chipParts
+				.map((_, i) => `<span class="dcol" id="dc${i}"></span>`)
+				.join(
+					`<span class="cfix">.</span>`,
+				)}<span class="cfix" id="cunit">${esc(b.chip.unit || "")}</span><span id="bdot"></span></div></div>`
+		: ""
 }
       </div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: FLAPRAIL (split-flap word tiles on a chyron bar) ----
   const HOT = ${J(dna.palette.hot || dna.palette.accent)}, BONE = ${J(dna.palette.body)};
   const frnd2 = mulberry32(${b.seed || 808});
@@ -2031,8 +2141,8 @@ ${
     tl.to("#ctrflap", { scaleY: 1, duration: 0.18, ease: "elastic.out(1, 0.45)" }, t + 0.09);
   });
 ${
-  chipL
-    ? `  // odometer chip (emphasis furniture): clacks on beside the emphasis line,
+	chipL
+		? `  // odometer chip (emphasis furniture): clacks on beside the emphasis line,
   // digits roll on true reels, status dot blinks through the hold (dead-air life)
   const CIN = ${(chipL.words[chipL.words.length - 1].start + 0.06).toFixed(3)};
   const COUT = ${(+chipL.out).toFixed(3)};
@@ -2059,70 +2169,77 @@ ${
   }
   tl.to("#chipflap", { rotationX: 88, duration: 0.09, ease: "power2.in" }, COUT);
   tl.set("#flchip", { display: "none" }, COUT + 0.10);`
-    : ""
+		: ""
 }
 ${
-  !HEROLESS && b.yield
-    ? `  // rail yields while the apex board locks
+	!HEROLESS && b.yield
+		? `  // rail yields while the apex board locks
   tl.to("#flwrap", { opacity: ${b.yield.dim}, duration: 0.18, ease: "power1.in" }, ${(heroIn - (b.yield.pre || 0.07)).toFixed(3)});
   tl.to("#flwrap", { opacity: 1, duration: 0.22, ease: "power1.out" }, ${(heroIn + (b.yield.post || 0.47)).toFixed(3)});`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmLedboard() {
-  // LEDBOARD: docked transit departure-strip; body lines arrive by vertical
-  // SCROLL-SNAP paging (steps(6)) inside the board window; each word lights via
-  // a small L→R LED column wipe (low-amplitude apex motif) + 1-frame arrival
-  // flicker; emphasis words get the LED-refresh double-blink. Furniture: green
-  // platform tag, ticking clock seconds, status swap gag (⚠ DELAYED → ● ON TIME
-  // shortly after the apex resolves), idle LED shimmer in dead air.
-  const b = dna.body;
-  const bd = b.board || {};
-  const bw = bd.width || 1000,
-    bh = bd.h || 116;
-  const bleft = bd.left ?? Math.round((W - bw) / 2);
-  const btop = H - (bd.bottom ?? 30) - bh;
-  const hdrH = 30,
-    winH = bh - hdrH - 2,
-    lineH = winH - 2;
-  const hd = b.header || {};
-  const A = dna.palette.accent;
-  const GRN = dna.palette.green || "#36e57a";
-  const WRN = dna.palette.warn || "#ff9e3d";
-  const lineData = LINES.map((L) => ({
-    id: "t" + L.id,
-    words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-  }));
-  // page-in ~0.2s before the first word lights (the paging IS the anticipation);
-  // each line pages out exactly as the next pages in (snap swap), last one early
-  // enough that the 0.20s page-out completes before the clip ends
-  const pins = LINES.map((L, i) =>
-    i === 0
-      ? Math.max(0.02, +(L.words[0].start - 0.22).toFixed(3))
-      : +(L.words[0].start - 0.22).toFixed(3),
-  );
-  lineData.forEach((L, i) => {
-    L.pin = pins[i];
-    L.pout = i + 1 < pins.length ? pins[i + 1] : +Math.min(LINES[i].out, DUR - 0.22).toFixed(3);
-  });
-  // idle LED shimmer: any dead air ≥1.2s between word lights gets refresh blips
-  const starts = LINES.flatMap((L) => L.words.map((w) => w.start));
-  const shimmers = [];
-  for (let i = 0; i + 1 < starts.length; i++)
-    if (starts[i + 1] - starts[i] > 1.2)
-      for (let t = starts[i] + 0.43; t < starts[i + 1] - 0.55; t += 0.6)
-        shimmers.push(+t.toFixed(3));
-  // status gag: ⚠ DELAYED blinks while we wait, pages to ● ON TIME after the apex
-  const swapT = +Math.min(heroIn + 0.69, DUR - 1.2).toFixed(3);
-  const statBlinks = [swapT - 2.55, swapT - 1.75, swapT - 1.15]
-    .filter((t) => t > 0.25)
-    .map((t) => +t.toFixed(3));
-  // clock seconds reel: one stacked digit per elapsed second
-  const nDig = Math.floor(DUR - 0.02) + 1;
-  const lateT = +(LASTWORD.start + 0.19).toFixed(3); // one late LED refresh on the final word
-  const css = `
+	// LEDBOARD: docked transit departure-strip; body lines arrive by vertical
+	// SCROLL-SNAP paging (steps(6)) inside the board window; each word lights via
+	// a small L→R LED column wipe (low-amplitude apex motif) + 1-frame arrival
+	// flicker; emphasis words get the LED-refresh double-blink. Furniture: green
+	// platform tag, ticking clock seconds, status swap gag (⚠ DELAYED → ● ON TIME
+	// shortly after the apex resolves), idle LED shimmer in dead air.
+	const b = dna.body;
+	const bd = b.board || {};
+	const bw = bd.width || 1000,
+		bh = bd.h || 116;
+	const bleft = bd.left ?? Math.round((W - bw) / 2);
+	const btop = H - (bd.bottom ?? 30) - bh;
+	const hdrH = 30,
+		winH = bh - hdrH - 2,
+		lineH = winH - 2;
+	const hd = b.header || {};
+	const A = dna.palette.accent;
+	const GRN = dna.palette.green || "#36e57a";
+	const WRN = dna.palette.warn || "#ff9e3d";
+	const lineData = LINES.map((L) => ({
+		id: "t" + L.id,
+		words: L.words.map((w) => [
+			w.display,
+			+w.start.toFixed(3),
+			w.minor ? 1 : 0,
+		]),
+	}));
+	// page-in ~0.2s before the first word lights (the paging IS the anticipation);
+	// each line pages out exactly as the next pages in (snap swap), last one early
+	// enough that the 0.20s page-out completes before the clip ends
+	const pins = LINES.map((L, i) =>
+		i === 0
+			? Math.max(0.02, +(L.words[0].start - 0.22).toFixed(3))
+			: +(L.words[0].start - 0.22).toFixed(3),
+	);
+	lineData.forEach((L, i) => {
+		L.pin = pins[i];
+		L.pout =
+			i + 1 < pins.length
+				? pins[i + 1]
+				: +Math.min(LINES[i].out, DUR - 0.22).toFixed(3);
+	});
+	// idle LED shimmer: any dead air ≥1.2s between word lights gets refresh blips
+	const starts = LINES.flatMap((L) => L.words.map((w) => w.start));
+	const shimmers = [];
+	for (let i = 0; i + 1 < starts.length; i++)
+		if (starts[i + 1] - starts[i] > 1.2)
+			for (let t = starts[i] + 0.43; t < starts[i + 1] - 0.55; t += 0.6)
+				shimmers.push(+t.toFixed(3));
+	// status gag: ⚠ DELAYED blinks while we wait, pages to ● ON TIME after the apex
+	const swapT = +Math.min(heroIn + 0.69, DUR - 1.2).toFixed(3);
+	const statBlinks = [swapT - 2.55, swapT - 1.75, swapT - 1.15]
+		.filter((t) => t > 0.25)
+		.map((t) => +t.toFixed(3));
+	// clock seconds reel: one stacked digit per elapsed second
+	const nDig = Math.floor(DUR - 0.02) + 1;
+	const lateT = +(LASTWORD.start + 0.19).toFixed(3); // one late LED refresh on the final word
+	const css = `
   #tboard { position:absolute; left:${bleft}px; top:${btop}px; width:${bw}px; height:${bh}px; border-radius:6px;
            background-color: rgba(8,8,11,0.90);
            background-image: radial-gradient(${A}0d 1px, rgba(0,0,0,0) 1.4px);
@@ -2150,7 +2267,7 @@ function paradigmLedboard() {
            color:${dna.palette.body}; white-space:nowrap;
            text-shadow: 0 0 9px ${A}73, 0 0 1px ${dna.palette.hot}e6; }
   .tline .w { display:inline-block; margin-right:0.35em; }`;
-  const html = `      <div id="tboard">
+	const html = `      <div id="tboard">
         <div id="thdr">
           <div id="tplt">${esc(hd.plt || "PLT 4")}</div>
           <div id="tstatwin"><div id="tstatstack">
@@ -2158,13 +2275,13 @@ function paradigmLedboard() {
             <span class="tstrow" id="tstrow2">${esc(hd.statusOk || "● ON TIME")}</span>
           </div></div>
           <div id="tclock">${esc(hd.clockPrefix || "19:42:0")}<span class="cw"><span id="tdigcol">${Array.from(
-            { length: nDig },
-            (_, k) => `<span>${k}</span>`,
-          ).join("")}</span></span></div>
+						{ length: nDig },
+						(_, k) => `<span>${k}</span>`,
+					).join("")}</span></span></div>
         </div>
         <div id="twin"></div>
       </div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: LEDBOARD (scroll-snap paging + per-word LED column wipes) ----
   const twin = document.getElementById("twin");
   const TRAIL = ${J(lineData)};
@@ -2193,17 +2310,17 @@ function paradigmLedboard() {
     });
   });
 ${
-  lateT + 0.05 < DUR - 0.25
-    ? `  // the final word gets one late LED refresh blink (kept inside the clip)
+	lateT + 0.05 < DUR - 0.25
+		? `  // the final word gets one late LED refresh blink (kept inside the clip)
   tl.set(lastW, { opacity: 0.22 }, ${lateT.toFixed(3)});
   tl.set(lastW, { opacity: 1 },    ${(lateT + 0.042).toFixed(3)});`
-    : ""
+		: ""
 }
 
   // ===== furniture =====
 ${
-  !HEROLESS
-    ? `  // status blinks while we wait, then the gag: pages to the OK row
+	!HEROLESS
+		? `  // status blinks while we wait, then the gag: pages to the OK row
   ${J(statBlinks)}.forEach((t) => {
     tl.set("#tstrow1", { opacity: 0.35 }, t);
     tl.set("#tstrow1", { opacity: 1 },    t + 0.042);
@@ -2211,7 +2328,7 @@ ${
   tl.to("#tstatstack", { y: -24, duration: 0.16, ease: "steps(4)" }, ${swapT.toFixed(3)});
   tl.set("#tstrow2", { opacity: 0.5 }, ${(swapT + 0.18).toFixed(3)});
   tl.set("#tstrow2", { opacity: 1 },   ${(swapT + 0.222).toFixed(3)});`
-    : ""
+		: ""
 }
 
   // clock seconds tick (stacked digit column, stepped shifts)
@@ -2223,61 +2340,65 @@ ${
     tl.set("#twin", { opacity: 1 },    t + 0.042);
   });
 ${
-  !HEROLESS && b.yield
-    ? `
+	!HEROLESS && b.yield
+		? `
   // ===== hierarchy: board yields while the apex lands =====
   tl.to("#tboard", { opacity: ${b.yield.dim}, duration: 0.18, ease: "power1.in" }, ${(heroIn - (b.yield.pre || 0.2)).toFixed(3)});
   tl.to("#tboard", { opacity: 1,   duration: 0.25, ease: "power1.out" }, ${(heroIn + (b.yield.post || 0.9)).toFixed(3)});`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmVhsrail() {
-  // VHSRAIL: camcorder-playback lower third. Every body word carries a PERMANENT
-  // 1px red+cyan misregistration fringe and arrives by tracking glitch (instant
-  // on + 2-frame y-shake + 1-frame band-slice shift of the word's bottom half);
-  // emphasis words get the PAUSE jitter (±1px y oscillation) + a white noise-band
-  // flicker. Exits are REWIND streaks left with a flat-white echo copy + scrub
-  // lines. Furniture: ▶ PLAY / ◀◀ REW top-left (REW gag in dead air and on the
-  // final rewind), ● REC top-right during the apex window, green timestamp
-  // bottom-right with a 1 Hz blinking colon, an idle tape-drift line in long
-  // silences, and the apex-coupled artifacts: 1-frame full white tear band +
-  // head-switching noise bar at REC FREEZE, scrub lines at the apex band on the
-  // hero's rewind exit.
-  const b = dna.body;
-  const p = dna.hero.params || {};
-  const X = theme.hero.exitAt ?? Math.min(heroOut, heroIn + (p.hold ?? 1.69)); // hero REWIND (shared with vhsosd)
-  const railTop = H - (b.bottomPx || 108);
-  const osd = b.osd || {};
-  const ts = osd.ts || ["JUN.11 2026 PM 7", "42"];
-  const A = dna.palette.accent,
-    GRN = dna.palette.green || dna.palette.accent,
-    RED = dna.palette.red || "#FF2E2E",
-    CYN = dna.palette.cyan || "#3FE8E8";
-  // line windows: `out` is the REWIND start — early into dead air (with the
-  // PLAY→REW gag), before the clip end for the last line
-  const lineData = LINES.map((L, i) => {
-    const lastEnd = L.words[L.words.length - 1].end;
-    const next = LINES[i + 1];
-    let out = +(L.out - 0.05).toFixed(3),
-      gag = 0;
-    if (next && next.in - lastEnd > 0.7) {
-      out = +(lastEnd + 0.53).toFixed(3);
-      gag = 1;
-    }
-    if (!next) out = +(DUR - 0.14).toFixed(3);
-    return {
-      id: "v" + L.id,
-      eid: "ve" + L.id,
-      in: +L.in.toFixed(3),
-      out,
-      gag,
-      words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-    };
-  });
-  const lastOut = lineData[lineData.length - 1].out;
-  const css = `
+	// VHSRAIL: camcorder-playback lower third. Every body word carries a PERMANENT
+	// 1px red+cyan misregistration fringe and arrives by tracking glitch (instant
+	// on + 2-frame y-shake + 1-frame band-slice shift of the word's bottom half);
+	// emphasis words get the PAUSE jitter (±1px y oscillation) + a white noise-band
+	// flicker. Exits are REWIND streaks left with a flat-white echo copy + scrub
+	// lines. Furniture: ▶ PLAY / ◀◀ REW top-left (REW gag in dead air and on the
+	// final rewind), ● REC top-right during the apex window, green timestamp
+	// bottom-right with a 1 Hz blinking colon, an idle tape-drift line in long
+	// silences, and the apex-coupled artifacts: 1-frame full white tear band +
+	// head-switching noise bar at REC FREEZE, scrub lines at the apex band on the
+	// hero's rewind exit.
+	const b = dna.body;
+	const p = dna.hero.params || {};
+	const X = theme.hero.exitAt ?? Math.min(heroOut, heroIn + (p.hold ?? 1.69)); // hero REWIND (shared with vhsosd)
+	const railTop = H - (b.bottomPx || 108);
+	const osd = b.osd || {};
+	const ts = osd.ts || ["JUN.11 2026 PM 7", "42"];
+	const A = dna.palette.accent,
+		GRN = dna.palette.green || dna.palette.accent,
+		RED = dna.palette.red || "#FF2E2E",
+		CYN = dna.palette.cyan || "#3FE8E8";
+	// line windows: `out` is the REWIND start — early into dead air (with the
+	// PLAY→REW gag), before the clip end for the last line
+	const lineData = LINES.map((L, i) => {
+		const lastEnd = L.words[L.words.length - 1].end;
+		const next = LINES[i + 1];
+		let out = +(L.out - 0.05).toFixed(3),
+			gag = 0;
+		if (next && next.in - lastEnd > 0.7) {
+			out = +(lastEnd + 0.53).toFixed(3);
+			gag = 1;
+		}
+		if (!next) out = +(DUR - 0.14).toFixed(3);
+		return {
+			id: "v" + L.id,
+			eid: "ve" + L.id,
+			in: +L.in.toFixed(3),
+			out,
+			gag,
+			words: L.words.map((w) => [
+				w.display,
+				+w.start.toFixed(3),
+				w.minor ? 1 : 0,
+			]),
+		};
+	});
+	const lastOut = lineData[lineData.length - 1].out;
+	const css = `
   /* ---- OSD furniture ---- */
   .osd { position:absolute; font-family:'${dna.fonts.tag}', monospace; font-size:28px; line-height:1;
          letter-spacing:2px; color:${A}; opacity:0;
@@ -2328,31 +2449,32 @@ function paradigmVhsrail() {
   #scrub3 { top:${HG.y - 28}px; } #scrub4 { top:${HG.y + 34}px; }
   #drift { position:absolute; left:0; top:${railTop + 48}px; width:100%; height:2px; opacity:0;
            background: rgba(255,255,255,0.45); }`;
-  const html =
-    `      <div class="osd" id="osdplay">
+	const html =
+		`      <div class="osd" id="osdplay">
         <div id="pmode"><div class="tri"></div><span>PLAY</span></div>
         <div id="rmode"><div class="rtri"></div><div class="rtri"></div><span>REW</span></div>
       </div>
       <div class="osd" id="rec"><div id="rdot"></div><span>REC</span></div>
       <div class="osd" id="osdts">${esc(ts[0])}<span id="col">:</span>${esc(ts[1])}</div>
 ` +
-    lineData
-      .map(
-        (L) => `      <div class="vln" id="${L.id}"></div><div class="vlnE" id="${L.eid}"></div>`,
-      )
-      .join("\n") +
-    `
+		lineData
+			.map(
+				(L) =>
+					`      <div class="vln" id="${L.id}"></div><div class="vlnE" id="${L.eid}"></div>`,
+			)
+			.join("\n") +
+		`
       <div id="drift"></div>
       <div class="scrub" id="scrub1"></div><div class="scrub" id="scrub2"></div>
       <div class="scrub" id="scrub3"></div><div class="scrub" id="scrub4"></div>
       <div id="tear"></div>
       <div id="hsbar"></div>`;
-  // PLAY → REW gags: each dead-air rewind + the final rewind (no restore)
-  const gags = lineData
-    .filter((L) => L.gag)
-    .map((L) => [+(L.out - 0.01).toFixed(3), +(L.out + 0.35).toFixed(3)]);
-  gags.push([+(lastOut - 0.01).toFixed(3), null]);
-  const js = `
+	// PLAY → REW gags: each dead-air rewind + the final rewind (no restore)
+	const gags = lineData
+		.filter((L) => L.gag)
+		.map((L) => [+(L.out - 0.01).toFixed(3), +(L.out + 0.35).toFixed(3)]);
+	gags.push([+(lastOut - 0.01).toFixed(3), null]);
+	const js = `
   // ---- body paradigm: VHSRAIL (tracking-glitch words, REWIND exits, OSD furniture) ----
 ${!HEROLESS ? `  const I = ${heroIn.toFixed(3)}, X = ${X.toFixed(3)};` : ""}
 
@@ -2415,8 +2537,8 @@ ${!HEROLESS ? `  const I = ${heroIn.toFixed(3)}, X = ${X.toFixed(3)};` : ""}
     });
   });
 ${
-  !HEROLESS && b.yield
-    ? `
+	!HEROLESS && b.yield
+		? `
   // rail yields while the apex lands (dim clamped ≥ line-in; restore only with runway)
   VRAIL.forEach((L) => {
     if (L.in < I + 0.9 && L.out > I - 0.3) {
@@ -2428,7 +2550,7 @@ ${
       }
     }
   });`
-    : ""
+		: ""
 }
 
   // idle tape noise in dead air
@@ -2439,8 +2561,8 @@ ${
   });
 
 ${
-  !HEROLESS
-    ? `  // ===== REC FREEZE artifacts (apex-coupled, in FRONT of the subject) =====
+	!HEROLESS
+		? `  // ===== REC FREEZE artifacts (apex-coupled, in FRONT of the subject) =====
   // 1-frame full white tear band
   tl.set("#tear", { opacity: 0.95 }, I);
   tl.set("#tear", { opacity: 0 }, I + F);
@@ -2460,41 +2582,48 @@ ${
 
   // apex REWIND exit: 2 scrub lines at the apex band
   [0.6, 0.25, 0.5, 0].forEach((o, k) => tl.set(["#scrub3","#scrub4"], { opacity: o }, X + k * F));`
-    : ""
+		: ""
 }
   // head-switch reprise on the final rewind
   [[0, 0.85, 40], [0.04, 0.6, 190], [0.08, 0.8, 90]].forEach(([dt, o, px]) => {
     tl.set("#hsbar", { opacity: o, backgroundPositionX: px + "px" }, ${lastOut.toFixed(3)} + dt);
   });
   tl.set("#hsbar", { opacity: 0 }, ${Math.min(lastOut + 0.12, DUR - 0.02).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmHudrail() {
-  // HUDRAIL: arcade-cabinet HUD. The whole frame plays through a CRT (scanline
-  // + vignette overlays); body words coin-pop onto a docked HUD bar (2px accent
-  // border, 1UP / CREDIT tags) with steps(2) pixel pops + a 1-frame white
-  // coin-blip tick over the word; emphasis words run a 3-frame palette swap
-  // (body -> accent -> magenta -> body). Lines exit by checkerboard dissolve
-  // (words vanish in 2 alternating 2-frame passes). The 1UP tag blinks on the
-  // classic attract cadence all clip; the HUD yields while the boss lands.
-  const b = dna.body;
-  const bar = b.bar || {};
-  const barH = bar.h || 70,
-    inset = bar.inset || 24,
-    barBot = bar.bottom || 50;
-  const barTop = H - barBot - barH;
-  const tags = b.tags || {};
-  const A = dna.palette.accent,
-    MG = dna.palette.magenta || "#FF2E88";
-  const lineData = LINES.map((L, i) => ({
-    id: "h" + L.id,
-    in: +L.in.toFixed(3),
-    // checkerboard exit start: just before the next line's first pop
-    xo: i + 1 < LINES.length ? +(L.out - 0.04).toFixed(3) : +Math.min(L.out, DUR - 0.11).toFixed(3),
-    words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-  }));
-  const css = `
+	// HUDRAIL: arcade-cabinet HUD. The whole frame plays through a CRT (scanline
+	// + vignette overlays); body words coin-pop onto a docked HUD bar (2px accent
+	// border, 1UP / CREDIT tags) with steps(2) pixel pops + a 1-frame white
+	// coin-blip tick over the word; emphasis words run a 3-frame palette swap
+	// (body -> accent -> magenta -> body). Lines exit by checkerboard dissolve
+	// (words vanish in 2 alternating 2-frame passes). The 1UP tag blinks on the
+	// classic attract cadence all clip; the HUD yields while the boss lands.
+	const b = dna.body;
+	const bar = b.bar || {};
+	const barH = bar.h || 70,
+		inset = bar.inset || 24,
+		barBot = bar.bottom || 50;
+	const barTop = H - barBot - barH;
+	const tags = b.tags || {};
+	const A = dna.palette.accent,
+		MG = dna.palette.magenta || "#FF2E88";
+	const lineData = LINES.map((L, i) => ({
+		id: "h" + L.id,
+		in: +L.in.toFixed(3),
+		// checkerboard exit start: just before the next line's first pop
+		xo:
+			i + 1 < LINES.length
+				? +(L.out - 0.04).toFixed(3)
+				: +Math.min(L.out, DUR - 0.11).toFixed(3),
+		words: L.words.map((w) => [
+			w.display,
+			+w.start.toFixed(3),
+			w.minor ? 1 : 0,
+		]),
+	}));
+	const css = `
   #hud   { position:absolute; left:${inset}px; top:${barTop}px; width:${W - 2 * inset}px; height:${barH}px;
            opacity:0; background:rgba(3,8,18,0.84); border:2px solid ${A};
            box-shadow:0 0 16px ${A}59, inset 0 0 24px ${A}14; z-index:3; }
@@ -2515,14 +2644,14 @@ function paradigmHudrail() {
            background:radial-gradient(120% 95% at 50% 46%, rgba(0,0,0,0) 58%, rgba(0,0,0,0.34) 100%); }
   #crtscan { position:absolute; inset:0; opacity:0; z-index:21; pointer-events:none;
            background:repeating-linear-gradient(180deg, rgba(0,0,0,0.9) 0px, rgba(0,0,0,0.9) 2px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 5px); }`;
-  const html = `      <div id="hud">
+	const html = `      <div id="hud">
         <div id="tagL">${esc(tags.left || "1UP")}</div>
         <div id="tagR">${esc(tags.right || "CREDIT 01")}</div>
 ${lineData.map((L) => `        <div class="hln" id="${L.id}"></div>`).join("\n")}
       </div>
       <div id="crtvig"></div>
       <div id="crtscan"></div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: HUDRAIL (coin-pop words on an arcade HUD bar) ----
   // world overlays: scanlines + slight vignette
   tl.set("#crtscan", { opacity: ${b.scan ?? 0.06} }, 0.03);
@@ -2566,120 +2695,130 @@ ${lineData.map((L) => `        <div class="hln" id="${L.id}"></div>`).join("\n")
     tl.set(line, { opacity: 0, display: "none" }, Math.min(L.xo + 0.15, ${(DUR - 0.02).toFixed(2)}));
   });
 ${
-  !HEROLESS && b.yield
-    ? `  // HUD yields while the boss lands (restore only with runway)
+	!HEROLESS && b.yield
+		? `  // HUD yields while the boss lands (restore only with runway)
   tl.to("#hud", { opacity: ${b.yield.dim}, duration: 0.15, ease: "power1.in" }, ${(heroIn - (b.yield.pre || 0.2)).toFixed(3)});
 ${
-  heroIn + (b.yield.post || 0.9) + 0.3 < DUR - 0.1
-    ? `  tl.to("#hud", { opacity: 1, duration: 0.25, ease: "power1.out" }, ${(heroIn + (b.yield.post || 0.9)).toFixed(3)});`
-    : ""
+	heroIn + (b.yield.post || 0.9) + 0.3 < DUR - 0.1
+		? `  tl.to("#hud", { opacity: 1, duration: 0.25, ease: "power1.out" }, ${(heroIn + (b.yield.post || 0.9)).toFixed(3)});`
+		: ""
 }`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmCarbonstrip() {
-  // CARBONSTRIP: cold-war case-file transcript strip docked on the clearer
-  // side (manila gradient, punch holes, faint red watermark, typed case
-  // header). Carbon type HAMMERS in per word — per-char sets 30ms apart,
-  // scale 1.35→1 in one frame (the stamp motif at low amplitude) — every
-  // strike kicks the strip 1px (y-channel locked while the strip itself is
-  // tweened); seeded ±1.2px baselines + seeded ribbon-ink weight. Emphasis
-  // words get a red ink ellipse drawn around them. Lines live on up to
-  // body.rows fixed slots; PAGES (broken at full rows, dead-air gaps > 0.7s,
-  // and after the hero hand-off line — it is filed away while the stamp owns
-  // the frame) exit by X-row over-strike (3 chunks per line, lines 0.16s
-  // apart) then a carriage yank-down feed; the final page is pulled with the
-  // whole strip at clip end. The strip top-shadow breathes during the
-  // stamp's dead-still hold; the strip yields (body.yield) while it lands.
-  const b = dna.body;
-  const p = dna.hero.params || {};
-  const C = heroIn + (p.crush ?? 0.074); // stamp contact (shared with rubberstamp)
-  const SW = (b.strip && b.strip.w) || 764,
-    SH = (b.strip && b.strip.h) || 132;
-  const SX = (b.strip && b.strip.x) ?? (CLEARER === "left" ? 48 : W - 48 - SW);
-  const ST = H - ((b.strip && b.strip.bottomPx) ?? 4) - SH;
-  const ROWS = b.rows || [36, 82];
-  const FY = +(DUR - 0.1).toFixed(3); // final carriage yank (the file is pulled)
-  const HDR = b.header || "TRANSCRIPT OF RECORDING";
-  const hdrW = Math.round(HDR.length * 11.4);
-  const hdrSteps = Math.max(8, Math.round(HDR.length * 0.58));
-  const rgb = (h) =>
-    [h.slice(1, 3), h.slice(3, 5), h.slice(5, 7)].map((x) => parseInt(x, 16)).join(",");
-  const ACC = dna.palette.accent || "#b3271e";
-  // ---- pages: up to ROWS.length lines per carriage feed ----
-  const pages = [];
-  let cur = [];
-  LINES.forEach((L, i) => {
-    cur.push(L);
-    const next = LINES[i + 1];
-    const heroLine = heroIn >= L.in - 0.01 && heroIn < L.out;
-    const gap = next ? next.words[0].start - L.words[L.words.length - 1].end : 0;
-    if (!next || cur.length === ROWS.length || heroLine || gap > 0.7) {
-      pages.push(cur);
-      cur = [];
-    }
-  });
-  // ---- exit schedule: X-strike chunks (0.05s apart, lines 0.16s apart) →
-  // yank → hide → carriage return. Roomy cadence in dead air, compressed
-  // when the next page is close (both cadences are the demo's). The whole
-  // exit always completes before the next page's first hammer strike.
-  const YLOCK = [[0, 0.215]]; // strip-y tween windows: no kicks inside
-  const pageData = pages.map((pg, pi) => {
-    const lines = pg.map((L, k) => ({
-      id: "d" + L.id,
-      top: ROWS[k],
-      n: L.words.reduce((a, w) => a + w.display.length, 0) + L.words.length - 1,
-      words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-    }));
-    if (pi === pages.length - 1) {
-      YLOCK.push([+(FY - 0.01).toFixed(3), +(DUR + 0.02).toFixed(3)]);
-      return { lines, xs: null, yank: null, limit: FY };
-    }
-    const lastW = pg[pg.length - 1].words;
-    const lastEnd = lastW[lastW.length - 1].end;
-    const nextIn = +(pages[pi + 1][0].words[0].start - 0.02).toFixed(3);
-    const n = pg.length;
-    const roomySpan = 0.16 * (n - 1) + 0.55,
-      tightSpan = 0.16 * (n - 1) + 0.3;
-    let xt0 = lastEnd + 0.33,
-      roomy = true;
-    if (xt0 + roomySpan > nextIn) {
-      xt0 = Math.max(lastEnd + 0.18, nextIn - roomySpan);
-      if (xt0 + roomySpan > nextIn + 0.001) {
-        roomy = false;
-        xt0 = Math.max(lastEnd + 0.15, nextIn - tightSpan);
-      }
-    }
-    xt0 = +xt0.toFixed(3);
-    const lastChunkEnd = xt0 + 0.16 * (n - 1) + 0.1;
-    const yankT = +(lastChunkEnd + (roomy ? 0.14 : 0.07)).toFixed(3);
-    const yankDur = roomy ? 0.1 : 0.07;
-    const hideT = +(yankT + (roomy ? 0.11 : 0.07)).toFixed(3);
-    const returnT = +(yankT + (roomy ? 0.13 : 0.075)).toFixed(3);
-    const returnDur = roomy ? 0.18 : 0.055;
-    const fits = xt0 + (roomy ? roomySpan : tightSpan) <= nextIn + 0.02;
-    YLOCK.push([+(yankT - 0.01).toFixed(3), +(returnT + returnDur).toFixed(3)]);
-    return {
-      lines,
-      xs: fits ? xt0 : null,
-      yank: [yankT, yankDur, hideT, returnT, returnDur],
-      limit: hideT,
-    };
-  });
-  // red-circle draw durations clamp inside the word's page life
-  pageData.forEach((pg) =>
-    pg.lines.forEach((ln) =>
-      ln.words.forEach((wd) => {
-        if (wd[2]) {
-          const circT = wd[1] + wd[0].length * 0.03 + 0.02;
-          wd.push(+Math.min(0.25, Math.max(0.14, pg.limit - circT - 0.02)).toFixed(3));
-        }
-      }),
-    ),
-  );
-  const css = `
+	// CARBONSTRIP: cold-war case-file transcript strip docked on the clearer
+	// side (manila gradient, punch holes, faint red watermark, typed case
+	// header). Carbon type HAMMERS in per word — per-char sets 30ms apart,
+	// scale 1.35→1 in one frame (the stamp motif at low amplitude) — every
+	// strike kicks the strip 1px (y-channel locked while the strip itself is
+	// tweened); seeded ±1.2px baselines + seeded ribbon-ink weight. Emphasis
+	// words get a red ink ellipse drawn around them. Lines live on up to
+	// body.rows fixed slots; PAGES (broken at full rows, dead-air gaps > 0.7s,
+	// and after the hero hand-off line — it is filed away while the stamp owns
+	// the frame) exit by X-row over-strike (3 chunks per line, lines 0.16s
+	// apart) then a carriage yank-down feed; the final page is pulled with the
+	// whole strip at clip end. The strip top-shadow breathes during the
+	// stamp's dead-still hold; the strip yields (body.yield) while it lands.
+	const b = dna.body;
+	const p = dna.hero.params || {};
+	const C = heroIn + (p.crush ?? 0.074); // stamp contact (shared with rubberstamp)
+	const SW = (b.strip && b.strip.w) || 764,
+		SH = (b.strip && b.strip.h) || 132;
+	const SX = (b.strip && b.strip.x) ?? (CLEARER === "left" ? 48 : W - 48 - SW);
+	const ST = H - ((b.strip && b.strip.bottomPx) ?? 4) - SH;
+	const ROWS = b.rows || [36, 82];
+	const FY = +(DUR - 0.1).toFixed(3); // final carriage yank (the file is pulled)
+	const HDR = b.header || "TRANSCRIPT OF RECORDING";
+	const hdrW = Math.round(HDR.length * 11.4);
+	const hdrSteps = Math.max(8, Math.round(HDR.length * 0.58));
+	const rgb = (h) =>
+		[h.slice(1, 3), h.slice(3, 5), h.slice(5, 7)]
+			.map((x) => parseInt(x, 16))
+			.join(",");
+	const ACC = dna.palette.accent || "#b3271e";
+	// ---- pages: up to ROWS.length lines per carriage feed ----
+	const pages = [];
+	let cur = [];
+	LINES.forEach((L, i) => {
+		cur.push(L);
+		const next = LINES[i + 1];
+		const heroLine = heroIn >= L.in - 0.01 && heroIn < L.out;
+		const gap = next
+			? next.words[0].start - L.words[L.words.length - 1].end
+			: 0;
+		if (!next || cur.length === ROWS.length || heroLine || gap > 0.7) {
+			pages.push(cur);
+			cur = [];
+		}
+	});
+	// ---- exit schedule: X-strike chunks (0.05s apart, lines 0.16s apart) →
+	// yank → hide → carriage return. Roomy cadence in dead air, compressed
+	// when the next page is close (both cadences are the demo's). The whole
+	// exit always completes before the next page's first hammer strike.
+	const YLOCK = [[0, 0.215]]; // strip-y tween windows: no kicks inside
+	const pageData = pages.map((pg, pi) => {
+		const lines = pg.map((L, k) => ({
+			id: "d" + L.id,
+			top: ROWS[k],
+			n: L.words.reduce((a, w) => a + w.display.length, 0) + L.words.length - 1,
+			words: L.words.map((w) => [
+				w.display,
+				+w.start.toFixed(3),
+				w.minor ? 1 : 0,
+			]),
+		}));
+		if (pi === pages.length - 1) {
+			YLOCK.push([+(FY - 0.01).toFixed(3), +(DUR + 0.02).toFixed(3)]);
+			return { lines, xs: null, yank: null, limit: FY };
+		}
+		const lastW = pg[pg.length - 1].words;
+		const lastEnd = lastW[lastW.length - 1].end;
+		const nextIn = +(pages[pi + 1][0].words[0].start - 0.02).toFixed(3);
+		const n = pg.length;
+		const roomySpan = 0.16 * (n - 1) + 0.55,
+			tightSpan = 0.16 * (n - 1) + 0.3;
+		let xt0 = lastEnd + 0.33,
+			roomy = true;
+		if (xt0 + roomySpan > nextIn) {
+			xt0 = Math.max(lastEnd + 0.18, nextIn - roomySpan);
+			if (xt0 + roomySpan > nextIn + 0.001) {
+				roomy = false;
+				xt0 = Math.max(lastEnd + 0.15, nextIn - tightSpan);
+			}
+		}
+		xt0 = +xt0.toFixed(3);
+		const lastChunkEnd = xt0 + 0.16 * (n - 1) + 0.1;
+		const yankT = +(lastChunkEnd + (roomy ? 0.14 : 0.07)).toFixed(3);
+		const yankDur = roomy ? 0.1 : 0.07;
+		const hideT = +(yankT + (roomy ? 0.11 : 0.07)).toFixed(3);
+		const returnT = +(yankT + (roomy ? 0.13 : 0.075)).toFixed(3);
+		const returnDur = roomy ? 0.18 : 0.055;
+		const fits = xt0 + (roomy ? roomySpan : tightSpan) <= nextIn + 0.02;
+		YLOCK.push([+(yankT - 0.01).toFixed(3), +(returnT + returnDur).toFixed(3)]);
+		return {
+			lines,
+			xs: fits ? xt0 : null,
+			yank: [yankT, yankDur, hideT, returnT, returnDur],
+			limit: hideT,
+		};
+	});
+	// red-circle draw durations clamp inside the word's page life
+	pageData.forEach((pg) =>
+		pg.lines.forEach((ln) =>
+			ln.words.forEach((wd) => {
+				if (wd[2]) {
+					const circT = wd[1] + wd[0].length * 0.03 + 0.02;
+					wd.push(
+						+Math.min(0.25, Math.max(0.14, pg.limit - circT - 0.02)).toFixed(3),
+					);
+				}
+			}),
+		),
+	);
+	const css = `
   #strip { position:absolute; left:${SX}px; top:${ST}px; width:${SW}px; height:${SH}px; opacity:0;
            background: linear-gradient(180deg, #e0cda6 0%, ${dna.palette.paper || "#d8c49a"} 42%, #ccb486 100%);
            border:1px solid rgba(106,86,48,0.9); border-radius:2px;
@@ -2704,22 +2843,25 @@ function paradigmCarbonstrip() {
   .circ { position:absolute; left:-13px; top:-9px; width:calc(100% + 26px);
           height:calc(100% + 18px); overflow:visible; pointer-events:none; }
   .circ ellipse { fill:none; stroke:${ACC}; stroke-width:3.6; stroke-linecap:round; }`;
-  const html = `      <div id="strip">
+	const html = `      <div id="strip">
         <div id="shade"></div>
         <div class="hole" style="top:24px"></div>
         <div class="hole" style="top:${SH - 40}px"></div>
         <div id="wm">${esc(b.watermark || "CONFIDENTIAL")}</div>
         <div id="hdrwrap"><div id="hdr">${esc(HDR)}</div></div>
 ${pageData
-  .flatMap((pg) => pg.lines)
-  .map((ln) => `        <div class="ln" id="${ln.id}" style="top:${ln.top}px"></div>`)
-  .join("\n")}
+	.flatMap((pg) => pg.lines)
+	.map(
+		(ln) =>
+			`        <div class="ln" id="${ln.id}" style="top:${ln.top}px"></div>`,
+	)
+	.join("\n")}
       </div>`;
-  const shadeStart = +(C + 0.12).toFixed(3);
-  const shadeDur = Math.min(1.5, FY - shadeStart - 0.05);
-  const dimT = +(heroIn - ((b.yield && b.yield.pre) || 0.02)).toFixed(3);
-  const resT = +(heroIn + ((b.yield && b.yield.post) || 0.41)).toFixed(3);
-  const js = `
+	const shadeStart = +(C + 0.12).toFixed(3);
+	const shadeDur = Math.min(1.5, FY - shadeStart - 0.05);
+	const dimT = +(heroIn - ((b.yield && b.yield.pre) || 0.02)).toFixed(3);
+	const resT = +(heroIn + ((b.yield && b.yield.post) || 0.41)).toFixed(3);
+	const js = `
   // ---- body paradigm: CARBONSTRIP (typewriter hammer in / X-strike + carriage-feed out) ----
   const strip = document.getElementById("strip");
   const krnd = mulberry32(${b.seed || 180618});
@@ -2806,85 +2948,86 @@ ${pageData
     }
   });
 ${
-  !HEROLESS && b.yield
-    ? `
+	!HEROLESS && b.yield
+		? `
   // ===== apex etiquette: the strip yields while the stamp lands =====
   tl.to(strip, { opacity: ${b.yield.dim}, duration: 0.18, ease: "power1.in" }, ${dimT});
 ${resT + 0.3 < FY ? `  tl.to(strip, { opacity: 1, duration: 0.25, ease: "power1.out" }, ${resT});` : ""}`
-    : ""
+		: ""
 }
 ${
-  !HEROLESS && shadeDur > 0.4
-    ? `
+	!HEROLESS && shadeDur > 0.4
+		? `
   // strip top-shadow breathes during the stamp's dead-still hold
   tl.to("#shade", { keyframes: { opacity: [0.5, 0.72, 0.54, 0.7, 0.55, 0.66, 0.5] },
                     duration: ${shadeDur.toFixed(2)}, ease: "none" }, ${shadeStart});`
-    : ""
+		: ""
 }
 
   // ===== ending: the file is pulled — strip yanks down and is gone =====
   tl.to(strip, { y: 34, duration: 0.09, ease: "power3.in" }, ${FY});
   tl.to(strip, { opacity: 0, duration: 0.06 }, ${(FY + 0.02).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmLaserrail() {
-  // LASERRAIL: concert lower third — every word is IGNITED where two thin
-  // laser beams (accent from the top-left, magenta from the top-right) sweep
-  // to CONVERGE on its position 2 frames early; at convergence a flare pops
-  // and the word snaps on in laser color (the apex motif at low amplitude:
-  // crush → contact squash → elastic settle, brightness cool). Emphasis words
-  // strobe once (1 frame off / back on) and their beams linger. Exits: a
-  // sweeper beam crosses L→R and carries the words (streak x+44 + blur).
-  // Word centers are BAKED at compile time from the measured char-width table
-  // (assets/fonts/char-widths.json) so font-load timing can't skew beam aim
-  // (calibrated vs the t37 demo's browser-measured table: ≤3px/word).
-  const b = dna.body;
-  const fam = dna.fonts.body;
-  const m = famMetrics(fam) || { ascent: 0.8, descent: 0.2, widths: {} };
-  const lsEm = parseFloat(b.letterSpacing) || 0;
-  const gapEm = b.wordGapEm ?? 0.24;
-  const railBot = H - b.bottomPx;
-  const emPx = Math.round(b.fontPx * (b.minorScale || 1.325));
-  const A = dna.palette.accent;
-  const lineData = LINES.map((L, i) => {
-    const words = L.words.map((w) => ({
-      txt: b.textTransform === "uppercase" ? w.display.toUpperCase() : w.display,
-      st: +w.start.toFixed(3),
-      em: w.minor ? 1 : 0,
-    }));
-    // centered-line layout, baked in px (CSS model: inline-blocks on one
-    // baseline, margin 0 <gapEm>em, tracking after every char incl the last)
-    const pxs = words.map((w) => (w.em ? emPx : b.fontPx));
-    const ws = words.map((w, k) => wordPx(w.txt, fam, pxs[k], lsEm));
-    const total = ws.reduce((a, x, k) => a + x + 2 * gapEm * pxs[k], 0);
-    const maxPx = Math.max(...pxs);
-    const baseline = railBot - (maxPx * (1 - m.ascent + m.descent)) / 2;
-    let cur = W / 2 - total / 2;
-    const pos = words.map((w, k) => {
-      const cx = cur + gapEm * pxs[k] + ws[k] / 2;
-      cur += ws[k] + 2 * gapEm * pxs[k];
-      return [
-        Math.round(cx),
-        Math.round(baseline - (pxs[k] * (m.ascent - m.descent)) / 2),
-        Math.round(ws[k]),
-      ];
-    });
-    // sweep starts so the carried words clear before the next line's beams own
-    // the rail; last line keeps the demo's end-of-clip runway
-    const sweepT =
-      i + 1 < LINES.length
-        ? +(L.out - 0.14).toFixed(3)
-        : +Math.min(L.out - 0.14, DUR - 0.26).toFixed(3);
-    return {
-      id: "lr" + L.id,
-      in: +L.in.toFixed(3),
-      sweepT,
-      words: words.map((w) => [w.txt, w.st, w.em]),
-      pos,
-    };
-  });
-  const css = `
+	// LASERRAIL: concert lower third — every word is IGNITED where two thin
+	// laser beams (accent from the top-left, magenta from the top-right) sweep
+	// to CONVERGE on its position 2 frames early; at convergence a flare pops
+	// and the word snaps on in laser color (the apex motif at low amplitude:
+	// crush → contact squash → elastic settle, brightness cool). Emphasis words
+	// strobe once (1 frame off / back on) and their beams linger. Exits: a
+	// sweeper beam crosses L→R and carries the words (streak x+44 + blur).
+	// Word centers are BAKED at compile time from the measured char-width table
+	// (assets/fonts/char-widths.json) so font-load timing can't skew beam aim
+	// (calibrated vs the t37 demo's browser-measured table: ≤3px/word).
+	const b = dna.body;
+	const fam = dna.fonts.body;
+	const m = famMetrics(fam) || { ascent: 0.8, descent: 0.2, widths: {} };
+	const lsEm = parseFloat(b.letterSpacing) || 0;
+	const gapEm = b.wordGapEm ?? 0.24;
+	const railBot = H - b.bottomPx;
+	const emPx = Math.round(b.fontPx * (b.minorScale || 1.325));
+	const A = dna.palette.accent;
+	const lineData = LINES.map((L, i) => {
+		const words = L.words.map((w) => ({
+			txt:
+				b.textTransform === "uppercase" ? w.display.toUpperCase() : w.display,
+			st: +w.start.toFixed(3),
+			em: w.minor ? 1 : 0,
+		}));
+		// centered-line layout, baked in px (CSS model: inline-blocks on one
+		// baseline, margin 0 <gapEm>em, tracking after every char incl the last)
+		const pxs = words.map((w) => (w.em ? emPx : b.fontPx));
+		const ws = words.map((w, k) => wordPx(w.txt, fam, pxs[k], lsEm));
+		const total = ws.reduce((a, x, k) => a + x + 2 * gapEm * pxs[k], 0);
+		const maxPx = Math.max(...pxs);
+		const baseline = railBot - (maxPx * (1 - m.ascent + m.descent)) / 2;
+		let cur = W / 2 - total / 2;
+		const pos = words.map((w, k) => {
+			const cx = cur + gapEm * pxs[k] + ws[k] / 2;
+			cur += ws[k] + 2 * gapEm * pxs[k];
+			return [
+				Math.round(cx),
+				Math.round(baseline - (pxs[k] * (m.ascent - m.descent)) / 2),
+				Math.round(ws[k]),
+			];
+		});
+		// sweep starts so the carried words clear before the next line's beams own
+		// the rail; last line keeps the demo's end-of-clip runway
+		const sweepT =
+			i + 1 < LINES.length
+				? +(L.out - 0.14).toFixed(3)
+				: +Math.min(L.out - 0.14, DUR - 0.26).toFixed(3);
+		return {
+			id: "lr" + L.id,
+			in: +L.in.toFixed(3),
+			sweepT,
+			words: words.map((w) => [w.txt, w.st, w.em]),
+			pos,
+		};
+	});
+	const css = `
   #lrfx { position:absolute; inset:0; }
   .lrline { position:absolute; left:${W / 2}px; top:${railBot}px; opacity:0; white-space:nowrap;
           font-family:'${fam}', sans-serif; font-size:${b.fontPx}px; line-height:1;
@@ -2899,11 +3042,14 @@ function paradigmLaserrail() {
   .lsweep { position:absolute; width:3px; height:88px; opacity:0;
            background: linear-gradient(180deg, ${A}00 0%, rgba(230,255,242,0.95) 45%, ${A}00 100%);
            filter: drop-shadow(0 0 6px ${A}); }`;
-  const html =
-    `      <svg id="lrfx" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+	const html =
+		`      <svg id="lrfx" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
         <g id="gLR"></g>
-      </svg>\n` + lineData.map((L) => `      <div class="lrline" id="${L.id}"></div>`).join("\n");
-  const js = `
+      </svg>\n` +
+		lineData
+			.map((L) => `      <div class="lrline" id="${L.id}"></div>`)
+			.join("\n");
+	const js = `
   // ---- body paradigm: LASERRAIL (per-word beam-converge ignition) ----
   const LACC = ${J(A)}, LMAG = ${J(dna.palette.magenta || "#ff4df0")};
   const NSL = "http://www.w3.org/2000/svg";
@@ -2931,9 +3077,9 @@ function paradigmLaserrail() {
       const el = line.children[wi];
       const [wx, wy] = L.pos[wi];
 ${
-  HEROLESS
-    ? "      const yld = 1;"
-    : `      // beams yield inside the apex window (the hero owns the light)
+	HEROLESS
+		? "      const yld = 1;"
+		: `      // beams yield inside the apex window (the hero owns the light)
       const yld = (st > ${(heroIn - 0.41).toFixed(3)} && st < ${(heroIn + 0.99).toFixed(3)})
         ? ${b.yield ? (b.yield.beamDim ?? 0.55) : 1} : 1;`
 }
@@ -2994,8 +3140,8 @@ ${
     tl.set(line, { display: "none" }, Math.min(L.sweepT + 0.32, ${(DUR - 0.02).toFixed(3)}));
   });
 ${
-  !HEROLESS && b.yield
-    ? `  // rail yields while the apex lands (restore only with clear runway)
+	!HEROLESS && b.yield
+		? `  // rail yields while the apex lands (restore only with clear runway)
   LRAIL.forEach((L) => {
     if (L.in < ${heroIn.toFixed(3)} + 0.9 && L.sweepT > ${heroIn.toFixed(3)} - 0.3) {
       const dimT = Math.max(${(heroIn - (b.yield.pre || 0.04)).toFixed(3)}, L.in + 0.05);
@@ -3006,34 +3152,42 @@ ${
       }
     }
   });`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmStormrail() {
-  // STORMRAIL: rain-washed lower third. Ambient rain = seeded thin streaks
-  // falling on repeating linear cycle tweens (pure f(t), one wind vector,
-  // mid-fall at t0); a second streak set DOUBLES the rain for ~1s after the
-  // strike. Body words arrive with the lightning-kiss motif at low amplitude
-  // (2-frame lit-bright pop + micro settle); emphasis = sheet-lightning double
-  // flash (the bg sky double-kisses at the same beats). Exits wash downward
-  // with the rain (y+22, blur). The visible line dims while the bolt lands and
-  // its text-shadow flips toward the strike for the flash frames.
-  const b = dna.body;
-  const r = b.rain || {};
-  const A = dna.palette.accent;
-  const railTop = H - (b.bottomPx || 98);
-  const sgn = (dna.hero.params || {}).side === "right" ? -1 : 1;
-  const lineData = LINES.map((L) => ({
-    id: "st" + L.id,
-    in: +L.in.toFixed(3),
-    // wash start: just before the next line — but a line facing dead air
-    // washes away early (the demo's r1 exits at lastWord + 1.08s)
-    out: +Math.min(L.out - 0.05, L.words[L.words.length - 1].end + 1.08, DUR - 0.2).toFixed(3),
-    words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-  }));
-  const css = `
+	// STORMRAIL: rain-washed lower third. Ambient rain = seeded thin streaks
+	// falling on repeating linear cycle tweens (pure f(t), one wind vector,
+	// mid-fall at t0); a second streak set DOUBLES the rain for ~1s after the
+	// strike. Body words arrive with the lightning-kiss motif at low amplitude
+	// (2-frame lit-bright pop + micro settle); emphasis = sheet-lightning double
+	// flash (the bg sky double-kisses at the same beats). Exits wash downward
+	// with the rain (y+22, blur). The visible line dims while the bolt lands and
+	// its text-shadow flips toward the strike for the flash frames.
+	const b = dna.body;
+	const r = b.rain || {};
+	const A = dna.palette.accent;
+	const railTop = H - (b.bottomPx || 98);
+	const sgn = (dna.hero.params || {}).side === "right" ? -1 : 1;
+	const lineData = LINES.map((L) => ({
+		id: "st" + L.id,
+		in: +L.in.toFixed(3),
+		// wash start: just before the next line — but a line facing dead air
+		// washes away early (the demo's r1 exits at lastWord + 1.08s)
+		out: +Math.min(
+			L.out - 0.05,
+			L.words[L.words.length - 1].end + 1.08,
+			DUR - 0.2,
+		).toFixed(3),
+		words: L.words.map((w) => [
+			w.display,
+			+w.start.toFixed(3),
+			w.minor ? 1 : 0,
+		]),
+	}));
+	const css = `
   #stscrim { position:absolute; left:0; right:0; top:${H - 180}px; height:180px; opacity:0;
     background:linear-gradient(to bottom, rgba(6,10,18,0) 0%, rgba(6,10,18,0.45) 45%, rgba(6,10,18,0.62) 100%); }
   #rain  { position:absolute; inset:0; opacity:${r.opacity ?? 0.08}; }
@@ -3045,14 +3199,16 @@ function paradigmStormrail() {
     letter-spacing:${b.letterSpacing || "0.015em"}; color:${dna.palette.body};
     text-shadow: 0 6px 16px rgba(2,8,18,0.85), 0 2px 4px rgba(2,8,18,0.7), 0 0 14px ${A}47; }
   .stline .w { display:inline-block; opacity:0; margin:0 0.16em; }`;
-  const html =
-    `      <div id="rain"></div>
+	const html =
+		`      <div id="rain"></div>
       <div id="stscrim"></div>
 ` +
-    lineData.map((L) => `      <div class="stline" id="${L.id}"></div>`).join("\n") +
-    `
+		lineData
+			.map((L) => `      <div class="stline" id="${L.id}"></div>`)
+			.join("\n") +
+		`
       <div id="rain2"></div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: STORMRAIL (lightning-kiss words, rain-wash exits, ambient rain) ----
 ${!HEROLESS ? `  const I = ${heroIn.toFixed(3)};` : ""}
   // ambient rain: seeded streaks on repeating linear cycles (f(t), no random at render)
@@ -3079,12 +3235,12 @@ ${!HEROLESS ? `  const I = ${heroIn.toFixed(3)};` : ""}
   }
   makeRain(document.getElementById("rain"),  ${r.count ?? 18}, ${r.seed ?? 9021}, 0, ${(DUR - 0.02).toFixed(2)});
 ${
-  !HEROLESS
-    ? `  makeRain(document.getElementById("rain2"), ${r.count ?? 18}, ${r.seed2 ?? 4477}, ${(heroIn - 0.11).toFixed(3)}, ${Math.min(heroIn + 1.24, DUR - 0.02).toFixed(3)});
+	!HEROLESS
+		? `  makeRain(document.getElementById("rain2"), ${r.count ?? 18}, ${r.seed2 ?? 4477}, ${(heroIn - 0.11).toFixed(3)}, ${Math.min(heroIn + 1.24, DUR - 0.02).toFixed(3)});
   // rain doubles for ~1s after the strike
   tl.set("#rain2", { opacity: 0.11 }, I + 0.02);
   tl.to("#rain2",  { opacity: 0, duration: 0.30 }, ${Math.min(heroIn + 1.02, DUR - 0.34).toFixed(3)});`
-    : ""
+		: ""
 }
 
   // rail scrim (stable reading surface against the busy lower frame)
@@ -3120,8 +3276,8 @@ ${
     tl.set(line, { display: "none" }, Math.min(L.out + 0.20, ${(DUR - 0.02).toFixed(2)}));
   });
 ${
-  !HEROLESS && b.yield
-    ? `  // rail yields while the bolt lands; the visible line's shadow flips toward
+	!HEROLESS && b.yield
+		? `  // rail yields while the bolt lands; the visible line's shadow flips toward
   // the strike for the flash frames (light from the bolt side)
   SRAIL.forEach((L) => {
     if (L.in < I + 0.9 && L.out > I - 0.3) {
@@ -3137,38 +3293,44 @@ ${
       tl.set("#" + L.id, { textShadow: "0 6px 16px rgba(2,8,18,0.85), 0 2px 4px rgba(2,8,18,0.7), 0 0 14px ${A}47" }, I + 0.09);
     }
   });`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmHolorail() {
-  // HOLORAIL: a volumetric projection PLATE (scanlined glass slab with corner
-  // brackets + feed tag) is the stable reading surface; it boots like a
-  // projector turning ON (scaleY snap + 1-frame flicker) and breathes a slow
-  // luminance cycle. Body words boot with the apex motif at low amplitude:
-  // instant opacity + RISING sweep reveal (clip wipe), a 1-frame interference
-  // x-glitch, and a constant chromatic-fringe text-shadow. Emphasis words get
-  // a 2-frame projection DROPOUT that restores brighter, then settles. Each
-  // line drifts slowly in rotationY (it IS a projection) and exits with the
-  // projector-cut: brightness pop → collapse to a horizontal slit → to a dot.
-  const b = dna.body;
-  const A = dna.palette.accent,
-    MG = dna.palette.magenta || "#ff5fd6";
-  const plateW = b.plateW || 980,
-    plateH = b.plateH || 96;
-  const plateY = H - (b.bottomPx || 108); // plate center
-  const lineY = plateY + (b.lineDy ?? 9); // line center sits low in the plate
-  const lineData = LINES.map((L, i) => ({
-    id: "hl" + L.id,
-    // projector-cut start: completes (0.15s) before the next line boots;
-    // the last line keeps the demo's end-of-clip runway
-    exit: +(i + 1 < LINES.length ? L.out - 0.15 : Math.min(L.out + 0.07, DUR - 0.18)).toFixed(3),
-    words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-  }));
-  const shadowBase = `-1.5px 0 0 ${A}8c, 1.5px 0 0 ${MG}6b, 0 0 16px ${A}80, 0 2px 8px rgba(1,10,16,0.85)`;
-  const shadowEm = `-1.5px 0 0 ${A}cc, 1.5px 0 0 ${MG}99, 0 0 26px ${dna.palette.glowEm || "#A0F2FF"}d9, 0 2px 8px rgba(1,10,16,0.85)`;
-  const css = `
+	// HOLORAIL: a volumetric projection PLATE (scanlined glass slab with corner
+	// brackets + feed tag) is the stable reading surface; it boots like a
+	// projector turning ON (scaleY snap + 1-frame flicker) and breathes a slow
+	// luminance cycle. Body words boot with the apex motif at low amplitude:
+	// instant opacity + RISING sweep reveal (clip wipe), a 1-frame interference
+	// x-glitch, and a constant chromatic-fringe text-shadow. Emphasis words get
+	// a 2-frame projection DROPOUT that restores brighter, then settles. Each
+	// line drifts slowly in rotationY (it IS a projection) and exits with the
+	// projector-cut: brightness pop → collapse to a horizontal slit → to a dot.
+	const b = dna.body;
+	const A = dna.palette.accent,
+		MG = dna.palette.magenta || "#ff5fd6";
+	const plateW = b.plateW || 980,
+		plateH = b.plateH || 96;
+	const plateY = H - (b.bottomPx || 108); // plate center
+	const lineY = plateY + (b.lineDy ?? 9); // line center sits low in the plate
+	const lineData = LINES.map((L, i) => ({
+		id: "hl" + L.id,
+		// projector-cut start: completes (0.15s) before the next line boots;
+		// the last line keeps the demo's end-of-clip runway
+		exit: +(
+			i + 1 < LINES.length ? L.out - 0.15 : Math.min(L.out + 0.07, DUR - 0.18)
+		).toFixed(3),
+		words: L.words.map((w) => [
+			w.display,
+			+w.start.toFixed(3),
+			w.minor ? 1 : 0,
+		]),
+	}));
+	const shadowBase = `-1.5px 0 0 ${A}8c, 1.5px 0 0 ${MG}6b, 0 0 16px ${A}80, 0 2px 8px rgba(1,10,16,0.85)`;
+	const shadowEm = `-1.5px 0 0 ${A}cc, 1.5px 0 0 ${MG}99, 0 0 26px ${dna.palette.glowEm || "#A0F2FF"}d9, 0 2px 8px rgba(1,10,16,0.85)`;
+	const css = `
   #railwrap { position:absolute; inset:0; }
   #plate { position:absolute; left:${W / 2}px; top:${plateY}px; width:${plateW}px; height:${plateH}px; opacity:0;
            border-radius:3px;
@@ -3190,8 +3352,8 @@ function paradigmHolorail() {
   .hln .w { display:inline-block; opacity:0; margin-right:0.3em;
            color:${dna.palette.body}ed;
            text-shadow: ${shadowBase}; }`;
-  const html =
-    `      <div id="railwrap">
+	const html =
+		`      <div id="railwrap">
         <div id="plate">
           <div id="pscan"></div>
           <div id="ptag">${esc(theme.plateTag || b.tag || "VOLUMETRIC FEED // CH-07")}</div>
@@ -3199,13 +3361,15 @@ function paradigmHolorail() {
           <div class="crn c"></div><div class="crn d"></div>
         </div>
 ` +
-    lineData.map((L) => `        <div class="hln" id="${L.id}"></div>`).join("\n") +
-    `
+		lineData
+			.map((L) => `        <div class="hln" id="${L.id}"></div>`)
+			.join("\n") +
+		`
       </div>`;
-  // plate breathe: finite yoyo cycles sized to the runway before the end cut
-  const pCut = +(DUR - 0.14).toFixed(3);
-  const breaths = Math.max(1, Math.floor((pCut - 0.5) / 0.8) - 1);
-  const js = `
+	// plate breathe: finite yoyo cycles sized to the runway before the end cut
+	const pCut = +(DUR - 0.14).toFixed(3);
+	const breaths = Math.max(1, Math.floor((pCut - 0.5) / 0.8) - 1);
+	const js = `
   // ---- body paradigm: HOLORAIL (projection plate, sweep-boot words, projector-cut exits) ----
   gsap.set("#plate", { xPercent: -50, yPercent: -50, transformOrigin: "50% 50%" });
 
@@ -3267,67 +3431,75 @@ function paradigmHolorail() {
     tl.set(line, { opacity: 0, display: "none" }, ex + 0.15);
   });
 ${
-  !HEROLESS && b.yield
-    ? `  // the whole rail (plate included) yields while the apex lands
+	!HEROLESS && b.yield
+		? `  // the whole rail (plate included) yields while the apex lands
   tl.to("#railwrap", { opacity: ${b.yield.dim}, duration: 0.18, ease: "power1.in" }, ${(heroIn - (b.yield.pre ?? 0.18)).toFixed(3)});
   tl.to("#railwrap", { opacity: 1, duration: 0.22, ease: "power1.out" }, ${(heroIn + (b.yield.post ?? 0.37)).toFixed(3)});`
-    : ""
+		: ""
 }
   // end: the plate itself gets the projector cut
   tl.set("#plate", { filter: "brightness(2.2)" }, ${pCut});
   tl.to("#plate", { scaleY: 0.03, duration: 0.07, ease: "power3.in" }, ${(pCut + 0.005).toFixed(3)});
   tl.to("#plate", { scaleX: 0.012, duration: 0.05, ease: "power3.in" }, ${(pCut + 0.08).toFixed(3)});
   tl.set("#plate", { opacity: 0 }, ${Math.min(pCut + 0.12, DUR - 0.02).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmPlanktonrail() {
-  // PLANKTONRAIL: deep-sea lower third on TWO coexisting row slots — even
-  // lines ride the upper row, odd lines the lower, so couplets share the
-  // water like drifting strata. Words GLOW ON like jellyfish (the apex bloom
-  // at low amplitude): 2-frame opacity + radial bloom from center (scale
-  // 0.92→1, blur 5→0, brightness 0.45→1) while a cyan glow text-shadow grows
-  // in; emphasis words pulse a slow DOUBLE-BEAT (jellyfish propulsion). Every
-  // line floats on a gentle y drift and exits by SINKING (+15px, dimming).
-  // Furniture: seeded plankton motes drift f(t) in the open water; the ones
-  // seeded in a ring around the apex get ATTRACTED to the bloom and brighten
-  // as it lands. The line feeding the apex dims while the bloom owns the
-  // frame (no restore — it exits dimmed, by design); a line entering during
-  // the hold arrives dimmed and restores once the bloom settles.
-  const b = dna.body;
-  const A = dna.palette.accent,
-    VIO = dna.palette.violet || "#9d7bff";
-  const rowB = H - (b.bottomPx || 70); // lower row center
-  const rowA = rowB - (b.rowDy ?? 58); // upper row center
-  const m = b.motes || {};
-  const yld = b.yield || {};
-  // active line = the one feeding the apex (last line that starts before it)
-  const activeIdx = LINES.reduce((a, L, i) => (L.words[0].start < heroIn ? i : a), 0);
-  const lineData = LINES.map((L, i) => {
-    // two-row coexistence: a line clears when its ROW is next needed (line
-    // i+2) or ~0.3s after its couplet finishes speaking (staggered pair
-    // exits); a pre-apex leftover clears just before the bloom lands (the
-    // feeding line stays and yields instead); the last line floats to the end
-    const pairLast = LINES[Math.min(i - (i % 2) + 1, LINES.length - 1)];
-    const pairEnd = pairLast.words[pairLast.words.length - 1].end;
-    let out =
-      i + 2 < LINES.length
-        ? Math.min(LINES[i + 2].in - 0.15, pairEnd + 0.28 + (i % 2) * 0.12)
-        : i + 1 < LINES.length
-          ? LINES[i + 1].words[0].start - 0.05
-          : null;
-    if (i !== activeIdx && out != null && out > heroIn - 0.25 && L.in < heroIn) out = heroIn - 0.21;
-    return {
-      id: "pl" + L.id,
-      top: i % 2 ? rowB : rowA,
-      in: +L.in.toFixed(3),
-      out: out == null ? null : +Math.min(out, DUR - 0.36).toFixed(3),
-      words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-    };
-  });
-  const shOn = `0 2px 10px rgba(1,10,20,0.85), 0 0 16px ${A}cc`;
-  const shEm = `0 2px 10px rgba(1,10,20,0.85), 0 0 18px ${A}f2, 0 0 34px ${VIO}8c`;
-  const css = `
+	// PLANKTONRAIL: deep-sea lower third on TWO coexisting row slots — even
+	// lines ride the upper row, odd lines the lower, so couplets share the
+	// water like drifting strata. Words GLOW ON like jellyfish (the apex bloom
+	// at low amplitude): 2-frame opacity + radial bloom from center (scale
+	// 0.92→1, blur 5→0, brightness 0.45→1) while a cyan glow text-shadow grows
+	// in; emphasis words pulse a slow DOUBLE-BEAT (jellyfish propulsion). Every
+	// line floats on a gentle y drift and exits by SINKING (+15px, dimming).
+	// Furniture: seeded plankton motes drift f(t) in the open water; the ones
+	// seeded in a ring around the apex get ATTRACTED to the bloom and brighten
+	// as it lands. The line feeding the apex dims while the bloom owns the
+	// frame (no restore — it exits dimmed, by design); a line entering during
+	// the hold arrives dimmed and restores once the bloom settles.
+	const b = dna.body;
+	const A = dna.palette.accent,
+		VIO = dna.palette.violet || "#9d7bff";
+	const rowB = H - (b.bottomPx || 70); // lower row center
+	const rowA = rowB - (b.rowDy ?? 58); // upper row center
+	const m = b.motes || {};
+	const yld = b.yield || {};
+	// active line = the one feeding the apex (last line that starts before it)
+	const activeIdx = LINES.reduce(
+		(a, L, i) => (L.words[0].start < heroIn ? i : a),
+		0,
+	);
+	const lineData = LINES.map((L, i) => {
+		// two-row coexistence: a line clears when its ROW is next needed (line
+		// i+2) or ~0.3s after its couplet finishes speaking (staggered pair
+		// exits); a pre-apex leftover clears just before the bloom lands (the
+		// feeding line stays and yields instead); the last line floats to the end
+		const pairLast = LINES[Math.min(i - (i % 2) + 1, LINES.length - 1)];
+		const pairEnd = pairLast.words[pairLast.words.length - 1].end;
+		let out =
+			i + 2 < LINES.length
+				? Math.min(LINES[i + 2].in - 0.15, pairEnd + 0.28 + (i % 2) * 0.12)
+				: i + 1 < LINES.length
+					? LINES[i + 1].words[0].start - 0.05
+					: null;
+		if (i !== activeIdx && out != null && out > heroIn - 0.25 && L.in < heroIn)
+			out = heroIn - 0.21;
+		return {
+			id: "pl" + L.id,
+			top: i % 2 ? rowB : rowA,
+			in: +L.in.toFixed(3),
+			out: out == null ? null : +Math.min(out, DUR - 0.36).toFixed(3),
+			words: L.words.map((w) => [
+				w.display,
+				+w.start.toFixed(3),
+				w.minor ? 1 : 0,
+			]),
+		};
+	});
+	const shOn = `0 2px 10px rgba(1,10,20,0.85), 0 0 16px ${A}cc`;
+	const shEm = `0 2px 10px rgba(1,10,20,0.85), 0 0 18px ${A}f2, 0 0 34px ${VIO}8c`;
+	const css = `
   .mote { position:absolute; border-radius:50%; background:${dna.palette.mote || "#96f5e8"}f2;
           box-shadow: 0 0 7px 2px ${A}bf; opacity:0; }
   .pln { position:absolute; left:${W / 2}px; white-space:nowrap;
@@ -3339,13 +3511,16 @@ function paradigmPlanktonrail() {
          text-shadow: 0 2px 10px rgba(1,10,20,0.85), 0 0 0px ${A}00; }
   .pln .w.em .ink { color:${dna.palette.em || "#f4fffd"};
          text-shadow: 0 2px 10px rgba(1,10,20,0.85), 0 0 0px ${A}00, 0 0 0px ${VIO}00; }`;
-  const html =
-    `      <div id="mfield"></div>
+	const html =
+		`      <div id="mfield"></div>
 ` +
-    lineData
-      .map((L) => `      <div class="pln" id="${L.id}" style="top:${L.top}px"></div>`)
-      .join("\n");
-  const js = `
+		lineData
+			.map(
+				(L) =>
+					`      <div class="pln" id="${L.id}" style="top:${L.top}px"></div>`,
+			)
+			.join("\n");
+	const js = `
   // ---- body paradigm: PLANKTONRAIL (jellyfish glow-on, two-row float, sinking exits) ----
 ${!HEROLESS ? `  const I = ${heroIn.toFixed(3)};` : ""}
   const mrnd = mulberry32(${m.seed ?? 2929});
@@ -3380,8 +3555,8 @@ ${!HEROLESS ? `  const I = ${heroIn.toFixed(3)};` : ""}
                              opacity: [0.13, 0.07, 0.11] },
                duration: dEnd - (tin + 0.32), ease: "sine.inOut" }, tin + 0.32);
 ${
-  !HEROLESS
-    ? `    if (near) {
+	!HEROLESS
+		? `    if (near) {
       // ATTRACTION: pulled toward the bloom, brightening
       const tx = (APX - L) * 0.72 + (mrnd() - 0.5) * 24;
       const ty = (APY - T) * 0.72 + (mrnd() - 0.5) * 18;
@@ -3393,7 +3568,7 @@ ${
     } else {
       tl.to(el, { y: "+=14", opacity: 0, duration: 0.16, ease: "power1.in" }, ${(DUR - 0.2).toFixed(3)});
     }`
-    : `    tl.to(el, { y: "+=14", opacity: 0, duration: 0.16, ease: "power1.in" }, ${(DUR - 0.2).toFixed(3)});`
+		: `    tl.to(el, { y: "+=14", opacity: 0, duration: 0.16, ease: "power1.in" }, ${(DUR - 0.2).toFixed(3)});`
 }
   }
 
@@ -3443,8 +3618,8 @@ ${
   });
 
 ${
-  !HEROLESS
-    ? `  // rail yields to the apex landing: the feeding line dims (and exits dimmed
+	!HEROLESS
+		? `  // rail yields to the apex landing: the feeding line dims (and exits dimmed
   // unless it has ≥0.9s of hold left); a line entering during the hold
   // arrives at ${yld.enter ?? 0.8} and restores once the bloom settles
   PRAIL.forEach((L, i) => {
@@ -3459,57 +3634,65 @@ ${
             Math.min(Math.max(I + ${(yld.post ?? 0.63).toFixed(2)}, L.in + 0.1), ${(DUR - 0.28).toFixed(2)}));
     }
   });`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmSheenrail() {
-  // SHEENRAIL: iridescent silk lower third on TWO coexisting row slots — even
-  // lines ride the upper row (H − bottomPx − rowDy), odd lines the lower
-  // (H − bottomPx), so couplets read together like a woven pair. Words are
-  // aurora-gradient ink (background-clip:text over a rose→teal→violet wash
-  // whose backgroundPosition DRIFTS f(t) across the whole clip — the body's
-  // hold life) above a blurred dark understroke; entrance = 2-frame opacity
-  // + y8 settle (the ribbon's flow at low amplitude); emphasis = ONE bright
-  // sheen sweep marching through the word + a brightness pulse. Exits
-  // dissolve UPWARD (y−12, blur 3, staggered) and each line releases 3-4
-  // drifting light streaks that float up from its row. A soft radial band
-  // scrim sits under the rows (stable reading surface); the whole rail —
-  // band included — yields while the ribbon writes. Line scheduling mirrors
-  // planktonrail's two-row coexistence: a row clears when next needed (line
-  // i+2) or shortly after its couplet finishes speaking (staggered pair
-  // exits); the pre-apex leftover clears at heroIn−0.32 while the FEEDING
-  // line stays (it dims with the railwrap yield); the last line holds.
-  const b = dna.body;
-  const PAL = [dna.palette.rose, dna.palette.accent, dna.palette.violet];
-  const rowB = H - (b.bottomPx || 76); // lower row TOP edge
-  const rowA = rowB - (b.rowDy ?? 58); // upper row TOP edge
-  const band = b.band || {};
-  const bandW = band.w ?? 860,
-    bandH = band.h ?? 170;
-  const bandCy = Math.round((rowA + rowB + b.fontPx * 1.1) / 2);
-  const yld = b.yield || {};
-  // active line = the one feeding the apex (last line that starts before it)
-  const activeIdx = LINES.reduce((a, L, i) => (L.words[0].start < heroIn ? i : a), 0);
-  const lineData = LINES.map((L, i) => {
-    const pairLast = LINES[Math.min(i - (i % 2) + 1, LINES.length - 1)];
-    const pairEnd = pairLast.words[pairLast.words.length - 1].end;
-    let out =
-      i + 2 < LINES.length
-        ? Math.min(LINES[i + 2].in - 0.15, pairEnd + 0.23 + (i % 2) * 0.17)
-        : i + 1 < LINES.length
-          ? LINES[i + 1].words[0].start - 0.11
-          : null;
-    if (i !== activeIdx && out != null && out > heroIn - 0.25 && L.in < heroIn) out = heroIn - 0.32;
-    return {
-      id: "sk" + L.id,
-      top: i % 2 ? rowB : rowA,
-      out: out == null ? null : +Math.min(out, DUR - 0.4).toFixed(3),
-      words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-    };
-  });
-  const css = `
+	// SHEENRAIL: iridescent silk lower third on TWO coexisting row slots — even
+	// lines ride the upper row (H − bottomPx − rowDy), odd lines the lower
+	// (H − bottomPx), so couplets read together like a woven pair. Words are
+	// aurora-gradient ink (background-clip:text over a rose→teal→violet wash
+	// whose backgroundPosition DRIFTS f(t) across the whole clip — the body's
+	// hold life) above a blurred dark understroke; entrance = 2-frame opacity
+	// + y8 settle (the ribbon's flow at low amplitude); emphasis = ONE bright
+	// sheen sweep marching through the word + a brightness pulse. Exits
+	// dissolve UPWARD (y−12, blur 3, staggered) and each line releases 3-4
+	// drifting light streaks that float up from its row. A soft radial band
+	// scrim sits under the rows (stable reading surface); the whole rail —
+	// band included — yields while the ribbon writes. Line scheduling mirrors
+	// planktonrail's two-row coexistence: a row clears when next needed (line
+	// i+2) or shortly after its couplet finishes speaking (staggered pair
+	// exits); the pre-apex leftover clears at heroIn−0.32 while the FEEDING
+	// line stays (it dims with the railwrap yield); the last line holds.
+	const b = dna.body;
+	const PAL = [dna.palette.rose, dna.palette.accent, dna.palette.violet];
+	const rowB = H - (b.bottomPx || 76); // lower row TOP edge
+	const rowA = rowB - (b.rowDy ?? 58); // upper row TOP edge
+	const band = b.band || {};
+	const bandW = band.w ?? 860,
+		bandH = band.h ?? 170;
+	const bandCy = Math.round((rowA + rowB + b.fontPx * 1.1) / 2);
+	const yld = b.yield || {};
+	// active line = the one feeding the apex (last line that starts before it)
+	const activeIdx = LINES.reduce(
+		(a, L, i) => (L.words[0].start < heroIn ? i : a),
+		0,
+	);
+	const lineData = LINES.map((L, i) => {
+		const pairLast = LINES[Math.min(i - (i % 2) + 1, LINES.length - 1)];
+		const pairEnd = pairLast.words[pairLast.words.length - 1].end;
+		let out =
+			i + 2 < LINES.length
+				? Math.min(LINES[i + 2].in - 0.15, pairEnd + 0.23 + (i % 2) * 0.17)
+				: i + 1 < LINES.length
+					? LINES[i + 1].words[0].start - 0.11
+					: null;
+		if (i !== activeIdx && out != null && out > heroIn - 0.25 && L.in < heroIn)
+			out = heroIn - 0.32;
+		return {
+			id: "sk" + L.id,
+			top: i % 2 ? rowB : rowA,
+			out: out == null ? null : +Math.min(out, DUR - 0.4).toFixed(3),
+			words: L.words.map((w) => [
+				w.display,
+				+w.start.toFixed(3),
+				w.minor ? 1 : 0,
+			]),
+		};
+	});
+	const css = `
   #skwrap { position:absolute; inset:0; }
   #band { position:absolute; left:${W / 2}px; top:${bandCy}px; width:${bandW}px; height:${bandH}px;
           margin-left:-${bandW / 2}px; margin-top:-${bandH / 2}px; opacity:0;
@@ -3530,16 +3713,19 @@ function paradigmSheenrail() {
          background-size: 260% 100%;
          -webkit-background-clip: text; background-clip: text; color: transparent; }
   .streak { position:absolute; width:3px; border-radius:2px; opacity:0; filter:blur(2px); }`;
-  const html =
-    `      <div id="skwrap">
+	const html =
+		`      <div id="skwrap">
         <div id="band"></div>
 ` +
-    lineData
-      .map((L) => `        <div class="skl" id="${L.id}" style="top:${L.top}px"></div>`)
-      .join("\n") +
-    `
+		lineData
+			.map(
+				(L) =>
+					`        <div class="skl" id="${L.id}" style="top:${L.top}px"></div>`,
+			)
+			.join("\n") +
+		`
       </div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: SHEENRAIL (flow-on entrance, sheen-sweep emphasis, dissolve-to-streaks exits) ----
 ${!HEROLESS ? `  const I = ${heroIn.toFixed(3)};` : ""}
   const srnd = mulberry32(${b.seed ?? 20260611});
@@ -3596,77 +3782,82 @@ ${!HEROLESS ? `  const I = ${heroIn.toFixed(3)};` : ""}
   tl.fromTo(allGrads, { backgroundPosition: "0% 50%" },
             { backgroundPosition: "300% 50%", duration: ${(DUR - 0.04).toFixed(3)}, ease: "none" }, 0);
 ${
-  !HEROLESS
-    ? `  // rail yields — band included — while the ribbon writes (apex owns the frame)
+	!HEROLESS
+		? `  // rail yields — band included — while the ribbon writes (apex owns the frame)
   tl.to("#skwrap", { opacity: ${yld.dim ?? 0.5}, duration: 0.2, ease: "sine.in" }, I - ${(yld.pre ?? 0.16).toFixed(2)});
   tl.to("#skwrap", { opacity: 1, duration: 0.3, ease: "sine.out" }, I + ${(yld.post ?? 0.62).toFixed(2)});`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmScoperail() {
-  // SCOPERAIL: oscilloscope lower third. A dark phosphor scope band (HUD
-  // readouts, graticule) hosts an ALWAYS-ALIVE waveform — an SVG polyline
-  // rebuilt from baked point-set states (seeded pseudo-RMS envelope: speech
-  // grows it, silence flattens it, every word arrival kicks a local gaussian
-  // burst for ~3 frames; the hero words kick WIDE bursts where the trace
-  // surges off the scope to write). Body lines (phosphor mono) sit on the
-  // band above the trace and wipe in L→R over reserved-width slots (the apex
-  // pen-write at low amplitude) with a 2-frame just-traced flash; emphasis
-  // words get a ticking frequency-readout chip; the trig LED blinks on every
-  // word arrival. Lines collapse INTO the waveform on exit. At the FINAL word
-  // the trace explodes to max-amp chaos, flatlines, collapses to a single dot
-  // and `body.siglost` stamps — the scope dies with the clip.
-  const b = dna.body;
-  const A = dna.palette.accent,
-    BRT = dna.palette.bright || "#d6ffe4",
-    FLSH = dna.palette.flash || "#eafff2",
-    EM = dna.palette.em || "#ffb347",
-    HUD = dna.palette.hud || "#2f8f55";
-  const bandH = b.bandH || 164;
-  const bandTop = H - bandH;
-  const waveH = b.waveH || 84;
-  const NZ = +LASTWORD.start.toFixed(3); // the scope-death beat
-  // line windows: exits collapse into the trace — early into dead air
-  // (lastWordStart+0.67), else just before the next line needs the slot
-  const lineData = LINES.map((L, i) => {
-    const lastSt = L.words[L.words.length - 1].start;
-    const next = LINES[i + 1];
-    const out = next
-      ? +Math.min(next.in - 0.05, lastSt + 0.67).toFixed(3)
-      : +Math.min(NZ + 0.33, DUR - 0.2).toFixed(3);
-    return {
-      id: "sc" + L.id,
-      in: +L.in.toFixed(3),
-      out,
-      words: L.words.map((w) => [
-        w.display,
-        +w.start.toFixed(3),
-        w.minor ? 1 : 0,
-        Math.abs(w.start - NZ) < 0.001 ? 1 : 0, // the death word settles hot
-      ]),
-    };
-  });
-  // waveform burst map BAKED from measured glyph metrics (slot centers) +
-  // the hero kick positions (the trace surges wide where the apex writes)
-  const GAPem = 0.32;
-  const burst = []; // [t, x, big]
-  LINES.forEach((L) => {
-    const ws = L.words.map((w) => wordPx(w.display, dna.fonts.body, b.fontPx, 0));
-    const totalW = ws.reduce((a, c) => a + c, 0) + GAPem * b.fontPx * (L.words.length - 1);
-    let x = W / 2 - totalW / 2;
-    L.words.forEach((w, i) => {
-      burst.push([+w.start.toFixed(3), +(x + ws[i] / 2).toFixed(1), 0]);
-      x += ws[i] + GAPem * b.fontPx;
-    });
-  });
-  if (hero && !heroInline)
-    for (let k = 0; k < hero.len; k++) {
-      const hx = HG.x + (hero.len === 1 ? 0 : (k / (hero.len - 1)) * 0.6 * (HG.halfW || 300));
-      burst.push([+tWords[hero.idx + k].start.toFixed(3), +hx.toFixed(1), 1]);
-    }
-  const css = `
+	// SCOPERAIL: oscilloscope lower third. A dark phosphor scope band (HUD
+	// readouts, graticule) hosts an ALWAYS-ALIVE waveform — an SVG polyline
+	// rebuilt from baked point-set states (seeded pseudo-RMS envelope: speech
+	// grows it, silence flattens it, every word arrival kicks a local gaussian
+	// burst for ~3 frames; the hero words kick WIDE bursts where the trace
+	// surges off the scope to write). Body lines (phosphor mono) sit on the
+	// band above the trace and wipe in L→R over reserved-width slots (the apex
+	// pen-write at low amplitude) with a 2-frame just-traced flash; emphasis
+	// words get a ticking frequency-readout chip; the trig LED blinks on every
+	// word arrival. Lines collapse INTO the waveform on exit. At the FINAL word
+	// the trace explodes to max-amp chaos, flatlines, collapses to a single dot
+	// and `body.siglost` stamps — the scope dies with the clip.
+	const b = dna.body;
+	const A = dna.palette.accent,
+		BRT = dna.palette.bright || "#d6ffe4",
+		FLSH = dna.palette.flash || "#eafff2",
+		EM = dna.palette.em || "#ffb347",
+		HUD = dna.palette.hud || "#2f8f55";
+	const bandH = b.bandH || 164;
+	const bandTop = H - bandH;
+	const waveH = b.waveH || 84;
+	const NZ = +LASTWORD.start.toFixed(3); // the scope-death beat
+	// line windows: exits collapse into the trace — early into dead air
+	// (lastWordStart+0.67), else just before the next line needs the slot
+	const lineData = LINES.map((L, i) => {
+		const lastSt = L.words[L.words.length - 1].start;
+		const next = LINES[i + 1];
+		const out = next
+			? +Math.min(next.in - 0.05, lastSt + 0.67).toFixed(3)
+			: +Math.min(NZ + 0.33, DUR - 0.2).toFixed(3);
+		return {
+			id: "sc" + L.id,
+			in: +L.in.toFixed(3),
+			out,
+			words: L.words.map((w) => [
+				w.display,
+				+w.start.toFixed(3),
+				w.minor ? 1 : 0,
+				Math.abs(w.start - NZ) < 0.001 ? 1 : 0, // the death word settles hot
+			]),
+		};
+	});
+	// waveform burst map BAKED from measured glyph metrics (slot centers) +
+	// the hero kick positions (the trace surges wide where the apex writes)
+	const GAPem = 0.32;
+	const burst = []; // [t, x, big]
+	LINES.forEach((L) => {
+		const ws = L.words.map((w) =>
+			wordPx(w.display, dna.fonts.body, b.fontPx, 0),
+		);
+		const totalW =
+			ws.reduce((a, c) => a + c, 0) + GAPem * b.fontPx * (L.words.length - 1);
+		let x = W / 2 - totalW / 2;
+		L.words.forEach((w, i) => {
+			burst.push([+w.start.toFixed(3), +(x + ws[i] / 2).toFixed(1), 0]);
+			x += ws[i] + GAPem * b.fontPx;
+		});
+	});
+	if (hero && !heroInline)
+		for (let k = 0; k < hero.len; k++) {
+			const hx =
+				HG.x +
+				(hero.len === 1 ? 0 : (k / (hero.len - 1)) * 0.6 * (HG.halfW || 300));
+			burst.push([+tWords[hero.idx + k].start.toFixed(3), +hx.toFixed(1), 1]);
+		}
+	const css = `
   #scband { position:absolute; left:0; top:${bandTop}px; width:${W}px; height:${bandH}px; opacity:0;
             background: rgba(0,12,4,0.58); border-top:1px solid ${A}4d;
             box-shadow: 0 -8px 30px rgba(0,0,0,0.35); }
@@ -3700,8 +3891,8 @@ function paradigmScoperail() {
   #scsiglost { position:absolute; left:0; top:${bandTop + (b.waveTop || 80)}px; width:${W}px; text-align:center;
                font-family:'${dna.fonts.tag}', monospace; font-size:24px; letter-spacing:6px;
                color:${EM}; text-shadow:0 0 10px ${EM}b3; opacity:0; }`;
-  const html =
-    `      <div id="scband">
+	const html =
+		`      <div id="scband">
         <div class="schud" id="schudL">${esc(b.hudL || "SPECTRUM // CH1")}</div>
         <div class="schud" id="schudR">${esc(b.hudR || FPS + ".0 kS/s · TRIG")}<span id="sctrig"></span></div>
         <div id="scgrat"></div>
@@ -3712,12 +3903,14 @@ function paradigmScoperail() {
           </svg>
         </div>
 ` +
-    lineData.map((L) => `        <div class="scln" id="${L.id}"></div>`).join("\n") +
-    `
+		lineData
+			.map((L) => `        <div class="scln" id="${L.id}"></div>`)
+			.join("\n") +
+		`
       </div>
       <div id="scsiglost">${esc(b.siglost || "— SIGNAL LOST —")}</div>
       <div id="scdot"></div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: SCOPERAIL (trace-wipe words, waveform alive all clip) ----
   const rnd = mulberry32(${b.waveSeed || 7});
   const NZ = ${NZ.toFixed(3)}, ENDC = ${(DUR - 0.02).toFixed(3)};
@@ -3779,12 +3972,12 @@ function paradigmScoperail() {
   tl.fromTo("#scwavewrap", { scaleX: 0.04, transformOrigin: "50% 50%" },
             { scaleX: 1, duration: 0.22, ease: "power2.out" }, 0.04);
 ${
-  !HEROLESS && b.yield && !heroInline
-    ? `
+	!HEROLESS && b.yield && !heroInline
+		? `
   // rail yields while the apex trace writes (band carries lines + wave + HUD)
   tl.to("#scband", { opacity: ${b.yield.dim}, duration: 0.18, ease: "power1.in" }, ${Math.max(heroIn - (b.yield.pre || 0.13), 0.2).toFixed(3)});
   tl.to("#scband", { opacity: 1, duration: 0.25, ease: "power1.out" }, ${Math.min(heroIn + (b.yield.post || 0.97), DUR - 0.4).toFixed(3)});`
-    : ""
+		: ""
 }
 
   // ===== body lines: trace-wipe entrances over reserved-width slots =====
@@ -3869,52 +4062,56 @@ ${
   tl.set("#scsiglost", { opacity: 1 }, Math.min(NZ + 0.43, ENDC - 2 * F));
   tl.set("#scsiglost", { opacity: 0.35 }, Math.min(NZ + 0.43 + F, ENDC - F));
   tl.set("#scsiglost", { opacity: 1 }, Math.min(NZ + 0.43 + 2 * F, ENDC));`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmPaperrail() {
-  // PAPERRAIL: stop-motion craft table — a kraft strip (torn top edge, washi-
-  // taped corners, handwritten tag) holds cream paper chips that are PLACED
-  // one by one: opacity full in 0 frames, y −16 + scale 1.06→1 with steps(2),
-  // seeded ±2.5° crooked = the papermat drop at low amplitude. The strip
-  // jitters ±0.7px every 4 frames (handmade weave); chips hold a rotation-only
-  // ~5fps wobble. Emphasis words get a washi-tape slap (chip pressed 1 frame);
-  // the FINAL word is an accent chip (sign-off); the hero slot keeps a red
-  // paper star (rail↔climax hand-off) that pulses as the apex chips land.
-  // Exits: chips peeled off (rotation −8°, y −40, steps(3)), staggered.
-  const b = dna.body;
-  const stripW = (b.strip && b.strip.w) || 1140;
-  const stripH = (b.strip && b.strip.h) || 88;
-  const SX = (b.strip && b.strip.x) ?? Math.round((W - stripW) / 2);
-  const ST = H - ((b.strip && b.strip.bottomPx) ?? 26) - stripH;
-  const k = (b.fontPx || 38) / 38; // chip furniture scales with the type
-  const r = (v) => Math.round(v * k);
-  const tapeDelay = b.tapeDelay ?? 0.25;
-  // hero hand-off slot: the line whose window holds the apex keeps a star chip
-  const heroLi = heroInline ? -1 : LINES.findIndex((L) => heroIn >= L.in - 0.01 && heroIn < L.out);
-  const lineData = LINES.map((L, li) => {
-    const n = L.words.length + (li === heroLi ? 1 : 0);
-    // peel (0.18s + stagger) always completes on frame; demo cadence L.out−0.04
-    const xo = +(
-      li === LINES.length - 1 ? Math.min(L.out - 0.04, DUR - 0.2 - (n - 1) * 0.03) : L.out - 0.04
-    ).toFixed(3);
-    const words = L.words.map((w, wi) => {
-      const isLast = li === LINES.length - 1 && wi === L.words.length - 1;
-      const kind = isLast ? 3 : w.minor ? 1 : 0; // 0 chip / 1 taped / 2 star / 3 accent
-      let tapeT = 0;
-      if (kind === 1) {
-        const tt = +Math.min(w.start + tapeDelay, xo - 0.2).toFixed(3);
-        if (tt >= w.start + 0.08) tapeT = tt;
-      }
-      return [w.display, +w.start.toFixed(3), kind, tapeT];
-    });
-    if (li === heroLi) {
-      const at = L.words.filter((w) => w.start < heroIn).length;
-      words.splice(at, 0, ["*", +heroIn.toFixed(3), 2, 0]);
-    }
-    return { id: "pl" + L.id, in: +L.in.toFixed(3), xo, words };
-  });
-  const css = `
+	// PAPERRAIL: stop-motion craft table — a kraft strip (torn top edge, washi-
+	// taped corners, handwritten tag) holds cream paper chips that are PLACED
+	// one by one: opacity full in 0 frames, y −16 + scale 1.06→1 with steps(2),
+	// seeded ±2.5° crooked = the papermat drop at low amplitude. The strip
+	// jitters ±0.7px every 4 frames (handmade weave); chips hold a rotation-only
+	// ~5fps wobble. Emphasis words get a washi-tape slap (chip pressed 1 frame);
+	// the FINAL word is an accent chip (sign-off); the hero slot keeps a red
+	// paper star (rail↔climax hand-off) that pulses as the apex chips land.
+	// Exits: chips peeled off (rotation −8°, y −40, steps(3)), staggered.
+	const b = dna.body;
+	const stripW = (b.strip && b.strip.w) || 1140;
+	const stripH = (b.strip && b.strip.h) || 88;
+	const SX = (b.strip && b.strip.x) ?? Math.round((W - stripW) / 2);
+	const ST = H - ((b.strip && b.strip.bottomPx) ?? 26) - stripH;
+	const k = (b.fontPx || 38) / 38; // chip furniture scales with the type
+	const r = (v) => Math.round(v * k);
+	const tapeDelay = b.tapeDelay ?? 0.25;
+	// hero hand-off slot: the line whose window holds the apex keeps a star chip
+	const heroLi = heroInline
+		? -1
+		: LINES.findIndex((L) => heroIn >= L.in - 0.01 && heroIn < L.out);
+	const lineData = LINES.map((L, li) => {
+		const n = L.words.length + (li === heroLi ? 1 : 0);
+		// peel (0.18s + stagger) always completes on frame; demo cadence L.out−0.04
+		const xo = +(
+			li === LINES.length - 1
+				? Math.min(L.out - 0.04, DUR - 0.2 - (n - 1) * 0.03)
+				: L.out - 0.04
+		).toFixed(3);
+		const words = L.words.map((w, wi) => {
+			const isLast = li === LINES.length - 1 && wi === L.words.length - 1;
+			const kind = isLast ? 3 : w.minor ? 1 : 0; // 0 chip / 1 taped / 2 star / 3 accent
+			let tapeT = 0;
+			if (kind === 1) {
+				const tt = +Math.min(w.start + tapeDelay, xo - 0.2).toFixed(3);
+				if (tt >= w.start + 0.08) tapeT = tt;
+			}
+			return [w.display, +w.start.toFixed(3), kind, tapeT];
+		});
+		if (li === heroLi) {
+			const at = L.words.filter((w) => w.start < heroIn).length;
+			words.splice(at, 0, ["*", +heroIn.toFixed(3), 2, 0]);
+		}
+		return { id: "pl" + L.id, in: +L.in.toFixed(3), xo, words };
+	});
+	const css = `
   #pstrip { position:absolute; left:${SX}px; top:${ST}px; width:${stripW}px; height:${stripH}px; opacity:0; }
   #pstrip .paper { position:absolute; inset:0;
                    background: linear-gradient(180deg, #bd9e6f 0%, #b89968 45%, #a8854f 100%);
@@ -3942,7 +4139,7 @@ function paradigmPaperrail() {
   .pstar { position:absolute; inset:0; background:${dna.palette.accent};
            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
            filter: drop-shadow(0 3px 0 rgba(58,38,16,0.38)); }`;
-  const html = `      <div id="pstrip">
+	const html = `      <div id="pstrip">
         <div class="paper"></div>
         <div class="pwt" id="pwtL"><i></i></div>
         <div class="pwt" id="pwtR"><i></i></div>
@@ -3951,9 +4148,12 @@ function paradigmPaperrail() {
       <div id="plines">
 ${lineData.map((L) => `        <div class="pline" id="${L.id}"></div>`).join("\n")}
       </div>`;
-  const dimT = +Math.max(0.15, heroIn - ((b.yield && b.yield.pre) || 0.2)).toFixed(3);
-  const resT = +(heroIn + ((b.yield && b.yield.post) || 0.9)).toFixed(3);
-  const js = `
+	const dimT = +Math.max(
+		0.15,
+		heroIn - ((b.yield && b.yield.pre) || 0.2),
+	).toFixed(3);
+	const resT = +(heroIn + ((b.yield && b.yield.post) || 0.9)).toFixed(3);
+	const js = `
   // ---- body paradigm: PAPERRAIL (chips placed steps(2) / peel-off exit) ----
   const RAILP = ${J(lineData)};
   const rrnd = mulberry32(${b.seed || 150372});
@@ -3975,12 +4175,12 @@ ${lineData.map((L) => `        <div class="pline" id="${L.id}"></div>`).join("\n
   for (let t = 0.45; t < ${(DUR - 0.06).toFixed(3)}; t += 1/6)
     tl.set("#pstrip", { x: (rrnd()-0.5)*1.4, y: (rrnd()-0.5)*1.4, rotation: (rrnd()-0.5)*0.36 }, t);
 ${
-  !HEROLESS && b.yield && !heroInline
-    ? `
+	!HEROLESS && b.yield && !heroInline
+		? `
   // rail yields while the apex chips land (furniture never contests the hero)
   tl.to(["#pstrip", "#plines"], { opacity: ${b.yield.dim}, duration: 0.10 }, ${dimT});
 ${resT + 0.3 < DUR ? `  tl.to(["#pstrip", "#plines"], { opacity: 1, duration: 0.22 }, ${resT});` : ""}`
-    : ""
+		: ""
 }
 
   // ===== BODY: paper chips placed one by one =====
@@ -4028,63 +4228,72 @@ ${resT + 0.3 < DUR ? `  tl.to(["#pstrip", "#plines"], { opacity: 1, duration: 0.
             L.xo + wi*0.03);
     });
   });`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmPopuprail() {
-  // POPUPRAIL: pop-up book page — a cream page strip (center foldline) unfolds
-  // up from the bottom edge (scaleY back.out, the stage is built); words POP
-  // UP on a baseline hinge (rotationX 85→0, back.out = the centerfold motif at
-  // low amplitude) on two reading rows that alternate per line. Emphasis words
-  // land bigger with a contact squash the strip FEELS (1px dip), then flick-
-  // wobble; blue paper struts lean in behind emphasis + the sign-off word; the
-  // hero slot keeps a blue paper star (rail↔climax hand-off). Exits fold flat
-  // in an L→R wave (the page closing); on the final word the whole page TILTS
-  // (paper physics) and the strip itself folds shut on the last frame.
-  const b = dna.body;
-  const stripW = (b.strip && b.strip.w) || 1230;
-  const stripH = (b.strip && b.strip.h) || 124;
-  const rowY = { A: H - (b.rowA ?? 70), B: H - (b.rowB ?? 20) };
-  const k = (b.fontPx || 42) / 42; // chip furniture scales with the type
-  const r = (v) => Math.round(v * k);
-  const emPx = b.emPx || Math.round((b.fontPx || 42) * 1.24);
-  const maxHold = b.maxHold ?? 0.95;
-  // hero hand-off slot: the line whose window holds the apex keeps a star chip
-  const heroLi = heroInline ? -1 : LINES.findIndex((L) => heroIn >= L.in - 0.01 && heroIn < L.out);
-  const lineData = LINES.map((L, li) => {
-    const lastSt = L.words[L.words.length - 1].start;
-    const n = L.words.length + (li === heroLi ? 1 : 0);
-    // fold as the next line begins, or after maxHold in silence; the fold wave
-    // + slot hide always complete by DUR−0.017 (demo cadence: L4 folds 5.76)
-    const foldT = +Math.min(L.out, lastSt + maxHold, DUR - 0.147 - 0.045 * (n - 1)).toFixed(3);
-    const words = L.words.map((w, wi) => {
-      const isLast = li === LINES.length - 1 && wi === L.words.length - 1;
-      const kind = isLast ? 2 : w.minor ? 1 : 0; // 0 plain | 1 emph | 2 emph-blue | 3 star
-      let wobT = 0,
-        wobD = 0,
-        strutT = 0;
-      if (kind === 1) {
-        // paper-flick after landing, squeezed to fit before the fold
-        const wt = +(w.start + 0.2).toFixed(3);
-        const wd = +Math.min(0.5, foldT - wt - 0.04).toFixed(2);
-        if (wd >= 0.15) {
-          wobT = wt;
-          wobD = wd;
-        }
-      }
-      if (kind >= 1) {
-        const st2 = +Math.min(w.start + (kind === 2 ? 0.15 : 0.26), foldT - 0.1).toFixed(3);
-        if (st2 >= w.start + 0.08) strutT = st2;
-      }
-      return [w.display, +w.start.toFixed(3), kind, wobT, wobD, strutT];
-    });
-    if (li === heroLi) {
-      const at = L.words.filter((w) => w.start < heroIn).length;
-      words.splice(at, 0, ["*", +heroIn.toFixed(3), 3, 0, 0, 0]);
-    }
-    return { id: "pu" + L.id, row: li % 2 === 0 ? "A" : "B", foldT, words };
-  });
-  const css = `
+	// POPUPRAIL: pop-up book page — a cream page strip (center foldline) unfolds
+	// up from the bottom edge (scaleY back.out, the stage is built); words POP
+	// UP on a baseline hinge (rotationX 85→0, back.out = the centerfold motif at
+	// low amplitude) on two reading rows that alternate per line. Emphasis words
+	// land bigger with a contact squash the strip FEELS (1px dip), then flick-
+	// wobble; blue paper struts lean in behind emphasis + the sign-off word; the
+	// hero slot keeps a blue paper star (rail↔climax hand-off). Exits fold flat
+	// in an L→R wave (the page closing); on the final word the whole page TILTS
+	// (paper physics) and the strip itself folds shut on the last frame.
+	const b = dna.body;
+	const stripW = (b.strip && b.strip.w) || 1230;
+	const stripH = (b.strip && b.strip.h) || 124;
+	const rowY = { A: H - (b.rowA ?? 70), B: H - (b.rowB ?? 20) };
+	const k = (b.fontPx || 42) / 42; // chip furniture scales with the type
+	const r = (v) => Math.round(v * k);
+	const emPx = b.emPx || Math.round((b.fontPx || 42) * 1.24);
+	const maxHold = b.maxHold ?? 0.95;
+	// hero hand-off slot: the line whose window holds the apex keeps a star chip
+	const heroLi = heroInline
+		? -1
+		: LINES.findIndex((L) => heroIn >= L.in - 0.01 && heroIn < L.out);
+	const lineData = LINES.map((L, li) => {
+		const lastSt = L.words[L.words.length - 1].start;
+		const n = L.words.length + (li === heroLi ? 1 : 0);
+		// fold as the next line begins, or after maxHold in silence; the fold wave
+		// + slot hide always complete by DUR−0.017 (demo cadence: L4 folds 5.76)
+		const foldT = +Math.min(
+			L.out,
+			lastSt + maxHold,
+			DUR - 0.147 - 0.045 * (n - 1),
+		).toFixed(3);
+		const words = L.words.map((w, wi) => {
+			const isLast = li === LINES.length - 1 && wi === L.words.length - 1;
+			const kind = isLast ? 2 : w.minor ? 1 : 0; // 0 plain | 1 emph | 2 emph-blue | 3 star
+			let wobT = 0,
+				wobD = 0,
+				strutT = 0;
+			if (kind === 1) {
+				// paper-flick after landing, squeezed to fit before the fold
+				const wt = +(w.start + 0.2).toFixed(3);
+				const wd = +Math.min(0.5, foldT - wt - 0.04).toFixed(2);
+				if (wd >= 0.15) {
+					wobT = wt;
+					wobD = wd;
+				}
+			}
+			if (kind >= 1) {
+				const st2 = +Math.min(
+					w.start + (kind === 2 ? 0.15 : 0.26),
+					foldT - 0.1,
+				).toFixed(3);
+				if (st2 >= w.start + 0.08) strutT = st2;
+			}
+			return [w.display, +w.start.toFixed(3), kind, wobT, wobD, strutT];
+		});
+		if (li === heroLi) {
+			const at = L.words.filter((w) => w.start < heroIn).length;
+			words.splice(at, 0, ["*", +heroIn.toFixed(3), 3, 0, 0, 0]);
+		}
+		return { id: "pu" + L.id, row: li % 2 === 0 ? "A" : "B", foldT, words };
+	});
+	const css = `
   #pupage { position:absolute; inset:0; }
   #pustrip { position:absolute; left:${W / 2}px; top:${H}px; width:${stripW}px; height:${stripH}px;
              opacity:0; border-radius:4px 4px 0 0;
@@ -4106,11 +4315,11 @@ function paradigmPopuprail() {
   .pustrut { position:absolute; right:-8px; bottom:0; width:${r(19)}px; height:${r(16)}px;
              background: linear-gradient(180deg,${dna.palette.strut1 || "#4f93c4"} 0%, ${dna.palette.strut2 || dna.palette.accent} 70%);
              clip-path: polygon(0 100%, 100% 100%, 100% 0); opacity:0; z-index:0; }`;
-  const html = `      <div id="pupage">
+	const html = `      <div id="pupage">
         <div id="pustrip"><div id="pufold"></div></div>
 ${lineData.map((L) => `        <div class="puline" id="${L.id}"></div>`).join("\n")}
       </div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: POPUPRAIL (baseline-hinge pop-ups / fold-flat exit) ----
   const RAILU = ${J(lineData)};
   const ROWY = ${J(rowY)};
@@ -4172,73 +4381,73 @@ ${lineData.map((L) => `        <div class="puline" id="${L.id}"></div>`).join("\
     });
   });
 ${
-  !HEROLESS && b.yield && !heroInline
-    ? `
+	!HEROLESS && b.yield && !heroInline
+		? `
   // APEX OWNS ITS WINDOW — page yields while the centerfold lands, restores
   tl.to("#pupage", { opacity: ${b.yield.dim}, duration: 0.12, ease: "power1.out" }, ${(heroIn - (b.yield.pre || 0.03)).toFixed(3)});
   tl.to("#pupage", { opacity: 1, duration: 0.22, ease: "power1.in" }, ${(heroIn + (b.yield.post || 0.47)).toFixed(3)});`
-    : ""
+		: ""
 }
 ${
-  b.tilt !== false
-    ? `
+	b.tilt !== false
+		? `
   // paper-world physics: on the final word the whole page TILTS and slides
   tl.to("#pupage", { rotation: 2, x: 6, transformOrigin: "50% 100%",
                      duration: 0.26, ease: "back.out(2.2)" }, ${(LASTWORD.start + 0.02).toFixed(3)});`
-    : ""
+		: ""
 }
   // ending: after the last fold the strip itself closes (book shut)
   tl.to("#pustrip", { scaleY: 0.03, duration: 0.07, ease: "power3.in" }, ${(DUR - 0.082).toFixed(3)});
   tl.set("#pustrip", { opacity: 0 }, ${(DUR - 0.017).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmChalkrail() {
-  // CHALKRAIL: night-lecture chalk band — a deep-green board strip (worn top
-  // hairline, eraser smudges, handwritten header tag, two chalk sticks) docked
-  // at the bottom edge holds reading rows that ACCUMULATE: lines fill the rows
-  // top→bottom in phases of rows.length; when the next phase needs the rows an
-  // ERASER SWIPE clears the board (a blurred light band sweeps across, the
-  // words SMEAR out scaleX 1.3 + blur(8), faint ghost smudges stay — chalk
-  // never fully erases). Words are chalk-written fast: 2-frame pop + scribble
-  // clip-reveal steps(4) + 6 seeded dust specks puffing at the base + seeded
-  // ±2° tilt = the chalkwrite verb at low amplitude. Emphasis = double
-  // underline dashes drawn beneath; the FINAL transcript word lands in yellow
-  // chalk (sign-off). Band yields during the apex landing, restores after.
-  const b = dna.body;
-  const stripW = (b.strip && b.strip.w) || 1200;
-  const stripH = (b.strip && b.strip.h) || 148;
-  const SX = (b.strip && b.strip.x) ?? Math.round((W - stripW) / 2);
-  const ST = H - ((b.strip && b.strip.bottomPx) ?? 0) - stripH;
-  const rows = b.rows || [26, 82];
-  const R = rows.length;
-  const kw = stripW / 1200,
-    kh = stripH / 148; // furniture scales with the strip (demo 1200×148)
-  const lineData = LINES.map((L, li) => ({
-    id: "cl" + L.id,
-    top: rows[li % R],
-    words: L.words.map((w, wi) => [
-      w.display,
-      +w.start.toFixed(3),
-      w.minor ? 1 : 0,
-      li === LINES.length - 1 && wi === L.words.length - 1 ? 1 : 0, // yellow sign-off
-    ]),
-  }));
-  // eraser passes: one per phase boundary — swipe after the previous phase's
-  // last word ends, always landing clear of the next phase's first word
-  const erases = [];
-  for (let pi = R; pi < LINES.length; pi += R) {
-    const prevEnd = Math.max(
-      ...LINES.slice(pi - R, pi).map((L) => L.words[L.words.length - 1].end),
-    );
-    const nextIn = LINES[pi].in;
-    const t = +Math.max(
-      prevEnd + 0.05,
-      Math.min(prevEnd + (b.eraseDelay ?? 0.23), nextIn - 0.9),
-    ).toFixed(3);
-    erases.push({ t, lines: lineData.slice(pi - R, pi).map((L) => L.id) });
-  }
-  const css = `
+	// CHALKRAIL: night-lecture chalk band — a deep-green board strip (worn top
+	// hairline, eraser smudges, handwritten header tag, two chalk sticks) docked
+	// at the bottom edge holds reading rows that ACCUMULATE: lines fill the rows
+	// top→bottom in phases of rows.length; when the next phase needs the rows an
+	// ERASER SWIPE clears the board (a blurred light band sweeps across, the
+	// words SMEAR out scaleX 1.3 + blur(8), faint ghost smudges stay — chalk
+	// never fully erases). Words are chalk-written fast: 2-frame pop + scribble
+	// clip-reveal steps(4) + 6 seeded dust specks puffing at the base + seeded
+	// ±2° tilt = the chalkwrite verb at low amplitude. Emphasis = double
+	// underline dashes drawn beneath; the FINAL transcript word lands in yellow
+	// chalk (sign-off). Band yields during the apex landing, restores after.
+	const b = dna.body;
+	const stripW = (b.strip && b.strip.w) || 1200;
+	const stripH = (b.strip && b.strip.h) || 148;
+	const SX = (b.strip && b.strip.x) ?? Math.round((W - stripW) / 2);
+	const ST = H - ((b.strip && b.strip.bottomPx) ?? 0) - stripH;
+	const rows = b.rows || [26, 82];
+	const R = rows.length;
+	const kw = stripW / 1200,
+		kh = stripH / 148; // furniture scales with the strip (demo 1200×148)
+	const lineData = LINES.map((L, li) => ({
+		id: "cl" + L.id,
+		top: rows[li % R],
+		words: L.words.map((w, wi) => [
+			w.display,
+			+w.start.toFixed(3),
+			w.minor ? 1 : 0,
+			li === LINES.length - 1 && wi === L.words.length - 1 ? 1 : 0, // yellow sign-off
+		]),
+	}));
+	// eraser passes: one per phase boundary — swipe after the previous phase's
+	// last word ends, always landing clear of the next phase's first word
+	const erases = [];
+	for (let pi = R; pi < LINES.length; pi += R) {
+		const prevEnd = Math.max(
+			...LINES.slice(pi - R, pi).map((L) => L.words[L.words.length - 1].end),
+		);
+		const nextIn = LINES[pi].in;
+		const t = +Math.max(
+			prevEnd + 0.05,
+			Math.min(prevEnd + (b.eraseDelay ?? 0.23), nextIn - 0.9),
+		).toFixed(3);
+		erases.push({ t, lines: lineData.slice(pi - R, pi).map((L) => L.id) });
+	}
+	const css = `
   #cband { position:absolute; left:${SX}px; top:${ST}px; width:${stripW}px; height:${stripH}px; opacity:0;
            background: linear-gradient(180deg, ${dna.palette.bandHi || "#23392d"} 0%, ${dna.palette.board || "#1d3328"} 45%, ${dna.palette.bandLo || "#16271f"} 100%);
            border-radius:8px 8px 0 0;
@@ -4275,7 +4484,7 @@ function paradigmChalkrail() {
   #ceraser { position:absolute; top:-8px; left:0; width:120px; height:${stripH + 16}px; opacity:0;
              background: linear-gradient(100deg, rgba(236,242,236,0) 0%, rgba(236,242,236,0.30) 45%, rgba(236,242,236,0) 100%);
              filter: blur(5px); }`;
-  const html = `      <div id="cband">
+	const html = `      <div id="cband">
         <div class="hairline"></div>
         <div class="smg" id="csmg1"></div>
         <div class="smg" id="csmg2"></div>
@@ -4287,7 +4496,7 @@ ${lineData.map((L) => `        <div class="crow" id="${L.id}" style="top:${L.top
         <div id="cstickY"></div>
         <div id="ceraser"></div>
       </div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: CHALKRAIL (chalk scribble pop / eraser-swipe phases) ----
   const RAILC = ${J(lineData)};
   const ERASES = ${J(erases)};
@@ -4366,54 +4575,54 @@ ${lineData.map((L) => `        <div class="crow" id="${L.id}" style="top:${L.top
     }
   });
 ${
-  !HEROLESS && b.yield && !heroInline
-    ? `
+	!HEROLESS && b.yield && !heroInline
+		? `
   // APEX OWNS ITS WINDOW — band yields while the chalk word writes, restores
   tl.to("#cband", { opacity: ${b.yield.dim}, duration: 0.14, ease: "power1.in"  }, ${(heroIn - (b.yield.pre || 0.07)).toFixed(3)});
 ${
-  heroIn + (b.yield.post || 0.41) < DUR - 0.3
-    ? `  tl.to("#cband", { opacity: 1,    duration: 0.22, ease: "power1.out" }, ${(heroIn + (b.yield.post || 0.41)).toFixed(3)});`
-    : ""
+	heroIn + (b.yield.post || 0.41) < DUR - 0.3
+		? `  tl.to("#cband", { opacity: 1,    duration: 0.22, ease: "power1.out" }, ${(heroIn + (b.yield.post || 0.41)).toFixed(3)});`
+		: ""
 }`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmMarkerrail() {
-  // MARKERRAIL: street handstyle rail — marker words FLICK onto a stable
-  // bottom rail (opacity full in 1 frame + 1-frame squeak skew, seeded crooked
-  // rotation settling back.out — the spray-write verb at low amplitude);
-  // emphasis words take an alternating paint color (`palette.em`/`em2`) + a
-  // spray-underline SWOOSH (dash-revealed squiggle) with 8 seeded overspray
-  // dots; the FINAL transcript word lands BIG in `palette.em` with mini
-  // apex-impact physics (crush → squash → elastic — it rides the plate punch).
-  // Spent lines are ROLLER-BUFFED: a gray paint roller sweeps across, the
-  // words vanish under it and the wet smear lingers before fading; the last
-  // line is never buffed (the sign-off stays painted). Rail yields while the
-  // apex tag writes.
-  const b = dna.body;
-  const EMS = [
-    dna.palette.em || dna.palette.accent,
-    dna.palette.em2 || dna.palette.em || dna.palette.accent,
-  ];
-  let emIdx = 0;
-  const lineData = LINES.map((L, li) => ({
-    id: "mr" + L.id,
-    in: +L.in.toFixed(3),
-    out: +L.out.toFixed(3),
-    last: li === LINES.length - 1 ? 1 : 0,
-    words: L.words.map((w, wi) => {
-      const signoff = li === LINES.length - 1 && wi === L.words.length - 1;
-      return [
-        w.display,
-        +w.start.toFixed(3),
-        signoff ? EMS[0] : w.minor ? EMS[emIdx++ % EMS.length] : 0,
-        signoff ? 1 : 0,
-      ];
-    }),
-  }));
-  const css = `
+	// MARKERRAIL: street handstyle rail — marker words FLICK onto a stable
+	// bottom rail (opacity full in 1 frame + 1-frame squeak skew, seeded crooked
+	// rotation settling back.out — the spray-write verb at low amplitude);
+	// emphasis words take an alternating paint color (`palette.em`/`em2`) + a
+	// spray-underline SWOOSH (dash-revealed squiggle) with 8 seeded overspray
+	// dots; the FINAL transcript word lands BIG in `palette.em` with mini
+	// apex-impact physics (crush → squash → elastic — it rides the plate punch).
+	// Spent lines are ROLLER-BUFFED: a gray paint roller sweeps across, the
+	// words vanish under it and the wet smear lingers before fading; the last
+	// line is never buffed (the sign-off stays painted). Rail yields while the
+	// apex tag writes.
+	const b = dna.body;
+	const EMS = [
+		dna.palette.em || dna.palette.accent,
+		dna.palette.em2 || dna.palette.em || dna.palette.accent,
+	];
+	let emIdx = 0;
+	const lineData = LINES.map((L, li) => ({
+		id: "mr" + L.id,
+		in: +L.in.toFixed(3),
+		out: +L.out.toFixed(3),
+		last: li === LINES.length - 1 ? 1 : 0,
+		words: L.words.map((w, wi) => {
+			const signoff = li === LINES.length - 1 && wi === L.words.length - 1;
+			return [
+				w.display,
+				+w.start.toFixed(3),
+				signoff ? EMS[0] : w.minor ? EMS[emIdx++ % EMS.length] : 0,
+				signoff ? 1 : 0,
+			];
+		}),
+	}));
+	const css = `
   .mline { position:absolute; left:${W / 2}px; top:${H - b.bottomPx}px; opacity:0; white-space:nowrap;
            font-family:'${dna.fonts.body}', cursive; font-size:${b.fontPx}px; line-height:1.25;
            color:${dna.palette.body};
@@ -4426,8 +4635,10 @@ function paradigmMarkerrail() {
   .muline { position:absolute; left:-8%; top:100%; width:116%; height:26px; margin-top:-8px;
             overflow:visible; }
   .modot { position:absolute; width:5px; height:5px; border-radius:50%; opacity:0; }`;
-  const html = lineData.map((L) => `      <div class="mline" id="${L.id}"></div>`).join("\n");
-  const js = `
+	const html = lineData
+		.map((L) => `      <div class="mline" id="${L.id}"></div>`)
+		.join("\n");
+	const js = `
   // ---- body paradigm: MARKERRAIL (marker flick in / roller buff out) ----
   const RAILM = ${J(lineData)};
   const DURM = ${(DUR - 0.02).toFixed(3)};
@@ -4502,8 +4713,8 @@ function paradigmMarkerrail() {
     }
   });
 ${
-  !HEROLESS && b.yield && !heroInline
-    ? `  // APEX OWNS ITS WINDOW — the line visible at the tag's onset yields.
+	!HEROLESS && b.yield && !heroInline
+		? `  // APEX OWNS ITS WINDOW — the line visible at the tag's onset yields.
   // Restore only with runway before the buff (else the line exits dimmed).
   RAILM.forEach((L) => {
     if (L.in <= ${heroIn.toFixed(3)} && L.out > ${(heroIn - (b.yield.pre || 0.04)).toFixed(3)}) {
@@ -4517,56 +4728,68 @@ ${
       }
     }
   });`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmBrushrail() {
-  // BRUSHRAIL: washi paper band — a deckle-edged paper band (two faintly
-  // rotated under-sheets + a warm translucent main sheet) swipes in L→R behind
-  // a traveling brush-head shadow (the ink gesture at low amplitude); body
-  // words are brush-WIPED on (clip reveal 0.16s behind a per-word brush head)
-  // on centered replace-lines with seeded ±1° tilt; emphasis words get a
-  // double curved ink underline drawn beneath (fat wash + tight core); spent
-  // lines are wiped OFF right-to-left like a wet cloth (the reveal in reverse,
-  // an erase brush head riding the wipe); the band + the line under the
-  // gesture yield while the apex lands, and the band exits with the last line
-  // on one final R→L wipe.
-  const b = dna.body;
-  const stripW = (b.strip && b.strip.w) || 820;
-  const stripH = (b.strip && b.strip.h) || 90;
-  const SX = (b.strip && b.strip.x) ?? Math.round((W - stripW) / 2);
-  const ST = H - ((b.strip && b.strip.bottomPx) ?? 61) - stripH;
-  const CX = SX + Math.round(stripW / 2),
-    CY = ST + Math.round(stripH / 2);
-  const lineY = CY - 1;
-  const maxHold = b.maxHold ?? 0.78;
-  const lineData = LINES.map((L, li) => {
-    const lastSt = L.words[L.words.length - 1].start;
-    // erase: as the next line needs the surface, or after maxHold in silence;
-    // the LAST line is wiped with the band just before the clip ends
-    let eraseT, eraseEnd;
-    if (li === LINES.length - 1) {
-      eraseT = +(DUR - 0.142).toFixed(3);
-      eraseEnd = +(DUR - 0.032).toFixed(3);
-    } else {
-      eraseT = +Math.max(lastSt + 0.18, Math.min(L.out - 0.136, lastSt + maxHold)).toFixed(3);
-      eraseEnd = +Math.max(eraseT + 0.06, Math.min(L.out + 0.004, eraseT + 0.14)).toFixed(3);
-    }
-    return {
-      id: "br" + L.id,
-      eraseT,
-      eraseEnd,
-      words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-    };
-  });
-  const lastE = lineData[lineData.length - 1].eraseT;
-  const heroLi = heroInline ? -1 : LINES.findIndex((L) => heroIn >= L.in - 0.01 && heroIn < L.out);
-  const INKB = dna.palette.body || "#221a12"; // brush-head shadow = the body ink
-  const breD = Math.min(5.5, DUR - 0.55).toFixed(2);
-  const breN = Math.max(16, Math.round(breD * 11.6));
-  const css = `
+	// BRUSHRAIL: washi paper band — a deckle-edged paper band (two faintly
+	// rotated under-sheets + a warm translucent main sheet) swipes in L→R behind
+	// a traveling brush-head shadow (the ink gesture at low amplitude); body
+	// words are brush-WIPED on (clip reveal 0.16s behind a per-word brush head)
+	// on centered replace-lines with seeded ±1° tilt; emphasis words get a
+	// double curved ink underline drawn beneath (fat wash + tight core); spent
+	// lines are wiped OFF right-to-left like a wet cloth (the reveal in reverse,
+	// an erase brush head riding the wipe); the band + the line under the
+	// gesture yield while the apex lands, and the band exits with the last line
+	// on one final R→L wipe.
+	const b = dna.body;
+	const stripW = (b.strip && b.strip.w) || 820;
+	const stripH = (b.strip && b.strip.h) || 90;
+	const SX = (b.strip && b.strip.x) ?? Math.round((W - stripW) / 2);
+	const ST = H - ((b.strip && b.strip.bottomPx) ?? 61) - stripH;
+	const CX = SX + Math.round(stripW / 2),
+		CY = ST + Math.round(stripH / 2);
+	const lineY = CY - 1;
+	const maxHold = b.maxHold ?? 0.78;
+	const lineData = LINES.map((L, li) => {
+		const lastSt = L.words[L.words.length - 1].start;
+		// erase: as the next line needs the surface, or after maxHold in silence;
+		// the LAST line is wiped with the band just before the clip ends
+		let eraseT, eraseEnd;
+		if (li === LINES.length - 1) {
+			eraseT = +(DUR - 0.142).toFixed(3);
+			eraseEnd = +(DUR - 0.032).toFixed(3);
+		} else {
+			eraseT = +Math.max(
+				lastSt + 0.18,
+				Math.min(L.out - 0.136, lastSt + maxHold),
+			).toFixed(3);
+			eraseEnd = +Math.max(
+				eraseT + 0.06,
+				Math.min(L.out + 0.004, eraseT + 0.14),
+			).toFixed(3);
+		}
+		return {
+			id: "br" + L.id,
+			eraseT,
+			eraseEnd,
+			words: L.words.map((w) => [
+				w.display,
+				+w.start.toFixed(3),
+				w.minor ? 1 : 0,
+			]),
+		};
+	});
+	const lastE = lineData[lineData.length - 1].eraseT;
+	const heroLi = heroInline
+		? -1
+		: LINES.findIndex((L) => heroIn >= L.in - 0.01 && heroIn < L.out);
+	const INKB = dna.palette.body || "#221a12"; // brush-head shadow = the body ink
+	const breD = Math.min(5.5, DUR - 0.55).toFixed(2);
+	const breN = Math.max(16, Math.round(breD * 11.6));
+	const css = `
   #band { position:absolute; left:${CX}px; top:${CY}px; width:${stripW}px; height:${stripH}px; }
   .bandu { position:absolute; inset:0; border-radius:8px;
            background: linear-gradient(180deg, ${dna.palette.paperHi || "#efe8d7"} 0%, ${dna.palette.paperLo || "#e7dfcb"} 100%); }
@@ -4592,7 +4815,7 @@ function paradigmBrushrail() {
   .bline .ebh  { position:absolute; top:-18%; width:34px; height:136%; opacity:0;
                  background: linear-gradient(270deg, ${INKB}00 0%, ${INKB}80 100%);
                  filter: blur(7px); }`;
-  const html = `      <div id="band">
+	const html = `      <div id="band">
         <div class="bandu" id="bandu1"></div>
         <div class="bandu" id="bandu2"></div>
         <div id="bandmain"></div>
@@ -4601,7 +4824,7 @@ function paradigmBrushrail() {
       <div id="blines">
 ${lineData.map((L) => `        <div class="bline" id="${L.id}"></div>`).join("\n")}
       </div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: BRUSHRAIL (brush-wipe reveals / wet-cloth wipe exits) ----
   const RAILB = ${J(lineData)};
   const brnd = mulberry32(${b.seed || 20260611});
@@ -4682,16 +4905,16 @@ ${lineData.map((L) => `        <div class="bline" id="${L.id}"></div>`).join("\n
     tl.set(line, { opacity: 0 }, L.eraseEnd + 0.02);
   });
 ${
-  !HEROLESS && b.yield && !heroInline
-    ? `
+	!HEROLESS && b.yield && !heroInline
+		? `
   // APEX OWNS ITS WINDOW — band + the line under the gesture yield, band restores
   tl.to(${heroLi >= 0 ? `["#band", "#br${heroLi}"]` : `"#band"`}, { opacity: ${b.yield.dim}, duration: 0.16 }, ${(heroIn - (b.yield.pre || 0.16)).toFixed(3)});
 ${
-  heroIn + (b.yield.post || 0.46) + 0.3 < DUR
-    ? `  tl.to("#band", { opacity: 1, duration: 0.18 }, ${(heroIn + (b.yield.post || 0.46)).toFixed(3)});`
-    : ""
+	heroIn + (b.yield.post || 0.46) + 0.3 < DUR
+		? `  tl.to("#band", { opacity: 1, duration: 0.18 }, ${(heroIn + (b.yield.post || 0.46)).toFixed(3)});`
+		: ""
 }`
-    : ""
+		: ""
 }
 
   // ending: the band itself is wiped off with the last line (one final R→L wipe)
@@ -4699,52 +4922,56 @@ ${
   tl.fromTo("#bandbh", { left: "100%", opacity: 0.6 },
             { left: -30, opacity: 0.6, duration: 0.13, ease: "power2.in" }, ${lastE});
   tl.set("#bandbh", { opacity: 0 }, ${Math.min(lastE + 0.14, DUR - 0.01).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function paradigmInkrail() {
-  // INKRAIL: sumi ink on still water — up to three fixed reading ROWS at the
-  // bottom center (rows cycle in pairs, the closing line takes the third row,
-  // so the final thought ACCUMULATES instead of replacing) where Mincho-serif
-  // ink words BLEED in over a paper-white halo glow (opacity snaps in 2
-  // frames; blur 12→0 + scale 1.25→1 carry the bleed — the apex bloom at low
-  // amplitude) while a duplicate blurred dark halo overshoots then tightens;
-  // an ink-settling RULE (gradient hairline) draws beneath each line;
-  // emphasis words shed a faint ink wisp curling off the word top; spent
-  // lines RE-DISSOLVE (blur up + spread + fade + slight rise — ink dispersing
-  // back into the water) as the line-after-next approaches (= the next
-  // occupant of their row); the closing lines persist to clip end; the rows
-  // visible under the bloom yield while the drop blooms.
-  const b = dna.body;
-  const rowGap = b.rowGap ?? 56;
-  const bottomPx = b.bottomPx ?? 36; // center of the LAST reading row
-  const n = LINES.length;
-  const base = n >= 3 ? 0 : 3 - n; // few lines sink to the lower rows
-  const lineData = LINES.map((L, li) => {
-    const slot = li === n - 1 && n >= 3 ? 2 : base + (li % 2);
-    let outT = null,
-      outDur = 0;
-    if (li + 2 < n) {
-      // re-dissolve as the line-after-next approaches; never dissolve mid-read
-      outDur = +Math.max(0.35, 0.5 - 0.05 * li).toFixed(2);
-      outT = +Math.max(
-        L.words[L.words.length - 1].start + 0.25,
-        LINES[li + 2].words[0].start - outDur - 0.05,
-      ).toFixed(3);
-    }
-    return {
-      id: "ik" + L.id,
-      in: +L.in.toFixed(3),
-      y: H - bottomPx - (2 - slot) * rowGap,
-      outT,
-      outDur,
-      words: L.words.map((w) => [w.display, +w.start.toFixed(3), w.minor ? 1 : 0]),
-    };
-  });
-  const INK = dna.palette.body;
-  const PAP = dna.palette.paper || "#fffaee",
-    PAP2 = dna.palette.paper2 || "#fff8e8";
-  const css = `
+	// INKRAIL: sumi ink on still water — up to three fixed reading ROWS at the
+	// bottom center (rows cycle in pairs, the closing line takes the third row,
+	// so the final thought ACCUMULATES instead of replacing) where Mincho-serif
+	// ink words BLEED in over a paper-white halo glow (opacity snaps in 2
+	// frames; blur 12→0 + scale 1.25→1 carry the bleed — the apex bloom at low
+	// amplitude) while a duplicate blurred dark halo overshoots then tightens;
+	// an ink-settling RULE (gradient hairline) draws beneath each line;
+	// emphasis words shed a faint ink wisp curling off the word top; spent
+	// lines RE-DISSOLVE (blur up + spread + fade + slight rise — ink dispersing
+	// back into the water) as the line-after-next approaches (= the next
+	// occupant of their row); the closing lines persist to clip end; the rows
+	// visible under the bloom yield while the drop blooms.
+	const b = dna.body;
+	const rowGap = b.rowGap ?? 56;
+	const bottomPx = b.bottomPx ?? 36; // center of the LAST reading row
+	const n = LINES.length;
+	const base = n >= 3 ? 0 : 3 - n; // few lines sink to the lower rows
+	const lineData = LINES.map((L, li) => {
+		const slot = li === n - 1 && n >= 3 ? 2 : base + (li % 2);
+		let outT = null,
+			outDur = 0;
+		if (li + 2 < n) {
+			// re-dissolve as the line-after-next approaches; never dissolve mid-read
+			outDur = +Math.max(0.35, 0.5 - 0.05 * li).toFixed(2);
+			outT = +Math.max(
+				L.words[L.words.length - 1].start + 0.25,
+				LINES[li + 2].words[0].start - outDur - 0.05,
+			).toFixed(3);
+		}
+		return {
+			id: "ik" + L.id,
+			in: +L.in.toFixed(3),
+			y: H - bottomPx - (2 - slot) * rowGap,
+			outT,
+			outDur,
+			words: L.words.map((w) => [
+				w.display,
+				+w.start.toFixed(3),
+				w.minor ? 1 : 0,
+			]),
+		};
+	});
+	const INK = dna.palette.body;
+	const PAP = dna.palette.paper || "#fffaee",
+		PAP2 = dna.palette.paper2 || "#fff8e8";
+	const css = `
   .irow { position:absolute; left:${W / 2}px; opacity:0; white-space:nowrap;
           font-family:'${dna.fonts.body}', serif; font-weight:${b.weight || 400};
           font-size:${b.fontPx}px; line-height:1.25; letter-spacing:${b.letterSpacing || "0.055em"};
@@ -4761,10 +4988,12 @@ function paradigmInkrail() {
   .iwisp { position:absolute; left:50%; top:-16px; width:22px; height:28px;
            margin-left:-11px; opacity:0; border:3px solid transparent;
            border-top-color:${INK}8c; border-radius:50%; filter:blur(2px); }`;
-  const html = lineData
-    .map((L) => `      <div class="irow" id="${L.id}" style="top:${L.y}px"></div>`)
-    .join("\n");
-  const js = `
+	const html = lineData
+		.map(
+			(L) => `      <div class="irow" id="${L.id}" style="top:${L.y}px"></div>`,
+		)
+		.join("\n");
+	const js = `
   // ---- body paradigm: INKRAIL (ink bleed-in / re-dissolve exits) ----
   const RAILI = ${J(lineData)};
   const IKLATE = ${(DUR - 0.84).toFixed(3)}; // late words bleed faster (resolve before clip end)
@@ -4817,8 +5046,8 @@ function paradigmInkrail() {
     }
   });
 ${
-  !HEROLESS && b.yield && !heroInline
-    ? `
+	!HEROLESS && b.yield && !heroInline
+		? `
   // rows visible under the bloom yield while the drop blooms, restore after.
   // Overlap guards: dim only after the line is IN with runway before its exit;
   // restore only with clear runway (else the line exits dimmed — one owner).
@@ -4831,17 +5060,17 @@ ${
         tl.to("#" + L.id, { opacity: 1, duration: 0.3, ease: "power1.out" }, resT);
     }
   });`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 // ---- ransom shared pieces: the cutout-chip recipes and the seeded paper-tear
 // polygon are ONE paper stock used by both layers (ransomrail body chips in the
 // fg, ransomnote letter chips in the bg) — emitted into each page separately
 function ransomChipCss(ls) {
-  const p = dna.palette;
-  return `
+	const p = dna.palette;
+	return `
   .ca { background:${p.paper || "#f5f1e4"}; color:${p.paperInk || "#17130d"}; font-family:'${dna.fonts.body}', sans-serif; letter-spacing:${ls}; }
   .cb { background:${p.dark || "#141414"}; color:${p.darkInk || "#f7f5ef"}; font-family:'${dna.fonts.dark}', sans-serif; font-weight:800; }
   .cc { background:${p.news || "#d8d3c5"}; color:${p.newsInk || "#262017"}; font-family:'${dna.fonts.news}', monospace; }
@@ -4857,45 +5086,60 @@ const RANSOM_TEAR = `function tearPoly(r){
   }`;
 
 function paradigmRansomrail() {
-  // RANSOMRAIL: kidnapper's collage — every transcript word is a cutout chip
-  // in one of 4 cycled recipes (paper/Anton, black/Inter-800, newsprint/
-  // Special Elite, accent/Permanent Marker; emphasis words snap to the accent
-  // chip) PASTED along the bottom rail line with seeded crookedness, seeded
-  // ±px sizes and misaligned baselines — the paste is the apex slam motif at
-  // low amplitude (1f appear at scale 1.12 → power3.in crush → 2-frame contact
-  // squash → elastic settle). Emphasis = 1-frame RE-PASTE lift (shadow grows,
-  // rotation flips sign for good); exits = chips RIPPED off one by one with
-  // 1-frame paper-tear flashes under each; lines breathe through their hold;
-  // the whole railwrap yields while the apex letters slam behind the subject.
-  const b = dna.body;
-  const last = LINES.length - 1;
-  const lineData = LINES.map((L, li) => {
-    const n = L.words.length;
-    const stag = li === last ? 0.04 : 0.045;
-    const ripDur = li === last ? 0.12 : 0.14;
-    const lastSt = L.words[n - 1].start;
-    // rip cadence (demo): chips tear off just before the next line pastes —
-    // the rip tail overlaps the new line a beat (collage chaos, by design);
-    // a line whose last word just spoke waits lastWord+0.14 first
-    let ripStart =
-      li === last
-        ? Math.min(L.out - 0.04, DUR - 0.06 - ripDur - stag * (n - 1))
-        : Math.max(lastSt + 0.14, LINES[li + 1].in - ripDur - stag * (n - 1) + 0.05);
-    ripStart = +Math.min(ripStart, DUR - 0.06 - ripDur - stag * (n - 1)).toFixed(3);
-    const words = L.words.map((w, wi) => {
-      const st = +w.start.toFixed(3);
-      const R = +Math.max(ripStart + stag * wi, st + 0.12).toFixed(3);
-      // re-paste lift: needs its own window before the chip's rip
-      let emphT = w.minor ? +Math.min(st + (b.emphDelay ?? 0.23), R - 0.27).toFixed(3) : 0;
-      if (emphT && emphT < st + 0.08) emphT = 0;
-      return [w.display, st, emphT, R, w.minor ? 1 : 0];
-    });
-    // hold life: gentle collage breathe on the whole line (demo cadence)
-    const bs = +(L.words[0].start + 0.08).toFixed(3);
-    const bd = +Math.min(1.8, ripStart - 0.03 - bs).toFixed(2);
-    return { id: "rr" + L.id, in: +L.in.toFixed(3), ripDur, words, bs, bd: bd >= 0.3 ? bd : 0 };
-  });
-  const css = `
+	// RANSOMRAIL: kidnapper's collage — every transcript word is a cutout chip
+	// in one of 4 cycled recipes (paper/Anton, black/Inter-800, newsprint/
+	// Special Elite, accent/Permanent Marker; emphasis words snap to the accent
+	// chip) PASTED along the bottom rail line with seeded crookedness, seeded
+	// ±px sizes and misaligned baselines — the paste is the apex slam motif at
+	// low amplitude (1f appear at scale 1.12 → power3.in crush → 2-frame contact
+	// squash → elastic settle). Emphasis = 1-frame RE-PASTE lift (shadow grows,
+	// rotation flips sign for good); exits = chips RIPPED off one by one with
+	// 1-frame paper-tear flashes under each; lines breathe through their hold;
+	// the whole railwrap yields while the apex letters slam behind the subject.
+	const b = dna.body;
+	const last = LINES.length - 1;
+	const lineData = LINES.map((L, li) => {
+		const n = L.words.length;
+		const stag = li === last ? 0.04 : 0.045;
+		const ripDur = li === last ? 0.12 : 0.14;
+		const lastSt = L.words[n - 1].start;
+		// rip cadence (demo): chips tear off just before the next line pastes —
+		// the rip tail overlaps the new line a beat (collage chaos, by design);
+		// a line whose last word just spoke waits lastWord+0.14 first
+		let ripStart =
+			li === last
+				? Math.min(L.out - 0.04, DUR - 0.06 - ripDur - stag * (n - 1))
+				: Math.max(
+						lastSt + 0.14,
+						LINES[li + 1].in - ripDur - stag * (n - 1) + 0.05,
+					);
+		ripStart = +Math.min(
+			ripStart,
+			DUR - 0.06 - ripDur - stag * (n - 1),
+		).toFixed(3);
+		const words = L.words.map((w, wi) => {
+			const st = +w.start.toFixed(3);
+			const R = +Math.max(ripStart + stag * wi, st + 0.12).toFixed(3);
+			// re-paste lift: needs its own window before the chip's rip
+			let emphT = w.minor
+				? +Math.min(st + (b.emphDelay ?? 0.23), R - 0.27).toFixed(3)
+				: 0;
+			if (emphT && emphT < st + 0.08) emphT = 0;
+			return [w.display, st, emphT, R, w.minor ? 1 : 0];
+		});
+		// hold life: gentle collage breathe on the whole line (demo cadence)
+		const bs = +(L.words[0].start + 0.08).toFixed(3);
+		const bd = +Math.min(1.8, ripStart - 0.03 - bs).toFixed(2);
+		return {
+			id: "rr" + L.id,
+			in: +L.in.toFixed(3),
+			ripDur,
+			words,
+			bs,
+			bd: bd >= 0.3 ? bd : 0,
+		};
+	});
+	const css = `
   #rrailwrap { position:absolute; inset:0; }
   .rline { position:absolute; left:${W / 2}px; top:${H - b.bottomPx}px; white-space:nowrap; }
   .rline .w  { display:inline-block; position:relative; margin:0 5px; }
@@ -4905,10 +5149,10 @@ function paradigmRansomrail() {
   .rchip { display:inline-block; line-height:1.05; padding:0.08em 0.16em 0.11em;
            text-transform:${b.textTransform || "uppercase"}; }
 ${ransomChipCss(b.letterSpacing || "0.02em")}`;
-  const html = `      <div id="rrailwrap">
+	const html = `      <div id="rrailwrap">
 ${lineData.map((L) => `        <div class="rline" id="${L.id}"></div>`).join("\n")}
       </div>`;
-  const js = `
+	const js = `
   // ---- body paradigm: RANSOMRAIL (chips pasted crooked / ripped off with tear flashes) ----
   const RAILR = ${J(lineData)};
   const crnd = mulberry32(${b.seed || 3940});
@@ -4965,92 +5209,95 @@ ${lineData.map((L) => `        <div class="rline" id="${L.id}"></div>`).join("\n
                             duration: L.bd, ease: "none" }, L.bs);
   });
 ${
-  !HEROLESS && b.yield && !heroInline
-    ? `  // rail yields while the apex letters slam behind the subject (container
+	!HEROLESS && b.yield && !heroInline
+		? `  // rail yields while the apex letters slam behind the subject (container
   // opacity — never contests the per-chip channels)
   tl.to("#rrailwrap", { opacity: ${b.yield.dim}, duration: 0.12 }, ${Math.max(0.05, heroIn - (b.yield.pre ?? 0.02)).toFixed(3)});
 ${
-  heroIn + (b.yield.post ?? 0.71) < DUR - 0.3
-    ? `  tl.to("#rrailwrap", { opacity: 1, duration: 0.2 }, ${(heroIn + (b.yield.post ?? 0.71)).toFixed(3)});`
-    : ""
+	heroIn + (b.yield.post ?? 0.71) < DUR - 0.3
+		? `  tl.to("#rrailwrap", { opacity: 1, duration: 0.2 }, ${(heroIn + (b.yield.post ?? 0.71)).toFixed(3)});`
+		: ""
 }`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 const PARADIGMS = {
-  rail: paradigmRail,
-  panel: paradigmPanel,
-  poem: paradigmPoem,
-  takeover: paradigmTakeover,
-  lastpage: paradigmLastpage,
-  flaprail: paradigmFlaprail,
-  ledboard: paradigmLedboard,
-  vhsrail: paradigmVhsrail,
-  hudrail: paradigmHudrail,
-  carbonstrip: paradigmCarbonstrip,
-  laserrail: paradigmLaserrail,
-  stormrail: paradigmStormrail,
-  holorail: paradigmHolorail,
-  planktonrail: paradigmPlanktonrail,
-  sheenrail: paradigmSheenrail,
-  scoperail: paradigmScoperail,
-  paperrail: paradigmPaperrail,
-  popuprail: paradigmPopuprail,
-  chalkrail: paradigmChalkrail,
-  markerrail: paradigmMarkerrail,
-  brushrail: paradigmBrushrail,
-  inkrail: paradigmInkrail,
-  ransomrail: paradigmRansomrail,
+	rail: paradigmRail,
+	panel: paradigmPanel,
+	poem: paradigmPoem,
+	takeover: paradigmTakeover,
+	lastpage: paradigmLastpage,
+	flaprail: paradigmFlaprail,
+	ledboard: paradigmLedboard,
+	vhsrail: paradigmVhsrail,
+	hudrail: paradigmHudrail,
+	carbonstrip: paradigmCarbonstrip,
+	laserrail: paradigmLaserrail,
+	stormrail: paradigmStormrail,
+	holorail: paradigmHolorail,
+	planktonrail: paradigmPlanktonrail,
+	sheenrail: paradigmSheenrail,
+	scoperail: paradigmScoperail,
+	paperrail: paradigmPaperrail,
+	popuprail: paradigmPopuprail,
+	chalkrail: paradigmChalkrail,
+	markerrail: paradigmMarkerrail,
+	brushrail: paradigmBrushrail,
+	inkrail: paradigmInkrail,
+	ransomrail: paradigmRansomrail,
 };
 
 function setpieceCpslam() {
-  // CP-language EMBED climax: acid-yellow word slams in BEHIND the subject with
-  // REAL notch cuts (SVG mask = true transparency over footage), a chromatic
-  // split that settles to a PERMANENT registration error, seeded glitch ticks,
-  // and a glitch-out exit. The frame stays footage — the word is set dressing.
-  const h = dna.hero,
-    p = h.params || {},
-    I = heroIn;
-  const YEL = dna.palette.body || "#FCEE0A",
-    CYN = "#00F0FF",
-    RED = "#FF003C";
-  const srnd = (() => {
-    let a = p.seed || 2077;
-    return () => {
-      a |= 0;
-      a = (a + 0x6d2b79f5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  })();
-  const DISP = heroText.toUpperCase(),
-    hpx = HG.fontPx;
-  const halfW = HG.halfW || (DISP.length * 0.56 * hpx) / 2;
-  const BW = Math.round(halfW * 2 + 140),
-    BH = Math.round(hpx * 1.5);
-  const CX = BW - 80 > W ? W / 2 : Math.max(BW / 2 - 40, Math.min(W - BW / 2 + 40, HG.x)),
-    CY = HG.y;
-  // seeded diagonal cuts through the letter band (precision is not the point —
-  // the cuts read as stencil damage wherever they land)
-  const nN = Math.max(2, Math.floor(DISP.length / 2.2));
-  const used = [];
-  while (used.length < nN) {
-    const i = Math.floor(srnd() * DISP.length);
-    if (!used.includes(i)) used.push(i);
-  }
-  const notches = used
-    .map((i, k) => {
-      const cx = BW / 2 - halfW + (i + 0.5) * 0.56 * hpx + (srnd() - 0.5) * 8;
-      const cy = BH / 2 + (k % 2 ? 0.24 : -0.27) * hpx + (srnd() - 0.5) * 10;
-      return `<rect x="${(cx - hpx * 0.12).toFixed(0)}" y="${(cy - hpx * 0.038).toFixed(0)}" width="${(hpx * 0.24).toFixed(0)}" height="${(hpx * 0.076).toFixed(0)}" fill="black" transform="rotate(-45 ${cx.toFixed(0)} ${cy.toFixed(0)})"/>`;
-    })
-    .join("\n            ");
-  const lay = (id, fill) =>
-    `<g id="${id}"><rect x="0" y="0" width="${BW}" height="${BH}" fill="${fill}" mask="url(#cpm)"/></g>`;
-  const css = `
+	// CP-language EMBED climax: acid-yellow word slams in BEHIND the subject with
+	// REAL notch cuts (SVG mask = true transparency over footage), a chromatic
+	// split that settles to a PERMANENT registration error, seeded glitch ticks,
+	// and a glitch-out exit. The frame stays footage — the word is set dressing.
+	const h = dna.hero,
+		p = h.params || {},
+		I = heroIn;
+	const YEL = dna.palette.body || "#FCEE0A",
+		CYN = "#00F0FF",
+		RED = "#FF003C";
+	const srnd = (() => {
+		let a = p.seed || 2077;
+		return () => {
+			a |= 0;
+			a = (a + 0x6d2b79f5) | 0;
+			let t = Math.imul(a ^ (a >>> 15), 1 | a);
+			t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+			return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+		};
+	})();
+	const DISP = heroText.toUpperCase(),
+		hpx = HG.fontPx;
+	const halfW = HG.halfW || (DISP.length * 0.56 * hpx) / 2;
+	const BW = Math.round(halfW * 2 + 140),
+		BH = Math.round(hpx * 1.5);
+	const CX =
+			BW - 80 > W
+				? W / 2
+				: Math.max(BW / 2 - 40, Math.min(W - BW / 2 + 40, HG.x)),
+		CY = HG.y;
+	// seeded diagonal cuts through the letter band (precision is not the point —
+	// the cuts read as stencil damage wherever they land)
+	const nN = Math.max(2, Math.floor(DISP.length / 2.2));
+	const used = [];
+	while (used.length < nN) {
+		const i = Math.floor(srnd() * DISP.length);
+		if (!used.includes(i)) used.push(i);
+	}
+	const notches = used
+		.map((i, k) => {
+			const cx = BW / 2 - halfW + (i + 0.5) * 0.56 * hpx + (srnd() - 0.5) * 8;
+			const cy = BH / 2 + (k % 2 ? 0.24 : -0.27) * hpx + (srnd() - 0.5) * 10;
+			return `<rect x="${(cx - hpx * 0.12).toFixed(0)}" y="${(cy - hpx * 0.038).toFixed(0)}" width="${(hpx * 0.24).toFixed(0)}" height="${(hpx * 0.076).toFixed(0)}" fill="black" transform="rotate(-45 ${cx.toFixed(0)} ${cy.toFixed(0)})"/>`;
+		})
+		.join("\n            ");
+	const lay = (id, fill) =>
+		`<g id="${id}"><rect x="0" y="0" width="${BW}" height="${BH}" fill="${fill}" mask="url(#cpm)"/></g>`;
+	const css = `
   #cpband { position:absolute; left:0; top:-80px; width:100%; height:70px; opacity:0;
             background: linear-gradient(180deg, rgba(0,240,255,0) 0%, rgba(0,240,255,0.4) 50%, rgba(0,240,255,0) 100%); }
   #cps { position:absolute; left:${CX}px; top:${CY}px; width:0; height:0; opacity:0; }
@@ -5060,7 +5307,7 @@ function setpieceCpslam() {
             font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif; font-weight:600;
             font-size:20px; letter-spacing:0.5em; text-indent:0.5em; color:${YEL}; opacity:0;
             white-space:nowrap; text-shadow: 0 2px 8px rgba(0,0,0,0.7); }`;
-  const html = `      <div id="cpband"></div>
+	const html = `      <div id="cpband"></div>
       <div id="cps">
         <svg id="cpsW" width="${BW}" height="${BH}" viewBox="0 0 ${BW} ${BH}">
           <defs><mask id="cpm">
@@ -5075,10 +5322,10 @@ function setpieceCpslam() {
         </svg>
         <div id="cpkana">${esc(p.kana || "サイバーパンク")}</div>
       </div>`;
-  // a climax is an EVENT: on long clips holding to clip-end turns it into
-  // wallpaper. Default hold ~2.6s after the slam; hero.exitAt / params.hold override.
-  const EX = theme.hero.exitAt ?? Math.min(heroOut - 0.2, I + (p.hold ?? 2.6));
-  const js = `
+	// a climax is an EVENT: on long clips holding to clip-end turns it into
+	// wallpaper. Default hold ~2.6s after the slam; hero.exitAt / params.hold override.
+	const EX = theme.hero.exitAt ?? Math.min(heroOut - 0.2, I + (p.hold ?? 2.6));
+	const js = `
   // ---- setpiece: CPSLAM (band charge -> crush slam -> permanent registration -> glitch-out) ----
   const I = ${I.toFixed(3)};
   const crnd = mulberry32(${p.seed || 2077});
@@ -5118,15 +5365,15 @@ function setpieceCpslam() {
   RG(15, -1, E);
   tl.set("#cps", { x: -7 }, E + F);
   tl.set("#cps", { opacity: 0, display: "none" }, E + 2 * F);`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceSettle() {
-  const I = heroIn;
-  const E = theme.hero.exitAt ?? Math.min(heroOut, DUR - 0.12);
-  const ruleW = Math.round(2 * HG.halfW * 0.62);
-  const holdDur = Math.max(0.4, E - I - 0.85);
-  const css = `
+	const I = heroIn;
+	const E = theme.hero.exitAt ?? Math.min(heroOut, DUR - 0.12);
+	const ruleW = Math.round(2 * HG.halfW * 0.62);
+	const holdDur = Math.max(0.4, E - I - 0.85);
+	const css = `
   ${dna.plate.dim ? `#dimP { position:absolute; inset:0; opacity:0; background:#06080c; }` : ""}
   #stl { position:absolute; left:${HG.x}px; top:${HG.y}px; transform:translate(-50%,-50%); }
   #stl-w { font-family:'${dna.fonts.hero}', sans-serif; font-weight:700; font-size:${HG.fontPx}px;
@@ -5135,16 +5382,16 @@ function setpieceSettle() {
   #stl-rule { position:absolute; left:50%; bottom:-20px; transform:translateX(-50%);
               width:0; height:3px; border-radius:2px; background:${dna.palette.accent};
               opacity:0.85; box-shadow: 0 1px 8px rgba(0,0,0,0.4); }`;
-  const html = `      ${dna.plate.dim ? `<div id="dimP"></div>` : ""}
+	const html = `      ${dna.plate.dim ? `<div id="dimP"></div>` : ""}
       <div id="stl"><div id="stl-w">${heroDisplay.toUpperCase()}</div><div id="stl-rule"></div></div>`;
-  const js = `
+	const js = `
   // ---- setpiece: SETTLE (quiet blur-settle + accent underline; restraint IS the style) ----
   const I = ${I.toFixed(3)};
 ${
-  dna.plate.dim
-    ? `  tl.fromTo("#dimP", { opacity: 0 }, { opacity: ${dna.plate.dim}, duration: 0.35, ease: "power2.in" }, I - 0.3);
+	dna.plate.dim
+		? `  tl.fromTo("#dimP", { opacity: 0 }, { opacity: ${dna.plate.dim}, duration: 0.35, ease: "power2.in" }, I - 0.3);
   tl.to("#dimP", { opacity: 0, duration: 0.4, ease: "power1.in" }, ${(E + 0.02).toFixed(3)});`
-    : ""
+		: ""
 }
   // opacity lands in ~2 frames; the transform settles separately (no ghost ramp)
   tl.fromTo("#stl-w", { opacity: 0 }, { opacity: 1, duration: 0.09, ease: "power1.out" }, I);
@@ -5158,35 +5405,35 @@ ${
   tl.to("#stl-w", { filter: "blur(5px)", duration: 0.22, ease: "power1.in" }, ${(E - 0.02).toFixed(3)});
   tl.to("#stl", { opacity: 0, y: -10, duration: 0.24, ease: "power2.in" }, ${E.toFixed(3)});
   tl.set("#stl", { display: "none" }, ${(E + 0.26).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 function setpieceFlapboard() {
-  // SPLIT-FLAP DEPARTURES BOARD: floodlights swing on, the housing clacks down
-  // behind the subject, one giant flap tile per char flip-cycles seeded wrong
-  // glyphs then locks the real char left→right with clack rhythm; rule wipes,
-  // status ticker types on; one tile re-flutters during the hold; tiles flip
-  // to blank and the housing flips away.
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const N = heroText.length;
-  const gap = p.gap || 7;
-  const tileW = HG.tileW,
-    tileH = HG.tileH,
-    fpx = HG.fontPx;
-  const lockWin = p.lockWindow || 0.34;
-  const AIN = I - 0.15;
-  const lockEnd = I + lockWin;
-  const E = heroOut;
-  const headH = 34;
-  const boardH = 10 + headH + tileH + 18;
-  const boardW = HG.halfW * 2;
-  const ruleW = Math.round(boardW - 43);
-  const ruleY = Math.round(HG.y + boardH / 2 + 37);
-  const tagW = Math.round((p.tag || "").length * 19);
-  const flutterIdx = Math.min(N - 1, Math.floor(N * 0.6));
-  const exit0 = E - ((N - 1) * 0.03 + 0.09);
-  const css = `
+	// SPLIT-FLAP DEPARTURES BOARD: floodlights swing on, the housing clacks down
+	// behind the subject, one giant flap tile per char flip-cycles seeded wrong
+	// glyphs then locks the real char left→right with clack rhythm; rule wipes,
+	// status ticker types on; one tile re-flutters during the hold; tiles flip
+	// to blank and the housing flips away.
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const N = heroText.length;
+	const gap = p.gap || 7;
+	const tileW = HG.tileW,
+		tileH = HG.tileH,
+		fpx = HG.fontPx;
+	const lockWin = p.lockWindow || 0.34;
+	const AIN = I - 0.15;
+	const lockEnd = I + lockWin;
+	const E = heroOut;
+	const headH = 34;
+	const boardH = 10 + headH + tileH + 18;
+	const boardW = HG.halfW * 2;
+	const ruleW = Math.round(boardW - 43);
+	const ruleY = Math.round(HG.y + boardH / 2 + 37);
+	const tagW = Math.round((p.tag || "").length * 19);
+	const flutterIdx = Math.min(N - 1, Math.floor(N * 0.6));
+	const exit0 = E - ((N - 1) * 0.03 + 0.09);
+	const css = `
   #dimF   { position:absolute; inset:0; opacity:0; background:#06080c; }
   #scrimF { position:absolute; inset:0; opacity:0;
             background: linear-gradient(180deg, rgba(5,7,11,0.72) 0%, rgba(5,7,11,0.3) 42%,
@@ -5227,7 +5474,7 @@ function setpieceFlapboard() {
               overflow:hidden; white-space:nowrap; width:0; }
   #tagF { font-family:'${dna.fonts.tag}', sans-serif; font-weight:600; font-size:27px; letter-spacing:7px;
           color:${dna.palette.hot}; white-space:nowrap; text-shadow: 0 2px 8px rgba(0,0,0,0.7); }`;
-  const html = `      <div id="dimF"></div><div id="scrimF"></div><div id="glowF"></div>
+	const html = `      <div id="dimF"></div><div id="scrimF"></div><div id="glowF"></div>
       <div id="persp">
         <div id="board">
           <div id="bhead"><span>${esc(p.headerLeft || "★ DEPARTURES")}</span><span class="r">${esc(p.headerRight || "")}</span></div>
@@ -5236,7 +5483,7 @@ function setpieceFlapboard() {
       </div>
       <div id="ruleF"></div>
       ${p.tag ? `<div id="tagwrapF"><div id="tagF">${esc(p.tag)}</div></div>` : ""}`;
-  const js = `
+	const js = `
   // ---- setpiece: FLAPBOARD (housing clack → flip-cycle → lock left→right → board life) ----
   const I = ${I.toFixed(3)}, AIN = ${AIN.toFixed(3)}, LOCK0 = I, LSTEP = ${(lockWin / Math.max(1, N - 1)).toFixed(5)};
   const WORDB = ${J(heroText)}, BGLYPHS = ${J(p.glyphs || "ABCDEFGHIKLMNOPRSTUVXYZ0123456789")};
@@ -5332,38 +5579,38 @@ ${p.tag ? `  tl.to("#tagwrapF", { width: 0, duration: 0.16, ease: "steps(8)" }, 
   });
   tl.to("#board", { rotationX: -45, opacity: 0, duration: 0.13, ease: "power2.in" }, ${(E - 0.04).toFixed(3)});
   tl.set("#board", { display: "none" }, ${Math.min(E + 0.08, DUR - 0.015).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceLedwipe() {
-  // TRANSIT LED BOARD: cool scrim + dim charge the room, a departure-board
-  // panel EXPANDS upward (stepped paging motif), then the word lights
-  // column-by-column via a L→R illumination wipe (clipPath steps) inside a
-  // chasing LED-marquee border; PA "ding" = two brightness pulses; hold life =
-  // glow breathe + LED dropouts; exit pages the word up out of the panel and
-  // the panel collapses back down.
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const C = I + (p.wipeDur || 0.3); // wipe completes = contact
-  const E = heroOut;
-  const panelW = HG.panelW,
-    panelH = HG.panelH,
-    fpx = HG.fontPx;
-  const px = Math.round(HG.x - panelW / 2),
-    py = Math.round(HG.y - panelH / 2);
-  const spillW = panelW - 180,
-    spillH = Math.round(panelH * 1.9);
-  const exScroll = +(E - 0.72).toFixed(3);
-  const wipeSteps = Math.max(8, Math.round(heroText.length * 1.4));
-  const A = dna.palette.accent,
-    HOT = dna.palette.hot,
-    GRN = dna.palette.green || "#36e57a";
-  // marquee dot lattice scales with the panel; chase runs until the exit
-  const nTop = Math.max(10, Math.round(panelW / 45));
-  const nSide = Math.max(2, Math.round((panelH - 19) / 52) - 1);
-  const kMax = Math.max(4, Math.floor((exScroll - (I - 0.01)) / 0.1));
-  const css = `
+	// TRANSIT LED BOARD: cool scrim + dim charge the room, a departure-board
+	// panel EXPANDS upward (stepped paging motif), then the word lights
+	// column-by-column via a L→R illumination wipe (clipPath steps) inside a
+	// chasing LED-marquee border; PA "ding" = two brightness pulses; hold life =
+	// glow breathe + LED dropouts; exit pages the word up out of the panel and
+	// the panel collapses back down.
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const C = I + (p.wipeDur || 0.3); // wipe completes = contact
+	const E = heroOut;
+	const panelW = HG.panelW,
+		panelH = HG.panelH,
+		fpx = HG.fontPx;
+	const px = Math.round(HG.x - panelW / 2),
+		py = Math.round(HG.y - panelH / 2);
+	const spillW = panelW - 180,
+		spillH = Math.round(panelH * 1.9);
+	const exScroll = +(E - 0.72).toFixed(3);
+	const wipeSteps = Math.max(8, Math.round(heroText.length * 1.4));
+	const A = dna.palette.accent,
+		HOT = dna.palette.hot,
+		GRN = dna.palette.green || "#36e57a";
+	// marquee dot lattice scales with the panel; chase runs until the exit
+	const nTop = Math.max(10, Math.round(panelW / 45));
+	const nSide = Math.max(2, Math.round((panelH - 19) / 52) - 1);
+	const kMax = Math.max(4, Math.floor((exScroll - (I - 0.01)) / 0.1));
+	const css = `
   #scrimL { position:absolute; inset:0; opacity:0;
             background: radial-gradient(120% 105% at 50% 40%, rgba(2,6,14,0) 30%, rgba(2,6,14,0.85) 100%); }
   #dimL { position:absolute; inset:0; opacity:0; background:#020409; }
@@ -5391,7 +5638,7 @@ function setpieceLedwipe() {
   #ghostL { color:${A}; opacity:0; }
   #awordL { color:${A}; opacity:0;
             text-shadow: 0 0 18px ${A}8c, 0 0 2px ${HOT}cc; }`;
-  const html = `      <div id="scrimL"></div><div id="dimL"></div><div id="spillL"></div>
+	const html = `      <div id="scrimL"></div><div id="dimL"></div><div id="spillL"></div>
       <div id="apxL">
         <div id="panelL">
           <div id="ptagL">${esc(p.headerLeft || "NOW ARRIVING ▸ 19:42")}</div>
@@ -5404,7 +5651,7 @@ function setpieceLedwipe() {
           </div>
         </div>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: LEDWIPE (panel expands → L→R illumination wipe → PA ding → page-up exit) ----
   const I = ${I.toFixed(3)}, C = ${C.toFixed(3)};
   gsap.set("#panelL", { transformOrigin: "50% 100%", scaleY: 0 });
@@ -5446,8 +5693,8 @@ function setpieceLedwipe() {
   tl.set("#panwinL", { filter: "brightness(1.45)" }, C + 0.18);
   tl.set("#panwinL", { filter: "brightness(1)" },    C + 0.26);
 ${
-  C + 0.99 < exScroll
-    ? `
+	C + 0.99 < exScroll
+		? `
   // hold life: glow breathes + LED dropouts
   tl.to("#awordL", { textShadow: "0 0 30px ${A}d9, 0 0 4px ${HOT}f2",
                      duration: 0.45, ease: "sine.inOut" }, C + 0.54);
@@ -5456,7 +5703,7 @@ ${
   tl.set("#awordL", { opacity: 0.82 }, C + 0.61); tl.set("#awordL", { opacity: 1 }, C + 0.652);
   tl.set("#awordL", { opacity: 0.90 }, C + 1.04); tl.set("#awordL", { opacity: 1 }, C + 1.082);
   tl.set("#ptagL", { opacity: 0.45 }, C + 0.41); tl.set("#ptagL", { opacity: 0.9 }, C + 0.452);`
-    : ""
+		: ""
 }
 
   // ===== exit: word pages up out of the window, board collapses =====
@@ -5487,36 +5734,36 @@ ${
       tl.set(groups[q], { opacity: lit ? 0.95 : 0.18 }, t);
     }
   }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceVhsosd() {
-  // REC FREEZE: the word slams in as a huge camcorder OSD readout BEHIND the
-  // subject. Permanent lens vignette = the camcorder look; a backlight-comp
-  // scrim kills the bright sky behind the word. Arrival = tracking-sliced
-  // crush (3 horizontal clip-path bands sheared + blurred, power4.in) that
-  // SNAPS into register on the contact frame, squash → elastic settle; heavy
-  // red/cyan misregistration cools from ±arrival px to ±settled px and keeps
-  // BREATHING through the hold; tape-weave y jitter + slow loom; auto-iris
-  // pump (white wash up, dark dip, settle). Exit = REWIND streak left with a
-  // flat-white echo copy.
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const C = I + (p.crush ?? 0.1); // contact: slices snap into register
-  const X = theme.hero.exitAt ?? Math.min(heroOut, I + (p.hold ?? 1.69)); // REWIND
-  const clips = p.bandClips || [
-    [0, 64],
-    [36, 30],
-    [70, 0],
-  ];
-  const shear = p.bandShear || [-46, 40, -34];
-  const mi = p.misregIn ?? 11, // arrival misregistration (px)
-    m = p.misreg ?? 3; // settled misregistration (px)
-  const RED = dna.palette.red || "#FF2E2E",
-    CYN = dna.palette.cyan || "#3FE8E8";
-  const yPct = ((HG.y / H) * 100).toFixed(0);
-  const css = `
+	// REC FREEZE: the word slams in as a huge camcorder OSD readout BEHIND the
+	// subject. Permanent lens vignette = the camcorder look; a backlight-comp
+	// scrim kills the bright sky behind the word. Arrival = tracking-sliced
+	// crush (3 horizontal clip-path bands sheared + blurred, power4.in) that
+	// SNAPS into register on the contact frame, squash → elastic settle; heavy
+	// red/cyan misregistration cools from ±arrival px to ±settled px and keeps
+	// BREATHING through the hold; tape-weave y jitter + slow loom; auto-iris
+	// pump (white wash up, dark dip, settle). Exit = REWIND streak left with a
+	// flat-white echo copy.
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const C = I + (p.crush ?? 0.1); // contact: slices snap into register
+	const X = theme.hero.exitAt ?? Math.min(heroOut, I + (p.hold ?? 1.69)); // REWIND
+	const clips = p.bandClips || [
+		[0, 64],
+		[36, 30],
+		[70, 0],
+	];
+	const shear = p.bandShear || [-46, 40, -34];
+	const mi = p.misregIn ?? 11, // arrival misregistration (px)
+		m = p.misreg ?? 3; // settled misregistration (px)
+	const RED = dna.palette.red || "#FF2E2E",
+		CYN = dna.palette.cyan || "#3FE8E8";
+	const yPct = ((HG.y / H) * 100).toFixed(0);
+	const css = `
   #vig { position:absolute; inset:0; opacity:0;
          background: radial-gradient(115% 100% at 50% 46%, rgba(0,0,0,0) 52%, rgba(0,0,0,${p.vignette ?? 0.34}) 100%); }
   #vscrim { position:absolute; inset:0; opacity:0;
@@ -5532,7 +5779,7 @@ function setpieceVhsosd() {
   .wb2 { color:${dna.palette.body}; text-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 1px 4px rgba(0,0,0,0.45); }
   ${clips.map((c, i) => `#vb${i + 1} { clip-path: inset(${c[0]}% 0 ${c[1]}% 0); }`).join("\n  ")}
   #oe { color:#ffffff; opacity:0.4; text-shadow:none; }`;
-  const html = `      <div id="vig"></div>
+	const html = `      <div id="vig"></div>
       <div id="vscrim"></div>
       <div id="osdw">
         <div id="weave">
@@ -5544,17 +5791,17 @@ function setpieceVhsosd() {
       <div id="oecho"><div class="aw" id="oe">${esc(heroText)}</div></div>
       <div id="iris"></div>
       <div id="irisd"></div>`;
-  const bandIds = clips.map((_, i) => "#vb" + (i + 1));
-  // hold life windows (clamped inside [contact, exit] so nothing fights the rewind)
-  const weaveTs = [];
-  const wv = p.weave || [-2, 1, -1, 2, -1, 1, -2, 0];
-  for (let k = 0; k < wv.length; k++) {
-    const t = C + 0.19 + k * 0.17;
-    if (t < X - 0.05) weaveTs.push([+t.toFixed(3), wv[k]]);
-  }
-  const brDur = Math.min(1.3, X - (C + 0.21) - 0.05);
-  const loomDur = Math.min(0.92, X - (C + 0.64) - 0.03);
-  const js = `
+	const bandIds = clips.map((_, i) => "#vb" + (i + 1));
+	// hold life windows (clamped inside [contact, exit] so nothing fights the rewind)
+	const weaveTs = [];
+	const wv = p.weave || [-2, 1, -1, 2, -1, 1, -2, 0];
+	for (let k = 0; k < wv.length; k++) {
+		const t = C + 0.19 + k * 0.17;
+		if (t < X - 0.05) weaveTs.push([+t.toFixed(3), wv[k]]);
+	}
+	const brDur = Math.min(1.3, X - (C + 0.21) - 0.05);
+	const loomDur = Math.min(0.92, X - (C + 0.64) - 0.03);
+	const js = `
   // ---- setpiece: VHSOSD (tracking-sliced OSD slam → misreg breathe → REWIND exit) ----
   const I = ${I.toFixed(3)}, C = ${C.toFixed(3)}, X = ${X.toFixed(3)};
   gsap.set(${J(["#mr", "#mc", ...bandIds, "#oe"])}, { xPercent:-50, yPercent:-50 });
@@ -5593,18 +5840,18 @@ function setpieceVhsosd() {
   tl.to("#irisd", { opacity: ${dna.plate.dim}, duration: 0.28, ease: "sine.out" }, C + 0.55);
   tl.to("#irisd", { opacity: 0, duration: 0.40, ease: "sine.in" }, C + 0.85);
 ${
-  brDur > 0.3
-    ? `
+	brDur > 0.3
+		? `
   // ===== HOLD LIFE: misregistration breathes, tape weave, slow loom =====
   tl.to("#mr", { keyframes: { x: [-${m}, -${(m * 1.53).toFixed(1)}, -${(m * 1.07).toFixed(1)}, -${(m * 1.67).toFixed(1)}, -${(m * 1.17).toFixed(1)}] }, duration: ${brDur.toFixed(2)}, ease: "none" }, C + 0.21);
   tl.to("#mc", { keyframes: { x: [${m}, ${(m * 1.53).toFixed(1)}, ${(m * 1.07).toFixed(1)}, ${(m * 1.67).toFixed(1)}, ${(m * 1.17).toFixed(1)}] }, duration: ${brDur.toFixed(2)}, ease: "none" }, C + 0.21);
   ${J(weaveTs)}.forEach(([t, v]) => tl.set("#weave", { y: v }, t));`
-    : ""
+		: ""
 }
 ${
-  loomDur > 0.3
-    ? `  tl.to("#osdw", { keyframes: { scale: [1, 1.03, 1.015, 1.028] }, duration: ${loomDur.toFixed(2)}, ease: "none" }, C + 0.64);`
-    : ""
+	loomDur > 0.3
+		? `  tl.to("#osdw", { keyframes: { scale: [1, 1.03, 1.015, 1.028] }, duration: ${loomDur.toFixed(2)}, ease: "none" }, C + 0.64);`
+		: ""
 }
 
   // ===== EXIT: REWIND — streak left with echo copy =====
@@ -5612,44 +5859,50 @@ ${
   tl.set("#oecho", { opacity: 1 }, X);
   tl.fromTo("#oe", { x: 0, opacity: 0.4 }, { x: -95, opacity: 0, duration: 0.18, ease: "power2.in" }, X + 0.01);
   tl.set(["#osdw","#oecho"], { display: "none" }, X + 0.25);`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceBossintro() {
-  // BOSS INTRO (bg): the room darkens behind a CRT edge glow (cyan base wash,
-  // pulses on the last emphasis before the boss and spills magenta on the
-  // strobe + the final word), WARNING blinks 2x above the word rect, then
-  // ~COLS×ROWS seeded pixel blocks fall steps(3) into a tight matrix grid
-  // covering the word rect (1-frame white land tick each — the coin-blip motif
-  // at block scale), and the word flashes ON (instant, oversized, quantized
-  // crush → 2-frame squash → elastic settle) with chromatic ghost layers and a
-  // 3-frame palette strobe. Hold: quantized breathe + CRT glow cycle + baked
-  // block shimmer blinks. Exit: per-letter checkerboard dissolve; blocks drop
-  // away quantized. FG furniture (rides rail.html via fg parts): letterbox
-  // bars slam in with a 1-frame overshoot and a HI-SCORE odometer rolls
-  // top-right through the hold.
-  const h = dna.hero,
-    p = h.params || {},
-    I = heroIn;
-  const CY = dna.palette.accent,
-    MG = dna.palette.magenta || "#FF2E88",
-    YL = dna.palette.yellow || "#FFE600";
-  const FLASH = I + (p.flashDelay ?? 0.14);
-  const EX = theme.hero.exitAt ?? Math.min(heroOut - 0.2, I + (p.hold ?? 1.24));
-  const ROWS = p.rows || 4;
-  const CWp = Math.round(HG.fontPx * 0.7),
-    CHp = Math.round(HG.fontPx * 0.5);
-  const COLS = Math.ceil((HG.halfW * 2 + 100) / CWp);
-  const X0 = Math.round(HG.x - (COLS * CWp) / 2),
-    Y0 = Math.round(HG.y - (ROWS * CHp) / 2);
-  // scene-reaction pulses: the edge glow pre-echoes the boss on the last
-  // emphasis word before the takeover; magenta answers on the final word
-  const minorsBefore = LINES.flatMap((L) => L.words).filter((w) => w.minor && w.start < I - 0.3);
-  const pulseT = minorsBefore.length ? minorsBefore[minorsBefore.length - 1].start : null;
-  const endPulse =
-    LASTWORD.start + 0.384 < DUR - 0.02 && LASTWORD.start > EX + 0.4 ? LASTWORD.start : null;
-  const lb = p.letterbox || 44;
-  const css = `
+	// BOSS INTRO (bg): the room darkens behind a CRT edge glow (cyan base wash,
+	// pulses on the last emphasis before the boss and spills magenta on the
+	// strobe + the final word), WARNING blinks 2x above the word rect, then
+	// ~COLS×ROWS seeded pixel blocks fall steps(3) into a tight matrix grid
+	// covering the word rect (1-frame white land tick each — the coin-blip motif
+	// at block scale), and the word flashes ON (instant, oversized, quantized
+	// crush → 2-frame squash → elastic settle) with chromatic ghost layers and a
+	// 3-frame palette strobe. Hold: quantized breathe + CRT glow cycle + baked
+	// block shimmer blinks. Exit: per-letter checkerboard dissolve; blocks drop
+	// away quantized. FG furniture (rides rail.html via fg parts): letterbox
+	// bars slam in with a 1-frame overshoot and a HI-SCORE odometer rolls
+	// top-right through the hold.
+	const h = dna.hero,
+		p = h.params || {},
+		I = heroIn;
+	const CY = dna.palette.accent,
+		MG = dna.palette.magenta || "#FF2E88",
+		YL = dna.palette.yellow || "#FFE600";
+	const FLASH = I + (p.flashDelay ?? 0.14);
+	const EX = theme.hero.exitAt ?? Math.min(heroOut - 0.2, I + (p.hold ?? 1.24));
+	const ROWS = p.rows || 4;
+	const CWp = Math.round(HG.fontPx * 0.7),
+		CHp = Math.round(HG.fontPx * 0.5);
+	const COLS = Math.ceil((HG.halfW * 2 + 100) / CWp);
+	const X0 = Math.round(HG.x - (COLS * CWp) / 2),
+		Y0 = Math.round(HG.y - (ROWS * CHp) / 2);
+	// scene-reaction pulses: the edge glow pre-echoes the boss on the last
+	// emphasis word before the takeover; magenta answers on the final word
+	const minorsBefore = LINES.flatMap((L) => L.words).filter(
+		(w) => w.minor && w.start < I - 0.3,
+	);
+	const pulseT = minorsBefore.length
+		? minorsBefore[minorsBefore.length - 1].start
+		: null;
+	const endPulse =
+		LASTWORD.start + 0.384 < DUR - 0.02 && LASTWORD.start > EX + 0.4
+			? LASTWORD.start
+			: null;
+	const lb = p.letterbox || 44;
+	const css = `
   #bdim  { position:absolute; inset:0; opacity:0;
            background:linear-gradient(180deg, rgba(2,3,12,0.66) 0%, rgba(2,3,12,0.40) 55%, rgba(2,3,12,0.30) 100%); }
   #edgeC { position:absolute; inset:0; opacity:0; box-shadow: inset 0 0 130px ${CY}4d; }
@@ -5668,7 +5921,7 @@ function setpieceBossintro() {
              font-family:'${dna.fonts.tag}', monospace; font-size:26px; letter-spacing:0.4em;
              color:${MG};
              text-shadow:0 0 14px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.9), 0 4px 0 rgba(0,0,0,0.8); }`;
-  const html = `      <div id="bdim"></div>
+	const html = `      <div id="bdim"></div>
       <div id="edgeC"></div>
       <div id="edgeM"></div>
       <div id="blocks"></div>
@@ -5678,7 +5931,7 @@ function setpieceBossintro() {
         <div class="bw" id="bwMain"></div>
       </div>
       <div id="warning">${esc(p.tag || "WARNING")}</div>`;
-  const js = `
+	const js = `
   // ---- setpiece: BOSSINTRO (dim + WARNING -> pixel-block assembly -> strobe flash) ----
   const I = ${I.toFixed(3)}, FLASH = ${FLASH.toFixed(3)}, OUT = ${EX.toFixed(3)};
   const CYc = ${J(CY)}, MGc = ${J(MG)}, YLc = ${J(YL)}, WHc = "#ffffff";
@@ -5687,11 +5940,11 @@ function setpieceBossintro() {
   // ===== scene reaction: CRT edge glow lives behind the subject =====
   tl.set("#edgeC", { opacity: 0.28 }, 0.05);
 ${
-  pulseT != null
-    ? `  // pulse on the last emphasis before the boss
+	pulseT != null
+		? `  // pulse on the last emphasis before the boss
   tl.set("#edgeC", { opacity: 0.62 }, ${pulseT.toFixed(3)});
   tl.set("#edgeC", { opacity: 0.28 }, ${(pulseT + 0.084).toFixed(3)});`
-    : ""
+		: ""
 }
   // boss dim: room darkens for the boss intro (helps a bright sky too)
   tl.to("#bdim", { opacity: ${dna.plate.dim ?? 0.58}, duration: 0.12, ease: "power2.out" }, I - 0.15);
@@ -5701,11 +5954,11 @@ ${
   tl.to("#edgeM", { opacity: 0, duration: 0.25, ease: "power1.out" }, FLASH + 0.126);
   tl.to("#bdim", { opacity: 0, duration: 0.35, ease: "power1.inOut" }, OUT + 0.10);
 ${
-  endPulse != null
-    ? `  // magenta answers on the final word
+	endPulse != null
+		? `  // magenta answers on the final word
   tl.set("#edgeM", { opacity: 0.55 }, ${endPulse.toFixed(3)});
   tl.to("#edgeM", { opacity: 0, duration: 0.3, ease: "power1.out" }, ${(endPulse + 0.084).toFixed(3)});`
-    : ""
+		: ""
 }
 
   // ===== WARNING blinks 2x above the word =====
@@ -5791,9 +6044,9 @@ ${
   });
   tl.set(["#bwC", "#bwM"], { opacity: 0 }, OUT + 0.042);
   tl.set("#bossWord", { opacity: 0, display: "none" }, OUT + 0.17);`;
-  // fg furniture: letterbox bars + HI-SCORE odometer ride the fg alpha layer
-  // (in FRONT of the subject — the cabinet frames the player)
-  const fgCss = `
+	// fg furniture: letterbox bars + HI-SCORE odometer ride the fg alpha layer
+	// (in FRONT of the subject — the cabinet frames the player)
+	const fgCss = `
   #lbTop { position:absolute; left:0; top:-${lb}px;    width:${W}px; height:${lb}px; background:#000; z-index:14; }
   #lbBot { position:absolute; left:0; bottom:-${lb}px; width:${W}px; height:${lb}px; background:#000; z-index:14; }
   #hi    { position:absolute; right:36px; top:${lb + 18}px; opacity:0; white-space:nowrap;
@@ -5801,10 +6054,10 @@ ${
            text-shadow:0 3px 0 rgba(0,0,0,0.75), 0 0 10px rgba(0,0,0,0.6); }
   #hi .lab { color:${CY}; margin-right:0.5em; }
   #hi #hsv { color:${YL}; }`;
-  const fgHtml = `      <div id="lbTop"></div>
+	const fgHtml = `      <div id="lbTop"></div>
       <div id="lbBot"></div>
       <div id="hi"><span class="lab">HI-SCORE</span><span id="hsv">0000000</span></div>`;
-  const fgJs = `
+	const fgJs = `
   // ---- bossintro furniture (fg): letterbox slam + HI-SCORE odometer ----
   {
     const BI = ${I.toFixed(3)}, BF = ${FLASH.toFixed(3)}, BO = ${EX.toFixed(3)};
@@ -5829,44 +6082,44 @@ ${
     tl.set("#hi", { color: "#ffffff" }, BO + 0.08);              // 1-frame white tick out
     tl.set("#hi", { opacity: 0 }, BO + 0.122);
   }`;
-  return { css, html, js, fgCss, fgHtml, fgJs };
+	return { css, html, js, fgCss, fgHtml, fgJs };
 }
 
 function setpieceRubberstamp() {
-  // RUBBER STAMP: the footage becomes an archival page at the apex — vignette
-  // charge (plate.charge) + manila sepia wash + a dim kick (plate.dim) that
-  // cools — then the verdict slams in BEHIND the subject as a bordered rubber
-  // stamp at params.rotation: crush 2.2→1 power4.in, 2-frame contact squash,
-  // double-strike ghost print, two thin-ink patches (clip-path circles in
-  // paper color), wet-ink saturate/brightness settle, and a paper indent
-  // shadow that blooms under the face. Stamps don't move: the hold is DEAD
-  // STILL, sold by the breathing indent + a slow paper loom. Exit at
-  // C + params.hold = mechanical 3-frame yank-down cut (the page is filed
-  // away); the archive plate releases 0.25s before it.
-  const h = dna.hero,
-    p = h.params || {},
-    I = heroIn;
-  const C = I + (p.crush ?? 0.074); // stamp contact (plate punch lands here via punchOffset)
-  const X = theme.hero.exitAt ?? Math.min(heroOut - 0.06, C + (p.hold ?? 2.02));
-  const ROT = p.rotation ?? -8;
-  const RED = dna.palette.accent || "#b3271e";
-  const s = HG.fontPx / 120; // demo face was cut at 120px — chrome scales with it
-  const bw = Math.max(3, Math.round(6 * s)),
-    rad = Math.round(14 * s);
-  const padT = Math.round(20 * s),
-    padX = Math.round(40 * s),
-    padB = Math.round(14 * s);
-  const paperW = Math.round(HG.halfW * 2 * 1.18),
-    paperH = Math.round(HG.fontPx * 2.83);
-  const indW = Math.round(HG.halfW * 2 * 1.06),
-    indH = Math.round(HG.fontPx * 2.08);
-  const patches = p.patches || [
-    [27, 36, 0.72],
-    [71, 68, 0.57],
-  ];
-  const loomDur = Math.min(1.7, DUR - (C + 0.35) - 0.03);
-  const breDur = Math.min(1.6, DUR - (C + 0.45) - 0.03);
-  const css = `
+	// RUBBER STAMP: the footage becomes an archival page at the apex — vignette
+	// charge (plate.charge) + manila sepia wash + a dim kick (plate.dim) that
+	// cools — then the verdict slams in BEHIND the subject as a bordered rubber
+	// stamp at params.rotation: crush 2.2→1 power4.in, 2-frame contact squash,
+	// double-strike ghost print, two thin-ink patches (clip-path circles in
+	// paper color), wet-ink saturate/brightness settle, and a paper indent
+	// shadow that blooms under the face. Stamps don't move: the hold is DEAD
+	// STILL, sold by the breathing indent + a slow paper loom. Exit at
+	// C + params.hold = mechanical 3-frame yank-down cut (the page is filed
+	// away); the archive plate releases 0.25s before it.
+	const h = dna.hero,
+		p = h.params || {},
+		I = heroIn;
+	const C = I + (p.crush ?? 0.074); // stamp contact (plate punch lands here via punchOffset)
+	const X = theme.hero.exitAt ?? Math.min(heroOut - 0.06, C + (p.hold ?? 2.02));
+	const ROT = p.rotation ?? -8;
+	const RED = dna.palette.accent || "#b3271e";
+	const s = HG.fontPx / 120; // demo face was cut at 120px — chrome scales with it
+	const bw = Math.max(3, Math.round(6 * s)),
+		rad = Math.round(14 * s);
+	const padT = Math.round(20 * s),
+		padX = Math.round(40 * s),
+		padB = Math.round(14 * s);
+	const paperW = Math.round(HG.halfW * 2 * 1.18),
+		paperH = Math.round(HG.fontPx * 2.83);
+	const indW = Math.round(HG.halfW * 2 * 1.06),
+		indH = Math.round(HG.fontPx * 2.08);
+	const patches = p.patches || [
+		[27, 36, 0.72],
+		[71, 68, 0.57],
+	];
+	const loomDur = Math.min(1.7, DUR - (C + 0.35) - 0.03);
+	const breDur = Math.min(1.6, DUR - (C + 0.45) - 0.03);
+	const css = `
   #dsep { position:absolute; inset:0; opacity:0; background:${dna.palette.paper || "#d8c49a"}; }
   #dvig { position:absolute; inset:0; opacity:0;
           background: radial-gradient(115% 100% at 50% 40%, rgba(0,0,0,0) 30%, rgba(20,14,8,0.85) 100%); }
@@ -5887,7 +6140,7 @@ function setpieceRubberstamp() {
   #dp1 .dface, #dp2 .dface { color:rgba(219,199,156,0.55); }
   #dp1 { clip-path: circle(${Math.round(patches[0][2] * HG.fontPx)}px at ${patches[0][0]}% ${patches[0][1]}%); }
   #dp2 { clip-path: circle(${Math.round(patches[1][2] * HG.fontPx)}px at ${patches[1][0]}% ${patches[1][1]}%); }`;
-  const html = `      <div id="dsep"></div>
+	const html = `      <div id="dsep"></div>
       <div id="dvig"></div>
       <div id="ddim"></div>
       <div id="dapex">
@@ -5902,7 +6155,7 @@ function setpieceRubberstamp() {
           </div>
         </div>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: RUBBERSTAMP (archive charge → stamp crush → dead-still hold → filed away) ----
   const I = ${I.toFixed(3)}, C = ${C.toFixed(3)}, X = ${X.toFixed(3)};
 
@@ -5949,62 +6202,118 @@ function setpieceRubberstamp() {
   tl.set("#dapex", { y: 10 }, X);
   tl.set("#dapex", { y: 28, opacity: 0.5 }, X + F);
   tl.set("#dapex", { opacity: 0 }, X + 2 * F);`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceLasercage() {
-  // LASER CAGE: concert blackout — the plate dims and haze cones breathe in
-  // the top corners; a 6-beam laser array (alternating accent/magenta,
-  // emitters along the top edge) snaps on and SWEEPS to converge on the word
-  // center, a hot core pops at convergence, and the word IGNITES behind the
-  // subject with an additive glow stack (wide blur + magenta fringe + tight
-  // blur + core): crush → contact squash → elastic settle + 2 controlled
-  // strobe pops. A criss-cross beam CAGE draws itself around the word rect
-  // and flickers; during the hold the array FANS OUT slowly behind the word
-  // (the iconic concert fan) while the word looms. Exit: the beams sweep away
-  // L→R carrying the letters (streak + blur) and the room lifts back up.
-  const I = heroIn;
-  const X0 = +(heroOut - 0.38).toFixed(3); // beams-carry-the-letters exit
-  const A = dna.palette.accent,
-    MG = dna.palette.magenta || "#ff4df0";
-  const CORE = dna.palette.core || "#eefff5",
-    SOFT = dna.palette.glowSoft || "#c9ffe2";
-  const fpx = HG.fontPx,
-    halfW = Math.round(HG.halfW),
-    cx = HG.x,
-    cy = HG.y;
-  // emitters along the top edge, initial aim points, fan-out floor targets
-  // (demo geometry expressed as frame fractions)
-  const EMX = [-0.023, 0.141, 0.352, 0.648, 0.859, 1.023].map((f) => Math.round(W * f));
-  const EMY = [-20, -45, -55, -55, -45, -20];
-  const STX = [0.164, 0.828, 0.313, 0.688, 0.406, 0.594].map((f) => Math.round(W * f));
-  const FANX = [0.094, 0.258, 0.426, 0.574, 0.742, 0.906].map((f) => Math.round(W * f));
-  const FANY = [0.75, 0.9, 0.97, 0.97, 0.9, 0.75].map((f) => Math.round(H * f));
-  // beam-grid cage around the word rect (extents derive from halfW + fontPx)
-  const CAGE = [
-    [cx - (halfW + 90), cy + 0.76 * fpx, cx + (halfW + 90), cy - 0.68 * fpx, A, 0.5],
-    [cx - (halfW + 90), cy - 0.68 * fpx, cx + (halfW + 90), cy + 0.76 * fpx, MG, 0.42],
-    [cx - (halfW - 80), cy + 1.0 * fpx, cx + (halfW - 80), cy - 0.92 * fpx, A, 0.5],
-    [cx - (halfW - 80), cy - 0.92 * fpx, cx + (halfW - 80), cy + 1.0 * fpx, MG, 0.42],
-    [cx - (halfW + 40), cy - 0.74 * fpx, cx + (halfW + 40), cy - 0.74 * fpx, A, 0.45],
-    [cx - (halfW + 40), cy + 0.82 * fpx, cx + (halfW + 40), cy + 0.82 * fpx, MG, 0.4],
-  ].map((c) => c.map((v) => (typeof v === "number" ? Math.round(v) : v)));
-  const spillW = 2 * halfW + 240,
-    spillH = Math.round(fpx * 5.2);
-  const hazeW = Math.round(W * 0.656),
-    hazeH = H + 60;
-  const blurBig = Math.round(0.22 * fpx),
-    blurTight = Math.max(3, Math.round(0.07 * fpx)),
-    fringeOff = Math.max(2, Math.round(0.03 * fpx));
-  // hold-life choreography only with runway before the exit
-  const strobeTs = [I + 0.5, I + 1.08].filter((t) => t < X0 - 0.25);
-  const fanDur = +Math.max(0.4, Math.min(1.0, X0 - (I + 0.62 + 5 * 0.04) - 0.05)).toFixed(2);
-  const flickDur = +Math.max(0.4, Math.min(1.2, X0 - 0.05 - (I + 0.6))).toFixed(2);
-  const lstag = +Math.min(
-    0.025,
-    Math.max(0.008, (DUR - 0.25 - (X0 + 0.02)) / Math.max(1, heroText.length - 1)),
-  ).toFixed(4);
-  const css = `
+	// LASER CAGE: concert blackout — the plate dims and haze cones breathe in
+	// the top corners; a 6-beam laser array (alternating accent/magenta,
+	// emitters along the top edge) snaps on and SWEEPS to converge on the word
+	// center, a hot core pops at convergence, and the word IGNITES behind the
+	// subject with an additive glow stack (wide blur + magenta fringe + tight
+	// blur + core): crush → contact squash → elastic settle + 2 controlled
+	// strobe pops. A criss-cross beam CAGE draws itself around the word rect
+	// and flickers; during the hold the array FANS OUT slowly behind the word
+	// (the iconic concert fan) while the word looms. Exit: the beams sweep away
+	// L→R carrying the letters (streak + blur) and the room lifts back up.
+	const I = heroIn;
+	const X0 = +(heroOut - 0.38).toFixed(3); // beams-carry-the-letters exit
+	const A = dna.palette.accent,
+		MG = dna.palette.magenta || "#ff4df0";
+	const CORE = dna.palette.core || "#eefff5",
+		SOFT = dna.palette.glowSoft || "#c9ffe2";
+	const fpx = HG.fontPx,
+		halfW = Math.round(HG.halfW),
+		cx = HG.x,
+		cy = HG.y;
+	// emitters along the top edge, initial aim points, fan-out floor targets
+	// (demo geometry expressed as frame fractions)
+	const EMX = [-0.023, 0.141, 0.352, 0.648, 0.859, 1.023].map((f) =>
+		Math.round(W * f),
+	);
+	const EMY = [-20, -45, -55, -55, -45, -20];
+	const STX = [0.164, 0.828, 0.313, 0.688, 0.406, 0.594].map((f) =>
+		Math.round(W * f),
+	);
+	const FANX = [0.094, 0.258, 0.426, 0.574, 0.742, 0.906].map((f) =>
+		Math.round(W * f),
+	);
+	const FANY = [0.75, 0.9, 0.97, 0.97, 0.9, 0.75].map((f) => Math.round(H * f));
+	// beam-grid cage around the word rect (extents derive from halfW + fontPx)
+	const CAGE = [
+		[
+			cx - (halfW + 90),
+			cy + 0.76 * fpx,
+			cx + (halfW + 90),
+			cy - 0.68 * fpx,
+			A,
+			0.5,
+		],
+		[
+			cx - (halfW + 90),
+			cy - 0.68 * fpx,
+			cx + (halfW + 90),
+			cy + 0.76 * fpx,
+			MG,
+			0.42,
+		],
+		[
+			cx - (halfW - 80),
+			cy + 1.0 * fpx,
+			cx + (halfW - 80),
+			cy - 0.92 * fpx,
+			A,
+			0.5,
+		],
+		[
+			cx - (halfW - 80),
+			cy - 0.92 * fpx,
+			cx + (halfW - 80),
+			cy + 1.0 * fpx,
+			MG,
+			0.42,
+		],
+		[
+			cx - (halfW + 40),
+			cy - 0.74 * fpx,
+			cx + (halfW + 40),
+			cy - 0.74 * fpx,
+			A,
+			0.45,
+		],
+		[
+			cx - (halfW + 40),
+			cy + 0.82 * fpx,
+			cx + (halfW + 40),
+			cy + 0.82 * fpx,
+			MG,
+			0.4,
+		],
+	].map((c) => c.map((v) => (typeof v === "number" ? Math.round(v) : v)));
+	const spillW = 2 * halfW + 240,
+		spillH = Math.round(fpx * 5.2);
+	const hazeW = Math.round(W * 0.656),
+		hazeH = H + 60;
+	const blurBig = Math.round(0.22 * fpx),
+		blurTight = Math.max(3, Math.round(0.07 * fpx)),
+		fringeOff = Math.max(2, Math.round(0.03 * fpx));
+	// hold-life choreography only with runway before the exit
+	const strobeTs = [I + 0.5, I + 1.08].filter((t) => t < X0 - 0.25);
+	const fanDur = +Math.max(
+		0.4,
+		Math.min(1.0, X0 - (I + 0.62 + 5 * 0.04) - 0.05),
+	).toFixed(2);
+	const flickDur = +Math.max(0.4, Math.min(1.2, X0 - 0.05 - (I + 0.6))).toFixed(
+		2,
+	);
+	const lstag = +Math.min(
+		0.025,
+		Math.max(
+			0.008,
+			(DUR - 0.25 - (X0 + 0.02)) / Math.max(1, heroText.length - 1),
+		),
+	).toFixed(4);
+	const css = `
   #dimC { position:absolute; inset:0; background:#000; opacity:0; }
   #hazeLc { position:absolute; left:-150px; top:-130px; width:${hazeW}px; height:${hazeH}px; opacity:0;
            background: radial-gradient(58% 95% at 12% 4%, ${A}80 0%, ${A}00 68%);
@@ -6028,7 +6337,7 @@ function setpieceLasercage() {
   #cword  { position:relative; color:${CORE};
             text-shadow: 0 0 16px ${A}d9, 0 0 44px ${A}80, 0 2px 8px rgba(0,0,0,0.55); }
   #cword .L { display:inline-block; }`;
-  const html = `      <div id="dimC"></div>
+	const html = `      <div id="dimC"></div>
       <div id="hazeLc"></div><div id="hazeRc"></div>
       <div id="spillC"></div>
       <svg id="lasersC" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
@@ -6041,7 +6350,7 @@ function setpieceLasercage() {
         <div class="clayer" id="cglow2">${esc(heroText)}</div>
         <div id="cword"></div>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: LASERCAGE (6-beam converge → ignite → cage → fan-out → carried exit) ----
   const I = ${I.toFixed(3)}, X0 = ${X0.toFixed(3)};
   const CACC = ${J(A)}, CMAG = ${J(MG)};
@@ -6174,80 +6483,80 @@ function setpieceLasercage() {
   tl.to("#dimC",   { opacity: 0.12, duration: 0.4, ease: "power1.in" }, X0 + 0.06);
   tl.to(["#hazeLc","#hazeRc"], { opacity: 0.03, duration: 0.4 }, X0 + 0.06);
   tl.set("#apexC", { display: "none" }, ${(DUR - 0.02).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceBoltstrike() {
-  // THUNDER apex: the storm is the editor. A slate storm mood sits on the room
-  // from t=0 and the sky "kisses" (1-frame brighten) on every body word —
-  // double-kiss on emphasis words, re-flashes during the hold. Before the
-  // strike the room charge-dims under a radial word scrim; a hand-authored
-  // branched bolt (haze/glow/core stack) flashes 2 frames BEFORE the word
-  // (leader → return stroke at contact) with a sky flash, then the word slams
-  // in lit HARD (brightness 2.5 → 1) with its text-shadow flipped toward the
-  // bolt for the flash frames; an ozone under-glow blooms and breathes through
-  // the hold (loom + 2-frame lit blips on the sheet re-flashes); exit washes
-  // downward with the rain.
-  const p = dna.hero.params || {},
-    I = heroIn;
-  const A = dna.palette.accent, // ozone / bolt haze
-    GL = dna.palette.glow || "#cfe8ff", // bolt glow
-    CORE = dna.palette.core || "#ffffff", // bolt core
-    HC = dna.palette.hero || dna.palette.body;
-  const EX = theme.hero.exitAt ?? Math.min(heroOut - 0.2, I + (p.hold ?? 2.05));
-  const hpx = HG.fontPx,
-    halfW = HG.halfW || heroText.length * 0.28 * hpx;
-  // word scrim sized from the word rect (demo 1100×330 around a 720×145 word)
-  const scW = Math.round(2 * halfW + 380),
-    scH = Math.round(hpx * 2.28);
-  // hand-authored branched bolt (5-seg zigzag + 2 branches) measured off the
-  // demo cut — offsets from the word center in halfW (x) / fontPx (y) units;
-  // the leader always enters from above the frame
-  const sgn = p.side === "right" ? -1 : 1;
-  const kx = ((halfW || 360) / 360) * sgn,
-    ky = hpx / 145;
-  const pts = (arr, top) =>
-    arr
-      .map(([dx, dy], k) => {
-        const x = HG.x + dx * kx;
-        let y = HG.y + dy * ky;
-        if (top && k === 0) y = Math.min(y, -25);
-        return `${Math.round(x)},${Math.round(y)}`;
-      })
-      .join(" ");
-  const MAINP = pts(
-    [
-      [-45, -282],
-      [-107, -134],
-      [-23, -56],
-      [-113, 66],
-      [-17, 150],
-      [-85, 268],
-    ],
-    true,
-  );
-  const BAP = pts([
-    [-107, -134],
-    [-183, -56],
-    [-157, 10],
-  ]);
-  const BBP = pts([
-    [-113, 66],
-    [-187, 140],
-    [-163, 200],
-  ]);
-  const wS = (w) => (w * ky).toFixed(1);
-  const boltSvg = (color, w, wb) =>
-    `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">` +
-    `<polyline points="${MAINP}" fill="none" stroke="${color}" stroke-width="${wS(w)}" stroke-linejoin="miter" stroke-linecap="round"/>` +
-    `<polyline points="${BAP}" fill="none" stroke="${color}" stroke-width="${wS(wb)}" stroke-linecap="round"/>` +
-    `<polyline points="${BBP}" fill="none" stroke="${color}" stroke-width="${wS(wb)}" stroke-linecap="round"/>` +
-    `</svg>`;
-  // the sky kisses on every BODY word (the hero word is consumed by the slam)
-  const kissData = LINES.flatMap((L) =>
-    L.words.map((w) => [+w.start.toFixed(3), w.minor ? 1 : 0]),
-  ).filter(([t]) => t < DUR - 0.1);
-  const css = `
+	// THUNDER apex: the storm is the editor. A slate storm mood sits on the room
+	// from t=0 and the sky "kisses" (1-frame brighten) on every body word —
+	// double-kiss on emphasis words, re-flashes during the hold. Before the
+	// strike the room charge-dims under a radial word scrim; a hand-authored
+	// branched bolt (haze/glow/core stack) flashes 2 frames BEFORE the word
+	// (leader → return stroke at contact) with a sky flash, then the word slams
+	// in lit HARD (brightness 2.5 → 1) with its text-shadow flipped toward the
+	// bolt for the flash frames; an ozone under-glow blooms and breathes through
+	// the hold (loom + 2-frame lit blips on the sheet re-flashes); exit washes
+	// downward with the rain.
+	const p = dna.hero.params || {},
+		I = heroIn;
+	const A = dna.palette.accent, // ozone / bolt haze
+		GL = dna.palette.glow || "#cfe8ff", // bolt glow
+		CORE = dna.palette.core || "#ffffff", // bolt core
+		HC = dna.palette.hero || dna.palette.body;
+	const EX = theme.hero.exitAt ?? Math.min(heroOut - 0.2, I + (p.hold ?? 2.05));
+	const hpx = HG.fontPx,
+		halfW = HG.halfW || heroText.length * 0.28 * hpx;
+	// word scrim sized from the word rect (demo 1100×330 around a 720×145 word)
+	const scW = Math.round(2 * halfW + 380),
+		scH = Math.round(hpx * 2.28);
+	// hand-authored branched bolt (5-seg zigzag + 2 branches) measured off the
+	// demo cut — offsets from the word center in halfW (x) / fontPx (y) units;
+	// the leader always enters from above the frame
+	const sgn = p.side === "right" ? -1 : 1;
+	const kx = ((halfW || 360) / 360) * sgn,
+		ky = hpx / 145;
+	const pts = (arr, top) =>
+		arr
+			.map(([dx, dy], k) => {
+				const x = HG.x + dx * kx;
+				let y = HG.y + dy * ky;
+				if (top && k === 0) y = Math.min(y, -25);
+				return `${Math.round(x)},${Math.round(y)}`;
+			})
+			.join(" ");
+	const MAINP = pts(
+		[
+			[-45, -282],
+			[-107, -134],
+			[-23, -56],
+			[-113, 66],
+			[-17, 150],
+			[-85, 268],
+		],
+		true,
+	);
+	const BAP = pts([
+		[-107, -134],
+		[-183, -56],
+		[-157, 10],
+	]);
+	const BBP = pts([
+		[-113, 66],
+		[-187, 140],
+		[-163, 200],
+	]);
+	const wS = (w) => (w * ky).toFixed(1);
+	const boltSvg = (color, w, wb) =>
+		`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">` +
+		`<polyline points="${MAINP}" fill="none" stroke="${color}" stroke-width="${wS(w)}" stroke-linejoin="miter" stroke-linecap="round"/>` +
+		`<polyline points="${BAP}" fill="none" stroke="${color}" stroke-width="${wS(wb)}" stroke-linecap="round"/>` +
+		`<polyline points="${BBP}" fill="none" stroke="${color}" stroke-width="${wS(wb)}" stroke-linecap="round"/>` +
+		`</svg>`;
+	// the sky kisses on every BODY word (the hero word is consumed by the slam)
+	const kissData = LINES.flatMap((L) =>
+		L.words.map((w) => [+w.start.toFixed(3), w.minor ? 1 : 0]),
+	).filter(([t]) => t < DUR - 0.1);
+	const css = `
   #mood { position:absolute; inset:0; background:rgba(38,62,96,${p.mood ?? 0.1}); }
   #dimP { position:absolute; inset:0; opacity:0; background:#0a1422; }
   #kiss { position:absolute; inset:0; opacity:0;
@@ -6269,7 +6578,7 @@ function setpieceBoltstrike() {
   #boltGlow { filter:blur(5px); opacity:0.9; }
   #skyflash { position:absolute; inset:0; opacity:0;
           background:radial-gradient(120% 90% at 42% 22%, rgba(240,248,255,0.95) 0%, rgba(200,222,250,0.55) 45%, rgba(120,150,190,0) 100%); }`;
-  const html = `      <div id="mood"></div>
+	const html = `      <div id="mood"></div>
       <div id="dimP"></div>
       <div id="kiss"></div>
       <div id="wordscrim"></div>
@@ -6283,10 +6592,10 @@ function setpieceBoltstrike() {
         <div class="boltlayer" id="boltCore">${boltSvg(CORE, 3.5, 2.2)}</div>
       </div>
       <div id="skyflash"></div>`;
-  // breathe/loom clamp inside [contact, exit] for any clip length
-  const breDur = Math.max(0.6, Math.min(1.5, EX - 0.23 - (I + 0.3)));
-  const loomDur = Math.max(0.4, EX - 0.04 - (I + 0.74));
-  const js = `
+	// breathe/loom clamp inside [contact, exit] for any clip length
+	const breDur = Math.max(0.6, Math.min(1.5, EX - 0.23 - (I + 0.3)));
+	const loomDur = Math.max(0.4, EX - 0.04 - (I + 0.74));
+	const js = `
   // ---- setpiece: BOLTSTRIKE (storm charge → branched-bolt leader → word slams in lit) ----
   const I = ${I.toFixed(3)}, EXB = ${EX.toFixed(3)};
 
@@ -6364,63 +6673,72 @@ function setpieceBoltstrike() {
   // EXIT: washes downward with the rain
   tl.to("#apex", { y: 38, opacity: 0, filter: "blur(6px)", duration: 0.22, ease: "power2.in" }, EXB);
   tl.set("#apex", { display: "none" }, ${Math.min(EX + 0.26, DUR - 0.02).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceHoloboot() {
-  // HOLOGRAM apex: full volumetric boot behind the subject. A desk emitter dot
-  // pops, the projection cone SNAPS wide (scaleX expo), a seed beam fires up
-  // from the emitter, and the word boots with a RISING clip sweep (opacity is
-  // instant — the reveal is a wipe) into a 7-layer projection stack (dark
-  // backing shadow / wide glow / magenta+cyan chromatic fringes / core /
-  // scanline mask / climbing interference bands). Contact = over-bright flash
-  // + squash held 2 frames + elastic settle + 1-frame x interference jumps;
-  // fringes blow wide then settle to a constant registration offset. Hold
-  // life: bands climb, rotationY oscillates, glow/cone breathe, emitter dot
-  // pulses, slow loom; a hand "passes through" the projection (skew + blur +
-  // fringe blowout, pure projection logic). Exit: the projector cut — the
-  // word collapses to a horizontal line, then to the base dot. A second,
-  // smaller emitter cone rises from the desk under the holorail plate all
-  // video (the body rail is cast from the SAME projector grammar).
-  const p = dna.hero.params || {},
-    I = heroIn;
-  const A = dna.palette.accent,
-    MG = dna.palette.magenta || "#ff5fd6";
-  const GLOW = dna.palette.glow || "#3eccf2",
-    CORE = dna.palette.core || "#eafbff";
-  const fpx = HG.fontPx,
-    halfW = Math.round(HG.halfW || heroText.length * 0.4 * fpx),
-    cx = HG.x,
-    cy = HG.y;
-  const k = fpx / 118; // demo scale unit (Orbitron 700 @ 118px)
-  // apex rig geometry derives from the word rect
-  const coneW = Math.min(2 * halfW + 80, W - 40);
-  const coneTop = Math.round(cy - 0.55 * fpx);
-  const emitY = Math.min(H - 30, Math.round(cy + 2.4 * fpx));
-  const coneH = emitY - coneTop;
-  const beamTop = coneTop + 40,
-    beamH = emitY - beamTop;
-  const cxP = ((cx / W) * 100).toFixed(1),
-    cyP = ((cy / H) * 100).toFixed(1);
-  // body-zone projector under the holorail plate (cone behind the subject)
-  const plateBot = Math.round(H - (dna.body.bottomPx || 108) + (dna.body.plateH || 96) / 2);
-  const bcW = p.coneW || 800,
-    bcTop = plateBot - 4,
-    bcH = H - bcTop - 4;
-  // interference-band pitch scales with the type
-  const bandH = Math.max(20, Math.round(fpx * 0.39));
-  const bp = (f) => Math.round(bandH * f);
-  // projector-cut exit + hold-life windows (all runway-clamped)
-  const cutT = +Math.min(heroOut - 0.22, DUR - 0.3).toFixed(3);
-  const C = I + 0.07; // contact
-  const holdD = +Math.max(0.6, Math.min(1.72, cutT - 0.05 - (I + 0.24))).toFixed(2);
-  const holdD2 = +Math.max(0.5, holdD - 0.1).toFixed(2);
-  const reactD = +Math.max(0.3, Math.min(0.9, cutT - 0.3 - (I + 0.24))).toFixed(2);
-  const loomD = +Math.min(0.62, Math.max(0.2, cutT - 0.3 - (I + 0.74))).toFixed(2);
-  // the hand-pass needs the loom done (scale channel) and clear exit runway
-  const passT = +Math.max(I + (p.passAt ?? 1.29), I + 1.25).toFixed(3);
-  const doPass = passT + 0.65 < cutT - 0.05;
-  const css = `
+	// HOLOGRAM apex: full volumetric boot behind the subject. A desk emitter dot
+	// pops, the projection cone SNAPS wide (scaleX expo), a seed beam fires up
+	// from the emitter, and the word boots with a RISING clip sweep (opacity is
+	// instant — the reveal is a wipe) into a 7-layer projection stack (dark
+	// backing shadow / wide glow / magenta+cyan chromatic fringes / core /
+	// scanline mask / climbing interference bands). Contact = over-bright flash
+	// + squash held 2 frames + elastic settle + 1-frame x interference jumps;
+	// fringes blow wide then settle to a constant registration offset. Hold
+	// life: bands climb, rotationY oscillates, glow/cone breathe, emitter dot
+	// pulses, slow loom; a hand "passes through" the projection (skew + blur +
+	// fringe blowout, pure projection logic). Exit: the projector cut — the
+	// word collapses to a horizontal line, then to the base dot. A second,
+	// smaller emitter cone rises from the desk under the holorail plate all
+	// video (the body rail is cast from the SAME projector grammar).
+	const p = dna.hero.params || {},
+		I = heroIn;
+	const A = dna.palette.accent,
+		MG = dna.palette.magenta || "#ff5fd6";
+	const GLOW = dna.palette.glow || "#3eccf2",
+		CORE = dna.palette.core || "#eafbff";
+	const fpx = HG.fontPx,
+		halfW = Math.round(HG.halfW || heroText.length * 0.4 * fpx),
+		cx = HG.x,
+		cy = HG.y;
+	const k = fpx / 118; // demo scale unit (Orbitron 700 @ 118px)
+	// apex rig geometry derives from the word rect
+	const coneW = Math.min(2 * halfW + 80, W - 40);
+	const coneTop = Math.round(cy - 0.55 * fpx);
+	const emitY = Math.min(H - 30, Math.round(cy + 2.4 * fpx));
+	const coneH = emitY - coneTop;
+	const beamTop = coneTop + 40,
+		beamH = emitY - beamTop;
+	const cxP = ((cx / W) * 100).toFixed(1),
+		cyP = ((cy / H) * 100).toFixed(1);
+	// body-zone projector under the holorail plate (cone behind the subject)
+	const plateBot = Math.round(
+		H - (dna.body.bottomPx || 108) + (dna.body.plateH || 96) / 2,
+	);
+	const bcW = p.coneW || 800,
+		bcTop = plateBot - 4,
+		bcH = H - bcTop - 4;
+	// interference-band pitch scales with the type
+	const bandH = Math.max(20, Math.round(fpx * 0.39));
+	const bp = (f) => Math.round(bandH * f);
+	// projector-cut exit + hold-life windows (all runway-clamped)
+	const cutT = +Math.min(heroOut - 0.22, DUR - 0.3).toFixed(3);
+	const C = I + 0.07; // contact
+	const holdD = +Math.max(
+		0.6,
+		Math.min(1.72, cutT - 0.05 - (I + 0.24)),
+	).toFixed(2);
+	const holdD2 = +Math.max(0.5, holdD - 0.1).toFixed(2);
+	const reactD = +Math.max(0.3, Math.min(0.9, cutT - 0.3 - (I + 0.24))).toFixed(
+		2,
+	);
+	const loomD = +Math.min(0.62, Math.max(0.2, cutT - 0.3 - (I + 0.74))).toFixed(
+		2,
+	);
+	// the hand-pass needs the loom done (scale channel) and clear exit runway
+	const passT = +Math.max(I + (p.passAt ?? 1.29), I + 1.25).toFixed(3);
+	const doPass = passT + 0.65 < cutT - 0.05;
+	const css = `
   #dimH { position:absolute; inset:0; opacity:0; background:#02101a; }
   #scrimH { position:absolute; inset:0; opacity:0;
            background: radial-gradient(58% 46% at ${cxP}% ${cyP}%, rgba(2,9,15,0.88) 0%, rgba(2,9,15,0.55) 48%, rgba(2,9,15,0) 78%); }
@@ -6458,7 +6776,7 @@ function setpieceHoloboot() {
             -webkit-background-clip:text; background-clip:text;
             background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) ${bp(0.717)}px, ${dna.palette.band || "#d8faff"}f2 ${bp(0.783)}px, ${dna.palette.band || "#d8faff"}f2 ${bp(0.87)}px, rgba(255,255,255,0) ${bp(0.935)}px, rgba(255,255,255,0) ${bandH}px);
             background-size: 100% ${bandH}px; }`;
-  const html = `      <div id="dimH"></div>
+	const html = `      <div id="dimH"></div>
       <div id="scrimH"></div>
       <div id="bcone"></div>
       <div id="bdot"></div>
@@ -6476,14 +6794,15 @@ function setpieceHoloboot() {
           <div class="aw" id="abands">${esc(heroText)}</div>
         </div>
       </div>`;
-  // body-projector flicker cycles, baked to the clip length
-  const coneFlicks = [];
-  for (let t = 0.6; t + 2.2 <= DUR - 0.25; t += 2.3) coneFlicks.push(+t.toFixed(2));
-  const dotPulses = [];
-  let dt = 0.5;
-  for (; dt + 2.0 <= DUR - 0.3; dt += 2.15) dotPulses.push(+dt.toFixed(2));
-  const dotTail = dt + 1.0 <= DUR - 0.24 ? +dt.toFixed(2) : null;
-  const js = `
+	// body-projector flicker cycles, baked to the clip length
+	const coneFlicks = [];
+	for (let t = 0.6; t + 2.2 <= DUR - 0.25; t += 2.3)
+		coneFlicks.push(+t.toFixed(2));
+	const dotPulses = [];
+	let dt = 0.5;
+	for (; dt + 2.0 <= DUR - 0.3; dt += 2.15) dotPulses.push(+dt.toFixed(2));
+	const dotTail = dt + 1.0 <= DUR - 0.24 ? +dt.toFixed(2) : null;
+	const js = `
   // ---- setpiece: HOLOBOOT (emitter pop → cone snap → seed beam → rising-sweep word boot) ----
   const I = ${I.toFixed(3)}, CUT = ${cutT.toFixed(3)};
   gsap.set("#apx", { xPercent: -50, yPercent: -50, transformPerspective: 900, transformOrigin: "50% 50%" });
@@ -6557,8 +6876,8 @@ function setpieceHoloboot() {
   tl.to("#apxdot", { keyframes: { scale: [1, 1.4, 1, 1.35, 1, 1.3, 1] }, duration: ${holdD2}, ease: "none" }, I + 0.29);
   ${loomD >= 0.2 ? `tl.to("#apx", { scale: 1.028, duration: ${loomD}, ease: "sine.inOut" }, I + 0.74);` : ""}
 ${
-  doPass
-    ? `
+	doPass
+		? `
   // ===== a hand "passes through" the projection: pure projection logic
   const P = ${passT.toFixed(3)};
   tl.set("#apx", { skewX: 6 }, P);
@@ -6573,7 +6892,7 @@ ${
   tl.to("#ccyn", { x: 2,  duration: 0.18, ease: "power2.out" }, P + 0.05);
   tl.set("#apx", { scaleY: 0.97 }, P + 0.13);
   tl.to("#apx", { scaleY: 1, duration: 0.3, ease: "elastic.out(1, 0.4)" }, P + 0.172);`
-    : ""
+		: ""
 }
 
   // ===== EXIT: projector cut — collapse to a horizontal line, then to the base dot
@@ -6584,99 +6903,110 @@ ${
   tl.to("#apxcone", { opacity: 0, duration: 0.16, ease: "power1.in" }, CUT + 0.02);
   tl.set("#apxdot", { scale: 2.2 }, CUT + 0.12);
   tl.to("#apxdot", { opacity: 0, duration: 0.09, ease: "power2.in" }, CUT + 0.18);`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceBiobloom() {
-  // BIOLUME apex: a bioluminescent BLOOM behind the subject. The abyss grade
-  // (params.mood) + a breathing vignette sit on the room from t=0 — the world
-  // IS underwater before anything speaks. A creature pre-glow gathers with a
-  // double-beat anticipation and crushes to a point; a dark pocket scrim
-  // (plate.scrim) opens behind the word zone; the word CONDENSES in (scale
-  // 2.35 crush power4.in 0.11s, blur 15→2, brightness 2.6→1.7) → 2-frame
-  // contact squash → elastic settle while cyan light SPILLS onto the scene;
-  // 6 luminous tendrils (blurred SVG strokes, cyan/violet alternating) draw
-  // outward from the word rect, staggered; through the hold the glow breathes
-  // 8–14%, two counter-drifting caustic gradients shimmer over the text zone
-  // and the bloom drifts slowly with the current (params.drift). Exit: the
-  // light SINKS — every glowing thing drifts down while dimming. Tendril
-  // geometry is hand-authored from the demo and baked at compile time as
-  // offsets from the word center (halfW/x × fontPx/120 units, frame-clamped).
-  const p = dna.hero.params || {},
-    I = heroIn;
-  const A = dna.palette.accent,
-    VIO = dna.palette.violet || "#9d7bff",
-    ICE = dna.palette.ice || "#8fe8ff",
-    CORE = dna.palette.core || "#f2fffd";
-  const fpx = HG.fontPx,
-    halfW = Math.round(HG.halfW || heroText.length * 0.33 * fpx),
-    cx = HG.x,
-    cy = HG.y;
-  const ky = fpx / 120; // demo scale unit (Fredoka 700 @ 120px)
-  const demoHalf = (wordPx("RECOVER", dna.fonts.hero, 120, 0.01) || 562) / 2;
-  const kx = halfW / demoHalf;
-  const TX = (x) => Math.round(Math.max(16, Math.min(W - 16, cx + (x - 560) * kx)));
-  const TY = (y) => Math.round(Math.max(16, Math.min(H - 16, cy + (y - 300) * ky)));
-  // 6 tendril cubics: anchors on the word rect edge, filaments reaching out
-  const TENDRILS = [
-    [
-      [340, 268],
-      [255, 230],
-      [195, 185],
-      [135, 110],
-    ],
-    [
-      [525, 244],
-      [500, 185],
-      [560, 140],
-      [520, 70],
-    ],
-    [
-      [725, 262],
-      [795, 222],
-      [850, 180],
-      [915, 112],
-    ],
-    [
-      [365, 332],
-      [280, 372],
-      [215, 425],
-      [150, 492],
-    ],
-    [
-      [580, 352],
-      [605, 415],
-      [545, 465],
-      [585, 530],
-    ],
-    [
-      [715, 335],
-      [790, 380],
-      [855, 425],
-      [920, 475],
-    ],
-  ].map((pts) => {
-    const q = pts.map(([x, y]) => TX(x) + " " + TY(y));
-    return `M ${q[0]} C ${q[1]}, ${q[2]}, ${q[3]}`;
-  });
-  const TCOL = [A, VIO, ICE, A, VIO, A];
-  const C = +(I + (p.crush ?? 0.11)).toFixed(3); // contact
-  const SINK = +Math.min(heroOut - 0.2, DUR - 0.3).toFixed(3);
-  // tendril stagger auto-clamps so the last filament completes before the sink
-  const stag = +Math.max(0.02, Math.min(0.05, (SINK - 0.46 - (C + 0.02)) / 5)).toFixed(3);
-  const breatheD = +Math.min(0.72, Math.max(0.3, DUR - 0.06 - (C + 0.12))).toFixed(2);
-  const flickD = +Math.min(0.7, SINK - 0.02 - (C + 0.34)).toFixed(2);
-  const shimD = +Math.min(0.5, Math.max(0.2, SINK + 0.03 - (C + 0.21))).toFixed(2);
-  const driftD = +Math.min(0.64, Math.max(0.2, SINK - (I + 0.21))).toFixed(2);
-  const wordFlickT = I + 0.59 + 0.32 <= SINK + 0.05 ? +(I + 0.59).toFixed(3) : null;
-  // geometry derived from the word rect
-  const pkW = Math.round(2 * halfW + 280),
-    pkH = Math.round(2.5 * fpx);
-  const pgW = Math.round(1.083 * fpx),
-    pgH = Math.round(0.717 * fpx);
-  const cxP = ((cx / W) * 100).toFixed(1),
-    cyP = ((cy / H) * 100).toFixed(1);
-  const css = `
+	// BIOLUME apex: a bioluminescent BLOOM behind the subject. The abyss grade
+	// (params.mood) + a breathing vignette sit on the room from t=0 — the world
+	// IS underwater before anything speaks. A creature pre-glow gathers with a
+	// double-beat anticipation and crushes to a point; a dark pocket scrim
+	// (plate.scrim) opens behind the word zone; the word CONDENSES in (scale
+	// 2.35 crush power4.in 0.11s, blur 15→2, brightness 2.6→1.7) → 2-frame
+	// contact squash → elastic settle while cyan light SPILLS onto the scene;
+	// 6 luminous tendrils (blurred SVG strokes, cyan/violet alternating) draw
+	// outward from the word rect, staggered; through the hold the glow breathes
+	// 8–14%, two counter-drifting caustic gradients shimmer over the text zone
+	// and the bloom drifts slowly with the current (params.drift). Exit: the
+	// light SINKS — every glowing thing drifts down while dimming. Tendril
+	// geometry is hand-authored from the demo and baked at compile time as
+	// offsets from the word center (halfW/x × fontPx/120 units, frame-clamped).
+	const p = dna.hero.params || {},
+		I = heroIn;
+	const A = dna.palette.accent,
+		VIO = dna.palette.violet || "#9d7bff",
+		ICE = dna.palette.ice || "#8fe8ff",
+		CORE = dna.palette.core || "#f2fffd";
+	const fpx = HG.fontPx,
+		halfW = Math.round(HG.halfW || heroText.length * 0.33 * fpx),
+		cx = HG.x,
+		cy = HG.y;
+	const ky = fpx / 120; // demo scale unit (Fredoka 700 @ 120px)
+	const demoHalf = (wordPx("RECOVER", dna.fonts.hero, 120, 0.01) || 562) / 2;
+	const kx = halfW / demoHalf;
+	const TX = (x) =>
+		Math.round(Math.max(16, Math.min(W - 16, cx + (x - 560) * kx)));
+	const TY = (y) =>
+		Math.round(Math.max(16, Math.min(H - 16, cy + (y - 300) * ky)));
+	// 6 tendril cubics: anchors on the word rect edge, filaments reaching out
+	const TENDRILS = [
+		[
+			[340, 268],
+			[255, 230],
+			[195, 185],
+			[135, 110],
+		],
+		[
+			[525, 244],
+			[500, 185],
+			[560, 140],
+			[520, 70],
+		],
+		[
+			[725, 262],
+			[795, 222],
+			[850, 180],
+			[915, 112],
+		],
+		[
+			[365, 332],
+			[280, 372],
+			[215, 425],
+			[150, 492],
+		],
+		[
+			[580, 352],
+			[605, 415],
+			[545, 465],
+			[585, 530],
+		],
+		[
+			[715, 335],
+			[790, 380],
+			[855, 425],
+			[920, 475],
+		],
+	].map((pts) => {
+		const q = pts.map(([x, y]) => TX(x) + " " + TY(y));
+		return `M ${q[0]} C ${q[1]}, ${q[2]}, ${q[3]}`;
+	});
+	const TCOL = [A, VIO, ICE, A, VIO, A];
+	const C = +(I + (p.crush ?? 0.11)).toFixed(3); // contact
+	const SINK = +Math.min(heroOut - 0.2, DUR - 0.3).toFixed(3);
+	// tendril stagger auto-clamps so the last filament completes before the sink
+	const stag = +Math.max(
+		0.02,
+		Math.min(0.05, (SINK - 0.46 - (C + 0.02)) / 5),
+	).toFixed(3);
+	const breatheD = +Math.min(
+		0.72,
+		Math.max(0.3, DUR - 0.06 - (C + 0.12)),
+	).toFixed(2);
+	const flickD = +Math.min(0.7, SINK - 0.02 - (C + 0.34)).toFixed(2);
+	const shimD = +Math.min(0.5, Math.max(0.2, SINK + 0.03 - (C + 0.21))).toFixed(
+		2,
+	);
+	const driftD = +Math.min(0.64, Math.max(0.2, SINK - (I + 0.21))).toFixed(2);
+	const wordFlickT =
+		I + 0.59 + 0.32 <= SINK + 0.05 ? +(I + 0.59).toFixed(3) : null;
+	// geometry derived from the word rect
+	const pkW = Math.round(2 * halfW + 280),
+		pkH = Math.round(2.5 * fpx);
+	const pgW = Math.round(1.083 * fpx),
+		pgH = Math.round(0.717 * fpx);
+	const cxP = ((cx / W) * 100).toFixed(1),
+		cyP = ((cy / H) * 100).toFixed(1);
+	const css = `
   #abyss { position:absolute; inset:0; opacity:${p.mood ?? 0.92};
            background:linear-gradient(180deg, rgba(3,11,26,0.52) 0%, rgba(3,11,26,0.30) 30%,
                        rgba(4,9,20,0.10) 52%, rgba(2,7,16,0.18) 78%, rgba(1,5,12,0.34) 100%); }
@@ -6713,7 +7043,7 @@ function setpieceBiobloom() {
   #aword { color:${CORE};
            text-shadow: 0 0 ${Math.round(18 * ky)}px ${A}f2, 0 0 ${Math.round(46 * ky)}px ${A}8c,
                         0 0 ${Math.round(100 * ky)}px ${VIO}80, 0 4px ${Math.round(22 * ky)}px rgba(1,8,16,0.7); }`;
-  const html = `      <div id="abyss"></div>
+	const html = `      <div id="abyss"></div>
       <div id="vig"></div>
       <div id="pocket"></div>
       <div id="spill"></div>
@@ -6730,7 +7060,7 @@ function setpieceBiobloom() {
         <div class="aw" id="aglow">${esc(heroText)}</div>
         <div class="aw" id="aword">${esc(heroText)}</div>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: BIOBLOOM (pre-glow gathers → word condenses → tendrils draw → light sinks) ----
   const BI = ${I.toFixed(3)}, BC = ${C.toFixed(3)}, SINK = ${SINK.toFixed(3)};
   gsap.set(["#aglow", "#aword"], { xPercent: -50, yPercent: -50 });
@@ -6789,10 +7119,10 @@ function setpieceBiobloom() {
     tl.to([pg, pc], { strokeDashoffset: 0, duration: 0.42, ease: "power2.out" }, t0);
   });
 ${
-  flickD >= 0.25
-    ? `  tl.to("#gGlow", { keyframes: { opacity: [0.78, 1, 0.72, 1, 0.82] },
+	flickD >= 0.25
+		? `  tl.to("#gGlow", { keyframes: { opacity: [0.78, 1, 0.72, 1, 0.82] },
                     duration: ${flickD}, ease: "sine.inOut" }, BC + 0.34);`
-    : ""
+		: ""
 }
 
   // ===== hold: glow breathes strongly (8-14%), caustics counter-drift =====
@@ -6800,11 +7130,11 @@ ${
                                  opacity: [0.78, 0.9, 0.7, 0.85] },
                     duration: ${breatheD}, ease: "sine.inOut" }, BC + 0.12);
 ${
-  wordFlickT != null
-    ? `  tl.to("#aword", { keyframes: { filter: ["blur(0px) brightness(1.6)", "blur(0px) brightness(1.4)",
+	wordFlickT != null
+		? `  tl.to("#aword", { keyframes: { filter: ["blur(0px) brightness(1.6)", "blur(0px) brightness(1.4)",
                                           "blur(0px) brightness(1.62)", "blur(0px) brightness(1.5)"] },
                     duration: 0.32, ease: "sine.inOut" }, ${wordFlickT.toFixed(3)});`
-    : ""
+		: ""
 }
   tl.to("#cauA", { opacity: 0.06, duration: 0.3, ease: "power1.out" }, BC + 0.02);
   tl.to("#cauB", { opacity: 0.06, duration: 0.3, ease: "power1.out" }, BC + 0.07);
@@ -6823,78 +7153,82 @@ ${
   tl.to("#apex", { y: 26, opacity: 0, duration: 0.2, ease: "power2.in" }, SINK + 0.06);
   tl.to("#aword", { filter: "blur(6px) brightness(1.2)", duration: 0.2, ease: "power1.in" }, SINK + 0.06);
   tl.set("#apex", { display: "none" }, ${Math.min(SINK + 0.28, DUR - 0.02).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceSilkribbon() {
-  // ---- setpiece: SILKRIBBON (aurora silk written into the night sky) ----
-  // The hero word is WRITTEN behind the subject as a silk ribbon: sequential
-  // Hershey-stroke reveal (one <path> per pen stroke, constant pen speed) in
-  // a blurred halo + tight core, BOTH stroked by ONE userSpaceOnUse aurora
-  // linearGradient (rose→teal→violet, reflect spread). SIGNATURE: the
-  // gradient's x1/x2 translate f(t) from I−0.07 to the end so the aurora
-  // colors FLOW THROUGH the drawn ribbon during the hold. A soft light mote
-  // (blurred halo + core dot) rides the pen, hops at lifts, and blooms out
-  // at the final stroke. Scene reaction: two huge aurora blobs drift the sky
-  // f(t) from t=0 (~params.wash) and DEEPEN as the ribbon writes; a top
-  // scrim (plate.scrim) charges in at I−0.34 (sky washout guard); a light
-  // spill tints the sky once the ribbon completes, flickering gently; the
-  // halo breathes through the hold. Gentle — no shake, no contact squash:
-  // the apex verb is the writing itself.
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  // stroke path baked at COMPILE time — any word, zero tuning (drawon pattern)
-  const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
-  const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
-  const tw = HG.ribbonW || Math.min(p.targetWidth || 880, W - 240);
-  const svgW = tw + 130,
-    svgH = 280;
-  const D = execFileSync(
-    "python3",
-    [
-      gen,
-      fontPath,
-      heroDisplay.toLowerCase(),
-      String(tw),
-      "200",
-      String(Math.round((svgW - tw) / 2)),
-    ],
-    { encoding: "utf8" },
-  ).trim();
-  const ENDT = +(DUR - 0.04).toFixed(3);
-  // writing window: keep the demo's 0.68s unless the hero lands too late to
-  // finish + hold before the end of the clip
-  const WIN = Math.min(p.window || 0.68, Math.max(0.36, ENDT - 0.42 - I));
-  const ROSE = dna.palette.rose,
-    TEAL = dna.palette.accent,
-    VIO = dna.palette.violet,
-    DEEP = dna.palette.deep || "#070C24";
-  const scrim = (dna.plate || {}).scrim ?? 0.72;
-  // aurora gradient span rides the ribbon ink (demo: 560 over 880, shift 1.5×span)
-  const gx1 = Math.round((svgW - tw) / 2),
-    span = Math.round(tw * 0.6364);
-  const spillW = tw + 60,
-    spillH = Math.round((tw + 60) * 0.51);
-  const css = `
+	// ---- setpiece: SILKRIBBON (aurora silk written into the night sky) ----
+	// The hero word is WRITTEN behind the subject as a silk ribbon: sequential
+	// Hershey-stroke reveal (one <path> per pen stroke, constant pen speed) in
+	// a blurred halo + tight core, BOTH stroked by ONE userSpaceOnUse aurora
+	// linearGradient (rose→teal→violet, reflect spread). SIGNATURE: the
+	// gradient's x1/x2 translate f(t) from I−0.07 to the end so the aurora
+	// colors FLOW THROUGH the drawn ribbon during the hold. A soft light mote
+	// (blurred halo + core dot) rides the pen, hops at lifts, and blooms out
+	// at the final stroke. Scene reaction: two huge aurora blobs drift the sky
+	// f(t) from t=0 (~params.wash) and DEEPEN as the ribbon writes; a top
+	// scrim (plate.scrim) charges in at I−0.34 (sky washout guard); a light
+	// spill tints the sky once the ribbon completes, flickering gently; the
+	// halo breathes through the hold. Gentle — no shake, no contact squash:
+	// the apex verb is the writing itself.
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	// stroke path baked at COMPILE time — any word, zero tuning (drawon pattern)
+	const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
+	const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
+	const tw = HG.ribbonW || Math.min(p.targetWidth || 880, W - 240);
+	const svgW = tw + 130,
+		svgH = 280;
+	const D = execFileSync(
+		"python3",
+		[
+			gen,
+			fontPath,
+			heroDisplay.toLowerCase(),
+			String(tw),
+			"200",
+			String(Math.round((svgW - tw) / 2)),
+		],
+		{ encoding: "utf8" },
+	).trim();
+	const ENDT = +(DUR - 0.04).toFixed(3);
+	// writing window: keep the demo's 0.68s unless the hero lands too late to
+	// finish + hold before the end of the clip
+	const WIN = Math.min(p.window || 0.68, Math.max(0.36, ENDT - 0.42 - I));
+	const ROSE = dna.palette.rose,
+		TEAL = dna.palette.accent,
+		VIO = dna.palette.violet,
+		DEEP = dna.palette.deep || "#070C24";
+	const scrim = (dna.plate || {}).scrim ?? 0.72;
+	// aurora gradient span rides the ribbon ink (demo: 560 over 880, shift 1.5×span)
+	const gx1 = Math.round((svgW - tw) / 2),
+		span = Math.round(tw * 0.6364);
+	const spillW = tw + 60,
+		spillH = Math.round((tw + 60) * 0.51);
+	const css = `
   .aur { position:absolute; border-radius:50%; opacity:0; will-change:transform; }
   #aurA { left:${Math.round(-0.141 * W)}px; top:${Math.round(-0.278 * H)}px; width:${Math.round(0.859 * W)}px; height:${Math.round(0.778 * H)}px;
           background: radial-gradient(50% 50% at 50% 50%, ${TEAL}d9 0%, ${TEAL}00 70%); }
   #aurB { left:${Math.round(0.406 * W)}px; top:${Math.round(-0.361 * H)}px; width:${Math.round(0.922 * W)}px; height:${Math.round(0.833 * H)}px;
           background: radial-gradient(50% 50% at 50% 50%, ${ROSE}cc 0%, ${ROSE}00 70%); }
   #apexScrim { position:absolute; left:0; top:0; width:${W}px; height:${Math.round(0.653 * H)}px; opacity:0;
-               background: linear-gradient(to bottom, ${DEEP}${Math.round(scrim * 255)
-                 .toString(16)
-                 .padStart(2, "0")} 0%, ${DEEP}${Math.round(scrim * 0.694 * 255)
-                 .toString(16)
-                 .padStart(2, "0")} 55%, ${DEEP}00 100%); }
+               background: linear-gradient(to bottom, ${DEEP}${Math.round(
+									scrim * 255,
+								)
+									.toString(16)
+									.padStart(2, "0")} 0%, ${DEEP}${Math.round(
+									scrim * 0.694 * 255,
+								)
+									.toString(16)
+									.padStart(2, "0")} 55%, ${DEEP}00 100%); }
   #spill { position:absolute; left:${HG.x}px; top:${HG.y}px; width:${spillW}px; height:${spillH}px;
            margin-left:-${Math.round(spillW / 2)}px; margin-top:-${Math.round(spillH / 2)}px; opacity:0;
            background: radial-gradient(50% 50% at 50% 50%, ${TEAL}80 0%, ${VIO}47 45%, ${ROSE}00 75%); }
   #silk { position:absolute; left:${HG.x}px; top:${HG.y}px; margin-left:-${Math.round(svgW / 2)}px;
           margin-top:-${Math.round(svgH / 2)}px; overflow:visible; }
   #coreG { filter: drop-shadow(0 0 6px rgba(255,255,255,0.55)); }`;
-  const html = `      <div class="aur" id="aurA"></div>
+	const html = `      <div class="aur" id="aurA"></div>
       <div class="aur" id="aurB"></div>
       <div id="apexScrim"></div>
       <div id="spill"></div>
@@ -6915,7 +7249,7 @@ function setpieceSilkribbon() {
         <circle id="nib" r="7" fill="#fff" opacity="0" filter="url(#haloblur)"/>
         <circle id="nibCore" r="3.5" fill="#fff" opacity="0"/>
       </svg>`;
-  const js = `
+	const js = `
   // ---- setpiece: SILKRIBBON (sequential silk-stroke reveal, flowing aurora gradient) ----
   const I9 = ${I.toFixed(3)}, WIN = ${WIN.toFixed(3)}, DRAWN = I9 + WIN, ENDT = ${ENDT};
   const D = ${J(D)};
@@ -6994,58 +7328,58 @@ function setpieceSilkribbon() {
   if (ENDT - DRAWN > 0.1)
     tl.to("#haloG", { keyframes: { opacity: [0.85, 0.7, 0.9, 0.72, 0.86] },
                       duration: ENDT - DRAWN, ease: "none" }, DRAWN);`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceScopetrace() {
-  // ---- setpiece: SCOPETRACE (the trace leaps off the scope and WRITES the word) ----
-  // A surge column jumps from the scope band up to the pen-start point, then
-  // the waveform WRITES the hero word in a thin phosphor stroke (sequential
-  // Hershey stroke reveal — core only, no halo: it is a trace, not a tube).
-  // The phosphor FILL flicker-arrives 2 frames + a 5-step blink AFTER the
-  // write completes (scope persistence), hums + breathes 1.6% through the
-  // hold, then the word COLLAPSES to a flatline (scaleY crush + horizontal
-  // flash) clearing before the next spoken word. Scene reaction: phosphor
-  // scrim + green spill behind the subject; a 1-frame green pulse answers the
-  // final transcript word (the scope-death beat the paradigm owns up front).
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
-  const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
-  const tw = HG.traceW;
-  // strip punctuation for the pen (the demo wrote "pixel size", period dropped)
-  const traceText = heroDisplay.toLowerCase().replace(/[^\p{L}\p{N} ']/gu, "");
-  const svgW = tw + 140,
-    svgH = 320,
-    BY = 215, // local baseline; ink center ≈ BY − 28 (demo registration)
-    CY = BY - 28;
-  const D = execFileSync(
-    "python3",
-    [gen, fontPath, traceText, String(tw), String(BY), String(70)],
-    { encoding: "utf8" },
-  ).trim();
-  // surge column lands at the pen-start point (first M of the path)
-  const m0 = D.match(/M ([\d.]+) ([\d.]+)/);
-  const surgeX = Math.round(HG.x - svgW / 2 + (m0 ? +m0[1] : 70));
-  const WIN = p.window || 0.6;
-  const FLICK = +(I + WIN + (p.flickGap ?? 0.12)).toFixed(3);
-  // exit: collapse to flatline CLEAR of the next spoken word (the demo's
-  // 3.33 before "It's" 3.545); falls back to the hero window end
-  const nextT = tWords
-    .filter((w) => w.start > hero.end + 0.01)
-    .map((w) => w.start)
-    .sort((a, b) => a - b)[0];
-  let EXIT = nextT != null ? nextT - (p.clearGap ?? 0.215) : heroOut - 0.2;
-  EXIT = +Math.max(FLICK + 0.45, Math.min(EXIT, heroOut)).toFixed(3);
-  const A = dna.palette.accent,
-    BRT = dna.palette.bright || "#d6ffe4";
-  const scrim = dna.plate.scrim ?? 0.62;
-  const ox = ((HG.x / W) * 100).toFixed(1),
-    oy = ((HG.y / H) * 100).toFixed(1);
-  const spillW = tw + 260,
-    spillH = Math.round((tw + 260) * 0.47);
-  const css = `
+	// ---- setpiece: SCOPETRACE (the trace leaps off the scope and WRITES the word) ----
+	// A surge column jumps from the scope band up to the pen-start point, then
+	// the waveform WRITES the hero word in a thin phosphor stroke (sequential
+	// Hershey stroke reveal — core only, no halo: it is a trace, not a tube).
+	// The phosphor FILL flicker-arrives 2 frames + a 5-step blink AFTER the
+	// write completes (scope persistence), hums + breathes 1.6% through the
+	// hold, then the word COLLAPSES to a flatline (scaleY crush + horizontal
+	// flash) clearing before the next spoken word. Scene reaction: phosphor
+	// scrim + green spill behind the subject; a 1-frame green pulse answers the
+	// final transcript word (the scope-death beat the paradigm owns up front).
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
+	const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
+	const tw = HG.traceW;
+	// strip punctuation for the pen (the demo wrote "pixel size", period dropped)
+	const traceText = heroDisplay.toLowerCase().replace(/[^\p{L}\p{N} ']/gu, "");
+	const svgW = tw + 140,
+		svgH = 320,
+		BY = 215, // local baseline; ink center ≈ BY − 28 (demo registration)
+		CY = BY - 28;
+	const D = execFileSync(
+		"python3",
+		[gen, fontPath, traceText, String(tw), String(BY), String(70)],
+		{ encoding: "utf8" },
+	).trim();
+	// surge column lands at the pen-start point (first M of the path)
+	const m0 = D.match(/M ([\d.]+) ([\d.]+)/);
+	const surgeX = Math.round(HG.x - svgW / 2 + (m0 ? +m0[1] : 70));
+	const WIN = p.window || 0.6;
+	const FLICK = +(I + WIN + (p.flickGap ?? 0.12)).toFixed(3);
+	// exit: collapse to flatline CLEAR of the next spoken word (the demo's
+	// 3.33 before "It's" 3.545); falls back to the hero window end
+	const nextT = tWords
+		.filter((w) => w.start > hero.end + 0.01)
+		.map((w) => w.start)
+		.sort((a, b) => a - b)[0];
+	let EXIT = nextT != null ? nextT - (p.clearGap ?? 0.215) : heroOut - 0.2;
+	EXIT = +Math.max(FLICK + 0.45, Math.min(EXIT, heroOut)).toFixed(3);
+	const A = dna.palette.accent,
+		BRT = dna.palette.bright || "#d6ffe4";
+	const scrim = dna.plate.scrim ?? 0.62;
+	const ox = ((HG.x / W) * 100).toFixed(1),
+		oy = ((HG.y / H) * 100).toFixed(1);
+	const spillW = tw + 260,
+		spillH = Math.round((tw + 260) * 0.47);
+	const css = `
   #scdim { position:absolute; inset:0; opacity:0;
            background: radial-gradient(90% 75% at ${ox}% ${oy}%, rgba(1,14,7,${scrim}) 0%, rgba(1,10,5,${(scrim * 0.55).toFixed(2)}) 60%, rgba(1,8,4,${(scrim * 0.19).toFixed(2)}) 100%); }
   #scspill { position:absolute; left:${HG.x}px; top:${HG.y}px; width:${spillW}px; height:${spillH}px;
@@ -7065,7 +7399,7 @@ function setpieceScopetrace() {
             background:${BRT}; box-shadow: 0 0 18px ${A}, 0 0 42px ${A}b3; }
   #scpulse { position:absolute; inset:0; opacity:0;
              background: radial-gradient(70% 60% at 50% 60%, ${A}38 0%, rgba(0,0,0,0) 70%); }`;
-  const html = `      <div id="scdim"></div>
+	const html = `      <div id="scdim"></div>
       <div id="scspill"></div>
       <div id="scsurge"></div>
       <div id="scblk">
@@ -7077,7 +7411,7 @@ function setpieceScopetrace() {
       </div>
       <div id="scflat"></div>
       <div id="scpulse"></div>`;
-  const js = `
+	const js = `
   // ---- setpiece: SCOPETRACE (surge → pen write → fill flicker → hum → flatline) ----
   const I = ${I.toFixed(3)}, WIN = ${WIN}, DRAWN = I + WIN, FLICK = ${FLICK.toFixed(3)}, EXIT = ${EXIT.toFixed(3)};
   const D = ${J(D)};
@@ -7170,51 +7504,51 @@ function setpieceScopetrace() {
   tl.set("#scpulse", { opacity: 1 }, ${Math.min(LASTWORD.start, DUR - 0.15).toFixed(3)});
   tl.set("#scpulse", { opacity: 0.4 }, ${Math.min(LASTWORD.start + F, DUR - 0.1).toFixed(3)});
   tl.set("#scpulse", { opacity: 0 }, ${Math.min(LASTWORD.start + 2 * F, DUR - 0.05).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpiecePapermat() {
-  // STOP-MOTION PAPERCUT EMBED: a torn-edge kraft mat drops onto the scene
-  // (steps(2) slap), then one torn cream chip per char DROPS with steps(3)
-  // gravity + 1-frame overshoot, lands crooked (seeded ±3° ±4px), settles in
-  // three 12fps poses and holds an 8fps wobble (baked set chain) until the
-  // FINAL word bumps the table and the chips SCATTER off down-right
-  // (disperse-on-last-word). Scene reaction: warm vignette charges with the
-  // landing. All geometry derives from HG (papermat branch).
-  const p = dna.hero.params || {},
-    I = heroIn;
-  const N = heroText.length;
-  const STEP = p.step ?? 0.09;
-  const tileW = HG.tileW,
-    tileH = HG.tileH,
-    fpx = HG.fontPx,
-    pitch = HG.pitch,
-    matW = HG.matW,
-    matH = HG.matH;
-  const matT = +Math.max(0.02, I - 0.212).toFixed(3);
-  // scatter trigger: the final word bumps the table (hero.exitAt overrides);
-  // the whole exit (chips 0.30 + mat sweep 0.26 at +0.21) lands inside DUR
-  const scatT = +Math.min(
-    Math.max(
-      I + (N - 1) * STEP + 0.5,
-      Math.min(
-        theme.hero.exitAt ?? LASTWORD.start + 0.02,
-        DUR - 0.48,
-        DUR - 0.32 - (N - 1) * 0.045,
-      ),
-    ),
-    DUR - 0.48,
-  ).toFixed(3);
-  const VIG = p.vig ?? 0.3;
-  const dropM = -(HG.y + matH / 2 + 50); // mat fully offscreen above
-  const dropL = -(HG.y + tileH / 2 + 100); // chips fully offscreen above
-  // tableau breathe windows (camera push feel), clamped before the scatter
-  const T1 = +(I + 0.83).toFixed(3);
-  const D1 = +Math.min(2.2, scatT - 0.3 - T1).toFixed(2);
-  const T2 = +(T1 + Math.max(0, D1)).toFixed(3);
-  const D2 = +Math.min(1.9, scatT - 0.15 - T2).toFixed(2);
-  const vigSettleT = +Math.min(matT + 0.79, scatT - 0.85).toFixed(3);
-  const css = `
+	// STOP-MOTION PAPERCUT EMBED: a torn-edge kraft mat drops onto the scene
+	// (steps(2) slap), then one torn cream chip per char DROPS with steps(3)
+	// gravity + 1-frame overshoot, lands crooked (seeded ±3° ±4px), settles in
+	// three 12fps poses and holds an 8fps wobble (baked set chain) until the
+	// FINAL word bumps the table and the chips SCATTER off down-right
+	// (disperse-on-last-word). Scene reaction: warm vignette charges with the
+	// landing. All geometry derives from HG (papermat branch).
+	const p = dna.hero.params || {},
+		I = heroIn;
+	const N = heroText.length;
+	const STEP = p.step ?? 0.09;
+	const tileW = HG.tileW,
+		tileH = HG.tileH,
+		fpx = HG.fontPx,
+		pitch = HG.pitch,
+		matW = HG.matW,
+		matH = HG.matH;
+	const matT = +Math.max(0.02, I - 0.212).toFixed(3);
+	// scatter trigger: the final word bumps the table (hero.exitAt overrides);
+	// the whole exit (chips 0.30 + mat sweep 0.26 at +0.21) lands inside DUR
+	const scatT = +Math.min(
+		Math.max(
+			I + (N - 1) * STEP + 0.5,
+			Math.min(
+				theme.hero.exitAt ?? LASTWORD.start + 0.02,
+				DUR - 0.48,
+				DUR - 0.32 - (N - 1) * 0.045,
+			),
+		),
+		DUR - 0.48,
+	).toFixed(3);
+	const VIG = p.vig ?? 0.3;
+	const dropM = -(HG.y + matH / 2 + 50); // mat fully offscreen above
+	const dropL = -(HG.y + tileH / 2 + 100); // chips fully offscreen above
+	// tableau breathe windows (camera push feel), clamped before the scatter
+	const T1 = +(I + 0.83).toFixed(3);
+	const D1 = +Math.min(2.2, scatT - 0.3 - T1).toFixed(2);
+	const T2 = +(T1 + Math.max(0, D1)).toFixed(3);
+	const D2 = +Math.min(1.9, scatT - 0.15 - T2).toFixed(2);
+	const vigSettleT = +Math.min(matT + 0.79, scatT - 0.85).toFixed(3);
+	const css = `
   #vigP { position:absolute; inset:0; opacity:0;
           background: radial-gradient(120% 105% at ${((HG.x / W) * 100).toFixed(0)}% ${((HG.y / H) * 100).toFixed(0)}%, rgba(0,0,0,0) 38%, rgba(26,16,5,0.85) 100%); }
   #apx  { position:absolute; left:${HG.x}px; top:${HG.y}px; width:0; height:0; }
@@ -7232,12 +7566,12 @@ function setpiecePapermat() {
   .lchip .pap2 { position:absolute; inset:5px; background:${dna.palette.paper2 || "#efe3c6"}; }
   .lchip .gl { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
                font-family:'${dna.fonts.hero}', sans-serif; font-size:${fpx}px; line-height:1; color:${dna.palette.ink || "#2b241b"}; }`;
-  const html = `      <div id="vigP"></div>
+	const html = `      <div id="vigP"></div>
       <div id="apx">
         <div id="matshad"></div>
         <div id="mat"><div class="pap"></div><div class="pap2"></div></div>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: PAPERMAT (mat slap → stepped-gravity chip drops → 8fps wobble → table-bump scatter) ----
   const I = ${I.toFixed(3)}, STEP = ${STEP}, SCAT = ${scatT};
   const prnd = mulberry32(${p.seed || 151515});
@@ -7323,60 +7657,61 @@ function setpiecePapermat() {
     tl.set(shad, { opacity: 0 }, S + 0.06);
   });
 ${
-  D1 >= 0.4
-    ? `
+	D1 >= 0.4
+		? `
   // hold loom: the whole tableau breathes very slowly (camera push feel)
   tl.to("#apx", { scale: 1.016, duration: ${D1}, ease: "sine.inOut" }, ${T1});
 ${D2 >= 0.3 ? `  tl.to("#apx", { scale: 1.004, duration: ${D2}, ease: "sine.inOut" }, ${T2});` : ""}`
-    : ""
+		: ""
 }
   // table bump, 1 frame before the scatter begins
   tl.set("#apx", { y: 4 }, ${(scatT - 0.041).toFixed(3)});
   tl.set("#apx", { y: 0 }, ${(scatT + 0.001).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceCenterfold() {
-  // POP-UP BOOK CENTERFOLD: blue + cream 12-point paper starbursts unfold on a
-  // baseline hinge (scaleY 0.03→1 back.out, staggered), then the hero word
-  // pops up in hinged clip-path segments (rotationX 85→0, the body motif at
-  // full amplitude), kraft struts lean in, backdrop + word wobble-settle
-  // TOGETHER (one wrapper owns rotationX), breathe through the hold, and the
-  // whole centerfold folds flat at heroOut (the book closing). A dusk scrim
-  // charges behind it (bright-sky insurance). Geometry derives from HG.
-  const p = dna.hero.params || {},
-    I = heroIn;
-  const segs = p.segs || 3,
-    stag = p.segStagger ?? 0.07;
-  const u = HG.burstR / 220; // prop scale (demo burst R 220)
-  const boxW = HG.boxW,
-    boxH = HG.boxH;
-  const cx = Math.round(boxW / 2),
-    cy = Math.round(boxH / 2);
-  const lineH = Math.round(HG.fontPx * 1.1667);
-  const wordTop = Math.round(cy - 24 * u - lineH / 2); // word center 24u above box center
-  const R1 = HG.burstR,
-    r1 = Math.round(0.673 * R1),
-    R2 = Math.round(0.9 * R1),
-    r2 = Math.round(0.555 * R1);
-  const strokeW = Math.max(2, Math.round(3 * u));
-  // exit start: fold flat before the next sentence (demo 3.28 = heroOut−0.33),
-  // never before the pop + wobble have read, always complete by DUR−0.08
-  const XO = +Math.max(I + (segs - 1) * stag + 0.45, Math.min(heroOut - 0.33, DUR - 0.39)).toFixed(
-    3,
-  );
-  const scrimT = +Math.max(0.02, I - 0.272).toFixed(3);
-  const blueT = +Math.max(0.04, I - 0.272).toFixed(3);
-  const wobT = +(I + 0.428).toFixed(3);
-  const wobD = +Math.min(0.7, XO - 0.05 - (I + 0.428)).toFixed(2);
-  const brT = +(I + 1.178).toFixed(3);
-  const brD = +Math.min(1.7, XO - 0.15 - (I + 1.178)).toFixed(2);
-  const segClips = Array.from({ length: segs }, (_, i) => {
-    const lp = ((i * 100) / segs).toFixed(1),
-      rp = (((segs - 1 - i) * 100) / segs).toFixed(1);
-    return `  #cfsg${i} { clip-path: inset(0 ${rp}% 0 ${lp}%); }`;
-  }).join("\n");
-  const css = `
+	// POP-UP BOOK CENTERFOLD: blue + cream 12-point paper starbursts unfold on a
+	// baseline hinge (scaleY 0.03→1 back.out, staggered), then the hero word
+	// pops up in hinged clip-path segments (rotationX 85→0, the body motif at
+	// full amplitude), kraft struts lean in, backdrop + word wobble-settle
+	// TOGETHER (one wrapper owns rotationX), breathe through the hold, and the
+	// whole centerfold folds flat at heroOut (the book closing). A dusk scrim
+	// charges behind it (bright-sky insurance). Geometry derives from HG.
+	const p = dna.hero.params || {},
+		I = heroIn;
+	const segs = p.segs || 3,
+		stag = p.segStagger ?? 0.07;
+	const u = HG.burstR / 220; // prop scale (demo burst R 220)
+	const boxW = HG.boxW,
+		boxH = HG.boxH;
+	const cx = Math.round(boxW / 2),
+		cy = Math.round(boxH / 2);
+	const lineH = Math.round(HG.fontPx * 1.1667);
+	const wordTop = Math.round(cy - 24 * u - lineH / 2); // word center 24u above box center
+	const R1 = HG.burstR,
+		r1 = Math.round(0.673 * R1),
+		R2 = Math.round(0.9 * R1),
+		r2 = Math.round(0.555 * R1);
+	const strokeW = Math.max(2, Math.round(3 * u));
+	// exit start: fold flat before the next sentence (demo 3.28 = heroOut−0.33),
+	// never before the pop + wobble have read, always complete by DUR−0.08
+	const XO = +Math.max(
+		I + (segs - 1) * stag + 0.45,
+		Math.min(heroOut - 0.33, DUR - 0.39),
+	).toFixed(3);
+	const scrimT = +Math.max(0.02, I - 0.272).toFixed(3);
+	const blueT = +Math.max(0.04, I - 0.272).toFixed(3);
+	const wobT = +(I + 0.428).toFixed(3);
+	const wobD = +Math.min(0.7, XO - 0.05 - (I + 0.428)).toFixed(2);
+	const brT = +(I + 1.178).toFixed(3);
+	const brD = +Math.min(1.7, XO - 0.15 - (I + 1.178)).toFixed(2);
+	const segClips = Array.from({ length: segs }, (_, i) => {
+		const lp = ((i * 100) / segs).toFixed(1),
+			rp = (((segs - 1 - i) * 100) / segs).toFixed(1);
+		return `  #cfsg${i} { clip-path: inset(0 ${rp}% 0 ${lp}%); }`;
+	}).join("\n");
+	const css = `
   #cfscrim { position:absolute; inset:0; opacity:0;
              background: radial-gradient(46% 54% at ${((HG.x / W) * 100).toFixed(0)}% ${(((HG.y + 24 * u) / H) * 100).toFixed(0)}%,
                rgba(16,24,42,0.62) 0%, rgba(16,24,42,0.34) 55%, rgba(16,24,42,0) 100%); }
@@ -7398,7 +7733,7 @@ function setpieceCenterfold() {
            line-height:${lineH}px; letter-spacing:0.02em; color:${dna.palette.ink || dna.palette.body};
            text-shadow: 0 3px 10px rgba(56,38,14,0.32); }
 ${segClips}`;
-  const html = `      <div id="cfscrim"></div>
+	const html = `      <div id="cfscrim"></div>
       <div id="cf">
         <div id="cfWob">
           <svg class="cfburst" id="cfbBlue" width="${boxW}" height="${boxH}" viewBox="0 0 ${boxW} ${boxH}">
@@ -7415,7 +7750,7 @@ ${Array.from({ length: segs }, (_, i) => `            <div class="cfseg" id="cfs
           </div>
         </div>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: CENTERFOLD (starburst unfold → hinged segment pop → wobble-settle → fold flat) ----
   const I = ${I.toFixed(3)}, XO = ${XO};
   // deterministic starburst geometry (paper sun)
@@ -7459,22 +7794,22 @@ ${Array.from({ length: segs }, (_, i) => `            <div class="cfseg" id="cfs
   tl.to("#cfs1", { scaleY: 1, duration: 0.12, ease: "back.out(2)" }, ${(I + 0.328).toFixed(3)});
   tl.to("#cfs2", { scaleY: 1, duration: 0.12, ease: "back.out(2)" }, ${(I + 0.378).toFixed(3)});
 ${
-  wobD >= 0.2
-    ? `
+	wobD >= 0.2
+		? `
   // backdrop + word wobble-settle TOGETHER (one wrapper owns it)
   tl.to("#cfWob", { keyframes: { rotationX: [0, -3.6, 2.4, -1.3, 0.6, 0] },
                     duration: ${wobD}, ease: "sine.inOut" }, ${wobT});`
-    : ""
+		: ""
 }
 ${
-  brD >= 0.5
-    ? `
+	brD >= 0.5
+		? `
   // hold life: slow paper breathing through the silence
   tl.to("#cfWob", { keyframes: { rotationX: [0, 1.5, -1.1, 1.3, 0] },
                     duration: ${brD}, ease: "sine.inOut" }, ${brT});
   tl.to("#cfShadow", { keyframes: { scaleX: [1, 1.05, 0.98, 1.04, 1] },
                        duration: ${brD}, ease: "sine.inOut" }, ${brT});`
-    : ""
+		: ""
 }
 
   // EXIT — the centerfold folds flat (book closing)
@@ -7490,65 +7825,75 @@ ${
   tl.set("#cfbBlue", { opacity: 0 }, XO + 0.31);
   tl.to("#cfShadow", { opacity: 0, scaleX: 0.3, duration: 0.16, ease: "power1.in" }, XO + 0.14);
   tl.to("#cfscrim", { opacity: 0, duration: 0.28, ease: "power1.in" }, XO + 0.02);`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceChalkwrite() {
-  // ---- setpiece: CHALKWRITE (the board grows and a hand WRITES the word) ----
-  // The lower chalk band grows into a FULL deep-green board behind the subject
-  // 0.3s before the apex (scaleY power3.out from the bottom edge, the room
-  // dims with it); the hero word is HAND-WRITTEN in chalk — sequential Hershey
-  // stroke reveal (drawon pattern), dry/rough via seeded ±1px jitter baked
-  // onto every pen point, a blurred halo under a tight core, a chalk-stick
-  // nib riding the pen — while dust specks fall from the nib. On completion a
-  // hand-slap CLAP shakes the board 1 frame (the dust burst lives in the
-  // rail, in FRONT of the subject: fx.chalkclap), then TWO violent
-  // accelerating underlines slash beneath (nib rides them, dust kicks at the
-  // ends), the chalk flicks away, and the halo breathes through the hold with
-  // two slow motes drifting off the letters.
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
-  const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
-  const tw = HG.chalkW;
-  const x0 = Math.round(HG.x - tw / 2);
-  let D = execFileSync(
-    "python3",
-    [gen, fontPath, heroDisplay.toLowerCase(), String(tw), "450", String(x0)],
-    { encoding: "utf8" },
-  ).trim();
-  // register the measured ink box on HG (ink CENTER lands on HG.y), then the
-  // board rect, underlines and the fg clap all derive from the same box
-  const pts = [...D.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => [+m[1], +m[2]]);
-  const ys0 = pts.map((q) => q[1]);
-  const dy = +(HG.y - (Math.min(...ys0) + Math.max(...ys0)) / 2).toFixed(1);
-  D = D.replace(/([ML]) ([-\d.]+) ([-\d.]+)/g, (m, c, x, y) => `${c} ${x} ${(+y + dy).toFixed(1)}`);
-  const inkTop = Math.min(...ys0) + dy,
-    inkBot = Math.max(...ys0) + dy,
-    inkH = inkBot - inkTop;
-  const inkL = Math.min(...pts.map((q) => q[0])),
-    inkR = Math.max(...pts.map((q) => q[0]));
-  // board: full strip width, grows from the bottom edge up past the ink
-  // (demo: ink top 320, board top 248 → gap 0.554 × ink height 130)
-  const stripW = (dna.body.strip && dna.body.strip.w) || 1200;
-  const SX = (dna.body.strip && dna.body.strip.x) ?? Math.round((W - stripW) / 2);
-  const boardTop = Math.max(40, Math.round(inkTop - (p.boardGap ?? 0.554) * Math.max(inkH, 90)));
-  const boardH = H - boardTop;
-  const kw = stripW / 1200,
-    kb = boardH / 472; // board furniture scales with the demo rect (1200×472)
-  const ENDT = +(DUR - 0.04).toFixed(3);
-  // writing window: keep the demo's 0.78s unless the hero lands too late to
-  // finish + underline + hold before the end of the clip
-  const WIN = Math.min(p.window || 0.78, Math.max(0.4, ENDT - 0.95 - I));
-  const DRAWN = +(I + WIN).toFixed(3);
-  // hand-off to the fg dust clap: the pen's final contact point, at write end
-  HG.clapX = Math.round(pts[pts.length - 1][0]);
-  HG.clapY = Math.round(pts[pts.length - 1][1] + dy);
-  HG.clapT = DRAWN;
-  const CHALK = dna.palette.chalk || dna.palette.accent || "#fbf9ef";
-  const DUST = dna.palette.dust || "#f6f4e9";
-  const css = `
+	// ---- setpiece: CHALKWRITE (the board grows and a hand WRITES the word) ----
+	// The lower chalk band grows into a FULL deep-green board behind the subject
+	// 0.3s before the apex (scaleY power3.out from the bottom edge, the room
+	// dims with it); the hero word is HAND-WRITTEN in chalk — sequential Hershey
+	// stroke reveal (drawon pattern), dry/rough via seeded ±1px jitter baked
+	// onto every pen point, a blurred halo under a tight core, a chalk-stick
+	// nib riding the pen — while dust specks fall from the nib. On completion a
+	// hand-slap CLAP shakes the board 1 frame (the dust burst lives in the
+	// rail, in FRONT of the subject: fx.chalkclap), then TWO violent
+	// accelerating underlines slash beneath (nib rides them, dust kicks at the
+	// ends), the chalk flicks away, and the halo breathes through the hold with
+	// two slow motes drifting off the letters.
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
+	const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
+	const tw = HG.chalkW;
+	const x0 = Math.round(HG.x - tw / 2);
+	let D = execFileSync(
+		"python3",
+		[gen, fontPath, heroDisplay.toLowerCase(), String(tw), "450", String(x0)],
+		{ encoding: "utf8" },
+	).trim();
+	// register the measured ink box on HG (ink CENTER lands on HG.y), then the
+	// board rect, underlines and the fg clap all derive from the same box
+	const pts = [...D.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => [
+		+m[1],
+		+m[2],
+	]);
+	const ys0 = pts.map((q) => q[1]);
+	const dy = +(HG.y - (Math.min(...ys0) + Math.max(...ys0)) / 2).toFixed(1);
+	D = D.replace(
+		/([ML]) ([-\d.]+) ([-\d.]+)/g,
+		(m, c, x, y) => `${c} ${x} ${(+y + dy).toFixed(1)}`,
+	);
+	const inkTop = Math.min(...ys0) + dy,
+		inkBot = Math.max(...ys0) + dy,
+		inkH = inkBot - inkTop;
+	const inkL = Math.min(...pts.map((q) => q[0])),
+		inkR = Math.max(...pts.map((q) => q[0]));
+	// board: full strip width, grows from the bottom edge up past the ink
+	// (demo: ink top 320, board top 248 → gap 0.554 × ink height 130)
+	const stripW = (dna.body.strip && dna.body.strip.w) || 1200;
+	const SX =
+		(dna.body.strip && dna.body.strip.x) ?? Math.round((W - stripW) / 2);
+	const boardTop = Math.max(
+		40,
+		Math.round(inkTop - (p.boardGap ?? 0.554) * Math.max(inkH, 90)),
+	);
+	const boardH = H - boardTop;
+	const kw = stripW / 1200,
+		kb = boardH / 472; // board furniture scales with the demo rect (1200×472)
+	const ENDT = +(DUR - 0.04).toFixed(3);
+	// writing window: keep the demo's 0.78s unless the hero lands too late to
+	// finish + underline + hold before the end of the clip
+	const WIN = Math.min(p.window || 0.78, Math.max(0.4, ENDT - 0.95 - I));
+	const DRAWN = +(I + WIN).toFixed(3);
+	// hand-off to the fg dust clap: the pen's final contact point, at write end
+	HG.clapX = Math.round(pts[pts.length - 1][0]);
+	HG.clapY = Math.round(pts[pts.length - 1][1] + dy);
+	HG.clapT = DRAWN;
+	const CHALK = dna.palette.chalk || dna.palette.accent || "#fbf9ef";
+	const DUST = dna.palette.dust || "#f6f4e9";
+	const css = `
   #cwDim { position:absolute; inset:0; background:${p.dimColor || "rgba(4,14,9,0.95)"}; opacity:0; }
   #cwVig { position:absolute; inset:0; opacity:0;
            background: radial-gradient(75% 70% at 50% 45%, rgba(0,0,0,0) 55%, rgba(2,10,6,0.55) 100%); }
@@ -7568,7 +7913,7 @@ function setpieceChalkwrite() {
   #cwSvg { position:absolute; left:0; top:0; overflow:visible; }
   #cwHaloG { opacity:${p.halo ?? 0.18}; }
   #cwCoreG { opacity:0.92; }`;
-  const html = `      <div id="cwDim"></div>
+	const html = `      <div id="cwDim"></div>
       <div id="cwVig"></div>
       <div id="cwUnit">
         <div id="cwBoard">
@@ -7588,7 +7933,7 @@ function setpieceChalkwrite() {
           <rect id="cwNib" x="-9" y="-3" width="18" height="6" rx="2.5" fill="#fffef6" opacity="0"/>
         </svg>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: CHALKWRITE (board grows; the hero word is hand-written in chalk) ----
   const I8 = ${I.toFixed(3)}, WIN8 = ${WIN.toFixed(3)}, DRAWN = ${DRAWN}, ENDT = ${ENDT};
   const D8 = ${J(D)};
@@ -7718,52 +8063,58 @@ function setpieceChalkwrite() {
     tl.set(c, { opacity: 0.6 }, ts);
     tl.to(c, { y: 30, x: crnd() * 10 - 5, opacity: 0, duration: 0.5, ease: "power1.in" }, ts);
   });`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceSpraytag() {
-  // ---- setpiece: SPRAYTAG (a writer steps up and TAGS the hero word) ----
-  // The dusk wall dims + a radial scrim charges as the writer steps up; the
-  // can RATTLES at the start point (seeded set-chain nib jitter), then the
-  // hero word is spray-written stroke by stroke — sequential Hershey dash
-  // reveal (drawon pattern) — as a TRIPLE stack per stroke: fat dark
-  // under-stroke (sky-contrast armor) + blurred overspray halo + wet paint
-  // core, the glowing nib riding each stroke. Seeded overspray dots pop near
-  // the nib as it passes; the nib throws off at the finish (the magenta splat
-  // lives in the rail, in FRONT of the subject: fx.paintsplat). Through the
-  // hold, seeded DRIPS grow from painted low points (signature) and the halo
-  // hums while the whole tag slowly looms.
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
-  const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
-  const tw = HG.sprayW;
-  const x0 = Math.round(HG.x - tw / 2);
-  let D = execFileSync(
-    "python3",
-    [gen, fontPath, heroDisplay.toLowerCase(), String(tw), "450", String(x0)],
-    { encoding: "utf8" },
-  ).trim();
-  // register the measured ink box on HG (ink CENTER lands on HG.y); the loom
-  // origin and the fg paint splat derive from the same box
-  const pts = [...D.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => [+m[1], +m[2]]);
-  const ys0 = pts.map((q) => q[1]);
-  const dy = +(HG.y - (Math.min(...ys0) + Math.max(...ys0)) / 2).toFixed(1);
-  D = D.replace(/([ML]) ([-\d.]+) ([-\d.]+)/g, (m, c, x, y) => `${c} ${x} ${(+y + dy).toFixed(1)}`);
-  const ENDT = +(DUR - 0.04).toFixed(3);
-  // writing window: keep the demo's 0.58s unless the hero lands too late to
-  // finish + splat + drip before the end of the clip
-  const WIN = Math.min(p.window || 0.58, Math.max(0.35, ENDT - 0.55 - I));
-  const DRAWN = +(I + WIN).toFixed(3);
-  // hand-off to the fg paint splat: the pen-finish point, at write end
-  HG.splatX = Math.round(pts[pts.length - 1][0]);
-  HG.splatY = Math.round(pts[pts.length - 1][1] + dy);
-  HG.splatT = DRAWN;
-  const PAINT = dna.palette.accent || "#ffd23f";
-  const UNDER = dna.palette.under || "#241008";
-  const NIB = dna.palette.nib || "#fff6d9";
-  const css = `
+	// ---- setpiece: SPRAYTAG (a writer steps up and TAGS the hero word) ----
+	// The dusk wall dims + a radial scrim charges as the writer steps up; the
+	// can RATTLES at the start point (seeded set-chain nib jitter), then the
+	// hero word is spray-written stroke by stroke — sequential Hershey dash
+	// reveal (drawon pattern) — as a TRIPLE stack per stroke: fat dark
+	// under-stroke (sky-contrast armor) + blurred overspray halo + wet paint
+	// core, the glowing nib riding each stroke. Seeded overspray dots pop near
+	// the nib as it passes; the nib throws off at the finish (the magenta splat
+	// lives in the rail, in FRONT of the subject: fx.paintsplat). Through the
+	// hold, seeded DRIPS grow from painted low points (signature) and the halo
+	// hums while the whole tag slowly looms.
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
+	const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
+	const tw = HG.sprayW;
+	const x0 = Math.round(HG.x - tw / 2);
+	let D = execFileSync(
+		"python3",
+		[gen, fontPath, heroDisplay.toLowerCase(), String(tw), "450", String(x0)],
+		{ encoding: "utf8" },
+	).trim();
+	// register the measured ink box on HG (ink CENTER lands on HG.y); the loom
+	// origin and the fg paint splat derive from the same box
+	const pts = [...D.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => [
+		+m[1],
+		+m[2],
+	]);
+	const ys0 = pts.map((q) => q[1]);
+	const dy = +(HG.y - (Math.min(...ys0) + Math.max(...ys0)) / 2).toFixed(1);
+	D = D.replace(
+		/([ML]) ([-\d.]+) ([-\d.]+)/g,
+		(m, c, x, y) => `${c} ${x} ${(+y + dy).toFixed(1)}`,
+	);
+	const ENDT = +(DUR - 0.04).toFixed(3);
+	// writing window: keep the demo's 0.58s unless the hero lands too late to
+	// finish + splat + drip before the end of the clip
+	const WIN = Math.min(p.window || 0.58, Math.max(0.35, ENDT - 0.55 - I));
+	const DRAWN = +(I + WIN).toFixed(3);
+	// hand-off to the fg paint splat: the pen-finish point, at write end
+	HG.splatX = Math.round(pts[pts.length - 1][0]);
+	HG.splatY = Math.round(pts[pts.length - 1][1] + dy);
+	HG.splatT = DRAWN;
+	const PAINT = dna.palette.accent || "#ffd23f";
+	const UNDER = dna.palette.under || "#241008";
+	const NIB = dna.palette.nib || "#fff6d9";
+	const css = `
   #stDim   { position:absolute; inset:0; opacity:0; background:${p.dimColor || "#0a0608"}; }
   #stScrim { position:absolute; inset:0; opacity:0;
              background: radial-gradient(92% 78% at 50% 36%, rgba(0,0,0,0) 28%, rgba(10,4,12,0.78) 100%); }
@@ -7775,7 +8126,7 @@ function setpieceSpraytag() {
             background: linear-gradient(180deg, ${PAINT} 0%, ${dna.palette.dripMid || "#eab928"} 78%, ${dna.palette.dripLo || "#d8a51d"} 100%);
             border-radius: 0 0 4px 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.35); }`;
-  const html = `      <div id="stDim"></div><div id="stScrim"></div>
+	const html = `      <div id="stDim"></div><div id="stScrim"></div>
       <div id="stWrap">
         <svg id="stSvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
           <defs>
@@ -7790,7 +8141,7 @@ function setpieceSpraytag() {
           <circle id="stNib" r="9" fill="${NIB}" opacity="0"/>
         </svg>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: SPRAYTAG (rattle → sequential spray write → drips + hum) ----
   const Ig = ${I.toFixed(3)}, WINg = ${WIN.toFixed(3)}, DRAWNg = ${DRAWN}, ENDTg = ${ENDT};
   const Dg = ${J(D)};
@@ -7925,68 +8276,77 @@ function setpieceSpraytag() {
   tl.to("#stHaloG", { keyframes: { opacity: humValsG }, duration: humDurG, ease: "none" }, humStartG);
   gsap.set("#stWrap", { transformOrigin: "${HG.x}px ${HG.y}px" });
   tl.to("#stWrap", { scale: 1.014, duration: 0.5, ease: "power1.inOut" }, DRAWNg + 0.08);`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceBrushwrite() {
-  // ---- setpiece: BRUSHWRITE (sumi-e — ONE violent calligraphic gesture) ----
-  // A warm paper wash charges behind the word; the brush SLAPS down at the
-  // first pen point (start-splat: irregular ink blob + seeded satellites —
-  // the fg fleck pass rides fx.brushflecks), then the hero word is written in
-  // ONE sequential gesture — Hershey dash reveal at constant pen speed — as a
-  // FOUR-layer stack per stroke (blurred bleed under fat/mid/core widths =
-  // pressure-tapered wet brush), the round ink nib riding the pen and
-  // flicking off at the finish. Spatter droplets eject perpendicular at the
-  // sharpest-curvature points of the gesture. Through the hold the ink
-  // BLEEDS into the paper (the blurred under-layer swells visible) and the
-  // whole work breathes; then the vermilion SEAL chop stamps beside the ink
-  // (power4 crush → 2-frame squash → elastic settle, red flecks kicked) —
-  // the plate punch lands on the chop contact.
-  const h = dna.hero,
-    p = h.params,
-    I = heroIn;
-  const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
-  const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
-  const tw = HG.brushW;
-  const x0 = Math.round(HG.x - tw / 2);
-  let D = execFileSync(
-    "python3",
-    [gen, fontPath, heroDisplay.toLowerCase(), String(tw), "450", String(x0)],
-    { encoding: "utf8" },
-  ).trim();
-  // register the measured ink box on HG (ink CENTER lands on HG.y); the wash,
-  // breathe origin, seal chop and the fg flecks all derive from the same box
-  const pts = [...D.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => [+m[1], +m[2]]);
-  const ys0 = pts.map((q) => q[1]);
-  const dy = +(HG.y - (Math.min(...ys0) + Math.max(...ys0)) / 2).toFixed(1);
-  D = D.replace(/([ML]) ([-\d.]+) ([-\d.]+)/g, (m, c, x, y) => `${c} ${x} ${(+y + dy).toFixed(1)}`);
-  const inkBot = Math.max(...ys0) + dy;
-  const inkR = Math.max(...pts.map((q) => q[0]));
-  const ENDT = +(DUR - 0.04).toFixed(3);
-  // writing window: keep the demo's 0.45s unless the gesture lands too late to
-  // finish + seal + bleed before the end of the clip
-  const WIN = Math.min(p.window || 0.45, Math.max(0.3, ENDT - 0.9 - I));
-  const DRAWN = +(I + WIN).toFixed(3);
-  // hand-off to the fg ink flecks: the brush's FIRST contact point, at slap-down
-  HG.fleckX = Math.round(pts[0][0]);
-  HG.fleckY = Math.round(pts[0][1] + dy);
-  HG.fleckT = +(I + 0.01).toFixed(3);
-  // seal chop: below-right of the ink (demo offsets), kept on frame
-  const SEALC = +(DRAWN + (p.sealDelay ?? 0.04)).toFixed(3);
-  const sealS = p.sealSize ?? 64;
-  const sealX = Math.min(W - 48, Math.max(60, Math.round(inkR + (p.sealDx ?? -103))));
-  const sealY = Math.min(H - 80, Math.round(inkBot + (p.sealDy ?? 72)));
-  const INK = dna.palette.ink || "#19120b";
-  const WASH = dna.palette.wash || "#f6f0e2";
-  const WASH2 = dna.palette.wash2 || "#f4edde";
-  const washW = tw + 380,
-    washH = p.washH ?? 420;
-  const bleedT = +(DRAWN + 0.1).toFixed(3);
-  const bleedDur = +Math.max(0.4, Math.min(1.7, ENDT - DRAWN - 0.1)).toFixed(2);
-  const breT = +Math.min(SEALC, ENDT - 0.4).toFixed(3);
-  const breDur = +Math.max(0.3, Math.min(1.78, ENDT - breT)).toFixed(2);
-  const breN = Math.max(8, Math.round(breDur / (2 * F)));
-  const css = `
+	// ---- setpiece: BRUSHWRITE (sumi-e — ONE violent calligraphic gesture) ----
+	// A warm paper wash charges behind the word; the brush SLAPS down at the
+	// first pen point (start-splat: irregular ink blob + seeded satellites —
+	// the fg fleck pass rides fx.brushflecks), then the hero word is written in
+	// ONE sequential gesture — Hershey dash reveal at constant pen speed — as a
+	// FOUR-layer stack per stroke (blurred bleed under fat/mid/core widths =
+	// pressure-tapered wet brush), the round ink nib riding the pen and
+	// flicking off at the finish. Spatter droplets eject perpendicular at the
+	// sharpest-curvature points of the gesture. Through the hold the ink
+	// BLEEDS into the paper (the blurred under-layer swells visible) and the
+	// whole work breathes; then the vermilion SEAL chop stamps beside the ink
+	// (power4 crush → 2-frame squash → elastic settle, red flecks kicked) —
+	// the plate punch lands on the chop contact.
+	const h = dna.hero,
+		p = h.params,
+		I = heroIn;
+	const fontPath = path.join(SKILL, "assets/strokefonts", dna.fonts.strokeFont);
+	const gen = path.join(SKILL, "scripts/gen-stroke-path.py");
+	const tw = HG.brushW;
+	const x0 = Math.round(HG.x - tw / 2);
+	let D = execFileSync(
+		"python3",
+		[gen, fontPath, heroDisplay.toLowerCase(), String(tw), "450", String(x0)],
+		{ encoding: "utf8" },
+	).trim();
+	// register the measured ink box on HG (ink CENTER lands on HG.y); the wash,
+	// breathe origin, seal chop and the fg flecks all derive from the same box
+	const pts = [...D.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => [
+		+m[1],
+		+m[2],
+	]);
+	const ys0 = pts.map((q) => q[1]);
+	const dy = +(HG.y - (Math.min(...ys0) + Math.max(...ys0)) / 2).toFixed(1);
+	D = D.replace(
+		/([ML]) ([-\d.]+) ([-\d.]+)/g,
+		(m, c, x, y) => `${c} ${x} ${(+y + dy).toFixed(1)}`,
+	);
+	const inkBot = Math.max(...ys0) + dy;
+	const inkR = Math.max(...pts.map((q) => q[0]));
+	const ENDT = +(DUR - 0.04).toFixed(3);
+	// writing window: keep the demo's 0.45s unless the gesture lands too late to
+	// finish + seal + bleed before the end of the clip
+	const WIN = Math.min(p.window || 0.45, Math.max(0.3, ENDT - 0.9 - I));
+	const DRAWN = +(I + WIN).toFixed(3);
+	// hand-off to the fg ink flecks: the brush's FIRST contact point, at slap-down
+	HG.fleckX = Math.round(pts[0][0]);
+	HG.fleckY = Math.round(pts[0][1] + dy);
+	HG.fleckT = +(I + 0.01).toFixed(3);
+	// seal chop: below-right of the ink (demo offsets), kept on frame
+	const SEALC = +(DRAWN + (p.sealDelay ?? 0.04)).toFixed(3);
+	const sealS = p.sealSize ?? 64;
+	const sealX = Math.min(
+		W - 48,
+		Math.max(60, Math.round(inkR + (p.sealDx ?? -103))),
+	);
+	const sealY = Math.min(H - 80, Math.round(inkBot + (p.sealDy ?? 72)));
+	const INK = dna.palette.ink || "#19120b";
+	const WASH = dna.palette.wash || "#f6f0e2";
+	const WASH2 = dna.palette.wash2 || "#f4edde";
+	const washW = tw + 380,
+		washH = p.washH ?? 420;
+	const bleedT = +(DRAWN + 0.1).toFixed(3);
+	const bleedDur = +Math.max(0.4, Math.min(1.7, ENDT - DRAWN - 0.1)).toFixed(2);
+	const breT = +Math.min(SEALC, ENDT - 0.4).toFixed(3);
+	const breDur = +Math.max(0.3, Math.min(1.78, ENDT - breT)).toFixed(2);
+	const breN = Math.max(8, Math.round(breDur / (2 * F)));
+	const css = `
   #bwWash { position:absolute; left:${HG.x}px; top:${HG.y}px; width:${washW}px; height:${washH}px;
             margin-left:-${Math.round(washW / 2)}px; margin-top:-${Math.round(washH / 2)}px; opacity:0;
             background: radial-gradient(50% 50% at 50% 50%,
@@ -8000,7 +8360,7 @@ function setpieceBrushwrite() {
                  font-family:'${dna.fonts.seal || dna.fonts.body}', serif; font-weight:700;
                  font-size:${Math.round(sealS * 0.656)}px; color:${dna.palette.sealText || "#f7efe2"}; }
   .bwfleck { position:absolute; border-radius:50%; background:${dna.palette.sealMid || "#c03422"}; opacity:0; }`;
-  const html = `      <div id="bwWash"></div>
+	const html = `      <div id="bwWash"></div>
       <svg id="bwSvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
         <defs>
           <filter id="bwbleedblur" x="-40%" y="-40%" width="180%" height="180%">
@@ -8018,7 +8378,7 @@ function setpieceBrushwrite() {
         <circle id="bwNib" r="7.5" fill="${dna.palette.nib || "#1a130c"}" opacity="0"/>
       </svg>
       <div id="bwSeal"><span>${esc(p.sealGlyph || "観")}</span></div>`;
-  const js = `
+	const js = `
   // ---- setpiece: BRUSHWRITE (slap-down → one gesture → bleed + seal chop) ----
   const Ib = ${I.toFixed(3)}, WINb = ${WIN.toFixed(3)}, DRAWNb = ${DRAWN}, ENDTb = ${ENDT};
   const Db = ${J(D)};
@@ -8027,9 +8387,9 @@ function setpieceBrushwrite() {
   // scene reaction: the paper wash charges in just before the gesture
   tl.fromTo("#bwWash", { opacity: 0 }, { opacity: ${p.wash ?? 0.34}, duration: 0.22, ease: "power2.in" }, ${(I - 0.18).toFixed(3)});
 ${
-  I + 1.3 < ENDT
-    ? `  tl.to("#bwWash", { opacity: ${p.washSettle ?? 0.27}, duration: ${Math.min(1.2, ENDT - I - 1.0).toFixed(2)}, ease: "power1.out" }, ${(I + 1.0).toFixed(3)});`
-    : ""
+	I + 1.3 < ENDT
+		? `  tl.to("#bwWash", { opacity: ${p.washSettle ?? 0.27}, duration: ${Math.min(1.2, ENDT - I - 1.0).toFixed(2)}, ease: "power1.out" }, ${(I + 1.0).toFixed(3)});`
+		: ""
 }
 
   // strokes split at pen lifts; FOUR stacked widths = pressure-tapered wet brush
@@ -8150,8 +8510,8 @@ ${
   tl.to("#bwInkAll", { keyframes: { scale: bValsB }, duration: ${breDur}, ease: "none",
                        svgOrigin: "${HG.x} ${HG.y}" }, ${breT});
 ${
-  SEALC + 0.38 <= ENDT
-    ? `
+	SEALC + 0.38 <= ENDT
+		? `
   // vermilion SEAL chop stamps the work — the plate punch lands on the contact
   gsap.set("#bwSeal", { xPercent: -50, yPercent: -50, rotation: -6, transformOrigin: "50% 50%" });
   tl.set("#bwSeal", { opacity: 1, scale: 1.7 }, ${(SEALC - 0.1).toFixed(3)});
@@ -8170,75 +8530,79 @@ ${
                   duration: 0.3, ease: "power2.out" }, ${(SEALC + 0.01).toFixed(3)});
     }
   }`
-    : ""
+		: ""
 }`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceInkbloom() {
-  // INKWATER apex: a sumi ink drop falls into still water BEHIND the subject.
-  // Scene reaction: paper-white radial washes behind the two text zones — the
-  // body rows get a PERSISTENT paper backing from t≈0.15 (the closing lines
-  // keep their ground) and the apex zone charges just before the drop — plus
-  // a gentle vignette that STILLS the world while the ink blooms. The drop
-  // appears above the word point, swells, falls (power2.in, scaleY stretch),
-  // squashes on contact (2 frames) and merges into the bloom: 3 stacked
-  // blurred irregular ellipses scaling at different rates with counter-
-  // rotations + 2 thin concentric ripple rings expanding on the water
-  // surface; the hero words RESOLVE out of the blob (opacity snaps, blur
-  // 16→0 + scale 1.12→1 carries the bleed) — the first at contact, the
-  // following at their own spoken times; through the hold the glyph edges
-  // BREATHE (baked blur keyframes), the whole group looms 1.018 and faint
-  // ink wisps curl off the word top; exit: RE-DISSOLVE (blur up + spread +
-  // fade — the ink disperses back into the water), timed to clear before the
-  // next body line needs the reader. Blob / ring / wisp geometry is the
-  // demo's, scaled from the measured word rect (kx = halfW/demoHalf,
-  // ky = fontPx/132); the rail wash registers on the body row geometry.
-  const p = dna.hero.params || {},
-    D = heroIn;
-  const INK = dna.palette.ink || dna.palette.body;
-  const PAP = dna.palette.paper || "#fffaee",
-    PAP2 = dna.palette.paper2 || "#fff8e8";
-  const WASH = dna.palette.wash || "#fff9ee",
-    WAPX = dna.palette.washApex || "#fffaf0";
-  const fpx = HG.fontPx,
-    halfW = Math.round(HG.halfW || heroDisplay.length * 0.25 * fpx),
-    cx = HG.x,
-    cy = HG.y;
-  const ky = fpx / 132; // demo scale unit (Shippori Mincho 700 @ 132px)
-  const demoHalf = (wordPx("pixel size.", dna.fonts.hero, 132, 0.02) || 650) / 2;
-  const kx = halfW / demoHalf;
-  const SX = (v) => Math.round(v * kx),
-    SY = (v) => Math.round(v * ky);
-  const C = +(D + (p.fall ?? 0.15)).toFixed(3); // contact with the water surface
-  // hero words resolve on their own spoken times (the first at contact)
-  const heroWords = heroDisplay.trim().split(/\s+/);
-  const RES = heroWords.map((wtx, k) => {
-    const tw = tWords[Math.min(hero.idx + k, hero.idx + hero.len - 1)];
-    return +Math.max(C + 0.02, k === 0 ? 0 : tw.start).toFixed(3);
-  });
-  // the bloom re-dissolves before the next body line needs the reader
-  const nextL = LINES.find((L) => L.words[0].start > hero.end + 0.05);
-  const XOUT = +Math.max(
-    C + 0.55,
-    Math.min(
-      D + (p.maxHold ?? 1.75),
-      nextL ? nextL.words[0].start - (p.clearGap ?? 0.24) : DUR - 0.6,
-      DUR - 0.6,
-    ),
-  ).toFixed(3);
-  const loomT = +(D + 0.373).toFixed(3),
-    loomD = +Math.min(1.3, XOUT - (D + 0.373) - 0.03).toFixed(2);
-  const vigOutT = +(XOUT - 0.15).toFixed(3),
-    vigOutD = +Math.min(0.6, DUR - 0.05 - (XOUT - 0.15)).toFixed(2);
-  // rail wash centers on the body reading rows (middle row)
-  const railY = H - ((dna.body && dna.body.bottomPx) ?? 36) - ((dna.body && dna.body.rowGap) ?? 56);
-  const wrW = p.washRailW ?? 1180,
-    wrH = p.washRailH ?? 300;
-  const waW = 2 * halfW + 370,
-    waH = p.washApexH ?? 430;
-  const blr = (v) => Math.max(8, SY(v));
-  const css = `
+	// INKWATER apex: a sumi ink drop falls into still water BEHIND the subject.
+	// Scene reaction: paper-white radial washes behind the two text zones — the
+	// body rows get a PERSISTENT paper backing from t≈0.15 (the closing lines
+	// keep their ground) and the apex zone charges just before the drop — plus
+	// a gentle vignette that STILLS the world while the ink blooms. The drop
+	// appears above the word point, swells, falls (power2.in, scaleY stretch),
+	// squashes on contact (2 frames) and merges into the bloom: 3 stacked
+	// blurred irregular ellipses scaling at different rates with counter-
+	// rotations + 2 thin concentric ripple rings expanding on the water
+	// surface; the hero words RESOLVE out of the blob (opacity snaps, blur
+	// 16→0 + scale 1.12→1 carries the bleed) — the first at contact, the
+	// following at their own spoken times; through the hold the glyph edges
+	// BREATHE (baked blur keyframes), the whole group looms 1.018 and faint
+	// ink wisps curl off the word top; exit: RE-DISSOLVE (blur up + spread +
+	// fade — the ink disperses back into the water), timed to clear before the
+	// next body line needs the reader. Blob / ring / wisp geometry is the
+	// demo's, scaled from the measured word rect (kx = halfW/demoHalf,
+	// ky = fontPx/132); the rail wash registers on the body row geometry.
+	const p = dna.hero.params || {},
+		D = heroIn;
+	const INK = dna.palette.ink || dna.palette.body;
+	const PAP = dna.palette.paper || "#fffaee",
+		PAP2 = dna.palette.paper2 || "#fff8e8";
+	const WASH = dna.palette.wash || "#fff9ee",
+		WAPX = dna.palette.washApex || "#fffaf0";
+	const fpx = HG.fontPx,
+		halfW = Math.round(HG.halfW || heroDisplay.length * 0.25 * fpx),
+		cx = HG.x,
+		cy = HG.y;
+	const ky = fpx / 132; // demo scale unit (Shippori Mincho 700 @ 132px)
+	const demoHalf =
+		(wordPx("pixel size.", dna.fonts.hero, 132, 0.02) || 650) / 2;
+	const kx = halfW / demoHalf;
+	const SX = (v) => Math.round(v * kx),
+		SY = (v) => Math.round(v * ky);
+	const C = +(D + (p.fall ?? 0.15)).toFixed(3); // contact with the water surface
+	// hero words resolve on their own spoken times (the first at contact)
+	const heroWords = heroDisplay.trim().split(/\s+/);
+	const RES = heroWords.map((wtx, k) => {
+		const tw = tWords[Math.min(hero.idx + k, hero.idx + hero.len - 1)];
+		return +Math.max(C + 0.02, k === 0 ? 0 : tw.start).toFixed(3);
+	});
+	// the bloom re-dissolves before the next body line needs the reader
+	const nextL = LINES.find((L) => L.words[0].start > hero.end + 0.05);
+	const XOUT = +Math.max(
+		C + 0.55,
+		Math.min(
+			D + (p.maxHold ?? 1.75),
+			nextL ? nextL.words[0].start - (p.clearGap ?? 0.24) : DUR - 0.6,
+			DUR - 0.6,
+		),
+	).toFixed(3);
+	const loomT = +(D + 0.373).toFixed(3),
+		loomD = +Math.min(1.3, XOUT - (D + 0.373) - 0.03).toFixed(2);
+	const vigOutT = +(XOUT - 0.15).toFixed(3),
+		vigOutD = +Math.min(0.6, DUR - 0.05 - (XOUT - 0.15)).toFixed(2);
+	// rail wash centers on the body reading rows (middle row)
+	const railY =
+		H -
+		((dna.body && dna.body.bottomPx) ?? 36) -
+		((dna.body && dna.body.rowGap) ?? 56);
+	const wrW = p.washRailW ?? 1180,
+		wrH = p.washRailH ?? 300;
+	const waW = 2 * halfW + 370,
+		waH = p.washApexH ?? 430;
+	const blr = (v) => Math.max(8, SY(v));
+	const css = `
   #ikvig { position:absolute; inset:0; opacity:0;
            background: radial-gradient(115% 100% at 50% 40%, rgba(0,0,0,0) 42%, rgba(8,6,4,0.55) 100%); }
   #ikwashRail { position:absolute; left:${W / 2}px; top:${railY}px; width:${wrW}px; height:${wrH}px;
@@ -8274,7 +8638,7 @@ function setpieceInkbloom() {
             border-radius:50%; filter: blur(2.5px); }
   #ikwisp1 { left:${SX(-210)}px; top:${SY(-118)}px; }
   #ikwisp2 { left:${SX(118)}px; top:${SY(-122)}px; }`;
-  const html = `      <div id="ikvig"></div>
+	const html = `      <div id="ikvig"></div>
       <div id="ikwashRail"></div>
       <div id="ikwashApex"></div>
       <div id="inkG">
@@ -8288,7 +8652,7 @@ function setpieceInkbloom() {
         <div class="ikwisp" id="ikwisp2"></div>
         <div id="ikdrop"></div>
       </div>`;
-  const js = `
+	const js = `
   // ---- setpiece: INKBLOOM (drop falls → ink blooms → words resolve → re-dissolve) ----
   // paper washes (the scene offers paper to the ink); the rail wash PERSISTS
   tl.fromTo("#ikwashRail", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power1.out" }, 0.15);
@@ -8343,73 +8707,77 @@ function setpieceInkbloom() {
     }
   });
 ${
-  loomD >= 0.2
-    ? `  // gentle loom on the group through the hold
+	loomD >= 0.2
+		? `  // gentle loom on the group through the hold
   tl.to("#inkG", { scale: 1.018, duration: ${loomD}, ease: "power1.inOut", transformOrigin: "50% 50%" }, ${loomT});`
-    : ""
+		: ""
 }
 
   // faint ink wisps curl off the word top during the hold
 ${
-  C + 0.573 + 0.6 <= XOUT
-    ? `  tl.set("#ikwisp1", { opacity: 0.45, transformOrigin: "50% 50%" }, ${(C + 0.573).toFixed(3)});
+	C + 0.573 + 0.6 <= XOUT
+		? `  tl.set("#ikwisp1", { opacity: 0.45, transformOrigin: "50% 50%" }, ${(C + 0.573).toFixed(3)});
   tl.fromTo("#ikwisp1", { y: 0, x: 0, rotation: 14, scaleY: 1 },
             { y: -44, x: 12, rotation: 96, scaleY: 1.6, duration: 0.95, ease: "power1.out" }, ${(C + 0.573).toFixed(3)});
   tl.to("#ikwisp1", { opacity: 0, duration: 0.4, ease: "power1.in" }, ${(C + 1.123).toFixed(3)});`
-    : ""
+		: ""
 }
 ${
-  C + 0.753 + 0.6 <= XOUT
-    ? `  tl.set("#ikwisp2", { opacity: 0.4, transformOrigin: "50% 50%" }, ${(C + 0.753).toFixed(3)});
+	C + 0.753 + 0.6 <= XOUT
+		? `  tl.set("#ikwisp2", { opacity: 0.4, transformOrigin: "50% 50%" }, ${(C + 0.753).toFixed(3)});
   tl.fromTo("#ikwisp2", { y: 0, x: 0, rotation: -18, scaleY: 1 },
             { y: -40, x: -14, rotation: -98, scaleY: 1.5, duration: 0.9, ease: "power1.out" }, ${(C + 0.753).toFixed(3)});
   tl.to("#ikwisp2", { opacity: 0, duration: 0.38, ease: "power1.in" }, ${(C + 1.273).toFixed(3)});`
-    : ""
+		: ""
 }
 
   // exit: re-dissolve — blur up + spread + fade, ink dispersing
   tl.to("#inkG", { scale: 1.15, filter: "blur(11px)", opacity: 0,
                    duration: 0.52, ease: "power1.in" }, ${XOUT});
   tl.set("#inkG", { display: "none" }, ${Math.min(XOUT + 0.6, DUR - 0.02).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 function setpieceRansomnote() {
-  // ---- setpiece: RANSOMNOTE (letter-by-letter cutout slam → collective jolt → ripped off) ----
-  // The hero word slams in BEHIND the subject as a ransom note: one cutout
-  // chip per letter (4 recipes cycled, seeded ±13% sizes / alternating-sign
-  // rotations / misaligned baselines), each slamming in oversized with a
-  // flight shadow that POPS tight on contact (power3.in crush → 2-frame
-  // squash → elastic settle) at S_i = I + 0.01 + step·i. When the LAST letter
-  // lands the whole word takes a collective 1-frame JOLT + a scene pulse
-  // (the plate punch anchors here — punchOffset is recomputed from the real
-  // letter count so the punch always lands on the jolt). Hold = slow loom
-  // keyframes (the crooked grid never straightens). Exit = letters RIPPED
-  // off one by one, a 1-frame paper-tear flash under each. Scene reaction =
-  // a collage scrim darkens the bright sky for the apex window.
-  const p = dna.hero.params || {},
-    I = heroIn;
-  const STEP = p.step ?? 0.06,
-    CRUSH = p.crush ?? 0.09,
-    RSTAG = p.ripStag ?? 0.045;
-  const BASE = HG.fontPx;
-  const kf = BASE / 130; // chip chrome scales with the demo's 130px cut
-  const N = [...heroText].filter((c) => c !== " ").length;
-  const JOLT = +(I + 0.01 + STEP * (N - 1) + CRUSH).toFixed(3);
-  // rip schedule: letters tear off while the closing line speaks (demo:
-  // lastWord − 0.19), clamped so the last rip completes on frame and the
-  // note holds ≥0.45s after the jolt
-  let ripT = Math.min(
-    theme.hero.exitAt ?? LASTWORD.start - (p.ripLead ?? 0.19),
-    DUR - 0.22 - RSTAG * (N - 1),
-  );
-  ripT = +Math.max(Math.min(ripT, DUR - 0.22 - RSTAG * (N - 1)), JOLT + 0.45).toFixed(3);
-  // the plate punch lands on the collective jolt, whatever the word length
-  if (dna.plate && dna.plate.punch) dna.plate.punchOffset = +(JOLT - I).toFixed(3);
-  const scrimT = +Math.max(0.02, I - 0.07).toFixed(3);
-  const loomT = +(JOLT + 0.1).toFixed(3);
-  const loomD = +Math.min(0.95, ripT - 0.08 - loomT).toFixed(2);
-  const css = `
+	// ---- setpiece: RANSOMNOTE (letter-by-letter cutout slam → collective jolt → ripped off) ----
+	// The hero word slams in BEHIND the subject as a ransom note: one cutout
+	// chip per letter (4 recipes cycled, seeded ±13% sizes / alternating-sign
+	// rotations / misaligned baselines), each slamming in oversized with a
+	// flight shadow that POPS tight on contact (power3.in crush → 2-frame
+	// squash → elastic settle) at S_i = I + 0.01 + step·i. When the LAST letter
+	// lands the whole word takes a collective 1-frame JOLT + a scene pulse
+	// (the plate punch anchors here — punchOffset is recomputed from the real
+	// letter count so the punch always lands on the jolt). Hold = slow loom
+	// keyframes (the crooked grid never straightens). Exit = letters RIPPED
+	// off one by one, a 1-frame paper-tear flash under each. Scene reaction =
+	// a collage scrim darkens the bright sky for the apex window.
+	const p = dna.hero.params || {},
+		I = heroIn;
+	const STEP = p.step ?? 0.06,
+		CRUSH = p.crush ?? 0.09,
+		RSTAG = p.ripStag ?? 0.045;
+	const BASE = HG.fontPx;
+	const kf = BASE / 130; // chip chrome scales with the demo's 130px cut
+	const N = [...heroText].filter((c) => c !== " ").length;
+	const JOLT = +(I + 0.01 + STEP * (N - 1) + CRUSH).toFixed(3);
+	// rip schedule: letters tear off while the closing line speaks (demo:
+	// lastWord − 0.19), clamped so the last rip completes on frame and the
+	// note holds ≥0.45s after the jolt
+	let ripT = Math.min(
+		theme.hero.exitAt ?? LASTWORD.start - (p.ripLead ?? 0.19),
+		DUR - 0.22 - RSTAG * (N - 1),
+	);
+	ripT = +Math.max(
+		Math.min(ripT, DUR - 0.22 - RSTAG * (N - 1)),
+		JOLT + 0.45,
+	).toFixed(3);
+	// the plate punch lands on the collective jolt, whatever the word length
+	if (dna.plate && dna.plate.punch)
+		dna.plate.punchOffset = +(JOLT - I).toFixed(3);
+	const scrimT = +Math.max(0.02, I - 0.07).toFixed(3);
+	const loomT = +(JOLT + 0.1).toFixed(3);
+	const loomD = +Math.min(0.95, ripT - 0.08 - loomT).toFixed(2);
+	const css = `
   #rscrim { position:absolute; inset:0; opacity:0;
             background: linear-gradient(180deg, rgba(12,8,5,0.66) 0%, rgba(12,8,5,0.48) 38%,
                         rgba(12,8,5,0.22) 62%, rgba(12,8,5,0.05) 100%); }
@@ -8422,10 +8790,10 @@ function setpieceRansomnote() {
          filter: drop-shadow(0 ${Math.max(4, Math.round(7 * kf))}px 0 rgba(8,6,4,0.55)); }
   .achip { display:inline-block; line-height:1.04; padding:0.05em 0.10em 0.09em; }
 ${ransomChipCss("0.01em")}`;
-  const html = `      <div id="rscrim"></div>
+	const html = `      <div id="rscrim"></div>
       <div id="rpulse"></div>
       <div id="rnote"></div>`;
-  const js = `
+	const js = `
   // ---- setpiece: RANSOMNOTE (letter chips slam → collective jolt → ripped off) ----
   const I = ${I.toFixed(3)}, STEP = ${STEP}, CRUSH = ${CRUSH}, RIPT = ${ripT};
   const arnd = mulberry32(${p.seed || 3939});
@@ -8483,52 +8851,52 @@ ${ransomChipCss("0.01em")}`;
   tl.set("#rpulse", { opacity: ${p.pulse ?? 0.2} }, ${JOLT});
   tl.to("#rpulse",  { opacity: 0, duration: 0.13, ease: "power1.out" }, ${(JOLT + 0.042).toFixed(3)});
 ${
-  loomD >= 0.35
-    ? `
+	loomD >= 0.35
+		? `
   // hold life: the pasted word looms (the crooked grid never straightens)
   tl.to("#rnote", { keyframes: { scale: [1, 1.02, 1.006, 1.018, 1] },
                     duration: ${loomD}, ease: "none" }, ${(JOLT + 0.1).toFixed(3)});`
-    : ""
+		: ""
 }
   tl.to("#rscrim", { opacity: 0, duration: 0.3, ease: "power1.in" }, ${(ripT + 0.06).toFixed(3)});`;
-  return { css, html, js };
+	return { css, html, js };
 }
 
 const SETPIECES = {
-  detonation: setpieceDetonation,
-  decode: setpieceDecode,
-  drawon: setpieceDrawon,
-  cpslam: setpieceCpslam,
-  settle: setpieceSettle,
-  flapboard: setpieceFlapboard,
-  ledwipe: setpieceLedwipe,
-  vhsosd: setpieceVhsosd,
-  bossintro: setpieceBossintro,
-  rubberstamp: setpieceRubberstamp,
-  lasercage: setpieceLasercage,
-  boltstrike: setpieceBoltstrike,
-  holoboot: setpieceHoloboot,
-  biobloom: setpieceBiobloom,
-  silkribbon: setpieceSilkribbon,
-  scopetrace: setpieceScopetrace,
-  papermat: setpiecePapermat,
-  centerfold: setpieceCenterfold,
-  chalkwrite: setpieceChalkwrite,
-  spraytag: setpieceSpraytag,
-  brushwrite: setpieceBrushwrite,
-  inkbloom: setpieceInkbloom,
-  ransomnote: setpieceRansomnote,
+	detonation: setpieceDetonation,
+	decode: setpieceDecode,
+	drawon: setpieceDrawon,
+	cpslam: setpieceCpslam,
+	settle: setpieceSettle,
+	flapboard: setpieceFlapboard,
+	ledwipe: setpieceLedwipe,
+	vhsosd: setpieceVhsosd,
+	bossintro: setpieceBossintro,
+	rubberstamp: setpieceRubberstamp,
+	lasercage: setpieceLasercage,
+	boltstrike: setpieceBoltstrike,
+	holoboot: setpieceHoloboot,
+	biobloom: setpieceBiobloom,
+	silkribbon: setpieceSilkribbon,
+	scopetrace: setpieceScopetrace,
+	papermat: setpiecePapermat,
+	centerfold: setpieceCenterfold,
+	chalkwrite: setpieceChalkwrite,
+	spraytag: setpieceSpraytag,
+	brushwrite: setpieceBrushwrite,
+	inkbloom: setpieceInkbloom,
+	ransomnote: setpieceRansomnote,
 };
 
 if (!PARADIGMS[dna.body.paradigm])
-  throw new Error("[make-theme] unknown body paradigm: " + dna.body.paradigm);
+	throw new Error("[make-theme] unknown body paradigm: " + dna.body.paradigm);
 const body = PARADIGMS[dna.body.paradigm]();
 
 let setp = { css: "", html: "", js: "" };
 if (!heroInline && !HEROLESS) {
-  if (!SETPIECES[dna.hero.setpiece])
-    throw new Error("[make-theme] unknown setpiece: " + dna.hero.setpiece);
-  setp = SETPIECES[dna.hero.setpiece]();
+	if (!SETPIECES[dna.hero.setpiece])
+		throw new Error("[make-theme] unknown setpiece: " + dna.hero.setpiece);
+	setp = SETPIECES[dna.hero.setpiece]();
 }
 const fx = HEROLESS ? { css: "", html: "", js: "" } : frontFx();
 
@@ -8537,23 +8905,26 @@ const bodyInBg = dna.body.layer === "bg";
 const poemScrimInBg = dna.body.paradigm === "poem" && dna.body.scrim;
 let bgExtra = { css: "", html: "", js: "" };
 if (poemScrimInBg) {
-  // poem keeps its scrim BEHIND the subject (subject stays lit) while the poem
-  // itself rides the fg alpha layer
-  const bgScrimSide = typeof CLEARER !== "undefined" && CLEARER === "right" ? "right" : "left";
-  bgExtra.css = `
+	// poem keeps its scrim BEHIND the subject (subject stays lit) while the poem
+	// itself rides the fg alpha layer
+	const bgScrimSide =
+		typeof CLEARER !== "undefined" && CLEARER === "right" ? "right" : "left";
+	bgExtra.css = `
   #pscrimBg { position:absolute; inset:0; opacity:0;
             background: linear-gradient(${bgScrimSide === "left" ? "100deg" : "260deg"},
               rgba(4,8,16,${dna.body.scrim.opacity}) 0%, rgba(4,8,16,${(dna.body.scrim.opacity * 0.6).toFixed(2)}) 38%, rgba(4,8,16,0) 62%); }`;
-  bgExtra.html = `      <div id="pscrimBg"></div>`;
-  bgExtra.js = `
+	bgExtra.html = `      <div id="pscrimBg"></div>`;
+	bgExtra.js = `
   tl.fromTo("#pscrimBg", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power1.out" }, 0.15);
   tl.to("#pscrimBg", { opacity: 0, duration: 0.4, ease: "power1.in" }, ${(LASTWORD.start + 0.15).toFixed(3)});`;
 }
 
 const bgHtml = bgSkeleton(
-  [bgExtra.html, setp.html, bodyInBg ? body.html : ""].filter(Boolean).join("\n"),
-  [bgExtra.css, setp.css, bodyInBg ? body.css : ""].filter(Boolean).join("\n"),
-  [bgExtra.js, setp.js, bodyInBg ? body.js : ""].filter(Boolean).join("\n"),
+	[bgExtra.html, setp.html, bodyInBg ? body.html : ""]
+		.filter(Boolean)
+		.join("\n"),
+	[bgExtra.css, setp.css, bodyInBg ? body.css : ""].filter(Boolean).join("\n"),
+	[bgExtra.js, setp.js, bodyInBg ? body.js : ""].filter(Boolean).join("\n"),
 );
 fs.writeFileSync(path.join(PROJECT, "index.html"), bgHtml);
 
@@ -8561,14 +8932,20 @@ fs.writeFileSync(path.join(PROJECT, "index.html"), bgHtml);
 // (a setpiece may emit fgHtml/fgCss/fgJs — e.g. a verbatim caption chip that
 // must ride ABOVE the matte while the setpiece scenery stays embedded behind)
 if (!bodyInBg || fx.html || fx.js || setp.fgHtml) {
-  const fgHtml = fgSkeleton(
-    [!bodyInBg ? body.html : "", setp.fgHtml || "", fx.html].filter(Boolean).join("\n"),
-    [!bodyInBg ? body.css : "", setp.fgCss || "", fx.css].filter(Boolean).join("\n"),
-    [!bodyInBg ? body.js : "", setp.fgJs || "", fx.js].filter(Boolean).join("\n"),
-  );
-  fs.writeFileSync(path.join(PROJECT, "rail.html"), fgHtml);
+	const fgHtml = fgSkeleton(
+		[!bodyInBg ? body.html : "", setp.fgHtml || "", fx.html]
+			.filter(Boolean)
+			.join("\n"),
+		[!bodyInBg ? body.css : "", setp.fgCss || "", fx.css]
+			.filter(Boolean)
+			.join("\n"),
+		[!bodyInBg ? body.js : "", setp.fgJs || "", fx.js]
+			.filter(Boolean)
+			.join("\n"),
+	);
+	fs.writeFileSync(path.join(PROJECT, "rail.html"), fgHtml);
 } else if (fs.existsSync(path.join(PROJECT, "rail.html"))) {
-  fs.unlinkSync(path.join(PROJECT, "rail.html"));
+	fs.unlinkSync(path.join(PROJECT, "rail.html"));
 }
 
 // _postfx.sh: plate reaction after the matte composite (subject+text move as one)
@@ -8584,24 +8961,26 @@ let filter;
 // are in pixels -> doubled at 2x)
 const SS = 2;
 if (P.punch) {
-  const minor = P.minorPunch && LINES.find((L) => L.words.some((w) => w.minor));
-  const minorT = minor ? (minor.words.find((w) => w.minor).start + 0.01).toFixed(3) : null;
-  filter = `scale=${W * SS}:${H * SS}:flags=lanczos,zoompan=
+	const minor = P.minorPunch && LINES.find((L) => L.words.some((w) => w.minor));
+	const minorT = minor
+		? (minor.words.find((w) => w.minor).start + 0.01).toFixed(3)
+		: null;
+	filter = `scale=${W * SS}:${H * SS}:flags=lanczos,zoompan=
     z='1+${P.punch}*exp(-${P.punchDecay || 9}*(time-${anchorT}))*between(time,${anchorT},${anchorT}+${P.shakeWindow || 0.6})${minorT ? `+${P.minorPunch}*exp(-10*(time-${minorT}))*between(time,${minorT},${minorT}+0.4)` : ""}':
     x='iw/2-(iw/zoom/2)${P.shakeAmpX ? `+${P.shakeAmpX * SS}*exp(-${P.shakeDecay || 7}*(time-${anchorT}))*sin(2*PI*${P.shakeHz || 12}*(time-${anchorT}))*between(time,${anchorT},${anchorT}+${P.shakeWindow || 0.6})` : ""}':
     y='ih/2-(ih/zoom/2)${P.shakeAmpY ? `+${P.shakeAmpY * SS}*exp(-${P.shakeDecay || 7}*(time-${anchorT}))*cos(2*PI*${((P.shakeHz || 12) * 1.31).toFixed(2)}*(time-${anchorT}))*between(time,${anchorT},${anchorT}+${P.shakeWindow || 0.6})` : ""}':
     d=1:s=${W * SS}x${H * SS}:fps=${FPS},scale=${W}:${H}:flags=lanczos`;
 } else if (P.pushIn) {
-  filter = `scale=${W * SS}:${H * SS}:flags=lanczos,zoompan=z='1+${P.pushIn}*time/${DUR.toFixed(2)}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${W * SS}x${H * SS}:fps=${FPS},scale=${W}:${H}:flags=lanczos`;
+	filter = `scale=${W * SS}:${H * SS}:flags=lanczos,zoompan=z='1+${P.pushIn}*time/${DUR.toFixed(2)}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${W * SS}x${H * SS}:fps=${FPS},scale=${W}:${H}:flags=lanczos`;
 } else {
-  filter = `null`;
+	filter = `null`;
 }
 const rgba = P.rgbashift
-  ? `,rgbashift=rh=-${P.rgbashift}:bh=${P.rgbashift}:enable='between(t,${anchorT},${(heroIn + 0.125).toFixed(3)})+between(t,${(LASTWORD.start + 0.04).toFixed(3)},${(LASTWORD.start + 0.17).toFixed(3)})',format=yuv420p`
-  : "";
+	? `,rgbashift=rh=-${P.rgbashift}:bh=${P.rgbashift}:enable='between(t,${anchorT},${(heroIn + 0.125).toFixed(3)})+between(t,${(LASTWORD.start + 0.04).toFixed(3)},${(LASTWORD.start + 0.17).toFixed(3)})',format=yuv420p`
+	: "";
 fs.writeFileSync(
-  path.join(PROJECT, "_postfx.sh"),
-  `#!/usr/bin/env bash
+	path.join(PROJECT, "_postfx.sh"),
+	`#!/usr/bin/env bash
 # generated by make-theme.cjs — plate reaction for theme "${dna.name}"
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -8614,8 +8993,8 @@ echo "[postfx] ${dna.name} → final_fx.mp4"
 );
 
 console.log(
-  `[make-theme] ${dna.name}: index.html${!bodyInBg || fx.html ? " + rail.html" : ""} + _postfx.sh`,
+	`[make-theme] ${dna.name}: index.html${!bodyInBg || fx.html ? " + rail.html" : ""} + _postfx.sh`,
 );
 console.log(
-  `[make-theme]   body=${dna.body.paradigm}(${dna.body.layer}) hero=${HEROLESS ? "none (pure body)" : heroInline ? "inline:" + dna.hero.setpiece : dna.hero.setpiece + " @" + heroIn.toFixed(2) + "s"} lines=${LINES.length} dur=${DUR}s`,
+	`[make-theme]   body=${dna.body.paradigm}(${dna.body.layer}) hero=${HEROLESS ? "none (pure body)" : heroInline ? "inline:" + dna.hero.setpiece : dna.hero.setpiece + " @" + heroIn.toFixed(2) + "s"} lines=${LINES.length} dur=${DUR}s`,
 );

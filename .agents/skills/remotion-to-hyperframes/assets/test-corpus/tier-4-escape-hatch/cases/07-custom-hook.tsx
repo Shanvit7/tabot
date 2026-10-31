@@ -14,15 +14,17 @@ import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 
 // Custom hook — pure derivation from frame, no state. Translates fine.
 function useFadeIn(durationInFrames: number) {
-  const frame = useCurrentFrame();
-  return interpolate(frame, [0, durationInFrames], [0, 1], { extrapolateRight: "clamp" });
+	const frame = useCurrentFrame();
+	return interpolate(frame, [0, durationInFrames], [0, 1], {
+		extrapolateRight: "clamp",
+	});
 }
 
 export const CustomHookDriven: React.FC = () => {
-  const opacity = useFadeIn(30);
-  return (
-    <AbsoluteFill style={{ opacity }}>
-      <div>fading in</div>
-    </AbsoluteFill>
-  );
+	const opacity = useFadeIn(30);
+	return (
+		<AbsoluteFill style={{ opacity }}>
+			<div>fading in</div>
+		</AbsoluteFill>
+	);
 };

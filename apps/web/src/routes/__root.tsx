@@ -4,6 +4,7 @@ import {
 	Outlet,
 	Scripts,
 } from "@tanstack/react-router";
+import "~/styles/app.css";
 
 const RootLayout = () => (
 	<html lang="en">
@@ -19,6 +20,13 @@ const RootLayout = () => (
 
 export const Route = createRootRoute({
 	head: () => ({
+		links: [
+			{
+				rel: "icon",
+				href: `${import.meta.env.BASE_URL}logo.png`,
+				type: "image/png",
+			},
+		],
 		meta: [
 			{ charSet: "utf-8" },
 			{ name: "viewport", content: "width=device-width, initial-scale=1" },

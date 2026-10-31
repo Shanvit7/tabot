@@ -15,16 +15,18 @@ import { Button } from "@mui/material";
 import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 
 export const MuiDriven: React.FC = () => {
-  const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 30], [0, 1], { extrapolateRight: "clamp" });
+	const frame = useCurrentFrame();
+	const opacity = interpolate(frame, [0, 30], [0, 1], {
+		extrapolateRight: "clamp",
+	});
 
-  return (
-    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
-      <div style={{ opacity }}>
-        <Button variant="contained" color="primary">
-          Click me · frame {frame}
-        </Button>
-      </div>
-    </AbsoluteFill>
-  );
+	return (
+		<AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
+			<div style={{ opacity }}>
+				<Button variant="contained" color="primary">
+					Click me · frame {frame}
+				</Button>
+			</div>
+		</AbsoluteFill>
+	);
 };

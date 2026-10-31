@@ -1,17 +1,30 @@
 import type { StoredTabEvent } from "../events/db";
 import type { StoredPageObservation } from "../pages/observations";
+import { searchQueryFromUrl } from "../privacy/ingest";
 
+export type SearchEvidenceKind =
+	| "url-only"
+	| "title-only"
+	| "auto-snippet"
+	| "interaction-excerpt"
+	| "search-phrase";
 type Source = {
 	kind: "event" | "page";
+	evidenceKind: SearchEvidenceKind;
+	pageTitle?: string;
 	id: string;
 	timestamp: number;
 	url: string;
+	favicon?: string;
 	text: string;
 	matchedTermCount: number;
+	searchQuery?: string;
 	excerpt?: string;
 };
 type SearchGroup = {
 	url: string;
+	favicon?: string;
+	faviconTimestamp?: number;
 	text: Set<string>;
 	firstSeen: number;
 	lastSeen: number;
@@ -21,42 +34,63 @@ type SearchGroup = {
 	sources: Source[];
 	excerpt: string;
 	excerptMatches: number;
+	searchQueries: {
+		query: string;
+		timestamp: number;
+		matchedTermCount: number;
+	}[];
 	excerptSourceId: string;
+	pageTitle?: string;
+	evidenceKinds?: Set<SearchEvidenceKind>;
 };
 export type HistorySearchCitation = Pick<
 	Source,
-	"kind" | "id" | "timestamp" | "url"
+	"kind" | "id" | "timestamp" | "url" | "evidenceKind"
 >;
 export type HistorySearchResult = {
 	url: string;
 	host: string;
+	favicon?: string;
 	firstSeen: number;
 	lastSeen: number;
 	eventCount: number;
 	pageCount: number;
 	excerpt: string;
+	searchQueries?: string[];
 	pageExcerptAvailable: boolean;
+	pageTitle?: string;
+	evidenceKinds: SearchEvidenceKind[];
 	matchedTerms: string[];
 	sources: HistorySearchCitation[];
 	sourceCount: number;
 	score: number;
 };
+export type SearchAvailability = {
+	mode: "hybrid" | "keyword";
+	indexing: boolean;
+	model: "not-loaded" | "loading" | "ready" | "unavailable";
+};
+
 export type HistorySearchOptions = {
 	from?: number;
 	to?: number;
 	origin?: string;
 	limit?: number;
 	offset?: number;
+	candidateOrder?: string[];
+	nearestTo?: number;
 };
-export type EvidenceSearchResult = {
-	origin: string;
+export type ActivitySearchResult = {
+	site: string;
 	firstSeen: number;
 	lastSeen: number;
 	eventCount: number;
 	pageCount: number;
-	excerpt: string;
+	title?: string;
+	preview: string | null;
+	matchedFrom: SearchEvidenceKind[];
 	matchedTerms: string[];
-	sources: Pick<HistorySearchCitation, "kind" | "id" | "timestamp">[];
+	anchors: Pick<HistorySearchCitation, "kind" | "id" | "timestamp">[];
 };
 
 export const tokenizeRecallText = (text: string): string[] =>
@@ -64,6 +98,37 @@ export const tokenizeRecallText = (text: string): string[] =>
 		.normalize("NFKC")
 		.toLowerCase()
 		.match(/[\p{L}\p{N}]+/gu) ?? [];
+
+export const parseRecentSearchQuestion = (query: string, now = Date.now()) => {
+	const match = query
+		.trim()
+		.match(
+			/^what did i search(?: for)?(?:\s+.*?)?\s+(\d{1,4})\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)\s+ago[?.!]*$/i,
+		);
+	if (!match) return undefined;
+	const amount = Number(match[1]);
+	if (!Number.isSafeInteger(amount) || amount < 1) return undefined;
+	const unit = match[2]?.toLowerCase();
+	const duration =
+		amount *
+		(unit?.startsWith("s")
+			? 1_000
+			: unit?.startsWith("m")
+				? 60_000
+				: unit?.startsWith("h")
+					? 3_600_000
+					: 86_400_000);
+	if (!Number.isFinite(duration) || duration > 365 * 86_400_000)
+		return undefined;
+	const target = now - duration;
+	const tolerance = 60_000;
+	return {
+		from: Math.max(0, target - tolerance),
+		to: Math.min(now, target + tolerance),
+		nearestTo: target,
+	};
+};
+
 const yieldTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 export const safeRecallUrl = (value: string | undefined): URL | null => {
 	try {
@@ -91,23 +156,51 @@ const addSource = (
 	group.sourceCount++;
 	group.firstSeen = Math.min(group.firstSeen, source.timestamp);
 	group.lastSeen = Math.max(group.lastSeen, source.timestamp);
-	if (source.kind === "event") group.eventCount++;
-	else {
+	if (source.favicon && source.timestamp >= (group.faviconTimestamp ?? 0)) {
+		group.favicon = source.favicon;
+		group.faviconTimestamp = source.timestamp;
+	}
+	if (source.kind === "event") {
+		group.eventCount++;
+		if (source.searchQuery) {
+			group.searchQueries.push({
+				query: source.searchQuery,
+				timestamp: source.timestamp,
+				matchedTermCount: source.matchedTermCount,
+			});
+			group.searchQueries = group.searchQueries
+				.sort(
+					(a, b) =>
+						b.matchedTermCount - a.matchedTermCount ||
+						b.timestamp - a.timestamp,
+				)
+				.filter(
+					(item, index, all) =>
+						all.findIndex((candidate) => candidate.query === item.query) ===
+						index,
+				)
+				.slice(0, 5);
+		}
+	} else {
 		group.pageCount++;
 		const matched = new Set(
 			tokenizeRecallText(source.excerpt ?? "").filter((term) =>
 				queryTerms.has(term),
 			),
 		);
-		if (matched.size > group.excerptMatches) {
+		if (matched.size > group.excerptMatches || !group.excerptSourceId) {
 			group.excerptMatches = matched.size;
 			group.excerpt = source.excerpt ?? "";
 			group.excerptSourceId = source.id;
 		}
 	}
+	group.evidenceKinds ??= new Set();
+	group.evidenceKinds.add(source.evidenceKind);
+	if (source.kind === "page" && source.pageTitle)
+		group.pageTitle = source.pageTitle;
 	group.sources.push(source);
 	group.sources = group.sources
-		.toSorted(
+		.sort(
 			(a, b) =>
 				Number(b.id === group.excerptSourceId) -
 					Number(a.id === group.excerptSourceId) ||
@@ -128,7 +221,8 @@ export const searchHistory = async (
 		48,
 	);
 	if (
-		!terms.length ||
+		(!terms.length && options.nearestTo === undefined) ||
+		(options.nearestTo !== undefined && !Number.isFinite(options.nearestTo)) ||
 		(options.from !== undefined && !Number.isFinite(options.from)) ||
 		(options.to !== undefined && !Number.isFinite(options.to)) ||
 		(options.offset !== undefined &&
@@ -149,13 +243,18 @@ export const searchHistory = async (
 			continue;
 		const url = safeRecallUrl(event.url);
 		if (!url || (options.origin && url.origin !== options.origin)) continue;
-		const text = `${url.hostname} ${url.pathname} ${event.type.replaceAll("_", " ")}`;
+		const searchQuery = searchQueryFromUrl(event.url);
+		const text = `${url.hostname} ${url.pathname} ${event.type.replaceAll("_", " ")} ${searchQuery ?? ""}`;
+		const favicon = safeRecallUrl(event.favicon);
 		const source: Source = {
 			kind: "event",
 			id: event.id,
 			timestamp: event.timestamp,
 			url: url.href,
+			...(favicon ? { favicon: favicon.href } : {}),
 			text,
+			evidenceKind: searchQuery ? "search-phrase" : "url-only",
+			...(searchQuery ? { searchQuery } : {}),
 			matchedTermCount: terms.filter((term) =>
 				tokenizeRecallText(text).includes(term),
 			).length,
@@ -163,6 +262,7 @@ export const searchHistory = async (
 		const group = groups.get(source.url) ?? {
 			url: source.url,
 			text: new Set<string>(),
+			searchQueries: [],
 			firstSeen: Number.MAX_SAFE_INTEGER,
 			lastSeen: 0,
 			eventCount: 0,
@@ -185,7 +285,7 @@ export const searchHistory = async (
 			continue;
 		const url = safeRecallUrl(page.url);
 		if (!url || (options.origin && url.origin !== options.origin)) continue;
-		const pageText = page.segments.join(" ");
+		const pageText = `${page.title ?? ""} ${page.segments.join(" ")}`.trim();
 		const text = `${url.hostname} ${url.pathname} ${pageText}`;
 		const matchedTerms = terms.filter((term) =>
 			tokenizeRecallText(text).includes(term),
@@ -197,8 +297,15 @@ export const searchHistory = async (
 			.toLowerCase()
 			.indexOf(excerptTerm?.toLowerCase() ?? "");
 		const excerptStart = Math.max(0, matchIndex - 80);
+		const hasExcerpt = page.segments.length > 0;
 		const source: Source = {
 			kind: "page",
+			evidenceKind: hasExcerpt
+				? page.trigger === "interaction"
+					? "interaction-excerpt"
+					: "auto-snippet"
+				: "title-only",
+			...(page.title ? { pageTitle: page.title } : {}),
 			id: page.id,
 			timestamp: page.timestamp,
 			url: url.href,
@@ -209,6 +316,7 @@ export const searchHistory = async (
 		const group = groups.get(source.url) ?? {
 			url: source.url,
 			text: new Set<string>(),
+			searchQueries: [],
 			firstSeen: Number.MAX_SAFE_INTEGER,
 			lastSeen: 0,
 			eventCount: 0,
@@ -245,6 +353,9 @@ export const searchHistory = async (
 	const averageLength = totalLength / (corpus.length || 1);
 	const limit = Math.max(1, Math.min(20, Math.floor(options.limit ?? 10)));
 	const results: HistorySearchResult[] = [];
+	const candidateRanks = new Map(
+		(options.candidateOrder ?? []).map((url, index) => [url, index]),
+	);
 	for (let index = 0; index < documents.length; index++) {
 		const document = documents[index];
 		const item = corpus[index];
@@ -263,24 +374,35 @@ export const searchHistory = async (
 				(idf * frequency * (k1 + 1)) /
 				(frequency + k1 * (1 - b + b * (item.length / averageLength)));
 		}
-		if (score) {
+		const candidateRank = candidateRanks.get(document.url) ?? -1;
+		if (score || candidateRank >= 0 || options.nearestTo !== undefined) {
 			const url = new URL(document.url);
 			results.push({
 				url: document.url,
 				host: url.host.replace(/^www\./, ""),
+				...(document.favicon ? { favicon: document.favicon } : {}),
 				firstSeen: document.firstSeen,
 				lastSeen: document.lastSeen,
 				eventCount: document.eventCount,
 				pageCount: document.pageCount,
 				excerpt: document.excerpt || `${url.hostname}${url.pathname}`,
-				pageExcerptAvailable: Boolean(document.excerptSourceId),
+				...(document.searchQueries.length
+					? { searchQueries: document.searchQueries.map((item) => item.query) }
+					: {}),
+				pageExcerptAvailable: document.sources.some(
+					(source) =>
+						source.kind === "page" && source.evidenceKind !== "title-only",
+				),
+				...(document.pageTitle ? { pageTitle: document.pageTitle } : {}),
+				evidenceKinds: [...(document.evidenceKinds ?? [])],
 				matchedTerms,
 				sources: document.sources.map(
-					({ kind, id, timestamp, url: sourceUrl }) => ({
+					({ kind, id, timestamp, url: sourceUrl, evidenceKind }) => ({
 						kind,
 						id,
 						timestamp,
 						url: sourceUrl,
+						evidenceKind,
 					}),
 				),
 				sourceCount: document.sourceCount,
@@ -291,23 +413,39 @@ export const searchHistory = async (
 	}
 	const offset = options.offset ?? 0;
 	return results
-		.toSorted((a, b) => b.score - a.score || b.lastSeen - a.lastSeen)
+		.sort((a, b) => {
+			if (options.nearestTo !== undefined)
+				return (
+					Math.abs(a.lastSeen - options.nearestTo) -
+					Math.abs(b.lastSeen - options.nearestTo)
+				);
+			const leftRank = candidateRanks.get(a.url) ?? -1;
+			const rightRank = candidateRanks.get(b.url) ?? -1;
+			if (leftRank >= 0 || rightRank >= 0)
+				return (
+					(leftRank < 0 ? Infinity : leftRank) -
+					(rightRank < 0 ? Infinity : rightRank)
+				);
+			return b.score - a.score || b.lastSeen - a.lastSeen;
+		})
 		.slice(offset, offset + limit);
 };
 
-/** Drop URL paths and raw event fields before returning search evidence to an MCP client. */
-export const projectEvidenceSearchResults = (
+/** Keep URL paths and raw browser-event fields out of activity search responses. */
+export const projectActivitySearchResults = (
 	results: HistorySearchResult[],
-): EvidenceSearchResult[] =>
+): ActivitySearchResult[] =>
 	results.map((result) => ({
-		origin: new URL(result.url).origin,
+		site: new URL(result.url).origin,
 		firstSeen: result.firstSeen,
 		lastSeen: result.lastSeen,
 		eventCount: result.eventCount,
 		pageCount: result.pageCount,
-		excerpt: result.pageExcerptAvailable ? result.excerpt.slice(0, 240) : "",
+		...(result.pageTitle ? { title: result.pageTitle } : {}),
+		preview: result.pageExcerptAvailable ? result.excerpt.slice(0, 240) : null,
+		matchedFrom: result.evidenceKinds,
 		matchedTerms: result.matchedTerms,
-		sources: result.sources.map(({ kind, id, timestamp }) => ({
+		anchors: result.sources.map(({ kind, id, timestamp }) => ({
 			kind,
 			id,
 			timestamp,

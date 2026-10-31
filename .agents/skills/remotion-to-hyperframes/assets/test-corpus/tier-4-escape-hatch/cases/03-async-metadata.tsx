@@ -13,27 +13,27 @@ import React from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 
 interface Props {
-  text: string;
+	text: string;
 }
 
 export const AsyncMetadataDriven: React.FC<Props> = ({ text }) => {
-  const frame = useCurrentFrame();
-  return (
-    <AbsoluteFill>
-      <div>
-        {text} · frame {frame}
-      </div>
-    </AbsoluteFill>
-  );
+	const frame = useCurrentFrame();
+	return (
+		<AbsoluteFill>
+			<div>
+				{text} · frame {frame}
+			</div>
+		</AbsoluteFill>
+	);
 };
 
 export const calculateMetadata = async ({ props }: { props: Props }) => {
-  const response = await fetch(
-    `https://api.example.com/duration?text=${encodeURIComponent(props.text)}`,
-  );
-  const { durationInFrames } = await response.json();
-  return {
-    durationInFrames,
-    fps: 30,
-  };
+	const response = await fetch(
+		`https://api.example.com/duration?text=${encodeURIComponent(props.text)}`,
+	);
+	const { durationInFrames } = await response.json();
+	return {
+		durationInFrames,
+		fps: 30,
+	};
 };

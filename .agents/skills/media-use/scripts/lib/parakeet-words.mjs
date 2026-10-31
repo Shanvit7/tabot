@@ -8,20 +8,25 @@
 // (see words.mjs / cutlist.mjs).
 
 export function mergeTokensToWords(parakeet) {
-  const sentences = Array.isArray(parakeet?.sentences) ? parakeet.sentences : [];
-  const words = [];
-  for (const s of sentences) {
-    for (const t of s.tokens ?? []) {
-      const raw = typeof t.text === "string" ? t.text : "";
-      const startsWord = raw.startsWith(" ") || words.length === 0;
-      if (startsWord) {
-        words.push({ text: raw.trim(), start: t.start, end: t.end });
-      } else {
-        const w = words[words.length - 1];
-        w.text += raw;
-        w.end = t.end;
-      }
-    }
-  }
-  return { text: (parakeet?.text ?? "").trim(), words: words.filter((w) => w.text.length > 0) };
+	const sentences = Array.isArray(parakeet?.sentences)
+		? parakeet.sentences
+		: [];
+	const words = [];
+	for (const s of sentences) {
+		for (const t of s.tokens ?? []) {
+			const raw = typeof t.text === "string" ? t.text : "";
+			const startsWord = raw.startsWith(" ") || words.length === 0;
+			if (startsWord) {
+				words.push({ text: raw.trim(), start: t.start, end: t.end });
+			} else {
+				const w = words[words.length - 1];
+				w.text += raw;
+				w.end = t.end;
+			}
+		}
+	}
+	return {
+		text: (parakeet?.text ?? "").trim(),
+		words: words.filter((w) => w.text.length > 0),
+	};
 }

@@ -12,6 +12,13 @@ export interface VisibleExcerptResult {
 	partial: boolean;
 }
 
+export const selectVisibleContentRoot = (doc: Document): Element =>
+	doc.querySelector("main article") ??
+	doc.querySelector("article") ??
+	doc.querySelector("[role='main']") ??
+	doc.querySelector("main") ??
+	doc.body;
+
 const hiddenElement = (element: Element): boolean => {
 	if (element.matches(EXCLUDED)) return true;
 	const style = getComputedStyle(element);
@@ -70,9 +77,10 @@ const visibleWord = (
 /** Read only complete words whose ranges pass viewport, clipping and occlusion checks. */
 export const extractVisibleExcerpts = (
 	doc: Document,
-	root: Element = doc.body,
+	root?: Element,
 ): VisibleExcerptResult => {
-	if (!root) return { segments: [], truncated: false, partial: true };
+	const contentRoot = root ?? selectVisibleContentRoot(doc);
+	if (!contentRoot) return { segments: [], truncated: false, partial: true };
 	const hiddenCache = new WeakMap<Element, boolean>();
 	const isHidden = (element: Element) => {
 		const cached = hiddenCache.get(element);
@@ -81,14 +89,15 @@ export const extractVisibleExcerpts = (
 		hiddenCache.set(element, hidden);
 		return hidden;
 	};
-	if (isHidden(root)) return { segments: [], truncated: false, partial: true };
+	if (isHidden(contentRoot))
+		return { segments: [], truncated: false, partial: true };
 	const segments: string[] = [];
 	let inspected = 0;
 	let scannedChars = 0;
 	let words = 0;
 	let truncated = false;
 	const walker = doc.createTreeWalker(
-		root,
+		contentRoot,
 		NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
 		{
 			acceptNode(node) {

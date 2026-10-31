@@ -11,26 +11,32 @@
 // use-effect-deps blocker.
 
 import React, { useCallback, useMemo } from "react";
-import { AbsoluteFill, delayRender, continueRender, useCurrentFrame, interpolate } from "remotion";
+import {
+	AbsoluteFill,
+	delayRender,
+	continueRender,
+	useCurrentFrame,
+	interpolate,
+} from "remotion";
 
 const handle = delayRender();
 // Resolve the handle once at module load — no per-frame side effects.
 queueMicrotask(() => continueRender(handle));
 
 export const WarningsOnly: React.FC = () => {
-  const frame = useCurrentFrame();
+	const frame = useCurrentFrame();
 
-  // useCallback / useMemo — decorative for render-perf in React, no equivalent
-  // needed in the seek-driven HF model.
-  const opacity = useMemo(
-    () => interpolate(frame, [0, 30], [0, 1], { extrapolateRight: "clamp" }),
-    [frame],
-  );
-  const onMount = useCallback(() => {}, []);
+	// useCallback / useMemo — decorative for render-perf in React, no equivalent
+	// needed in the seek-driven HF model.
+	const opacity = useMemo(
+		() => interpolate(frame, [0, 30], [0, 1], { extrapolateRight: "clamp" }),
+		[frame],
+	);
+	const onMount = useCallback(() => {}, []);
 
-  return (
-    <AbsoluteFill style={{ opacity }} onClick={onMount}>
-      <div>frame {frame}</div>
-    </AbsoluteFill>
-  );
+	return (
+		<AbsoluteFill style={{ opacity }} onClick={onMount}>
+			<div>frame {frame}</div>
+		</AbsoluteFill>
+	);
 };

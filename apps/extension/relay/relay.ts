@@ -2,16 +2,11 @@
 
 import {
 	type AssistantConnections,
-	extractRelatednessFeatures,
-	generateRelatednessCandidatesForSeeds,
 	logger,
 	parseAssistantConnections,
-	projectEvidenceSearchResults,
-	type RelatednessEvidence,
-	relatednessIdentityKeys,
-	relatednessMatchSignals,
+	projectActivitySearchResults,
+	type StoredIngestRecord,
 	safeRecallUrl,
-	scoreRelatednessHeuristic,
 } from "@tabot/shared";
 import { getStorageDb } from "../storage/client";
 
@@ -19,7 +14,7 @@ import { getStorageDb } from "../storage/client";
  * Extension ↔ relay connection.
  *
  * Owns: installation identity, authenticated WebSocket, heartbeat, exponential
- * backoff reconnect, request/response correlation, and local evidence search.
+ * backoff reconnect, request/response correlation, and local activity search.
  * Results are projected to the privacy-safe MCP contract before responding.
  */
 
@@ -41,14 +36,12 @@ const BACKOFF_MIN_MS = 1_000;
 const BACKOFF_MAX_MS = 60_000;
 
 /** Relay method names — must match mcp-server src/mcp/tools.ts. */
-const SEARCH_EVIDENCE_METHOD = "search_evidence";
-const FIND_RELATED_EVIDENCE_METHOD = "find_related_evidence";
-const GET_EVIDENCE_TRAIL_METHOD = "get_evidence_trail";
-const EVIDENCE_RESULT_LIMIT = 8;
-const MAX_EVIDENCE_OFFSET = 999_999;
-const RELATEDNESS_CANDIDATE_LIMIT = 1_000;
-const RELATEDNESS_PAIR_LIMIT = 20_000;
-const MAX_EVIDENCE_QUERY_CHARS = 200;
+const SEARCH_ACTIVITY_METHOD = "search_activity";
+const FIND_ACTIVITY_MATCHES_METHOD = "find_activity_matches";
+const GET_ACTIVITY_TIMELINE_METHOD = "get_activity_timeline";
+const ACTIVITY_RESULT_LIMIT = 8;
+const MAX_ACTIVITY_OFFSET = 999_999;
+const MAX_ACTIVITY_QUERY_CHARS = 200;
 
 interface Credentials {
 	installationId: string;
@@ -157,28 +150,28 @@ const send = (message: unknown) => {
 		socket.send(JSON.stringify(message));
 };
 
-// --- Local evidence search -------------------------------------------------
+// --- Local activity search -------------------------------------------------
 // Shared helper resets failed opens; do not cache a rejected promise here.
 const getDb = getStorageDb;
 
-const searchEvidence = async (params: unknown) => {
+const searchActivity = async (params: unknown) => {
 	const input = params as {
 		query?: unknown;
 		limit?: unknown;
 		cursor?: unknown;
 	} | null;
 	const query = typeof input?.query === "string" ? input.query.trim() : "";
-	if (!query || query.length > MAX_EVIDENCE_QUERY_CHARS)
+	if (!query || query.length > MAX_ACTIVITY_QUERY_CHARS)
 		throw new Error("query must contain 1 to 200 characters.");
 	const requestedLimit = input?.limit;
 	if (
 		requestedLimit !== undefined &&
 		(!Number.isSafeInteger(requestedLimit) ||
 			(requestedLimit as number) < 1 ||
-			(requestedLimit as number) > EVIDENCE_RESULT_LIMIT)
+			(requestedLimit as number) > ACTIVITY_RESULT_LIMIT)
 	)
 		throw new Error("limit must be an integer from 1 to 8.");
-	const limit = (requestedLimit as number | undefined) ?? EVIDENCE_RESULT_LIMIT;
+	const limit = (requestedLimit as number | undefined) ?? ACTIVITY_RESULT_LIMIT;
 	const cursor = input?.cursor;
 	let snapshot = Date.now();
 	let offset = 0;
@@ -194,7 +187,7 @@ const searchEvidence = async (params: unknown) => {
 			snapshot > Date.now() ||
 			!Number.isSafeInteger(offset) ||
 			offset < 1 ||
-			offset > MAX_EVIDENCE_OFFSET
+			offset > MAX_ACTIVITY_OFFSET
 		)
 			throw new Error("cursor must be a valid next-page cursor.");
 	}
@@ -205,26 +198,26 @@ const searchEvidence = async (params: unknown) => {
 	return {
 		count: results.length,
 		nextCursor:
-			page.length > limit && offset + results.length <= MAX_EVIDENCE_OFFSET
+			page.length > limit && offset + results.length <= MAX_ACTIVITY_OFFSET
 				? `${snapshot}:${offset + results.length}`
 				: null,
-		results: projectEvidenceSearchResults(results),
+		results: projectActivitySearchResults(results),
 	};
 };
 
-const findRelatedEvidence = async (params: unknown) => {
+const findActivityMatches = async (params: unknown) => {
 	const input = params as {
-		sources?: unknown;
+		anchors?: unknown;
 		limit?: unknown;
 		cursor?: unknown;
 		maxGapHours?: unknown;
 	} | null;
-	const sources = input?.sources;
+	const anchors = input?.anchors;
 	if (
-		!Array.isArray(sources) ||
-		sources.length < 1 ||
-		sources.length > 8 ||
-		sources.some((source: unknown) => {
+		!Array.isArray(anchors) ||
+		anchors.length < 1 ||
+		anchors.length > 8 ||
+		anchors.some((source: unknown) => {
 			if (!source || typeof source !== "object") return true;
 			const reference = source as Record<string, unknown>;
 			return (
@@ -235,16 +228,16 @@ const findRelatedEvidence = async (params: unknown) => {
 			);
 		})
 	)
-		throw new Error("sources must contain 1 to 8 valid evidence references.");
+		throw new Error("anchors must contain 1 to 8 valid activity items.");
 	const requestedLimit = input?.limit;
 	if (
 		requestedLimit !== undefined &&
 		(!Number.isSafeInteger(requestedLimit) ||
 			(requestedLimit as number) < 1 ||
-			(requestedLimit as number) > EVIDENCE_RESULT_LIMIT)
+			(requestedLimit as number) > ACTIVITY_RESULT_LIMIT)
 	)
 		throw new Error("limit must be an integer from 1 to 8.");
-	const limit = (requestedLimit as number | undefined) ?? EVIDENCE_RESULT_LIMIT;
+	const limit = (requestedLimit as number | undefined) ?? ACTIVITY_RESULT_LIMIT;
 	const requestedGap = input?.maxGapHours;
 	if (
 		requestedGap !== undefined &&
@@ -270,168 +263,141 @@ const findRelatedEvidence = async (params: unknown) => {
 			snapshot < 1 ||
 			snapshot > Date.now() ||
 			!Number.isSafeInteger(offset) ||
-			offset > MAX_EVIDENCE_OFFSET
+			offset > MAX_ACTIVITY_OFFSET
 		)
 			throw new Error("cursor must be a valid next-page cursor.");
 	}
-	const references = sources as { kind: "event" | "page"; id: string }[];
+	const references = anchors as { kind: "event" | "page"; id: string }[];
 	const db = await getDb();
 	const seeds = await Promise.all(
-		references.map(async (source) =>
+		references.map((source) =>
 			source.kind === "event"
 				? db.findEvent(source.id)
 				: db.getPageObservation(source.id),
 		),
 	);
 	if (seeds.some((seed) => !seed))
-		throw new Error("one or more evidence references are no longer available.");
-	const evidence = seeds as RelatednessEvidence[];
-	const nearby = await db.readRelatednessEvidence(
-		evidence.map((source) => source.timestamp),
-		[...new Set(evidence.flatMap(relatednessIdentityKeys))],
+		throw new Error(
+			"one or more selected activity items are no longer available.",
+		);
+	const anchorRecords = seeds as StoredIngestRecord[];
+	const origins = [
+		...new Set(
+			anchorRecords.flatMap((source) => {
+				const origin = safeRecallUrl(source.url)?.origin;
+				return origin ? [origin] : [];
+			}),
+		),
+	];
+	const pageKeys = [
+		...new Set(
+			anchorRecords.flatMap((source) =>
+				"kind" in source && source.kind === "page-observation"
+					? [source.pageKey]
+					: [],
+			),
+		),
+	];
+	const rows = await db.readRelatedActivity(
+		anchorRecords.map((source) => source.timestamp),
+		pageKeys,
+		origins,
+		anchorRecords.map((source) => source.id),
 		maxGapMs,
-		RELATEDNESS_CANDIDATE_LIMIT,
+		limit,
+		offset,
 		snapshot,
 	);
-	const evidenceById = new Map<string, RelatednessEvidence>();
-	for (const source of [...evidence, ...nearby])
-		evidenceById.set(source.id, source);
-	const seedIds = new Set(evidence.map((source) => source.id));
-	const ranked = new Map<
-		string,
-		{
-			source: RelatednessEvidence;
-			score: number;
-			signals: string[];
-			matchedSeedIds: Set<string>;
-		}
-	>();
-	const pairs = generateRelatednessCandidatesForSeeds(
-		[...evidenceById.values()],
-		[...seedIds],
-		{
-			maxPairs: RELATEDNESS_PAIR_LIMIT,
-			maxTemporalNeighbors: 64,
-			maxTimeGapMs: maxGapMs,
-		},
-	);
-	for (const pair of pairs) {
-		const left = evidenceById.get(pair.sourceIds[0]);
-		const right = evidenceById.get(pair.sourceIds[1]);
-		if (!left || !right) continue;
-		const leftIsSeed = seedIds.has(left.id);
-		const rightIsSeed = seedIds.has(right.id);
-		if (leftIsSeed === rightIsSeed) continue;
-		const seed = leftIsSeed ? left : right;
-		const candidate = leftIsSeed ? right : left;
-		const features = extractRelatednessFeatures(seed, candidate).features;
-		const signals = relatednessMatchSignals(features);
-		if (!signals.length) continue;
-		const score = scoreRelatednessHeuristic(features);
-		const current = ranked.get(candidate.id);
-		if (current) {
-			current.matchedSeedIds.add(seed.id);
-			if (score > current.score) {
-				current.score = score;
-				current.signals = signals;
-			}
-		} else {
-			ranked.set(candidate.id, {
-				source: candidate,
-				score,
-				signals,
-				matchedSeedIds: new Set([seed.id]),
-			});
-		}
-	}
-	const results = [...ranked.values()]
-		.sort(
-			(a, b) =>
-				b.score - a.score ||
-				b.source.timestamp - a.source.timestamp ||
-				a.source.id.localeCompare(b.source.id),
-		)
-		.slice(offset, offset + limit + 1);
-	const page = results.slice(0, limit);
+	const page = rows.slice(0, limit);
+	const results = page.map((source) => {
+		const origin = safeRecallUrl(source.url)?.origin ?? null;
+		const isPage = "kind" in source && source.kind === "page-observation";
+		const matches = anchorRecords.flatMap((seed) => {
+			const seedOrigin = safeRecallUrl(seed.url)?.origin;
+			const reasons = [
+				...(isPage &&
+				"kind" in seed &&
+				seed.kind === "page-observation" &&
+				seed.pageKey === source.pageKey
+					? ["same_page"]
+					: []),
+				...(origin && origin === seedOrigin ? ["same_site"] : []),
+				...(Math.abs(source.timestamp - seed.timestamp) <= maxGapMs
+					? ["within_time_window"]
+					: []),
+			];
+			return reasons.length ? [{ id: seed.id, reasons }] : [];
+		});
+		return {
+			id: source.id,
+			kind: isPage ? "page" : "event",
+			timestamp: source.timestamp,
+			site: origin,
+			preview: isPage ? source.segments.join(" ").slice(0, 240) : null,
+			matchedBy: [...new Set(matches.flatMap((match) => match.reasons))],
+			matchedAnchorIds: matches.map((match) => match.id),
+		};
+	});
 	return {
-		ranker: "heuristic-v1",
 		count: page.length,
 		nextCursor:
-			results.length > limit ? `${snapshot}:${offset + page.length}` : null,
-		candidatePoolLimited: nearby.length === RELATEDNESS_CANDIDATE_LIMIT,
-		results: page.map(({ source, score, signals, matchedSeedIds }) => {
-			const url = safeRecallUrl(source.url);
-			const isPage = "kind" in source && source.kind === "page-observation";
-			return {
-				id: source.id,
-				kind: isPage ? "page" : "event",
-				timestamp: source.timestamp,
-				origin: url?.origin ?? null,
-				excerpt: isPage ? source.segments.join(" ").slice(0, 240) : "",
-				score,
-				signals,
-				matchedSeedIds: [...matchedSeedIds],
-			};
-		}),
+			rows.length > limit ? `${snapshot}:${offset + page.length}` : null,
+		matches: results,
 	};
 };
 
-const getEvidenceTrail = async (params: unknown) => {
-	const related = (await findRelatedEvidence(params)) as {
-		ranker: string;
+const getActivityTimeline = async (params: unknown) => {
+	const related = (await findActivityMatches(params)) as {
 		count: number;
 		nextCursor: string | null;
-		candidatePoolLimited: boolean;
-		results: {
+		matches: {
 			id: string;
 			kind: "event" | "page";
 			timestamp: number;
-			origin: string | null;
-			excerpt: string;
-			score: number;
-			signals: string[];
-			matchedSeedIds: string[];
+			site: string | null;
+			preview: string | null;
+			matchedBy: string[];
+			matchedAnchorIds: string[];
 		}[];
 	};
-	const input = params as { sources: { kind: "event" | "page"; id: string }[] };
+	const input = params as { anchors: { kind: "event" | "page"; id: string }[] };
 	const db = await getDb();
 	const seeds = await Promise.all(
-		input.sources.map(async (source) =>
+		input.anchors.map((source) =>
 			source.kind === "event"
 				? db.findEvent(source.id)
 				: db.getPageObservation(source.id),
 		),
 	);
 	if (seeds.some((seed) => !seed))
-		throw new Error("one or more evidence references are no longer available.");
-	const seedSteps = (seeds as RelatednessEvidence[]).map((source) => {
-		const url = safeRecallUrl(source.url);
+		throw new Error(
+			"one or more selected activity items are no longer available.",
+		);
+	const seedSteps = (seeds as StoredIngestRecord[]).map((source) => {
 		const isPage = "kind" in source && source.kind === "page-observation";
 		return {
 			id: source.id,
 			kind: isPage ? "page" : "event",
 			timestamp: source.timestamp,
-			origin: url?.origin ?? null,
-			excerpt: isPage ? source.segments.join(" ").slice(0, 240) : "",
-			role: "seed",
+			site: safeRecallUrl(source.url)?.origin ?? null,
+			preview: isPage ? source.segments.join(" ").slice(0, 240) : null,
+			role: "anchor",
 		};
 	});
 	return {
-		ranker: related.ranker,
 		count: related.count,
 		nextCursor: related.nextCursor,
-		candidatePoolLimited: related.candidatePoolLimited,
-		trail: [
+		items: [
 			...seedSteps,
-			...related.results.map((result) => ({ ...result, role: "related" })),
+			...related.matches.map((result) => ({ ...result, role: "match" })),
 		].sort((a, b) => a.timestamp - b.timestamp || a.id.localeCompare(b.id)),
 	};
 };
 
 const handlers: Record<string, (params: unknown) => Promise<unknown>> = {
-	[SEARCH_EVIDENCE_METHOD]: searchEvidence,
-	[FIND_RELATED_EVIDENCE_METHOD]: findRelatedEvidence,
-	[GET_EVIDENCE_TRAIL_METHOD]: getEvidenceTrail,
+	[SEARCH_ACTIVITY_METHOD]: searchActivity,
+	[FIND_ACTIVITY_MATCHES_METHOD]: findActivityMatches,
+	[GET_ACTIVITY_TIMELINE_METHOD]: getActivityTimeline,
 };
 
 const handleRequest = async (message: ServerRequest) => {

@@ -13,13 +13,13 @@
 // ADAPT for a new location: change START (a point ON your centerline where the corridor opens),
 // WINDOW_KM, and DAMP/SMOOTH below. Input must be a single LineString feature (features[0].geometry).
 
-import {readFileSync, writeFileSync, mkdirSync} from 'fs';
-import {dirname, resolve} from 'path';
-import {fileURLToPath} from 'url';
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const IN = process.argv[2] || resolve(__dir, '../assets/sample-river.geojson');
-const OUT = process.argv[3] || resolve(__dir, '../assets/cesium-path.json');
+const IN = process.argv[2] || resolve(__dir, "../assets/sample-river.geojson");
+const OUT = process.argv[3] || resolve(__dir, "../assets/cesium-path.json");
 const havKm = (a, b) => {
 	const R = 6371,
 		r = Math.PI / 180,
@@ -31,7 +31,7 @@ const havKm = (a, b) => {
 	return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-const gorge = JSON.parse(readFileSync(IN, 'utf8')).features[0].geometry
+const gorge = JSON.parse(readFileSync(IN, "utf8")).features[0].geometry
 	.coordinates;
 
 // ADAPT: clip ~24 km of river from the reach where the flythrough opens. START must be a point ON the
@@ -128,7 +128,7 @@ const path = sm.map((p) => {
 	]);
 });
 
-mkdirSync(dirname(OUT), {recursive: true});
+mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(path));
 
 let len = 0;
@@ -158,4 +158,4 @@ for (let i = 0; i + stepPts < path.length; i += stepPts) {
 	}
 	prev = h;
 }
-console.log(`  heading deltas every 1.5km (deg): ${hs.join(', ')}`);
+console.log(`  heading deltas every 1.5km (deg): ${hs.join(", ")}`);

@@ -4,6 +4,7 @@ import { sanitizeEventForIngestion } from "../privacy/ingest";
 import type {
 	HistorySearchOptions,
 	HistorySearchResult,
+	SearchAvailability,
 } from "../recall/history-search";
 import type { TabEventMetadata, TabEventType } from "./events";
 import { normalizeEvent } from "./ingest";
@@ -120,24 +121,32 @@ export class TabotDatabase {
 		this.request<InsertEventsResult>("commitIngest", [records]);
 	countEvents = () => this.request<number>("countEvents");
 	countPages = () => this.request<number>("countPages");
+	getFirstEventTimestamp = () =>
+		this.request<number | null>("getFirstEventTimestamp");
 	readEvents = (range?: EventRange) =>
 		this.request<StoredTabEvent[]>("readEvents", [range]);
 	findEvent = (id: string) =>
 		this.request<StoredTabEvent | undefined>("findEvent", [id]);
 	getPageObservation = (id: string) =>
 		this.request<StoredPageObservation | undefined>("getPageObservation", [id]);
-	readRelatednessEvidence = (
+	readRelatedActivity = (
 		anchors: number[],
-		identityKeys: string[],
+		pageKeys: string[],
+		origins: string[],
+		seedIds: string[],
 		maxGapMs: number,
 		limit: number,
+		offset: number,
 		to: number,
 	) =>
-		this.request<StoredIngestRecord[]>("readRelatednessEvidence", [
+		this.request<StoredIngestRecord[]>("readRelatedActivity", [
 			anchors,
-			identityKeys,
+			pageKeys,
+			origins,
+			seedIds,
 			maxGapMs,
 			limit,
+			offset,
 			to,
 		]);
 	getPageSummaries = (from: number, to: number, limit?: number) =>
@@ -150,6 +159,8 @@ export class TabotDatabase {
 		this.request<PageCaptureSiteSummary[]>("getPageCaptureSiteSummaries");
 	searchHistory = (query: string, options?: HistorySearchOptions) =>
 		this.request<HistorySearchResult[]>("searchHistory", [query, options]);
+	getSearchStatus = () =>
+		this.request<SearchAvailability>("getSearchStatus", []);
 	getLegacyMigrationStatus = () =>
 		this.request<{
 			pendingRetirement: boolean;

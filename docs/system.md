@@ -274,8 +274,8 @@ pnpm --filter @tabot/shared run swDerivation
 pnpm --filter @tabot/shared run swGraph
 pnpm --filter @tabot/shared run swEpisodes
 pnpm --filter extension check:popup
-pnpm --filter extension check:evidenceRelay
-pnpm --filter mcp-server check:evidenceSurface
+pnpm --filter extension check:activityRelay
+pnpm --filter mcp-server check:activitySurface
 pnpm --filter extension build
 pnpm --filter web build
 ```

@@ -19,8 +19,8 @@ import { AUTH_CODE_TTL_MS, MAX_HTTP_BODY_BYTES, NAME, VERSION } from "./config";
 import { logEvent } from "./log";
 import { ERROR_CODES, RelayError } from "./mcp/protocol";
 import {
-	findRelatedEvidenceInputSchema,
-	searchEvidenceInputSchema,
+	findActivityMatchesInputSchema,
+	searchActivityInputSchema,
 } from "./mcp/schema";
 import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./mcp/tools";
 
@@ -91,36 +91,36 @@ const createMcpServer = (
 	};
 
 	server.registerTool(
-		TOOL_NAMES.SEARCH_EVIDENCE,
+		TOOL_NAMES.SEARCH_ACTIVITY,
 		{
-			title: "Search Tabot evidence",
-			description: TOOL_DESCRIPTIONS.SEARCH_EVIDENCE,
+			title: "Search browser activity",
+			description: TOOL_DESCRIPTIONS.SEARCH_ACTIVITY,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: searchEvidenceInputSchema,
+			inputSchema: searchActivityInputSchema,
 		},
-		(params) => call(TOOL_NAMES.SEARCH_EVIDENCE, params),
+		(params) => call(TOOL_NAMES.SEARCH_ACTIVITY, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.FIND_RELATED_EVIDENCE,
+		TOOL_NAMES.FIND_ACTIVITY_MATCHES,
 		{
-			title: "Find related Tabot evidence",
-			description: TOOL_DESCRIPTIONS.FIND_RELATED_EVIDENCE,
+			title: "Find activity matches",
+			description: TOOL_DESCRIPTIONS.FIND_ACTIVITY_MATCHES,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: findRelatedEvidenceInputSchema,
+			inputSchema: findActivityMatchesInputSchema,
 		},
-		(params) => call(TOOL_NAMES.FIND_RELATED_EVIDENCE, params),
+		(params) => call(TOOL_NAMES.FIND_ACTIVITY_MATCHES, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_EVIDENCE_TRAIL,
+		TOOL_NAMES.GET_ACTIVITY_TIMELINE,
 		{
-			title: "Build a Tabot evidence trail",
-			description: TOOL_DESCRIPTIONS.GET_EVIDENCE_TRAIL,
+			title: "View activity timeline",
+			description: TOOL_DESCRIPTIONS.GET_ACTIVITY_TIMELINE,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: findRelatedEvidenceInputSchema,
+			inputSchema: findActivityMatchesInputSchema,
 		},
-		(params) => call(TOOL_NAMES.GET_EVIDENCE_TRAIL, params),
+		(params) => call(TOOL_NAMES.GET_ACTIVITY_TIMELINE, params),
 	);
 
 	return server;

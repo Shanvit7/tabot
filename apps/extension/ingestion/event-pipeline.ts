@@ -203,7 +203,6 @@ export const createEventPipeline = <T extends IngestRecord = StoredTabEvent>(
 	const ingest = (
 		input: T,
 		prepare?: () => Promise<IngestAck | null>,
-		native = false,
 	): Promise<IngestAck> => {
 		counters.observed++;
 		let row: T;
@@ -237,8 +236,7 @@ export const createEventPipeline = <T extends IngestRecord = StoredTabEvent>(
 			return Promise.resolve({ status: "retryable", code: "writer-blocked" });
 		}
 		const size = eventBytes(row);
-		const reserved =
-			native || (!isPageObservation(row) && BOUNDARIES.has(row.type));
+		const reserved = !isPageObservation(row) && BOUNDARIES.has(row.type);
 		if (
 			outstanding.size >= limits.rows - (reserved ? 0 : limits.reserveRows) ||
 			bytes + size > limits.bytes - (reserved ? 0 : limits.reserveBytes)

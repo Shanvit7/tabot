@@ -4,7 +4,6 @@ import {
 	type IngestAck,
 	MAX_EVENT_BYTES,
 	MAX_PAGE_OBSERVATION_BYTES,
-	normalizePageObservation,
 	PAGE_EVENT_TYPES,
 	PAGE_OBSERVATION_PROTOCOL_VERSION,
 	PAGE_PROTOCOL_VERSION,
@@ -173,7 +172,8 @@ export type PageObservationMessage = {
 	id: string;
 	timestamp: number;
 	documentUrl: string;
-	trigger: "viewport-dwell" | "interaction";
+	trigger: "auto-dwell" | "viewport-dwell" | "interaction";
+	title?: string;
 	segments: string[];
 	truncated: boolean;
 	partial: boolean;
@@ -222,8 +222,21 @@ export const ingestPageObservationMessage = async (
 	const keys = Object.keys(message).sort();
 	if (
 		message.kind !== "TABOT_PAGE_OBSERVATION" ||
-		keys.join(",") !==
-			"documentUrl,id,kind,partial,segments,timestamp,trigger,truncated,version" ||
+		keys.some(
+			(key) =>
+				![
+					"documentUrl",
+					"id",
+					"kind",
+					"partial",
+					"segments",
+					"timestamp",
+					"title",
+					"trigger",
+					"truncated",
+					"version",
+				].includes(key),
+		) ||
 		typeof message.id !== "string" ||
 		!UUID_PATTERN.test(message.id) ||
 		!Number.isSafeInteger(message.timestamp) ||
@@ -231,9 +244,13 @@ export const ingestPageObservationMessage = async (
 		typeof message.documentUrl !== "string" ||
 		message.documentUrl.length > 8192 ||
 		!/^https?:\/\//.test(message.documentUrl) ||
-		!["viewport-dwell", "interaction"].includes(message.trigger) ||
+		!["auto-dwell", "viewport-dwell", "interaction"].includes(
+			message.trigger,
+		) ||
+		(message.title !== undefined &&
+			(typeof message.title !== "string" || message.title.length > 512)) ||
 		!Array.isArray(message.segments) ||
-		message.segments.length < 1 ||
+		(!message.title && message.segments.length === 0) ||
 		message.segments.length > 4 ||
 		message.segments.some(
 			(segment) =>
@@ -248,8 +265,8 @@ export const ingestPageObservationMessage = async (
 	const now = deps.now ?? Date.now();
 	if (message.timestamp < now - 300_000 || message.timestamp > now + 5000)
 		return reject("capture-time-out-of-range");
-	const site = pageCaptureSite(message.documentUrl, sender.tab?.incognito);
-	if (!site) return reject("invalid-site");
+	if (!pageCaptureSite(message.documentUrl, sender.tab?.incognito))
+		return reject("invalid-site");
 	let captureIdentity: string;
 	let pageKey: string;
 	try {
@@ -263,6 +280,7 @@ export const ingestPageObservationMessage = async (
 				sender.documentId,
 				message.documentUrl,
 				message.trigger,
+				message.title ?? null,
 				message.segments,
 				message.truncated,
 				message.partial,
@@ -283,11 +301,12 @@ export const ingestPageObservationMessage = async (
 		captureIdentity,
 		url: message.documentUrl,
 		trigger: message.trigger,
+		title: message.title,
 		segments: message.segments,
 		coverage: { truncated: message.truncated, partial: message.partial },
 	}).catch(() => null);
 	if (!sanitized) return reject("privacy-processing-failed");
-	const row = normalizePageObservation(sanitized);
+	const row = sanitized;
 	return deps.pipeline.ingest(row, async () => {
 		const previous = await deps.find(row.id);
 		if (previous)
@@ -295,7 +314,6 @@ export const ingestPageObservationMessage = async (
 				? { status: "persisted", id: row.id }
 				: { status: "rejected", code: "id-conflict" };
 		if (
-			message.documentUrl !== currentUrl ||
 			isPageCaptureExcludedUrl(message.documentUrl) ||
 			now - row.timestamp > 10_000 ||
 			!(await deps.eligible(tabId))

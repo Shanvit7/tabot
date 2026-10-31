@@ -1,4 +1,4 @@
 export {
-	findRelatedEvidenceInputSchema,
-	searchEvidenceInputSchema,
+	findActivityMatchesInputSchema,
+	searchActivityInputSchema,
 } from "./tools.schema";

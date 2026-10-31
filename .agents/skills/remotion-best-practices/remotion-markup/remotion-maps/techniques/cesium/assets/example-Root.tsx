@@ -1,14 +1,17 @@
-import React from 'react';
-import {Composition} from 'remotion';
-import {CesiumFlythrough, type CesiumFlythroughProps} from './CesiumFlythrough';
-import cityPath from './city-path.json';
+import React from "react";
+import { Composition } from "remotion";
+import {
+	CesiumFlythrough,
+	type CesiumFlythroughProps,
+} from "./CesiumFlythrough";
+import cityPath from "./city-path.json";
 
 export const RemotionRoot: React.FC = () => (
 	<>
 		<Composition
 			id="LandscapeFlyover"
 			component={CesiumFlythrough}
-			defaultProps={{mode: 'landscape'} satisfies CesiumFlythroughProps}
+			defaultProps={{ mode: "landscape" } satisfies CesiumFlythroughProps}
 			durationInFrames={24 * 30}
 			fps={30}
 			width={1920}
@@ -19,7 +22,7 @@ export const RemotionRoot: React.FC = () => (
 			component={CesiumFlythrough}
 			defaultProps={
 				{
-					mode: 'city',
+					mode: "city",
 					path: cityPath as [number, number][],
 					altitudeStart: 700,
 					altitudeEnd: 500,

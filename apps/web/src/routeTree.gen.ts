@@ -10,33 +10,73 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkspaceRouteImport } from './routes/_workspace'
+import { Route as WorkspaceAiRouteImport } from './routes/_workspace.ai'
+import { Route as WorkspaceAssistantRouteImport } from './routes/_workspace.assistant'
+import { Route as WorkspaceHomeRouteImport } from './routes/_workspace.home'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkspaceRoute = WorkspaceRouteImport.update({
+  id: '/_workspace',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkspaceAiRoute = WorkspaceAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceAssistantRoute = WorkspaceAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceHomeRoute = WorkspaceHomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai': typeof WorkspaceAiRoute
+  '/assistant': typeof WorkspaceAssistantRoute
+  '/home': typeof WorkspaceHomeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai': typeof WorkspaceAiRoute
+  '/assistant': typeof WorkspaceAssistantRoute
+  '/home': typeof WorkspaceHomeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_workspace': typeof WorkspaceRouteWithChildren
+  '/_workspace/ai': typeof WorkspaceAiRoute
+  '/_workspace/assistant': typeof WorkspaceAssistantRoute
+  '/_workspace/home': typeof WorkspaceHomeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/ai' | '/assistant' | '/home'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/ai' | '/assistant' | '/home'
+  id:
+    | '__root__'
+    | '/'
+    | '/_workspace'
+    | '/_workspace/ai'
+    | '/_workspace/assistant'
+    | '/_workspace/home'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  WorkspaceRoute: typeof WorkspaceRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +88,56 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_workspace': {
+      id: '/_workspace'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof WorkspaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_workspace/ai': {
+      id: '/_workspace/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof WorkspaceAiRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/assistant': {
+      id: '/_workspace/assistant'
+      path: '/assistant'
+      fullPath: '/assistant'
+      preLoaderRoute: typeof WorkspaceAssistantRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/home': {
+      id: '/_workspace/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof WorkspaceHomeRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
   }
 }
 
+interface WorkspaceRouteChildren {
+  WorkspaceAiRoute: typeof WorkspaceAiRoute
+  WorkspaceAssistantRoute: typeof WorkspaceAssistantRoute
+  WorkspaceHomeRoute: typeof WorkspaceHomeRoute
+}
+
+const WorkspaceRouteChildren: WorkspaceRouteChildren = {
+  WorkspaceAiRoute: WorkspaceAiRoute,
+  WorkspaceAssistantRoute: WorkspaceAssistantRoute,
+  WorkspaceHomeRoute: WorkspaceHomeRoute,
+}
+
+const WorkspaceRouteWithChildren = WorkspaceRoute._addFileChildren(
+  WorkspaceRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  WorkspaceRoute: WorkspaceRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

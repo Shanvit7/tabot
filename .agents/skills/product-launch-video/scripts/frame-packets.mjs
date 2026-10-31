@@ -11,17 +11,21 @@ import * as core from "./lib/frame-packets-core.mjs";
 
 const SKILL_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG = {
-  animationDir: resolve(SKILL_DIR, "../hyperframes-animation"),
-  corePath: resolve(SKILL_DIR, "../hyperframes/references/frame-worker-core.md"),
-  deltaPath: resolve(SKILL_DIR, "sub-agents/frame-worker.md"),
+	animationDir: resolve(SKILL_DIR, "../hyperframes-animation"),
+	corePath: resolve(
+		SKILL_DIR,
+		"../hyperframes/references/frame-worker-core.md",
+	),
+	deltaPath: resolve(SKILL_DIR, "sub-agents/frame-worker.md"),
 };
 
 export function buildRolePayload({ outDir }) {
-  return core.buildRolePayload({ ...CONFIG, outDir });
+	return core.buildRolePayload({ ...CONFIG, outDir });
 }
 
 export function buildFramePackets(options) {
-  return core.buildFramePackets({ ...CONFIG, ...options });
+	return core.buildFramePackets({ ...CONFIG, ...options });
 }
 
-if (core.isMainModule(import.meta.url)) core.runCli({ buildFramePackets, buildRolePayload });
+if (core.isMainModule(import.meta.url))
+	core.runCli({ buildFramePackets, buildRolePayload });

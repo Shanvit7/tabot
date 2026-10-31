@@ -31,12 +31,12 @@ import { join, resolve } from "node:path";
 
 const argv = process.argv.slice(2);
 const flag = (name, def) => {
-  const i = argv.indexOf(`--${name}`);
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
+	const i = argv.indexOf(`--${name}`);
+	return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def;
 };
 function die(msg) {
-  console.error(`✗ fetch-pr.mjs: ${msg}`);
-  process.exit(1);
+	console.error(`✗ fetch-pr.mjs: ${msg}`);
+	process.exit(1);
 }
 
 const prRef = flag("pr", null);
@@ -46,56 +46,62 @@ const outDir = resolve(flag("out-dir", "./capture"));
 // Run gh, capture stdout. Returns { ok, stdout, stderr } — never throws (callers
 // decide whether a failure is fatal). 64 MB buffer covers large diffs / file lists.
 function ghTry(args) {
-  try {
-    const stdout = execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    return { ok: true, stdout, stderr: "" };
-  } catch (e) {
-    return {
-      ok: false,
-      stdout: (e.stdout || "").toString(),
-      stderr: (e.stderr || e.message || "").toString().trim(),
-    };
-  }
+	try {
+		const stdout = execFileSync("gh", args, {
+			encoding: "utf8",
+			maxBuffer: 64 * 1024 * 1024,
+		});
+		return { ok: true, stdout, stderr: "" };
+	} catch (e) {
+		return {
+			ok: false,
+			stdout: (e.stdout || "").toString(),
+			stderr: (e.stderr || e.message || "").toString().trim(),
+		};
+	}
 }
 
 // ── 0. auth — fail fast with gh's own hint ───────────────────────────────────
 if (!ghTry(["auth", "status"]).ok) {
-  die("gh is not authenticated — run: gh auth login");
+	die("gh is not authenticated — run: gh auth login");
 }
 
 // ── 1. core PR object (gh pr view) ───────────────────────────────────────────
 const FIELDS = [
-  "number",
-  "title",
-  "body",
-  "author",
-  "url",
-  "baseRefName",
-  "headRefName",
-  "commits",
-  "files",
-  "additions",
-  "deletions",
-  "changedFiles",
-  "labels",
-  "reviews",
-  "latestReviews",
-  "comments",
-  "assignees",
-  "reviewDecision",
-  "mergedBy",
-  "state",
-  "mergedAt",
+	"number",
+	"title",
+	"body",
+	"author",
+	"url",
+	"baseRefName",
+	"headRefName",
+	"commits",
+	"files",
+	"additions",
+	"deletions",
+	"changedFiles",
+	"labels",
+	"reviews",
+	"latestReviews",
+	"comments",
+	"assignees",
+	"reviewDecision",
+	"mergedBy",
+	"state",
+	"mergedAt",
 ].join(",");
 
 const view = ghTry(["pr", "view", prRef, "--json", FIELDS]);
-if (!view.ok) die(`gh pr view "${prRef}" failed (auth / not found / private?):\n${view.stderr}`);
+if (!view.ok)
+	die(
+		`gh pr view "${prRef}" failed (auth / not found / private?):\n${view.stderr}`,
+	);
 
 let pr;
 try {
-  pr = JSON.parse(view.stdout);
+	pr = JSON.parse(view.stdout);
 } catch (e) {
-  die(`gh pr view returned unparseable JSON (${e.message})`);
+	die(`gh pr view returned unparseable JSON (${e.message})`);
 }
 
 // ── 2. complete the files list via paginated gh api (the truncation fix) ──────
@@ -107,37 +113,40 @@ const owner = m?.[1];
 const repo = m?.[2];
 let filesNote = `${Array.isArray(pr.files) ? pr.files.length : 0} (from pr view)`;
 if (owner && repo && number != null) {
-  const apiFiles = ghTry([
-    "api",
-    "--paginate",
-    `repos/${owner}/${repo}/pulls/${number}/files`,
-    "--jq",
-    ".[] | {path: .filename, additions, deletions, status}",
-  ]);
-  if (apiFiles.ok) {
-    const files = apiFiles.stdout
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => {
-        try {
-          return JSON.parse(l);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-    if (files.length) {
-      pr.files = files;
-      if (pr.changedFiles == null || files.length > pr.changedFiles) pr.changedFiles = files.length;
-      filesNote = `${files.length} (completed via gh api)`;
-    }
-  } else {
-    console.error(
-      `  (warn: gh api files failed — keeping pr view's files: ${apiFiles.stderr.split("\n")[0]})`,
-    );
-  }
+	const apiFiles = ghTry([
+		"api",
+		"--paginate",
+		`repos/${owner}/${repo}/pulls/${number}/files`,
+		"--jq",
+		".[] | {path: .filename, additions, deletions, status}",
+	]);
+	if (apiFiles.ok) {
+		const files = apiFiles.stdout
+			.split("\n")
+			.filter(Boolean)
+			.map((l) => {
+				try {
+					return JSON.parse(l);
+				} catch {
+					return null;
+				}
+			})
+			.filter(Boolean);
+		if (files.length) {
+			pr.files = files;
+			if (pr.changedFiles == null || files.length > pr.changedFiles)
+				pr.changedFiles = files.length;
+			filesNote = `${files.length} (completed via gh api)`;
+		}
+	} else {
+		console.error(
+			`  (warn: gh api files failed — keeping pr view's files: ${apiFiles.stderr.split("\n")[0]})`,
+		);
+	}
 } else {
-  console.error("  (warn: could not parse owner/repo from PR url — keeping pr view's files)");
+	console.error(
+		"  (warn: could not parse owner/repo from PR url — keeping pr view's files)",
+	);
 }
 
 // ── 2.5 best-effort shipping version (MERGED PRs only) ───────────────────────
@@ -152,57 +161,66 @@ if (owner && repo && number != null) {
 pr.shipped_version = null;
 pr.version_source = null;
 if (pr.state === "MERGED") {
-  const mergedAt = pr.mergedAt ? Date.parse(pr.mergedAt) : NaN;
+	const mergedAt = pr.mergedAt ? Date.parse(pr.mergedAt) : NaN;
 
-  // (a) earliest non-draft release published on/after the merge.
-  if (owner && repo && !Number.isNaN(mergedAt)) {
-    const rel = ghTry([
-      "api",
-      "--paginate",
-      `repos/${owner}/${repo}/releases`,
-      "--jq",
-      ".[] | select(.draft == false) | {tag: .tag_name, published: .published_at}",
-    ]);
-    if (rel.ok) {
-      let best = null;
-      for (const line of rel.stdout.split("\n").filter(Boolean)) {
-        let r;
-        try {
-          r = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (!r?.tag || !r?.published) continue;
-        const t = Date.parse(r.published);
-        if (Number.isNaN(t) || t < mergedAt) continue;
-        if (!best || t < best.t) best = { tag: r.tag, t };
-      }
-      if (best) {
-        pr.shipped_version = best.tag;
-        pr.version_source = "first release published at/after merge";
-      }
-    } else {
-      console.error(`  (warn: gh api releases failed: ${rel.stderr.split("\n")[0]})`);
-    }
-  }
+	// (a) earliest non-draft release published on/after the merge.
+	if (owner && repo && !Number.isNaN(mergedAt)) {
+		const rel = ghTry([
+			"api",
+			"--paginate",
+			`repos/${owner}/${repo}/releases`,
+			"--jq",
+			".[] | select(.draft == false) | {tag: .tag_name, published: .published_at}",
+		]);
+		if (rel.ok) {
+			let best = null;
+			for (const line of rel.stdout.split("\n").filter(Boolean)) {
+				let r;
+				try {
+					r = JSON.parse(line);
+				} catch {
+					continue;
+				}
+				if (!r?.tag || !r?.published) continue;
+				const t = Date.parse(r.published);
+				if (Number.isNaN(t) || t < mergedAt) continue;
+				if (!best || t < best.t) best = { tag: r.tag, t };
+			}
+			if (best) {
+				pr.shipped_version = best.tag;
+				pr.version_source = "first release published at/after merge";
+			}
+		} else {
+			console.error(
+				`  (warn: gh api releases failed: ${rel.stderr.split("\n")[0]})`,
+			);
+		}
+	}
 
-  // (b) fallback — default branch's package manifest version (change merged but not
-  //     yet in a tagged release). Marked as unreleased so the skill doesn't present
-  //     it as a shipped tag.
-  if (pr.shipped_version == null && owner && repo) {
-    const pkg = ghTry(["api", `repos/${owner}/${repo}/contents/package.json`, "--jq", ".content"]);
-    if (pkg.ok && pkg.stdout.trim()) {
-      try {
-        const manifest = JSON.parse(Buffer.from(pkg.stdout.trim(), "base64").toString("utf8"));
-        if (manifest?.version) {
-          pr.shipped_version = String(manifest.version);
-          pr.version_source = "default-branch package.json (unreleased)";
-        }
-      } catch {
-        /* not JSON / no version — leave null */
-      }
-    }
-  }
+	// (b) fallback — default branch's package manifest version (change merged but not
+	//     yet in a tagged release). Marked as unreleased so the skill doesn't present
+	//     it as a shipped tag.
+	if (pr.shipped_version == null && owner && repo) {
+		const pkg = ghTry([
+			"api",
+			`repos/${owner}/${repo}/contents/package.json`,
+			"--jq",
+			".content",
+		]);
+		if (pkg.ok && pkg.stdout.trim()) {
+			try {
+				const manifest = JSON.parse(
+					Buffer.from(pkg.stdout.trim(), "base64").toString("utf8"),
+				);
+				if (manifest?.version) {
+					pr.shipped_version = String(manifest.version);
+					pr.version_source = "default-branch package.json (unreleased)";
+				}
+			} catch {
+				/* not JSON / no version — leave null */
+			}
+		}
+	}
 }
 
 // ── 3. write capture/pr.json + capture/diff.patch ────────────────────────────
@@ -213,22 +231,22 @@ writeFileSync(prJsonPath, JSON.stringify(pr, null, 2) + "\n");
 const diff = ghTry(["pr", "diff", prRef]);
 const diffPath = join(outDir, "diff.patch");
 if (diff.ok) {
-  writeFileSync(diffPath, diff.stdout);
+	writeFileSync(diffPath, diff.stdout);
 } else {
-  // The brief still builds without the diff (ingest treats it as optional), so this
-  // is a warning, not fatal — but surface it.
-  console.error(
-    `  (warn: gh pr diff failed — brief builds without it: ${diff.stderr.split("\n")[0]})`,
-  );
+	// The brief still builds without the diff (ingest treats it as optional), so this
+	// is a warning, not fatal — but surface it.
+	console.error(
+		`  (warn: gh pr diff failed — brief builds without it: ${diff.stderr.split("\n")[0]})`,
+	);
 }
 
 // ── 4. summary ───────────────────────────────────────────────────────────────
 const repoLabel = owner && repo ? `${owner}/${repo}` : "(repo?)";
 console.log(
-  [
-    `✓ fetch-pr: ${repoLabel} PR #${number ?? "?"} — "${(pr.title || "").slice(0, 72)}"`,
-    `  files: ${filesNote}; diff: ${diff.ok ? `${diff.stdout.length} chars` : "MISSING"}`,
-    `  shipped_version: ${pr.shipped_version ?? "null"}${pr.version_source ? ` (${pr.version_source})` : ""}`,
-    `  wrote ${prJsonPath}${diff.ok ? ` + ${diffPath}` : ""}`,
-  ].join("\n"),
+	[
+		`✓ fetch-pr: ${repoLabel} PR #${number ?? "?"} — "${(pr.title || "").slice(0, 72)}"`,
+		`  files: ${filesNote}; diff: ${diff.ok ? `${diff.stdout.length} chars` : "MISSING"}`,
+		`  shipped_version: ${pr.shipped_version ?? "null"}${pr.version_source ? ` (${pr.version_source})` : ""}`,
+		`  wrote ${prJsonPath}${diff.ok ? ` + ${diffPath}` : ""}`,
+	].join("\n"),
 );

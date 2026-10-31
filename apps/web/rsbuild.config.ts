@@ -46,6 +46,9 @@ export default defineConfig({
 		define: {
 			...publicVars,
 			"import.meta.env.BASE_URL": JSON.stringify(base),
+			"import.meta.env.VITE_TABOT_EXTENSION_ID": JSON.stringify(
+				process.env.VITE_TABOT_EXTENSION_ID ?? "",
+			),
 		},
 	},
 	tools: {

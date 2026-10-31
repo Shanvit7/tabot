@@ -22,12 +22,14 @@ import { spawnSync } from "node:child_process";
 // `python` (or any executable that exits 0) that `doctor` rejects. Python 2
 // prints its version to stderr, so read both streams.
 export function defaultProbe(cmd, args) {
-  try {
-    const result = spawnSync(cmd, args, { encoding: "utf-8", timeout: 5000 });
-    return result.status === 0 && /Python 3/.test(`${result.stdout}${result.stderr}`);
-  } catch {
-    return false;
-  }
+	try {
+		const result = spawnSync(cmd, args, { encoding: "utf-8", timeout: 5000 });
+		return (
+			result.status === 0 && /Python 3/.test(`${result.stdout}${result.stderr}`)
+		);
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -40,26 +42,28 @@ export function defaultProbe(cmd, args) {
  * the eventual spawn fails loudly exactly as it did before — never worse.
  */
 export function resolvePythonCommand(
-  platform = process.platform,
-  probe = defaultProbe,
-  env = process.env,
+	platform = process.platform,
+	probe = defaultProbe,
+	env = process.env,
 ) {
-  const override = env.HYPERFRAMES_PYTHON;
-  if (override && probe(override, ["--version"])) return [override];
-  const candidates =
-    platform === "win32" ? [["python3"], ["python"], ["py", "-3"]] : [["python3"], ["python"]];
-  for (const prefix of candidates) {
-    if (probe(prefix[0], [...prefix.slice(1), "--version"])) return prefix;
-  }
-  return candidates[0];
+	const override = env.HYPERFRAMES_PYTHON;
+	if (override && probe(override, ["--version"])) return [override];
+	const candidates =
+		platform === "win32"
+			? [["python3"], ["python"], ["py", "-3"]]
+			: [["python3"], ["python"]];
+	for (const prefix of candidates) {
+		if (probe(prefix[0], [...prefix.slice(1), "--version"])) return prefix;
+	}
+	return candidates[0];
 }
 
 let cached = null;
 
 /** Cached `resolvePythonCommand()` — probing spawns, so resolve at most once. */
 export function pythonCommand() {
-  if (!cached) cached = resolvePythonCommand();
-  return cached;
+	if (!cached) cached = resolvePythonCommand();
+	return cached;
 }
 
 /**
@@ -68,10 +72,10 @@ export function pythonCommand() {
  * prefix args) ahead of the caller's own arguments.
  */
 export function pythonInvocation(extraArgs, prefix = pythonCommand()) {
-  return { cmd: prefix[0], args: [...prefix.slice(1), ...extraArgs] };
+	return { cmd: prefix[0], args: [...prefix.slice(1), ...extraArgs] };
 }
 
 /** Test-only: clear the cached resolution so a test can re-probe. */
 export function _resetPythonCommandCacheForTests() {
-  cached = null;
+	cached = null;
 }

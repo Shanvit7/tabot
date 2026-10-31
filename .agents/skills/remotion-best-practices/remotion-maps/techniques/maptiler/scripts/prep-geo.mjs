@@ -11,27 +11,27 @@
 // shortest-path from source node to mouth node. Do NOT greedily chain by nearest endpoint: it bounces
 // between parallel channels. (That routing step is a prerequisite, not part of this script.)
 
-import {readFileSync, writeFileSync, mkdirSync} from 'fs';
-import {dirname, resolve} from 'path';
-import {fileURLToPath} from 'url';
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 
-if (process.argv.includes('--help')) {
+if (process.argv.includes("--help")) {
 	console.log(
-		'Configure COUNTRIES, RIVER, BORDER, label bounds, and output paths in this script, then run: bun scripts/prep-geo.mjs',
+		"Configure COUNTRIES, RIVER, BORDER, label bounds, and output paths in this script, then run: bun scripts/prep-geo.mjs",
 	);
 	process.exit(0);
 }
 
-const turf = await import('@turf/turf');
+const turf = await import("@turf/turf");
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const root = resolve(__dir, '..');
-const geo = resolve(root, '../geodata'); // ADAPT: where your input GeoJSON lives
-const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
+const root = resolve(__dir, "..");
+const geo = resolve(root, "../geodata"); // ADAPT: where your input GeoJSON lives
+const read = (p) => JSON.parse(readFileSync(p, "utf8"));
 
 // ===== CONFIG — edit for your river + countries =====
-const COUNTRIES = ['china', 'india', 'bangladesh']; // ORDERED headwaters → mouth; first = source (stop 0)
-const RIVER = resolve(geo, 'focus-rivers/yarlung-brahmaputra-full-osm.geojson'); // a single clean source→mouth LineString
+const COUNTRIES = ["china", "india", "bangladesh"]; // ORDERED headwaters → mouth; first = source (stop 0)
+const RIVER = resolve(geo, "focus-rivers/yarlung-brahmaputra-full-osm.geojson"); // a single clean source→mouth LineString
 const BORDER = (name) => resolve(geo, `project-borders/${name}.geojson`); // one polygon file per country, named <country>.geojson
 const FRAME_BBOX = [76, 14, 104, 33.5]; // [W,S,E,N] visible extent — fallback for label anchoring only
 const ANCHOR_BBOX = {
@@ -39,11 +39,11 @@ const ANCHOR_BBOX = {
 	india: [76, 14, 99, 31],
 	bangladesh: [86, 20, 93, 27],
 }; // [W,S,E,N] per-country label "story region"
-const NUDGE = {china: [0, 0.6], india: [-1.0, 0], bangladesh: [0, -0.6]}; // [lng,lat] label nudge
+const NUDGE = { china: [0, 0.6], india: [-1.0, 0], bangladesh: [0, -0.6] }; // [lng,lat] label nudge
 const RIVER_SIMPLIFY_TOL = 0.006; // degrees — smooths the draw-on (bigger = simpler)
-const OUT_RIVER = resolve(root, 'out/river-flow.json');
-const OUT_META = resolve(root, 'out/country-meta.json');
-const OUT_BORDERS = resolve(root, 'out/borders.geojson');
+const OUT_RIVER = resolve(root, "out/river-flow.json");
+const OUT_META = resolve(root, "out/country-meta.json");
+const OUT_BORDERS = resolve(root, "out/borders.geojson");
 // =====================================================
 
 const havKm = (a, b) => {
@@ -68,13 +68,13 @@ const flow = turf.simplify(turf.lineString(routed.slice(0, end)), {
 }).geometry.coordinates;
 
 // --- Borders + country fills (one source, filtered per country in the component) ---
-const borders = {type: 'FeatureCollection', features: []};
+const borders = { type: "FeatureCollection", features: [] };
 const polys = {};
 for (const name of COUNTRIES) {
 	const fc = read(BORDER(name));
 	polys[name] = fc;
 	for (const f of fc.features) {
-		f.properties = {...(f.properties || {}), country: name};
+		f.properties = { ...(f.properties || {}), country: name };
 		borders.features.push(f);
 	}
 }
@@ -102,7 +102,7 @@ for (let i = 0; i < flow.length; i++) {
 // complete named source. Never crop a country or bilateral boundary to the viewport. ---
 const biggestPoly = (geom) => {
 	const rings =
-		geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
+		geom.type === "MultiPolygon" ? geom.coordinates : [geom.coordinates];
 	let best = null,
 		bestA = -1;
 	for (const c of rings) {
@@ -132,7 +132,7 @@ const completeExteriorSegments = (fc) => {
 	const segments = [];
 	for (const feature of fc.features) {
 		const polygons =
-			feature.geometry.type === 'MultiPolygon'
+			feature.geometry.type === "MultiPolygon"
 				? feature.geometry.coordinates
 				: [feature.geometry.coordinates];
 		for (const polygon of polygons)
@@ -176,16 +176,16 @@ for (const name of COUNTRIES) {
 	};
 }
 
-mkdirSync(dirname(OUT_RIVER), {recursive: true});
+mkdirSync(dirname(OUT_RIVER), { recursive: true });
 writeFileSync(OUT_RIVER, JSON.stringify(flow));
 writeFileSync(OUT_META, JSON.stringify(countryMeta));
 writeFileSync(OUT_BORDERS, JSON.stringify(borders));
 console.log(
-	'river:',
+	"river:",
 	flow.length,
-	'pts ·',
+	"pts ·",
 	flowKm.toFixed(0),
-	'km · entry stops',
+	"km · entry stops",
 	JSON.stringify(stops),
 );
 for (const n of COUNTRIES) {
@@ -194,7 +194,7 @@ for (const n of COUNTRIES) {
 		0,
 	);
 	console.log(
-		`  ${n}: anchor ${countryMeta[n].anchor.map((v) => v.toFixed(2)).join(',')} · border ${km.toFixed(0)} km`,
+		`  ${n}: anchor ${countryMeta[n].anchor.map((v) => v.toFixed(2)).join(",")} · border ${km.toFixed(0)} km`,
 	);
 }
 console.log(
