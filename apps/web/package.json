@@ -7,7 +7,9 @@
 		"dev": "rsbuild dev",
 		"build": "rsbuild build && tsc --noEmit",
 		"preview": "rsbuild preview",
+		"check": "pnpm check:readingDeskState",
 		"check:tutorial": "node --experimental-strip-types src/checks/chatgpt-tutorial.check.mjs",
+		"check:readingDeskState": "node src/components/home/reading-desk-state.check.mjs",
 		"doctor": "react-doctor",
 		"start": "rsbuild preview"
 	},

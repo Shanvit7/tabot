@@ -40,6 +40,7 @@ const SEMANTICS: Record<TabEventType, SwSemantic> = {
 	SCROLL: "contextual",
 	CLICK: "behavioral",
 	KEY_ACTIVITY: "behavioral",
+	NOTE_SAVED: "behavioral",
 	// --- SW telemetry (Phase 2, FINAL) ---
 	SW_WINDOW_FOCUS: "contextual", // ONLY analytical SW signal: cross-window
 	// continuity evidence at the graph layer. Never a session boundary.

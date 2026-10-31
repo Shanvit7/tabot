@@ -9,17 +9,11 @@
 	--color-muted: #476151;
 	--color-line: #d2ddd2;
 	--color-lime-brand: #bfff00;
-	--color-trace: #0b1310;
-	--color-trace-raised: #101d15;
-	--color-trace-text: #e8f3e8;
-	--color-trace-muted: #8fae95;
-	--color-trace-site: #6f9c81;
-	--color-trace-line: #476151;
 }
 
 @layer base {
 	body {
-		@apply m-0 w-100 max-w-full bg-canvas;
+		@apply m-0 w-[380px] max-w-full bg-canvas;
 		max-height: 600px;
 		overflow: hidden;
 	}
@@ -28,65 +22,24 @@
 	}
 }
 
-@keyframes observing-pulse {
-	0%,
-	100% {
-		opacity: 1;
-	}
-	50% {
-		opacity: 0.55;
-	}
-}
-
 @layer components {
 	.popup-shell main {
 		scrollbar-width: thin;
 		scrollbar-color: var(--color-muted) transparent;
-	}
-	.popup-shell main:focus-visible {
-		outline: 2px solid var(--color-muted);
-		outline-offset: -2px;
-	}
-	.popup-observing {
-		animation: observing-pulse 2s ease-in-out infinite;
 	}
 	.popup-shell button {
 		@apply cursor-pointer transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50;
 	}
 	.popup-shell button:focus-visible,
 	.popup-shell a:focus-visible,
-	.popup-sites summary:focus-visible {
+	.popup-shell textarea:focus-visible {
 		outline: 2px solid var(--color-ink);
-		outline-offset: 3px;
-		box-shadow: 0 0 0 5px var(--color-lime-brand);
-	}
-	.popup-sites summary {
-		list-style: none;
-	}
-	.popup-sites summary::-webkit-details-marker {
-		display: none;
-	}
-	.popup-sites summary:hover {
-		@apply bg-trace-raised;
-	}
-	.popup-sites[open] summary svg {
-		transform: rotate(180deg);
-	}
-	.popup-primary {
-		@apply bg-ink text-canvas hover:bg-muted active:bg-ink;
-	}
-	.popup-quiet {
-		@apply min-h-11 rounded-md bg-surface font-medium text-ink hover:bg-raised active:bg-line;
-	}
-	.popup-row {
-		@apply rounded-md hover:bg-surface active:bg-raised;
+		outline-offset: 2px;
+		box-shadow: 0 0 0 4px var(--color-lime-brand);
 	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.popup-observing {
-		animation: none;
-	}
 	.popup-shell button {
 		transition: none;
 	}

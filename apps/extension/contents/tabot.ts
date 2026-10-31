@@ -24,6 +24,7 @@ let excerptTimer: ReturnType<typeof setTimeout> | undefined;
 let mutationObserver: MutationObserver | undefined;
 let lastExcerptAt = 0;
 let captureAllowed = false;
+let trackingAllowed = false;
 let policyGeneration = 0;
 const TRACKING_KEY = "tabot_tracking_enabled";
 const captureEligible = (url = location.href) =>
@@ -137,20 +138,22 @@ requestViewportExcerpt = (delay: number) => {
 };
 const syncCapturePolicy = async () => {
 	const generation = ++policyGeneration;
-	let allowed =
+	const allowed =
 		pageCaptureSite(location.href) !== null &&
 		!chrome.extension.inIncognitoContext &&
 		!isPageCaptureExcludedUrl(location.href);
-	if (allowed) {
-		try {
-			const stored = await chrome.storage.local.get(TRACKING_KEY);
-			allowed = stored[TRACKING_KEY] !== false;
-		} catch {
-			allowed = false;
-		}
-	}
+	let enabled = false;
+	try {
+		const stored = await chrome.storage.local.get(TRACKING_KEY);
+		enabled = stored[TRACKING_KEY] !== false;
+	} catch {}
 	if (generation !== policyGeneration) return;
-	captureAllowed = allowed;
+	trackingAllowed = enabled;
+	captureAllowed = allowed && enabled;
+	if (!enabled) {
+		scrollThrottler.cancel();
+		keyThrottler.cancel();
+	}
 	if (!captureAllowed || document.hidden || !document.hasFocus()) {
 		clearTimeout(excerptTimer);
 		excerptTimer = undefined;
@@ -171,6 +174,7 @@ const send = (
 	metadata?: Record<string, number>,
 	timestamp = Date.now(),
 ) => {
+	if (!trackingAllowed) return;
 	if (
 		type !== "PAGE_HIDDEN" &&
 		!flushingHidden &&
@@ -274,6 +278,9 @@ window.addEventListener("blur", () => {
 window.addEventListener("focus", () => void syncCapturePolicy());
 chrome.storage.onChanged.addListener((changes, areaName) => {
 	if (areaName !== "local" || !changes[TRACKING_KEY]) return;
+	trackingAllowed = false;
+	scrollThrottler.cancel();
+	keyThrottler.cancel();
 	captureAllowed = false;
 	clearTimeout(excerptTimer);
 	excerptTimer = undefined;
@@ -294,5 +301,6 @@ chrome.runtime.onMessage.addListener((message) => {
 		void syncCapturePolicy();
 	}
 });
-send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");
-void syncCapturePolicy();
+void syncCapturePolicy().then(() =>
+	send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE"),
+);

@@ -17,9 +17,25 @@ export type DashboardPagePreview = Pick<
 	url: string;
 	redacted: boolean;
 };
+export type DashboardNoteResult = {
+	id: string;
+	text: string;
+	createdAt: number;
+	updatedAt: number;
+	url: string;
+	host: string;
+	site: string;
+	title: string | null;
+	favicon: string | null;
+	session: { start: number; end: number; durationMs: number } | null;
+};
 export type DashboardReadFailure = { ok: false; code: string };
 export type DashboardHistoryResponse =
-	| { results: HistorySearchResult[]; searchStatus: SearchAvailability }
+	| {
+			results: HistorySearchResult[];
+			searchStatus: SearchAvailability;
+			notes?: DashboardNoteResult[];
+	  }
 	| { preview: DashboardPagePreview | null }
 	| DashboardReadFailure;
 
@@ -109,6 +125,36 @@ export const isDashboardSearchResults = (
 					timestamp(source.timestamp) &&
 					source.url === item.url,
 			),
+	);
+
+export const isDashboardNotes = (
+	value: unknown,
+): value is DashboardNoteResult[] =>
+	Array.isArray(value) &&
+	value.length <= 20 &&
+	value.every(
+		(item) =>
+			isRecord(item) &&
+			typeof item.id === "string" &&
+			item.id.length <= 64 &&
+			typeof item.text === "string" &&
+			item.text.length <= 4_000 &&
+			timestamp(item.createdAt) &&
+			timestamp(item.updatedAt) &&
+			localUrl(item.url) &&
+			typeof item.host === "string" &&
+			item.host.length <= 253 &&
+			typeof item.site === "string" &&
+			item.site.length <= 253 &&
+			(item.title === null ||
+				(typeof item.title === "string" && item.title.length <= 300)) &&
+			(item.favicon === null || safeFaviconUrl(item.favicon)) &&
+			(item.session === null ||
+				(isRecord(item.session) &&
+					timestamp(item.session.start) &&
+					timestamp(item.session.end) &&
+					item.session.start <= item.session.end &&
+					count(item.session.durationMs))),
 	);
 
 export const isDashboardSearchAvailability = (

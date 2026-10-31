@@ -60,6 +60,7 @@ const INTERACTION_TYPES: readonly TabEventType[] = [
 	"CLICK",
 	"KEY_ACTIVITY",
 	"SCROLL",
+	"NOTE_SAVED",
 ];
 
 const extractDomain = (url: string): string => {

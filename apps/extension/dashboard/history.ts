@@ -1,4 +1,11 @@
-import { safeRecallUrl, type TabotDatabase, UUID_PATTERN } from "@tabot/shared";
+import {
+	type StoredTabEvent,
+	safeRecallUrl,
+	sessionForNote,
+	sessionize,
+	type TabotDatabase,
+	UUID_PATTERN,
+} from "@tabot/shared";
 import {
 	type DashboardHistoryResponse,
 	type DashboardPagePreview,
@@ -9,7 +16,11 @@ import { isDashboardSender } from "./sender";
 
 type HistoryReader = Pick<
 	TabotDatabase,
-	"searchHistory" | "getSearchStatus" | "getPageObservation"
+	| "searchHistory"
+	| "searchNotes"
+	| "getSearchStatus"
+	| "getPageObservation"
+	| "readEvents"
 >;
 
 export const readDashboardHistory = async (
@@ -60,13 +71,52 @@ export const readDashboardHistory = async (
 	try {
 		const db = await getDb();
 		if (search) {
-			const results = await db.searchHistory(message.query as string, {
+			const options = {
 				from: message.from as number | undefined,
 				to: message.to as number | undefined,
 				origin: message.origin as string | undefined,
 				limit: (message.limit as number | undefined) ?? 20,
-			});
-			return { results, searchStatus: await db.getSearchStatus() };
+			};
+			const domain = options.origin
+				? new URL(options.origin).hostname
+				: undefined;
+			const [results, notes, events, searchStatus] = await Promise.all([
+				db.searchHistory(message.query as string, options),
+				db.searchNotes(message.query as string, {
+					from: options.from,
+					to: options.to,
+					domain,
+					limit: options.limit,
+				}),
+				db.readEvents(),
+				db.getSearchStatus(),
+			]);
+			const sessions = sessionize(events as StoredTabEvent[]);
+			return {
+				results,
+				searchStatus,
+				notes: notes.map((note) => {
+					const session = sessionForNote(note, sessions);
+					return {
+						id: note.id,
+						text: note.text.slice(0, 4_000),
+						createdAt: note.createdAt,
+						updatedAt: note.updatedAt,
+						url: note.url,
+						host: note.host,
+						site: note.site,
+						title: note.title,
+						favicon: safeRecallUrl(note.favicon ?? undefined)?.href ?? null,
+						session: session
+							? {
+									start: session.startTimestamp,
+									end: session.endTimestamp,
+									durationMs: session.duration,
+								}
+							: null,
+					};
+				}),
+			};
 		}
 		const page = await db.getPageObservation(message.id as string);
 		const url = safeRecallUrl(page?.url)?.href;

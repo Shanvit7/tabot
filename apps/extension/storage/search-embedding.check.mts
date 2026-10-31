@@ -29,7 +29,7 @@ Object.defineProperty(globalThis, "Worker", {
 });
 
 try {
-	const { embedSearchText } = await import("./search-embedding.ts");
+	const { embedSearchText } = await import("./search-embedding");
 	const result = embedSearchText("local query");
 	const worker = MockWorker.instances[0];
 	assert.ok(worker);

@@ -69,7 +69,9 @@ export const normalizeEvent = (event: StoredTabEvent): StoredTabEvent => {
 							? !["popup", "dashboard"].includes(value as string)
 							: key === "lifecycle"
 								? !LIFECYCLE_KINDS.includes(value as never)
-								: true
+								: key === "noteId"
+									? typeof value !== "string" || value.length > 64
+									: true
 			)
 				throw new EventValidationError("invalid-metadata");
 		}

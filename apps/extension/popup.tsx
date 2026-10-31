@@ -1,756 +1,402 @@
 import logo from "data-base64:~assets/icon.png";
-import ClaudeMono from "@lobehub/icons/es/Claude/components/Mono";
-import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
-import {
-	type AssistantConnections,
-	CLAUDE_CONNECTORS_URL,
-	chatGptConnectPromptUrl,
-	chatGptContextUrl,
-	claudePromptUrl,
-	contextPrompt,
-	derive,
-	type PageCaptureSiteSummary,
-	parseAssistantConnections,
-	resolveChatGptConnectUrl,
-	type StatsSnapshot,
-	type StoredTabEvent,
-} from "@tabot/shared";
-import {
-	ChevronDown,
-	ChevronRight,
-	Globe,
-	History,
-	Pause,
-	Play,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import {
-	contextDuration,
-	contextHomeUrl,
-	type PopupSummary,
-	popupSummary,
-	siteFavicon,
-	siteLabel,
-} from "~/popup/model";
+import { createTrackingClient } from "@tabot/shared/tracking";
+import { Globe2, Pause, Play, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import "./popup.tailwind.css";
 
 const HOME_URL =
 	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
-const LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
-const Arrow = () => (
-	<ChevronRight
-		aria-hidden="true"
-		strokeWidth={1.5}
-		className="size-4 shrink-0"
-	/>
+const MAX_NOTE_LENGTH = 4_000;
+const trackingClient = createTrackingClient((message) =>
+	chrome.runtime.sendMessage(message),
 );
-
-const SiteIcon = ({
-	domain,
-	favicons,
-}: {
-	domain: string;
-	favicons: PopupSummary["favicons"];
-}) => {
-	const src = siteFavicon(domain, favicons);
-	const [failedSrc, setFailedSrc] = useState<string | null>(null);
-	return (
-		<span
-			aria-hidden="true"
-			className="flex size-6 shrink-0 items-center justify-center rounded-md bg-canvas text-muted"
-		>
-			{src && failedSrc !== src ? (
-				<img
-					src={src}
-					alt=""
-					width={16}
-					height={16}
-					referrerPolicy="no-referrer"
-					onError={() => setFailedSrc(src)}
-					className="size-4 object-contain"
-				/>
-			) : (
-				<Globe aria-hidden="true" strokeWidth={1.5} className="size-4" />
-			)}
-		</span>
-	);
+type Note = { id: string; text: string; createdAt: number; updatedAt: number };
+type Page = {
+	eligible: boolean;
+	reason?: string;
+	tabId: number;
+	pageKey: string;
+	title: string | null;
+	favicon?: string | null;
+	url: string;
+	host: string;
+	notes: Note[];
 };
 
-const ActivitySites = ({
-	context,
-	favicons,
-}: {
-	context: NonNullable<PopupSummary["featured"]>;
-	favicons: PopupSummary["favicons"];
-}) => {
-	const allSites = context.domains.toSorted(
-		(a, b) => b.eventCount - a.eventCount,
-	);
-	const sites = allSites.slice(0, 3);
-	return (
-		<div>
-			<div className="relative mt-4 grid grid-cols-[minmax(0,1fr)_56px] items-center gap-6">
-				<svg
-					aria-hidden="true"
-					viewBox="0 0 100 100"
-					preserveAspectRatio="none"
-					className="pointer-events-none absolute inset-0 h-full w-full text-trace-line"
-				>
-					{sites.map((site, index) => {
-						const y = ((index + 0.5) / sites.length) * 100;
-						return (
-							<path
-								key={site.domain}
-								d={`M60 ${y} C76 ${y} 70 50 90 50`}
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="0.5"
-							/>
-						);
-					})}
-				</svg>
-				<ul
-					aria-label="Sites in this activity"
-					className="relative min-w-0 space-y-2"
-				>
-					{sites.map((site) => (
-						<li
-							key={site.domain}
-							className="flex h-10 min-w-0 items-center gap-2 rounded-md bg-trace-raised px-2 text-xs text-trace-text"
-						>
-							<SiteIcon domain={site.domain} favicons={favicons} />
-							<span className="min-w-0 truncate">{siteLabel(site.domain)}</span>
-						</li>
-					))}
-				</ul>
-				<div className="relative flex size-14 flex-col items-center justify-center gap-1 rounded-xl border border-trace-line bg-trace-raised text-trace-text">
-					<History
-						aria-hidden="true"
-						strokeWidth={1.5}
-						className="size-5 shrink-0 text-lime-brand"
-					/>
-					<span className="text-xs font-medium">Activity</span>
-				</div>
-			</div>
-			<details className="popup-sites mt-2">
-				<summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-md px-1 text-xs text-trace-text">
-					<span>View all sites</span>
-					<ChevronDown
-						aria-hidden="true"
-						strokeWidth={1.5}
-						className="size-4 shrink-0"
-					/>
-				</summary>
-				<ul
-					aria-label="All sites in this activity"
-					className="space-y-2 rounded-md bg-trace-raised p-2"
-				>
-					{allSites.map((site) => (
-						<li
-							key={site.domain}
-							className="flex min-w-0 items-center gap-2 text-xs leading-5 text-trace-text"
-						>
-							<SiteIcon domain={site.domain} favicons={favicons} />
-							<span className="min-w-0 wrap-anywhere">
-								{siteLabel(site.domain)}
-							</span>
-						</li>
-					))}
-				</ul>
-			</details>
-		</div>
-	);
-};
+const relativeTime = (timestamp: number) =>
+	new Intl.DateTimeFormat(undefined, {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(timestamp);
 
-const IndexPopup = () => {
-	const [summary, setSummary] = useState<PopupSummary | null>(null);
+export default function Popup() {
+	const [page, setPage] = useState<Page | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState("");
+	const [draft, setDraft] = useState("");
+	const [editingId, setEditingId] = useState<string | null>(null);
+	const [saving, setSaving] = useState(false);
 	const [tracking, setTracking] = useState<boolean | null>(null);
-	const [pageSummaries, setPageSummaries] = useState<PageCaptureSiteSummary[]>(
-		[],
-	);
-	const [pageSummariesLoading, setPageSummariesLoading] = useState(true);
-	const [pageCaptureBusy, setPageCaptureBusy] = useState(false);
-	const [pageCaptureError, setPageCaptureError] = useState<string | null>(null);
-	const [assistantConnections, setAssistantConnections] =
-		useState<AssistantConnections | null>(null);
-	const chatGptConnected = assistantConnections?.chatgpt ?? null;
-	const claudeConnected = assistantConnections?.claude ?? null;
-	const [chatGptUrl, setChatGptUrl] = useState(chatGptConnectPromptUrl);
-	const [toggling, setToggling] = useState(false);
-	const [pipelineDegraded, setPipelineDegraded] = useState(false);
-	const [writerBlocked, setWriterBlocked] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [attempt, setAttempt] = useState(0);
-	const previousVisit = useRef<Promise<number | null> | null>(null);
+	const [trackingBusy, setTrackingBusy] = useState(false);
+	const [trackingError, setTrackingError] = useState("");
 
-	useEffect(() => {
-		let active = true;
-		void chrome.runtime
-			.sendMessage({ type: "GET_PAGE_CAPTURE_SUMMARIES" })
-			.then((summaries: PageCaptureSiteSummary[] | { ok: false }) => {
-				if (active && Array.isArray(summaries)) setPageSummaries(summaries);
-			})
-			.catch(() => {
-				if (active) setPageCaptureError("Could not load saved page excerpts.");
-			})
-			.finally(() => {
-				if (active) setPageSummariesLoading(false);
+	const loadPage = useCallback(async () => {
+		setLoading(true);
+		setError("");
+		try {
+			const result = await chrome.runtime.sendMessage({
+				type: "GET_ACTIVE_PAGE",
 			});
-		return () => {
-			active = false;
-		};
-	}, []);
-
-	useEffect(() => {
-		let active = true;
-		void resolveChatGptConnectUrl().then((url) => {
-			if (active) setChatGptUrl(() => url);
-		});
-		return () => {
-			active = false;
-		};
-	}, []);
-
-	useEffect(() => {
-		let active = true;
-		let timer: ReturnType<typeof setTimeout>;
-		if (attempt > 0) setError(null);
-		const refreshAssistantConnection = async () => {
-			let connections: AssistantConnections | null = null;
-			try {
-				connections = parseAssistantConnections(
-					await chrome.runtime.sendMessage({
-						type: "GET_ASSISTANT_CONNECTIONS",
-					}),
-				);
-			} catch {
-				// An unavailable relay is unknown, not disconnected.
-			}
-			if (active) setAssistantConnections(connections);
-		};
-		const start = async () => {
-			previousVisit.current ??= (async () => {
-				try {
-					const stored = await chrome.storage.local.get(LAST_VIEWED_KEY);
-					const value = stored[LAST_VIEWED_KEY];
-					return typeof value === "number" &&
-						Number.isFinite(value) &&
-						value > 0 &&
-						value <= Date.now()
-						? value
-						: null;
-				} catch {
-					// Context still works without a saved visit; do not invent an unread count.
-					return null;
-				}
-			})();
-			const lastViewed = await previousVisit.current;
-			const refresh = async () => {
-				// Optional network check must not delay loading local activity.
-				void refreshAssistantConnection();
-				try {
-					const [events, status, stats] = await Promise.all([
-						chrome.runtime.sendMessage({ type: "GET_EVENTS" }) as Promise<
-							StoredTabEvent[]
-						>,
-						chrome.runtime.sendMessage({ type: "GET_TRACKING" }) as Promise<{
-							enabled: boolean;
-						}>,
-						chrome.runtime.sendMessage({
-							type: "GET_STATS",
-						}) as Promise<StatsSnapshot>,
-					]);
-					if (!active) return;
-					if (
-						!Array.isArray(events) ||
-						typeof status?.enabled !== "boolean" ||
-						!stats
-					)
-						throw new Error("Unavailable");
-					const now = Date.now();
-					// Keep full derivation so context IDs match dashboard; never derive a sliced export.
-					setSummary(popupSummary(derive(events), lastViewed, now));
-					setTracking(status.enabled);
-					setPipelineDegraded(stats.health !== "healthy" || stats.rejected > 0);
-					setWriterBlocked(stats.health === "blocked");
-					setError(null);
-					try {
-						await chrome.storage.local.set({ [LAST_VIEWED_KEY]: now });
-					} catch {
-						// Visit tracking is optional; capture and context remain unaffected.
-					}
-				} catch {
-					if (active) setError("Could not load your activity. Try again.");
-				} finally {
-					if (active) timer = setTimeout(refresh, 10_000);
-				}
-			};
-			if (active) await refresh();
-		};
-		void start();
-		return () => {
-			active = false;
-			clearTimeout(timer);
-		};
-	}, [attempt]);
-
-	const refreshPageSummaries = async () => {
-		try {
-			const summaries = (await chrome.runtime.sendMessage({
-				type: "GET_PAGE_CAPTURE_SUMMARIES",
-			})) as PageCaptureSiteSummary[];
-			if (Array.isArray(summaries)) setPageSummaries(summaries);
+			if (result?.ok === false)
+				throw new Error(result.code ?? "Could not load notes.");
+			setPage({ ...result, notes: result.notes ?? [] } as Page);
 		} catch {
-			setPageCaptureError("Could not load saved page excerpts.");
-		}
-	};
-
-	const deletePageEvidence = async (origin?: string) => {
-		if (pageCaptureBusy) return;
-		setPageCaptureBusy(true);
-		setPageCaptureError(null);
-		try {
-			const result = (await chrome.runtime.sendMessage({
-				type: "DELETE_PAGE_OBSERVATIONS",
-				...(origin ? { origin } : {}),
-			})) as { ok: true; deleted: number } | { ok: false };
-			if (!result?.ok) throw new Error("delete-failed");
-			await refreshPageSummaries();
-		} catch {
-			setPageCaptureError("Could not delete saved page excerpts. Try again.");
+			setError("Could not load notes. Retry.");
 		} finally {
-			setPageCaptureBusy(false);
+			setLoading(false);
 		}
-	};
+	}, []);
+
+	const loadTracking = useCallback(async () => {
+		setTrackingError("");
+		try {
+			setTracking(await trackingClient.read());
+		} catch {
+			setTracking(null);
+			setTrackingError("Tracking status unavailable.");
+		}
+	}, []);
+
+	useEffect(() => {
+		document.documentElement.lang = "en";
+		void loadPage();
+		void loadTracking();
+	}, [loadPage, loadTracking]);
 
 	const toggleTracking = async () => {
-		if (tracking === null || toggling) return;
-		setToggling(true);
+		if (tracking === null || trackingBusy) return;
+		setTrackingError("");
+		setTrackingBusy(true);
 		try {
-			const response = await chrome.runtime.sendMessage({
-				type: "SET_TRACKING",
-				enabled: !tracking,
-			});
-			if (
-				typeof response?.enabled !== "boolean" ||
-				response.enabled === tracking
-			)
-				throw new Error("Not saved");
-			setTracking(response.enabled);
+			setTracking(await trackingClient.set(!tracking));
 		} catch {
-			setError("Could not save your preference. Try again.");
+			setTrackingError("Could not update tracking. Try again.");
 		} finally {
-			setToggling(false);
+			setTrackingBusy(false);
 		}
 	};
 
-	const openTabot = async (contextId?: string) => {
+	const saveNote = async () => {
+		if (!page?.eligible || !draft.trim() || saving) return;
+		setSaving(true);
+		setError("");
 		try {
-			await chrome.tabs.create({ url: contextHomeUrl(HOME_URL, contextId) });
-			window.close();
-		} catch {
-			setError("Could not open Tabot. Try again.");
+			const result = await chrome.runtime.sendMessage({
+				type: "SAVE_NOTE",
+				tabId: page.tabId,
+				pageKey: page.pageKey,
+				...(editingId ? { id: editingId } : {}),
+				text: draft,
+			});
+			if (!result?.note) throw new Error(result?.code ?? "save-failed");
+			setPage({
+				...page,
+				notes: [
+					result.note,
+					...page.notes.filter((note) => note.id !== result.note.id),
+				].sort((a, b) => b.createdAt - a.createdAt),
+			});
+			setDraft("");
+			setEditingId(null);
+		} catch (reason) {
+			const code = reason instanceof Error ? reason.message : "";
+			setError(
+				code === "page-changed"
+					? "Page changed. Reload notes before saving."
+					: code
+						? `Could not save note (${code}). Your draft is still here.`
+						: "Could not save note. Your draft is still here.",
+			);
+		} finally {
+			setSaving(false);
 		}
 	};
 
-	const featured = summary?.featured;
-	const paused = tracking === false;
-	const TrackingIcon = paused ? Play : Pause;
+	const deleteNote = async (id: string) => {
+		if (!page || !window.confirm("Delete this note?")) return;
+		try {
+			const result = await chrome.runtime.sendMessage({
+				type: "DELETE_NOTE",
+				id,
+			});
+			if (result?.deleted)
+				setPage({
+					...page,
+					notes: page.notes.filter((note) => note.id !== id),
+				});
+			else setError("Could not delete note.");
+		} catch {
+			setError("Could not delete note.");
+		}
+	};
+
 	return (
-		<div className="popup-shell flex max-h-150 w-100 max-w-full flex-col overflow-hidden bg-canvas font-sans text-ink">
-			<header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-				<div className="flex items-center gap-2.5">
+		<div className="popup-shell w-full bg-canvas text-ink">
+			<header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3">
+				<div className="flex min-w-0 items-center gap-2.5">
 					<img
 						src={logo}
-						alt=""
-						width={32}
-						height={32}
-						className="size-8 rounded-lg"
+						alt="Tabot"
+						width={26}
+						height={26}
+						className="size-[26px] shrink-0 object-contain"
 					/>
-					<span className="text-lg font-semibold tracking-tight">Tabot</span>
+					<div className="min-w-0">
+						<p className="text-xs font-semibold">Tabot</p>
+						<p
+							role="status"
+							aria-live="polite"
+							className="flex items-center gap-1.5 text-xs text-muted"
+						>
+							<span
+								aria-hidden="true"
+								className={`size-2 rounded-full ${tracking === true ? "bg-lime-brand" : "bg-muted"}`}
+							/>
+							{tracking === null
+								? "Checking tracking…"
+								: tracking
+									? "Tracking on"
+									: "Tracking paused"}
+						</p>
+					</div>
 				</div>
-				<div className="flex items-center gap-2">
-					<span
-						className={`flex h-11 w-26 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium ${paused || tracking === null ? "bg-surface text-muted" : "bg-trace text-trace-text"}`}
-					>
-						<span
-							aria-hidden="true"
-							className={`size-2 shrink-0 rounded-full ${paused || tracking === null ? "bg-muted" : "popup-observing bg-lime-brand"}`}
-						/>
-						{tracking === null ? "Loading" : paused ? "Paused" : "Observing"}
-					</span>
+				<button
+					type="button"
+					onClick={() => void toggleTracking()}
+					disabled={tracking === null || trackingBusy}
+					aria-label={
+						tracking === null
+							? "Checking tracking status"
+							: tracking
+								? "Pause tracking"
+								: "Resume tracking"
+					}
+					className="flex min-h-11 min-w-[92px] items-center justify-center gap-2 rounded-md bg-ink px-3 text-xs font-semibold text-white hover:bg-muted disabled:opacity-50"
+				>
+					{tracking === true ? (
+						<Pause aria-hidden="true" className="size-4" />
+					) : (
+						<Play aria-hidden="true" className="size-4" />
+					)}
+					{trackingBusy
+						? "Updating…"
+						: tracking === null
+							? "Checking…"
+							: tracking
+								? "Pause"
+								: "Resume"}
+				</button>
+			</header>
+			{trackingError && (
+				<div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
+					<p role="alert" className="text-xs text-red-700">
+						{trackingError}
+					</p>
 					<button
 						type="button"
-						onClick={toggleTracking}
-						disabled={tracking === null || toggling}
-						aria-pressed={paused}
-						aria-label={paused ? "Resume observing" : "Pause observing"}
-						className="popup-quiet flex h-11 w-26 shrink-0 items-center justify-center gap-1.5 border border-line px-2 text-xs"
+						onClick={() => void loadTracking()}
+						className="min-h-9 px-2 text-xs font-semibold text-ink underline underline-offset-2"
 					>
-						<TrackingIcon
-							aria-hidden="true"
-							strokeWidth={1.5}
-							className="size-3.5 shrink-0"
-						/>
-						{toggling ? "Updating…" : paused ? "Resume" : "Pause"}
+						Retry
 					</button>
 				</div>
-			</header>
-
-			<main
-				className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-4"
-				// biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users need to focus the popup's only scroll region.
-				tabIndex={0}
-				aria-label="Browser activity"
-				aria-busy={!summary && !error}
-			>
+			)}
+			<main className="max-h-[532px] overflow-y-auto">
 				<section
-					aria-labelledby="page-capture-heading"
-					className="mb-5 border-y border-line py-4"
+					className="border-b border-line px-4 py-4"
+					aria-label="Current page"
 				>
-					<h2 id="page-capture-heading" className="text-sm font-semibold">
-						Page evidence
-					</h2>
-					<p className="mt-1 text-xs leading-5 text-muted">
-						Visible excerpts are captured automatically while tracking is
-						active, redacted, and stored locally. Oldest excerpts are removed
-						only when the 25 MiB storage budget is exceeded. Deleting stored
-						excerpts does not pause capture.
-					</p>
-					{pageSummariesLoading && (
-						<p role="status" className="mt-2 text-xs text-muted">
-							Loading saved excerpts…
+					{loading ? (
+						<p className="text-sm text-muted">Checking this page…</p>
+					) : page?.eligible ? (
+						<div className="flex min-w-0 items-center gap-3">
+							{page.favicon ? (
+								<img
+									src={page.favicon}
+									alt=""
+									aria-hidden="true"
+									className="size-7 shrink-0 rounded-sm object-contain"
+								/>
+							) : (
+								<Globe2
+									aria-hidden="true"
+									className="size-6 shrink-0 text-muted"
+								/>
+							)}
+							<div className="min-w-0">
+								<h1 className="line-clamp-2 text-sm font-semibold leading-5">
+									{page.title || page.host}
+								</h1>
+								<p className="mt-0.5 truncate text-xs text-muted">
+									{page.host}
+								</p>
+							</div>
+						</div>
+					) : (
+						<p className="text-sm text-muted">
+							{page?.reason ?? "Could not load this page."}
 						</p>
 					)}
-					{!pageSummariesLoading && pageSummaries.length === 0 && (
-						<p className="mt-2 text-xs text-muted">No saved excerpts.</p>
+					{error && !page && (
+						<button
+							type="button"
+							onClick={() => void loadPage()}
+							className="mt-2 min-h-9 text-sm font-medium text-ink underline underline-offset-2"
+						>
+							{error} Retry
+						</button>
 					)}
-					{pageSummaries.length > 0 && (
-						<div className="mt-3 border-t border-line pt-3">
-							<p className="text-xs font-medium">Saved page excerpts</p>
-							<ul className="mt-1 divide-y divide-line">
-								{pageSummaries.map(({ origin, count }) => (
-									<li
-										key={origin}
-										className="flex min-h-11 items-center justify-between gap-3 py-1"
-									>
-										<span className="min-w-0 truncate text-xs">
-											{new URL(origin).host} · {count}
-										</span>
+				</section>
+				<section className="px-4 pt-4" aria-label="Page notes">
+					<div className="mb-2 flex items-center justify-between">
+						<h2 className="text-sm font-semibold">Page notes</h2>
+						<span className="min-w-7 rounded-full bg-raised px-2 py-0.5 text-center text-xs font-medium text-muted">
+							{page?.notes.length ?? 0}
+						</span>
+					</div>
+					{loading ? (
+						<p className="py-3 text-sm text-muted">Loading notes…</p>
+					) : page?.eligible && page.notes.length === 0 ? (
+						<p className="py-2 text-sm text-muted">
+							No notes saved on this page.
+						</p>
+					) : null}
+					<div>
+						{page?.notes.map((note) => (
+							<article key={note.id} className="border-b border-line py-3">
+								{editingId === note.id ? (
+									<textarea
+										aria-label="Edit note"
+										value={draft}
+										maxLength={MAX_NOTE_LENGTH}
+										onChange={(event) => setDraft(event.target.value)}
+										onKeyDown={(event) => {
+											if (
+												(event.metaKey || event.ctrlKey) &&
+												event.key === "Enter"
+											)
+												void saveNote();
+										}}
+										className="min-h-20 w-full resize-y rounded-md border border-line bg-white p-2 text-sm outline-none focus:border-ink"
+									/>
+								) : (
+									<p className="whitespace-pre-wrap break-words text-sm leading-5">
+										{note.text}
+									</p>
+								)}
+								<div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted">
+									<span>
+										{relativeTime(note.createdAt)}
+										{note.updatedAt > note.createdAt ? " · edited" : ""}
+									</span>
+									<div className="flex items-center gap-1">
+										{editingId === note.id ? (
+											<>
+												<button
+													type="button"
+													onClick={() => void saveNote()}
+													disabled={saving || !draft.trim()}
+													className="min-h-9 px-2 font-semibold text-ink"
+												>
+													Save
+												</button>
+												<button
+													type="button"
+													onClick={() => {
+														setEditingId(null);
+														setDraft("");
+													}}
+													className="min-h-9 px-2 font-semibold text-ink"
+												>
+													Cancel
+												</button>
+											</>
+										) : (
+											<button
+												type="button"
+												onClick={() => {
+													setEditingId(note.id);
+													setDraft(note.text);
+												}}
+												className="min-h-9 px-2 font-semibold text-ink"
+											>
+												Edit
+											</button>
+										)}
 										<button
 											type="button"
-											disabled={pageCaptureBusy}
-											aria-label={`Delete stored excerpts from ${new URL(origin).host}`}
-											className="popup-row min-h-11 shrink-0 px-2 text-xs underline"
-											onClick={() => void deletePageEvidence(origin)}
+											onClick={() => void deleteNote(note.id)}
+											aria-label="Delete note"
+											className="grid size-9 place-items-center rounded-sm text-muted hover:bg-raised hover:text-ink"
 										>
-											Delete stored
+											<Trash2 aria-hidden="true" className="size-4" />
 										</button>
-									</li>
-								))}
-							</ul>
-							<button
-								type="button"
-								disabled={pageCaptureBusy}
-								className="popup-quiet mt-2 min-h-11 px-3 text-xs"
-								onClick={() => void deletePageEvidence()}
-							>
-								Delete all stored excerpts
-							</button>
-						</div>
-					)}
-					{pageCaptureError && (
-						<p role="alert" className="mt-2 text-xs text-muted">
-							{pageCaptureError}
+									</div>
+								</div>
+							</article>
+						))}
+					</div>
+					{error && page && (
+						<p role="alert" className="py-2 text-xs text-red-700">
+							{error}
 						</p>
 					)}
 				</section>
-				{chatGptConnected === false && (
-					<aside
-						aria-label="ChatGPT connection"
-						className="mb-4 flex items-center gap-3 rounded-lg border border-line bg-surface p-3"
-					>
-						<OpenAIMono
-							aria-hidden="true"
-							className="size-5 shrink-0 text-ink"
+				{page?.eligible && !editingId && (
+					<section className="mt-2 border-t border-line px-4 py-4">
+						<label
+							htmlFor="page-note-draft"
+							className="mb-2 block text-sm font-semibold"
+						>
+							Add a note
+						</label>
+						<textarea
+							id="page-note-draft"
+							placeholder="What do you want to remember?"
+							value={draft}
+							maxLength={MAX_NOTE_LENGTH}
+							onChange={(event) => setDraft(event.target.value)}
+							onKeyDown={(event) => {
+								if ((event.metaKey || event.ctrlKey) && event.key === "Enter")
+									void saveNote();
+							}}
+							className="min-h-20 w-full resize-y rounded-md border border-line bg-white p-3 text-sm leading-5 outline-none placeholder:text-muted/70 focus:border-ink focus:ring-2 focus:ring-lime-brand"
 						/>
-						<div className="min-w-0 flex-1">
-							<p className="text-sm font-medium">Connect ChatGPT</p>
-							<p className="mt-0.5 text-xs leading-4 text-muted">
-								Ask about your browsing.
-							</p>
-						</div>
-						<a
-							href={chatGptUrl}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="popup-quiet flex min-h-11 shrink-0 items-center justify-center border border-line bg-canvas px-3 text-xs no-underline"
-						>
-							Connect
-							<span className="sr-only"> ChatGPT (opens in a new tab)</span>
-						</a>
-					</aside>
-				)}
-				<aside
-					aria-label="Claude connection"
-					className="mb-4 flex items-center gap-3 rounded-lg border border-line bg-surface p-3"
-				>
-					<ClaudeMono aria-hidden="true" className="size-5 shrink-0 text-ink" />
-					<div className="min-w-0 flex-1">
-						<p className="text-sm font-medium">
-							{claudeConnected === true ? "Claude connected" : "Connect Claude"}
-						</p>
-						<p className="mt-0.5 text-xs leading-4 text-muted">
-							Ask about your browsing.
-						</p>
-					</div>
-					{claudeConnected === true ? (
-						<span role="status" className="text-xs text-muted">
-							Connected
-						</span>
-					) : (
-						<a
-							href={CLAUDE_CONNECTORS_URL}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="popup-quiet flex min-h-11 shrink-0 items-center justify-center border border-line bg-canvas px-3 text-xs no-underline"
-						>
-							Connect
-							<span className="sr-only">
-								{" "}
-								Claude Connectors (opens in a new tab)
+						<div className="mt-2 flex items-center justify-between gap-3">
+							<span className="text-xs text-muted">
+								{draft.length}/{MAX_NOTE_LENGTH} · ⌘/Ctrl + Enter to save
 							</span>
-						</a>
-					)}
-				</aside>
-				{error && (
-					<div
-						role="alert"
-						className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-surface p-3 text-sm"
-					>
-						<p>{error}</p>
-						<button
-							type="button"
-							onClick={() => setAttempt((value) => value + 1)}
-							className="popup-quiet shrink-0 px-3"
-						>
-							Retry
-						</button>
-					</div>
-				)}
-				{!summary ? (
-					<section className="min-h-64">
-						<h1 className="text-2xl font-semibold tracking-tight">
-							Loading your activity.
-						</h1>
-						<p role="status" className="mt-2 text-sm leading-6 text-muted">
-							{error
-								? "Your recorded activity is still on this device."
-								: "Reading your browser activity from this device…"}
-						</p>
+							<button
+								type="button"
+								onClick={() => void saveNote()}
+								disabled={saving || !draft.trim()}
+								className="min-h-11 shrink-0 rounded-md bg-ink px-4 text-xs font-semibold text-white hover:bg-muted disabled:opacity-40"
+							>
+								{saving ? "Saving…" : "Save note"}
+							</button>
+						</div>
 					</section>
-				) : (
-					<>
-						<h1 className="text-2xl font-semibold leading-tight tracking-tight text-balance">
-							{paused ? "Tabot is paused." : "Your activity across tabs."}
-						</h1>
-						<p className="mt-2 text-sm leading-6 text-muted">
-							{paused
-								? "New browser activity is not being recorded. You can still review and share earlier activity."
-								: "Tabot records the sites you visit and how you move between them."}
-						</p>
-
-						{!summary.ready && !paused && summary.sessions > 0 && (
-							<section
-								aria-label="Today's browsing progress"
-								role="status"
-								className="mt-4 rounded-lg border border-line bg-surface p-3"
-							>
-								<p className="text-xs text-muted">Today so far</p>
-								<p className="mt-0.5 text-sm font-medium">
-									{summary.sessions} browsing{" "}
-									{summary.sessions === 1 ? "session" : "sessions"}
-								</p>
-								<p className="mt-1 text-xs leading-5 text-muted">
-									Keep browsing normally. A summary appears once Tabot has
-									enough browsing to summarize.
-								</p>
-							</section>
-						)}
-
-						{summary.updated > 0 && featured && (
-							<section
-								aria-label="New activity since your last visit"
-								role="status"
-								className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3"
-							>
-								<div>
-									<p className="text-xs text-muted">Since your last visit</p>
-									<p className="mt-0.5 text-sm font-medium">
-										{summary.updated === 1
-											? "1 new activity summary"
-											: `${summary.updated} new activity summaries`}
-									</p>
-								</div>
-								<button
-									type="button"
-									onClick={() => openTabot(featured.id)}
-									className="popup-quiet flex min-h-11 shrink-0 items-center gap-2 border border-line bg-canvas px-3 text-xs font-medium"
-								>
-									Review
-									<Arrow />
-								</button>
-							</section>
-						)}
-
-						{featured ? (
-							<section
-								aria-label="Featured browser activity"
-								className="mt-5 rounded-xl bg-trace p-4 text-trace-text"
-							>
-								<h2 className="min-w-0 truncate text-base font-medium">
-									{siteLabel(featured.primaryDomain)}
-								</h2>
-								<ActivitySites context={featured} favicons={summary.favicons} />
-								{summary.ready && (
-									<div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-trace-line pt-3">
-										<div>
-											<p className="text-sm font-medium">
-												Activity summary ready
-											</p>
-											<p className="mt-0.5 text-xs leading-4 text-muted">
-												{featured.domains.length} sites ·{" "}
-												{contextDuration(featured.duration)}
-											</p>
-										</div>
-										{chatGptConnected === true ? (
-											<a
-												href={chatGptContextUrl(featured.id)}
-												target="_blank"
-												rel="noopener noreferrer"
-												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
-											>
-												Ask ChatGPT
-											</a>
-										) : chatGptConnected === false ? (
-											<a
-												href={chatGptUrl}
-												target="_blank"
-												rel="noopener noreferrer"
-												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
-											>
-												Connect ChatGPT
-											</a>
-										) : (
-											<span role="status" className="text-xs text-muted">
-												Checking ChatGPT…
-											</span>
-										)}
-										<a
-											href={claudePromptUrl(contextPrompt(featured.id))}
-											target="_blank"
-											rel="noopener noreferrer"
-											className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
-										>
-											Ask Claude
-										</a>
-									</div>
-								)}
-							</section>
-						) : (
-							<section
-								aria-label="Getting started"
-								className="mt-5 rounded-xl bg-surface p-5"
-							>
-								<h2 className="text-base font-medium">
-									No recent activity to show.
-								</h2>
-								<p className="mt-2 text-sm leading-6 text-muted">
-									{paused
-										? "Choose Resume whenever you’re ready."
-										: "Browse as usual. The connections between your visits will appear here."}
-								</p>
-							</section>
-						)}
-
-						{summary.recent.length > 0 && (
-							<section aria-labelledby="recent-heading" className="mt-5">
-								<h2 id="recent-heading" className="text-sm font-medium">
-									Earlier activity
-								</h2>
-								<ul className="mt-2 divide-y divide-line">
-									{summary.recent.map((context) => (
-										<li key={context.id}>
-											<button
-												type="button"
-												onClick={() => openTabot(context.id)}
-												className="popup-row flex min-h-14 w-full items-center justify-between gap-3 py-2 text-left"
-											>
-												<SiteIcon
-													domain={context.primaryDomain}
-													favicons={summary.favicons}
-												/>
-												<span className="min-w-0 flex-1">
-													<span className="line-clamp-2 text-sm font-medium wrap-anywhere">
-														{siteLabel(context.primaryDomain)}
-													</span>
-												</span>
-												<Arrow />
-											</button>
-										</li>
-									))}
-								</ul>
-							</section>
-						)}
-					</>
 				)}
-				{writerBlocked && (
-					<button
-						type="button"
-						className="popup-row mt-3 min-h-11 text-xs underline"
-						onClick={async () => {
-							try {
-								await chrome.runtime.sendMessage({ type: "RETRY_INGEST" });
-								setAttempt((value) => value + 1);
-							} catch {
-								setError("Could not retry recording. Try again.");
-							}
-						}}
-					>
-						Retry recording
-					</button>
-				)}
-				{pipelineDegraded && (
-					<p role="status" className="mt-4 text-xs leading-5 text-muted">
-						Capture delayed or some events not admitted this worker session.
-						Committed activity remains available.
-					</p>
-				)}
-			</main>
-			<footer className="shrink-0 border-t border-line px-5 py-3">
-				<button
-					type="button"
-					onClick={() => openTabot(featured?.id)}
-					className="popup-primary flex min-h-11 w-full items-center justify-between rounded-lg px-4 text-sm font-semibold"
+				<a
+					href={`${HOME_URL}?q=${encodeURIComponent(draft.trim())}`}
+					target="_blank"
+					rel="noreferrer"
+					className="flex min-h-11 items-center justify-center gap-2 border-t border-line px-4 text-xs font-semibold text-muted hover:text-ink focus-visible:underline"
 				>
-					{featured ? "Review activity" : "Open Tabot"}
-					<Arrow />
-				</button>
-				<div className="mt-2 flex min-h-11 items-center justify-between gap-3 text-xs text-muted">
-					<span>Stays on this device. Choose what to share.</span>
-					{featured && (
-						<button
-							type="button"
-							onClick={() => openTabot()}
-							className="popup-row min-h-11 shrink-0 px-1 font-medium"
-						>
-							Open Tabot
-						</button>
-					)}
-				</div>
-			</footer>
+					<Search aria-hidden="true" className="size-4" />
+					Search notes on Home
+				</a>
+			</main>
 		</div>
 	);
-};
-
-export default IndexPopup;
+}

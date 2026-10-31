@@ -157,6 +157,19 @@ try {
 	await restarted();
 	assert.equal(emitted.at(-1)?.type, "PAGE_VISIBLE");
 
+	// Listener samples queued after pause must not restart capture.
+	let trackingEnabled = true;
+	const guarded = startForegroundTracking(emit, () => trackingEnabled);
+	await guarded();
+	trackingEnabled = false;
+	await guarded(false);
+	const afterPause = emitted.length;
+	await guarded();
+	assert.equal(emitted.length, afterPause);
+	trackingEnabled = true;
+	await guarded();
+	assert.equal(emitted.at(-1)?.type, "PAGE_VISIBLE");
+
 	// API failure cannot turn into a positive foreground observation.
 	fail = true;
 	const warn = console.warn;

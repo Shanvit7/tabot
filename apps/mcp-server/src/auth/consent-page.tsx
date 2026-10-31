@@ -1,51 +1,51 @@
 const styles = `
-:root{color-scheme:light;font-family:"IBM Plex Sans",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#101510;background:#f5f6f0;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+@font-face{font-family:"Clash Grotesk";src:url("/fonts/clash-grotesk-var.woff2") format("woff2");font-style:normal;font-weight:200 700;font-display:swap}
+@font-face{font-family:"Clash Display";src:url("/fonts/clash-display-600.woff2") format("woff2");font-style:normal;font-weight:600;font-display:swap}
+:root{color-scheme:light;font-family:"Clash Grotesk",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#15251b;background:#fff;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
-body{min-height:100vh;min-height:100svh;margin:0;display:grid;place-items:start center;padding:max(1.25rem,env(safe-area-inset-top)) max(1.25rem,env(safe-area-inset-right)) max(1.25rem,env(safe-area-inset-bottom)) max(1.25rem,env(safe-area-inset-left))}
-main{width:min(100%,52rem);max-width:100%;min-width:0;overflow-wrap:anywhere;background:#fff;border:2px solid #101510;box-shadow:6px 6px 0 #101510;padding:clamp(.875rem,2.5vw,1.25rem)}
-.brand{display:inline-flex;align-items:center;gap:.5rem;margin-bottom:1.25rem;font-size:1rem;font-weight:700;letter-spacing:-.03em}
-.brand-mark{width:.8rem;height:.8rem;background:#bfff00;border:1px solid #101510}
-.eyebrow{margin:0 0 .65rem;font:600 .7rem/1.3 "IBM Plex Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:#40584a}
-h1{margin:0;font-size:clamp(1.125rem,3vw,1.5rem);line-height:1.15;letter-spacing:-.03em;overflow-wrap:anywhere}
-.client{color:#40584a}
-.description{margin:.85rem 0 0;font-size:.8125rem;line-height:1.5;color:#263329}
-.connection-route{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,.8fr) auto minmax(0,1fr);align-items:center;gap:.4rem;margin:1.25rem 0 0;padding:.75rem;border:1px solid #c5d0c2;background:#f5f6f0}
-.route-step{display:flex;min-width:0;flex-direction:column;align-items:center;gap:.4rem;color:#263329;font-size:.65rem;font-weight:600;line-height:1.25;text-align:center;overflow-wrap:anywhere}
-.route-symbol{display:grid;width:2rem;height:2rem;place-items:center;border:1px solid #101510;background:#fff}
-.route-symbol svg{width:1.2rem;height:1.2rem;fill:none;stroke:#101510;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.route-symbol .brand-mark{display:block}
+body{min-height:100vh;min-height:100svh;margin:0;display:grid;place-items:start center;padding:max(2rem,env(safe-area-inset-top)) max(1.25rem,env(safe-area-inset-right)) max(2rem,env(safe-area-inset-bottom)) max(1.25rem,env(safe-area-inset-left))}
+main{width:min(100%,44rem);max-width:100%;min-width:0;overflow-wrap:anywhere;padding:clamp(1rem,4vw,2rem);background:#fff}
+.brand{display:inline-flex;align-items:center;gap:.6rem;margin-bottom:1.5rem;font-size:1rem;font-weight:700;letter-spacing:-.02em}
+.brand-mark{display:grid;width:2rem;height:2rem;place-items:center;border-radius:.65rem;background:#bfff00;color:#15251b;font-size:1rem;font-weight:800}
+h1{margin:0;font-family:"Clash Display","Clash Grotesk",system-ui,sans-serif;font-size:clamp(1.5rem,4vw,2rem);font-weight:600;line-height:1.15;letter-spacing:-.03em;overflow-wrap:anywhere}
+.client{color:#476151}
+.description{max-width:60ch;margin:.75rem 0 0;font-size:.9375rem;line-height:1.55;color:#476151}
+.connection-route{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,.8fr) auto minmax(0,1fr);align-items:center;gap:.5rem;margin:1.5rem 0 0;padding:1rem;border:1px solid #d2ddd2;border-radius:.875rem;background:#f5f8f4}
+.route-step{display:flex;min-width:0;flex-direction:column;align-items:center;gap:.5rem;color:#15251b;font-size:.75rem;font-weight:600;line-height:1.35;text-align:center;overflow-wrap:anywhere}
+.route-symbol{display:grid;width:2.5rem;height:2.5rem;place-items:center;border-radius:.75rem;background:#fff;color:#15251b}
+.route-symbol svg{width:1.25rem;height:1.25rem;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.route-symbol .brand-mark{width:2.5rem;height:2.5rem;border-radius:.75rem}
 .route-step.tabot .route-symbol{background:#bfff00}
-.route-arrow{width:.9rem;height:.9rem;fill:none;stroke:#40584a;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.privacy{margin:.9rem 0 0;padding:.8rem;background:#eef4ea;border:1px solid #101510}
-.privacy h2{margin:0 0 .65rem;font-size:.85rem;line-height:1.3;letter-spacing:-.02em}
-.privacy-row{display:grid;grid-template-columns:1.1rem 1fr;gap:.5rem;align-items:start;font-size:.75rem;line-height:1.4}
-.privacy-row+.privacy-row{margin-top:.6rem;padding-top:.6rem;border-top:1px solid #c5d0c2}
+.route-arrow{width:1rem;height:1rem;fill:none;stroke:#476151;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.privacy{margin:1.5rem 0 0;padding:1rem 0 0;border-top:1px solid #d2ddd2}
+.privacy h2{margin:0 0 .75rem;font-size:1rem;line-height:1.35;letter-spacing:-.02em}
+.privacy-row{display:grid;grid-template-columns:1.1rem minmax(0,1fr);gap:.65rem;align-items:start;font-size:.875rem;line-height:1.5;color:#476151}
+.privacy-row+.privacy-row{margin-top:.75rem;padding-top:.75rem;border-top:1px solid #d2ddd2}
 .privacy-mark svg{display:block;width:1rem;height:1rem;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 .privacy-mark.good{color:#315b25}
 .privacy-mark.no{color:#5b3825}
 .privacy p{margin:0}
-.privacy-note{margin-top:.65rem;padding-top:.6rem;border-top:1px solid #c5d0c2;font-size:.7rem;line-height:1.4;color:#263329}
-.privacy-note .privacy-link{color:#101510;font-weight:700;text-decoration:underline;text-decoration-color:#bfff00;text-decoration-thickness:2px;text-underline-offset:3px}
-.privacy-note .privacy-link:focus-visible{outline:2px solid #101510;outline-offset:2px}
-.privacy-footer{margin:.6rem 0 0;font-size:.7rem;line-height:1.4;color:#40584a;font-weight:700;padding-top:.5rem;text-align:center}
-form{margin-top:1rem}
-button{display:flex;align-items:center;justify-content:center;width:min(100%,22rem);min-height:3.5rem;margin-inline:auto;padding:.75rem 1rem;border:2px solid #bfff00;background:#101510;color:#bfff00;font-family:inherit;text-align:center;cursor:pointer;box-shadow:4px 4px 0 #bfff00;transition:transform 140ms ease,box-shadow 140ms ease}
+.privacy-note{margin-top:1rem;padding-top:.75rem;border-top:1px solid #d2ddd2;font-size:.8125rem;line-height:1.5;color:#476151}
+.privacy-note .privacy-link{color:#15251b;font-weight:600;text-decoration:underline;text-decoration-color:#bfff00;text-decoration-thickness:2px;text-underline-offset:3px}
+.privacy-note .privacy-link:focus-visible{outline:2px solid #15251b;outline-offset:3px;border-radius:2px}
+.privacy-footer{margin:1rem 0 0;padding-top:.75rem;border-top:1px solid #d2ddd2;font-size:.8125rem;line-height:1.5;color:#476151}
+form{margin-top:1.25rem}
+button{display:flex;align-items:center;justify-content:center;width:min(100%,24rem);min-height:3.25rem;margin-inline:auto;padding:.75rem 1rem;border:1px solid #bfff00;border-radius:.75rem;background:#bfff00;color:#15251b;font-family:inherit;text-align:center;cursor:pointer;transition:background-color 140ms ease,border-color 140ms ease,transform 140ms ease}
 .cta-copy{display:grid;width:100%;gap:.2rem;text-align:center}
-.cta-title{font-size:.8rem;font-weight:700;line-height:1.2}
-.cta-hint{font-size:.65rem;font-weight:500;line-height:1.3;color:#eef4ea}
-.cta-prompt{margin:0 0 .6rem;text-align:center;font-size:.75rem;font-weight:600;line-height:1.4;color:#40584a}
-button:hover:not(:disabled){transform:translate(-2px,-2px);box-shadow:6px 6px 0 #101510}
-button:active:not(:disabled){transform:translate(2px,2px);box-shadow:2px 2px 0 #101510}
-button:focus-visible{outline:3px solid #101510;outline-offset:4px}
-button:disabled{cursor:wait;opacity:.7}
-#status{min-height:1.4em;margin:.65rem 0 0;font-size:.7rem;line-height:1.4;color:#40584a}
-#status[data-state="error"]{color:#a12622}
-.card-footer{margin-top:.85rem;padding-top:.65rem;border-top:1px solid #c5d0c2;text-align:center;font-size:.7rem;line-height:1.4;color:#40584a}
-.contact-link{display:inline-flex;min-height:2.75rem;align-items:center;padding-inline:.2rem;color:#101510;font-weight:600;text-decoration:underline;text-decoration-color:#bfff00;text-decoration-thickness:2px;text-underline-offset:3px}
-.contact-link:hover{color:#40584a}
-.contact-link:focus-visible{outline:2px solid #101510;outline-offset:2px}
-::selection{background:#bfff00;color:#101510}
-@media(max-width:22rem){body{padding-top:max(.75rem,env(safe-area-inset-top));padding-right:max(.75rem,env(safe-area-inset-right));padding-left:max(.75rem,env(safe-area-inset-left));place-items:start center}main{width:100%;min-width:0;padding:.75rem;box-shadow:4px 4px 0 #101510}.privacy{padding:.65rem}.privacy-row{grid-template-columns:1rem minmax(0,1fr);gap:.45rem}}
+.cta-title{font-size:.9375rem;font-weight:650;line-height:1.25}
+.cta-hint{font-size:.75rem;font-weight:500;line-height:1.4;color:#263b2e}
+button:hover:not(:disabled){border-color:#a8e600;background:#a8e600}
+button:active:not(:disabled){transform:translateY(1px)}
+button:focus-visible{outline:3px solid #15251b;outline-offset:3px}
+button:disabled{cursor:wait;opacity:.65}
+#status{min-height:1.4em;margin:.65rem 0 0;font-size:.8125rem;line-height:1.45;color:#476151}
+#status[data-state="error"]{color:#a02d2d}
+.card-footer{margin-top:1.25rem;padding-top:.75rem;border-top:1px solid #d2ddd2;text-align:center;font-size:.8125rem;line-height:1.5;color:#476151}
+.contact-link{display:inline-flex;min-height:2.75rem;align-items:center;padding-inline:.2rem;color:#15251b;font-weight:600;text-decoration:underline;text-decoration-color:#bfff00;text-decoration-thickness:2px;text-underline-offset:3px}
+.contact-link:hover{color:#476151}
+.contact-link:focus-visible{outline:2px solid #15251b;outline-offset:2px;border-radius:2px}
+::selection{background:#bfff00;color:#15251b}
+@media(max-width:22rem){body{padding-top:max(1rem,env(safe-area-inset-top));padding-right:max(.75rem,env(safe-area-inset-right));padding-left:max(.75rem,env(safe-area-inset-left))}main{width:100%;min-width:0;padding:.75rem}.connection-route{gap:.3rem;padding:.75rem}.route-step{font-size:.6875rem}.route-symbol,.route-symbol .brand-mark{width:2.25rem;height:2.25rem}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important}}
 `;
 
@@ -97,18 +97,19 @@ export const consentPage = ({
 				name="viewport"
 				content="width=device-width,initial-scale=1,viewport-fit=cover"
 			/>
-			<meta name="theme-color" content="#f5f6f0" />
+			<meta name="theme-color" content="#f5f8f4" />
 			<title>Connect Tabot</title>
 			<style dangerouslySetInnerHTML={{ __html: styles }} />
 		</head>
 		<body data-extension-id={extensionId} data-transaction-id={transactionId}>
-			<main>
+			<main aria-labelledby="consent-heading">
 				<div class="brand">
-					<span class="brand-mark" aria-hidden="true"></span>
+					<span class="brand-mark" aria-hidden="true">
+						T
+					</span>
 					<span>tabot</span>
 				</div>
-				<p class="eyebrow">Chrome profile connection</p>
-				<h1>
+				<h1 id="consent-heading">
 					Connect Tabot <span class="client">to {clientName}</span>
 				</h1>
 				<p class="description">
@@ -135,9 +136,9 @@ export const consentPage = ({
 					</svg>
 					<div class="route-step tabot">
 						<span class="route-symbol" aria-hidden="true">
-							<span class="brand-mark"></span>
+							<span class="brand-mark">T</span>
 						</span>
-						<span>Tabot Plugin / MCP</span>
+						<span>Tabot MCP</span>
 					</div>
 					<svg class="route-arrow" viewBox="0 0 16 16" aria-hidden="true">
 						<path d="M2 8h11m-4-4 4 4-4 4" />
@@ -152,17 +153,6 @@ export const consentPage = ({
 						<span>{clientName}</span>
 					</div>
 				</div>
-				<form id="authorize" method="post" action="/authorize">
-					<input type="hidden" name="transaction" value={transactionId} />
-					<p class="cta-prompt">Get started, by clicking below</p>
-					<button id="connect" type="button">
-						<span class="cta-copy">
-							<span class="cta-title">Connect to {clientName}</span>
-							<span class="cta-hint">Share activity when you ask</span>
-						</span>
-					</button>
-					<p id="status" role="status" aria-live="polite"></p>
-				</form>
 				<section class="privacy" aria-labelledby="privacy-heading">
 					<h2 id="privacy-heading">Privacy, at a glance</h2>
 					<div class="privacy-row">
@@ -173,8 +163,9 @@ export const consentPage = ({
 							</svg>
 						</span>
 						<p>
-							<strong>Shared on request:</strong> selected activity summaries,
-							sites/timing, patterns, metrics.
+							<strong>Shared on request:</strong> selected activity and saved
+							notes may include site names, timestamps, page titles, and short
+							redacted previews.
 						</p>
 					</div>
 					<div class="privacy-row">
@@ -185,14 +176,15 @@ export const consentPage = ({
 							</svg>
 						</span>
 						<p>
-							<strong>Never captured:</strong> page content, screenshots, typed
-							text, or form values. Raw data stays on-device.
+							<strong>Stays on this device:</strong> full browsing history, full
+							page paths, and raw events. Screenshots, typed text, and form
+							values are never captured.
 						</p>
 					</div>
 					<p class="privacy-note">
-						<strong>PII redaction:</strong> emails, phones, cards, and IBANs in
-						shared text/URLs are redacted. Other identifiers may slip through;
-						site names/timing stay visible.{" "}
+						<strong>We hide:</strong> email addresses, phone numbers, card
+						numbers, and IBANs in shared text/URLs. Other identifiers may remain
+						visible, as do site names and timing.{" "}
 						<a
 							class="privacy-link"
 							href="https://shanvit7.github.io/tabot/privacy/#when-you-connect-chatgpt"
@@ -204,10 +196,20 @@ export const consentPage = ({
 						.
 					</p>
 					<p class="privacy-footer">
-						This Plugin / MCP passes requests or results; stores no history or
-						tool results.
+						Tabot stores connection details, not browsing history or tool
+						results. Only selected results reach {clientName} when you ask.
 					</p>
 				</section>
+				<form id="authorize" method="post" action="/authorize">
+					<input type="hidden" name="transaction" value={transactionId} />
+					<button id="connect" type="button">
+						<span class="cta-copy">
+							<span class="cta-title">Connect to {clientName}</span>
+							<span class="cta-hint">Share activity when you ask</span>
+						</span>
+					</button>
+					<p id="status" role="status" aria-live="polite"></p>
+				</form>
 				<footer class="card-footer">
 					In case of any privacy concerns or feedback, please feel free to reach
 					out to{" "}

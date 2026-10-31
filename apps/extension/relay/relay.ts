@@ -2,12 +2,19 @@
 
 import {
 	type AssistantConnections,
+	canonicalPageUrl,
 	logger,
+	type PageNote,
 	parseAssistantConnections,
+	piiRedactor,
 	projectActivitySearchResults,
 	type StoredIngestRecord,
+	type StoredTabEvent,
 	safeRecallUrl,
+	sessionForNote,
+	sessionize,
 } from "@tabot/shared";
+import { createCaptureIdentity } from "../ingestion/capture-identity";
 import { getStorageDb } from "../storage/client";
 
 /**
@@ -39,6 +46,8 @@ const BACKOFF_MAX_MS = 60_000;
 const SEARCH_ACTIVITY_METHOD = "search_activity";
 const FIND_ACTIVITY_MATCHES_METHOD = "find_activity_matches";
 const GET_ACTIVITY_TIMELINE_METHOD = "get_activity_timeline";
+const SEARCH_NOTES_METHOD = "search_notes";
+const GET_PAGE_NOTES_METHOD = "get_page_notes";
 const ACTIVITY_RESULT_LIMIT = 8;
 const MAX_ACTIVITY_OFFSET = 999_999;
 const MAX_ACTIVITY_QUERY_CHARS = 200;
@@ -394,7 +403,131 @@ const getActivityTimeline = async (params: unknown) => {
 	};
 };
 
+const noteResult = async (
+	note: PageNote,
+	sessions: ReturnType<typeof sessionize>,
+) => {
+	const session = sessionForNote(note, sessions);
+	const [{ redacted: text }, { redacted: title }] = await Promise.all([
+		piiRedactor.redact(note.text),
+		piiRedactor.redact(note.title ?? ""),
+	]);
+	return {
+		id: note.id,
+		text: text.slice(0, 4_000),
+		createdAt: note.createdAt,
+		updatedAt: note.updatedAt,
+		origin: new URL(note.origin).origin,
+		host: note.host,
+		title: title || null,
+		session: session
+			? {
+					start: session.startTimestamp,
+					end: session.endTimestamp,
+					durationMs: session.duration,
+					sites: session.domains,
+				}
+			: null,
+	};
+};
+
+const searchNotes = async (params: unknown) => {
+	const input = params as {
+		query?: unknown;
+		from?: unknown;
+		to?: unknown;
+		site?: unknown;
+		limit?: unknown;
+	} | null;
+	const query = typeof input?.query === "string" ? input.query.trim() : "";
+	if (!query || query.length > MAX_ACTIVITY_QUERY_CHARS)
+		throw new Error("query must contain 1 to 200 characters.");
+	if (
+		input?.from !== undefined &&
+		(typeof input.from !== "number" ||
+			!Number.isFinite(input.from) ||
+			input.from < 0)
+	)
+		throw new Error("from must be a timestamp.");
+	if (
+		input?.to !== undefined &&
+		(typeof input.to !== "number" ||
+			!Number.isFinite(input.to) ||
+			input.to < 0 ||
+			(typeof input.from === "number" && input.to < input.from))
+	)
+		throw new Error("to must be a timestamp at or after from.");
+	if (
+		input?.site !== undefined &&
+		(typeof input.site !== "string" || input.site.length > 253)
+	)
+		throw new Error("site must be a domain.");
+	const limit =
+		input?.limit === undefined ? ACTIVITY_RESULT_LIMIT : input.limit;
+	if (
+		!Number.isSafeInteger(limit) ||
+		(limit as number) < 1 ||
+		(limit as number) > ACTIVITY_RESULT_LIMIT
+	)
+		throw new Error("limit must be an integer from 1 to 8.");
+	const db = await getDb();
+	const [notes, events] = await Promise.all([
+		db.searchNotes(query, {
+			from: input.from as number | undefined,
+			to: input.to as number | undefined,
+			domain: input.site as string | undefined,
+			limit: limit as number,
+		}),
+		db.readEvents(),
+	]);
+	const sessions = sessionize(events as StoredTabEvent[]);
+	return {
+		count: notes.length,
+		notes: await Promise.all(notes.map((note) => noteResult(note, sessions))),
+	};
+};
+
+const getPageNotes = async (params: unknown) => {
+	const input = params as { url?: unknown } | null;
+	if (typeof input?.url !== "string" || input.url.length > 2_048)
+		throw new Error("url must be an http or https page URL.");
+	let parsed: URL;
+	try {
+		parsed = new URL(input.url);
+	} catch {
+		throw new Error("url must be an http or https page URL.");
+	}
+	if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+		throw new Error("url must be an http or https page URL.");
+	const pageKey = await createCaptureIdentity([
+		"page-resource:v1",
+		canonicalPageUrl(parsed.href),
+	]);
+	const db = await getDb();
+	const [notes, events] = await Promise.all([
+		db.listPageNotes(pageKey),
+		db.readEvents(),
+	]);
+	const sessions = sessionize(events as StoredTabEvent[]);
+	const [{ redacted: title }] = await Promise.all([
+		piiRedactor.redact(notes[0]?.title ?? ""),
+	]);
+	return {
+		found: notes.length > 0,
+		origin: parsed.origin,
+		host: parsed.hostname,
+		title: title || null,
+		notes: await Promise.all(
+			notes
+				.slice(0, ACTIVITY_RESULT_LIMIT)
+				.map((note) => noteResult(note, sessions)),
+		),
+	};
+};
+
 const handlers: Record<string, (params: unknown) => Promise<unknown>> = {
+	[SEARCH_NOTES_METHOD]: searchNotes,
+	[GET_PAGE_NOTES_METHOD]: getPageNotes,
 	[SEARCH_ACTIVITY_METHOD]: searchActivity,
 	[FIND_ACTIVITY_MATCHES_METHOD]: findActivityMatches,
 	[GET_ACTIVITY_TIMELINE_METHOD]: getActivityTimeline,

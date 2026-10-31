@@ -1,6 +1,14 @@
 # MCP tool surface and AI-response review
 
-Tabot exposes three read-only MCP tools for locally captured browser activity. Examples show representative JSON wrapped in one MCP text block. Timestamps are Unix milliseconds. No tool returns full URL paths or raw browser-event fields.
+Tabot exposes five read-only MCP tools for locally captured browser activity and user-written notes. Examples show representative JSON wrapped in one MCP text block. Timestamps are Unix milliseconds. No tool returns full URL paths or raw browser-event fields.
+
+## `search_notes`
+
+Search user notes. Note text and titles are PII-redacted before leaving the extension. Results include site host, timestamps and derived session details when available; full page paths and tab identifiers remain local.
+
+## `get_page_notes`
+
+Get up to 8 notes for an HTTP(S) page. The extension canonicalizes the URL locally and matches by the shared page key. The result returns redacted note text, host, timestamps and session details; it does not return the path.
 
 ## `search_activity`
 

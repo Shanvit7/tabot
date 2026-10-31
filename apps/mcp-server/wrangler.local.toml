@@ -2,6 +2,9 @@ name = "tabot-mcp-local"
 main = "src/index.ts"
 compatibility_date = "2026-09-20"
 
+[assets]
+directory = "./public"
+
 [vars]
 MCP_PUBLIC_URL = "http://localhost:8787/mcp"
 

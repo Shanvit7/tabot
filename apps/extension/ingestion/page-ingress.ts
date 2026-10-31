@@ -1,4 +1,5 @@
 import {
+	canonicalPageUrl,
 	eventBytes,
 	eventIdentity,
 	type IngestAck,
@@ -285,7 +286,10 @@ export const ingestPageObservationMessage = async (
 				message.truncated,
 				message.partial,
 			]),
-			deps.captureIdentity(["page-resource:v1", message.documentUrl]),
+			deps.captureIdentity([
+				"page-resource:v1",
+				canonicalPageUrl(message.documentUrl),
+			]),
 		]);
 	} catch {
 		return reject("privacy-processing-failed");

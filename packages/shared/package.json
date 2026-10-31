@@ -10,10 +10,13 @@
 		".": "./src/index.ts",
 		"./assistant-connections": "./src/assistant-connections.ts",
 		"./dashboard": "./src/dashboard.ts",
-		"./share/targets": "./src/share/targets.ts"
+		"./share/targets": "./src/share/targets.ts",
+		"./tracking": "./src/tracking/tracking.ts"
 	},
 	"scripts": {
 		"check:activityMetrics": "node --import ./resolve-hook.mjs src/checks/activity-metrics.check.ts",
+		"check:notes": "node --import ./resolve-hook.mjs src/checks/notes.check.ts",
+		"check:tracking": "node --import ./resolve-hook.mjs src/checks/tracking.check.ts",
 		"check:foreground": "node --import ./resolve-hook.mjs src/checks/foreground.check.ts",
 		"check:sessions": "node --import ./resolve-hook.mjs src/checks/sessions.check.ts",
 		"check:contexts": "node --import ./resolve-hook.mjs src/checks/contexts.check.ts",
@@ -30,7 +33,7 @@
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
 		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
 		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts",
-		"check": "pnpm check:activityMetrics && pnpm check:foreground && pnpm check:sessions && pnpm check:contexts && pnpm check:memories && pnpm check:retrieval && pnpm check:historySearch && pnpm check:liveContext && pnpm check:meaningfulEvents && pnpm check:pipeline && pnpm check:privacy && pnpm check:pageObservations && pnpm check:exportFilename && pnpm check:connectTargets && pnpm check:activityGraph && pnpm check:stabilization && pnpm check:v5regression && pnpm swSemantics && pnpm swDerivation && pnpm swGraph && pnpm swEpisodes",
+		"check": "pnpm check:notes && pnpm check:tracking && pnpm check:activityMetrics && pnpm check:foreground && pnpm check:sessions && pnpm check:contexts && pnpm check:memories && pnpm check:retrieval && pnpm check:historySearch && pnpm check:liveContext && pnpm check:meaningfulEvents && pnpm check:pipeline && pnpm check:privacy && pnpm check:pageObservations && pnpm check:exportFilename && pnpm check:connectTargets && pnpm check:activityGraph && pnpm check:stabilization && pnpm check:v5regression && pnpm swSemantics && pnpm swDerivation && pnpm swGraph && pnpm swEpisodes",
 		"swSemantics": "node --import ./resolve-hook.mjs src/checks/sw-semantics.check.ts",
 		"swDerivation": "node --import ./resolve-hook.mjs src/checks/sw-derivation.check.ts",
 		"swGraph": "node --import ./resolve-hook.mjs src/checks/sw-graph.check.ts",

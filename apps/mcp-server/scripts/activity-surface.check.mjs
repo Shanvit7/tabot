@@ -21,6 +21,7 @@ registerHooks({
 const { default: app } = await import("../src/index.ts");
 let dispatches = 0;
 let relatedDispatches = 0;
+let noteDispatches = 0;
 const relatedActivity = {
 	count: 1,
 	nextCursor: null,
@@ -64,6 +65,24 @@ const env = {
 		get: () => ({
 			fetch: async (request) => {
 				const { method, params } = await request.json();
+				if (method === "search_notes" || method === "get_page_notes") {
+					noteDispatches++;
+					assert.deepEqual(
+						params,
+						method === "search_notes"
+							? { query: "OAuth setup", limit: 4 }
+							: { url: "https://example.test/docs" },
+					);
+					return Response.json({
+						ok: true,
+						result: {
+							count: 1,
+							notes: [
+								{ id: "note-id", text: "OAuth setup", host: "example.test" },
+							],
+						},
+					});
+				}
 				if (method === "search_activity") {
 					dispatches++;
 					assert.deepEqual(params, {
@@ -126,7 +145,13 @@ const list = await rpc("tools/list", {});
 assert.equal(list.status, 200);
 assert.deepEqual(
 	list.body.result.tools.map((tool) => tool.name),
-	["search_activity", "find_activity_matches", "get_activity_timeline"],
+	[
+		"search_activity",
+		"find_activity_matches",
+		"search_notes",
+		"get_page_notes",
+		"get_activity_timeline",
+	],
 );
 assert.deepEqual(list.body.result.tools[0].inputSchema.required, ["query"]);
 assert.equal(list.body.result.tools[0].inputSchema.properties.limit.maximum, 8);
@@ -134,13 +159,15 @@ assert.match(
 	list.body.result.tools[0].inputSchema.properties.cursor.pattern,
 	/\\d/,
 );
-assert.deepEqual(list.body.result.tools[1].inputSchema.required, ["anchors"]);
+assert.deepEqual(list.body.result.tools[2].inputSchema.required, ["query"]);
+assert.deepEqual(list.body.result.tools[3].inputSchema.required, ["url"]);
+assert.deepEqual(list.body.result.tools[4].inputSchema.required, ["anchors"]);
 assert.equal(
-	list.body.result.tools[1].inputSchema.properties.anchors.maxItems,
+	list.body.result.tools[4].inputSchema.properties.anchors.maxItems,
 	8,
 );
 assert.equal(
-	list.body.result.tools[1].inputSchema.properties.maxGapHours.maximum,
+	list.body.result.tools[4].inputSchema.properties.maxGapHours.maximum,
 	720,
 );
 const result = await rpc("tools/call", {
@@ -156,6 +183,20 @@ const nextPage = await rpc("tools/call", {
 });
 assert.equal(JSON.parse(nextPage.body.result.content[0].text).nextCursor, null);
 assert.equal(dispatches, 2);
+const notesResult = await rpc("tools/call", {
+	name: "search_notes",
+	arguments: { query: "OAuth setup", limit: 4 },
+});
+assert.equal(JSON.parse(notesResult.body.result.content[0].text).count, 1);
+const pageNotesResult = await rpc("tools/call", {
+	name: "get_page_notes",
+	arguments: { url: "https://example.test/docs" },
+});
+assert.equal(
+	JSON.parse(pageNotesResult.body.result.content[0].text).notes[0].id,
+	"note-id",
+);
+assert.equal(noteDispatches, 2);
 const relatedResult = await rpc("tools/call", {
 	name: "find_activity_matches",
 	arguments: {

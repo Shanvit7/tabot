@@ -1,12 +1,15 @@
 import {
+	type DashboardNoteResult,
 	type DashboardPagePreview,
 	type HistorySearchResult,
+	isDashboardNotes,
 	isDashboardPagePreview,
 	isDashboardSearchAvailability,
 	isDashboardSearchResults,
 	isRecord,
 	type SearchAvailability,
 } from "@tabot/shared/dashboard";
+import { createTrackingClient } from "@tabot/shared/tracking";
 import { createClientOnlyFn } from "@tanstack/react-start";
 
 // Browser-only transport: never send history or search terms through Start server functions.
@@ -23,6 +26,8 @@ const failureMessage = (code: unknown): string => {
 		return "This dashboard address is not allowed. Open Tabot on its published dashboard or localhost:3000.";
 	if (code === "invalid-request")
 		return "This search request could not be read. Reload the dashboard and try again.";
+	if (code === "tracking-update-failed")
+		return "Could not update tracking. Try again.";
 	return "Tabot could not read local storage. Reload the extension, then try again. This does not mean your history is empty.";
 };
 
@@ -89,38 +94,28 @@ export const searchRetainedPages = async (
 	query: string,
 ): Promise<{
 	results: HistorySearchResult[];
+	notes: DashboardNoteResult[];
 	searchStatus: SearchAvailability;
 }> => {
 	const response = await request({ type: "SEARCH_HISTORY", query, limit: 20 });
 	if (
 		!isDashboardSearchResults(response.results) ||
-		!isDashboardSearchAvailability(response.searchStatus)
+		!isDashboardSearchAvailability(response.searchStatus) ||
+		(response.notes !== undefined && !isDashboardNotes(response.notes))
 	)
 		throw new Error(
 			"Search response is incompatible. Reload the latest Tabot extension.",
 		);
 	return {
 		results: response.results,
+		notes: (response.notes as DashboardNoteResult[] | undefined) ?? [],
 		searchStatus: response.searchStatus,
 	};
 };
 
-export const readPagePreview = async (
-	id: string,
-	url: string,
-): Promise<DashboardPagePreview | null> => {
-	const response = await request({ type: "GET_PAGE_PREVIEW", id, url });
-	if (response.preview === null) return null;
-	if (
-		!isDashboardPagePreview(response.preview) ||
-		response.preview.id !== id ||
-		response.preview.url !== url
-	)
-		throw new Error(
-			"Capture response is incompatible. Reload the latest Tabot extension.",
-		);
-	return response.preview;
-};
+const trackingClient = createTrackingClient(request);
+export const readTrackingState = trackingClient.read;
+export const setTrackingEnabled = trackingClient.set;
 
 export const readHistoryCounts = async (): Promise<{
 	eventCount: number;
@@ -151,4 +146,21 @@ export const readHistoryCounts = async (): Promise<{
 		firstEventTimestamp:
 			typeof firstEventTimestamp === "number" ? firstEventTimestamp : null,
 	};
+};
+
+export const readPagePreview = async (
+	id: string,
+	url: string,
+): Promise<DashboardPagePreview | null> => {
+	const response = await request({ type: "GET_PAGE_PREVIEW", id, url });
+	if (response.preview === null) return null;
+	if (
+		!isDashboardPagePreview(response.preview) ||
+		response.preview.id !== id ||
+		response.preview.url !== url
+	)
+		throw new Error(
+			"Capture response is incompatible. Reload the latest Tabot extension.",
+		);
+	return response.preview;
 };

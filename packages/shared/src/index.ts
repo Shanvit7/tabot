@@ -112,6 +112,14 @@ export {
 	type MemoryDomain,
 } from "./memories/memories";
 export {
+	type NewPageNote,
+	noteMatchesDomain,
+	type PageNote,
+	searchNoteRows,
+	sessionForNote,
+	validateNoteText,
+} from "./notes/notes";
+export {
 	PAGE_MIN_INTERVAL_MS,
 	PAGE_RESOURCE_DAILY_BYTES,
 	PAGE_SITE_HOURLY_BYTES,
@@ -129,11 +137,13 @@ export {
 	type StoredPageObservation,
 	sanitizePageObservationForIngestion,
 } from "./pages/observations";
+export { canonicalPageUrl } from "./privacy/canonical-url";
 export {
 	sanitizeEventForIngestion,
 	sanitizeUrlForIngestion,
 	searchQueryFromUrl,
 } from "./privacy/ingest";
+export { piiRedactor } from "./privacy/pii-redactor";
 export {
 	PII_REDACTION_DEFAULT_ENABLED,
 	sanitizeDerived,
@@ -236,3 +246,8 @@ export {
 	WEB_TARGET_DEFS,
 	type WebTargetDef,
 } from "./share/targets";
+export {
+	createTrackingClient,
+	type TrackingMessage,
+	type TrackingTransport,
+} from "./tracking/tracking";

@@ -2,6 +2,7 @@
 
 import {
 	bulkInsertIngestRecords,
+	canonicalPageUrl,
 	countEvents,
 	deletePageObservations,
 	getAllEvents,
@@ -9,14 +10,17 @@ import {
 	getPageObservationById,
 	getPageObservations,
 	logger,
+	type PageNote,
 	prunePageObservations,
 	readFailure,
 	type StatsSnapshot,
 	type StoredIngestRecord,
 	type StoredTabEvent,
 	sanitizeEventForIngestion,
+	sanitizeUrlForIngestion,
 	type TabEventMetadata,
 	type TabEventType,
+	validateNoteText,
 } from "@tabot/shared";
 import {
 	isForegroundTab,
@@ -97,13 +101,81 @@ const nativeInstance = crypto.randomUUID();
 let nativeSequence = 0;
 
 const TRACKING_KEY = "tabot_tracking_enabled";
-let trackingEnabled = true;
+const TRACKING_RESUMED_KEY = "tabot_tracking_resumed_at";
+let trackingEnabled = false;
+let trackingGeneration = 0;
+let trackingResumedAt = 0;
 const trackingReady = chrome.storage.local
-	.get(TRACKING_KEY)
+	.get([TRACKING_KEY, TRACKING_RESUMED_KEY])
 	.then((stored) => {
 		trackingEnabled = stored[TRACKING_KEY] !== false;
+		trackingResumedAt =
+			typeof stored[TRACKING_RESUMED_KEY] === "number"
+				? stored[TRACKING_RESUMED_KEY]
+				: 0;
 	})
 	.catch(() => {});
+let trackingUpdates = Promise.resolve();
+const readTracking = async () => {
+	await trackingReady;
+	await trackingUpdates;
+	const stored = await chrome.storage.local.get([
+		TRACKING_KEY,
+		TRACKING_RESUMED_KEY,
+	]);
+	trackingEnabled = stored[TRACKING_KEY] !== false;
+	trackingResumedAt =
+		typeof stored[TRACKING_RESUMED_KEY] === "number"
+			? stored[TRACKING_RESUMED_KEY]
+			: 0;
+	return trackingEnabled;
+};
+const setTracking = (enabled: boolean) => {
+	const update = trackingUpdates.then(async () => {
+		await trackingReady;
+		const previous = trackingEnabled;
+		if (enabled === previous) return enabled;
+		if (!enabled) {
+			trackingEnabled = false;
+			trackingGeneration++;
+		}
+		try {
+			const resumedAt = enabled ? Date.now() : trackingResumedAt;
+			await chrome.storage.local.set({
+				[TRACKING_KEY]: enabled,
+				[TRACKING_RESUMED_KEY]: resumedAt,
+			});
+			if (enabled) {
+				trackingResumedAt = resumedAt;
+				trackingGeneration++;
+				trackingEnabled = true;
+			}
+			await sampleForeground(enabled);
+		} catch (error) {
+			trackingEnabled = previous;
+			trackingGeneration++;
+			if (previous) await sampleForeground();
+			throw error;
+		}
+		return trackingEnabled;
+	});
+	trackingUpdates = update.then(
+		() => undefined,
+		() => undefined,
+	);
+	return update;
+};
+const isCaptureEligible = async (tabId: number, timestamp: unknown) => {
+	await trackingReady;
+	const generation = trackingGeneration;
+	return (
+		(await isForegroundTab(tabId)) &&
+		trackingEnabled &&
+		generation === trackingGeneration &&
+		typeof timestamp === "number" &&
+		timestamp >= trackingResumedAt
+	);
+};
 
 // --- SW telemetry: browser focus is the ONLY emitted SW signal ---
 // popup polling (GET_STATS/GET_COUNTS/GET_EVENTS) is answered without
@@ -117,7 +189,9 @@ const push = async (
 	metadata?: TabEventMetadata,
 	timestamp = Date.now(),
 	snapshot?: { url?: string; favicon?: string },
+	terminalBoundary = false,
 ) => {
+	const generation = trackingGeneration;
 	const row: StoredTabEvent = {
 		id: crypto.randomUUID(),
 		type,
@@ -138,27 +212,28 @@ const push = async (
 		});
 		return { status: "rejected", code: "privacy-processing-failed" };
 	}
-	return pipeline.ingest(
-		sanitized,
-		async () => {
-			await trackingReady;
-			if (
-				!trackingEnabled ||
-				([
-					"TAB_ACTIVATED",
-					"NAVIGATION",
-					"PAGE_VISIBLE",
-					"SCROLL",
-					"CLICK",
-					"KEY_ACTIVITY",
-				].includes(type) &&
-					!(await isForegroundTab(tabId)))
-			)
-				return { status: "ignored", code: "capture-policy" };
-			return null;
-		},
-		true,
-	);
+	return pipeline.ingest(sanitized, async () => {
+		await trackingReady;
+		if (
+			([
+				"TAB_ACTIVATED",
+				"NAVIGATION",
+				"PAGE_VISIBLE",
+				"SCROLL",
+				"CLICK",
+				"KEY_ACTIVITY",
+				"NOTE_SAVED",
+			].includes(type) &&
+				!(await isForegroundTab(tabId))) ||
+			(type !== "NOTE_SAVED" &&
+				!(terminalBoundary && type === "PAGE_HIDDEN") &&
+				(!trackingEnabled ||
+					generation !== trackingGeneration ||
+					timestamp < trackingResumedAt))
+		)
+			return { status: "ignored", code: "capture-policy" };
+		return null;
+	});
 };
 
 // --- Chrome tab lifecycle ---
@@ -235,16 +310,21 @@ if (chrome.windows?.onFocusChanged) {
 	});
 }
 
-const sampleForeground = startForegroundTracking(async (type, state) => {
-	return push(
-		type,
-		state.tabId,
-		state.windowId,
-		undefined,
-		state.timestamp,
-		state,
-	);
-});
+const sampleForeground = startForegroundTracking(
+	async (type, state) => {
+		return push(
+			type,
+			state.tabId,
+			state.windowId,
+			undefined,
+			state.timestamp,
+			state,
+			// Only this trusted sampler may close an active span after pause blocks admission.
+			type === "PAGE_HIDDEN",
+		);
+	},
+	() => trackingReady.then(() => trackingEnabled),
+);
 
 // --- retired SW signals: NO producers. Historical rows remain readable ---
 // (SW_POPUP_OPEN, SW_TRACKING_TOGGLE, SW_DOWNLOAD, SW_LIFECYCLE were removed
@@ -291,19 +371,154 @@ const respondAssistantConnections = (
 // Listeners register synchronously; literal true retains asynchronous response channel.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.type === "SET_TRACKING") {
-		void (async () => {
-			await trackingReady;
-			if (message.enabled !== true) await sampleForeground(false);
-			trackingEnabled = message.enabled === true;
-			await chrome.storage.local.set({ [TRACKING_KEY]: trackingEnabled });
-			if (trackingEnabled) await sampleForeground();
-			sendResponse({ enabled: trackingEnabled });
-		})().catch(() => sendResponse({ enabled: trackingEnabled }));
+		void setTracking(message.enabled === true)
+			.then((enabled) => sendResponse({ enabled }))
+			.catch(() => sendResponse({ enabled: trackingEnabled }));
 		return true;
 	}
 
 	if (message?.type === "GET_TRACKING") {
-		trackingReady.then(() => sendResponse({ enabled: trackingEnabled }));
+		void readTracking()
+			.then((enabled) => sendResponse({ enabled }))
+			.catch(() =>
+				sendResponse({ ok: false, code: "tracking-status-unavailable" }),
+			);
+		return true;
+	}
+
+	if (["GET_ACTIVE_PAGE", "SAVE_NOTE", "DELETE_NOTE"].includes(message?.type)) {
+		if (!isExtensionPageSender(sender)) return false;
+		void (async () => {
+			try {
+				const db = await getDb();
+				if (message.type === "GET_ACTIVE_PAGE") {
+					const [tab] = await chrome.tabs.query({
+						active: true,
+						lastFocusedWindow: true,
+					});
+					const rawUrl = tab?.url;
+					if (
+						!tab?.id ||
+						!tab.windowId ||
+						!rawUrl ||
+						tab.incognito ||
+						!/^https?:\/\//.test(rawUrl)
+					) {
+						sendResponse({
+							eligible: false,
+							reason: "Notes can't be added on this page",
+						});
+						return;
+					}
+					const canonical = canonicalPageUrl(rawUrl);
+					const [url, pageKey] = await Promise.all([
+						sanitizeUrlForIngestion(canonical),
+						createCaptureIdentity(["page-resource:v1", canonical]),
+					]);
+					if (!url) throw new Error("page-url-unavailable");
+					const parsed = new URL(url);
+					const noteTitle = (tab.title ?? "").slice(0, 300) || null;
+					sendResponse({
+						eligible: true,
+						tabId: tab.id,
+						windowId: tab.windowId,
+						url,
+						host: parsed.hostname,
+						origin: parsed.origin,
+						title: tab.title ?? null,
+						favicon: tab.favIconUrl ?? null,
+						pageKey,
+						notes: await db.listPageNotes(pageKey, {
+							url,
+							host: parsed.hostname,
+							title: noteTitle,
+						}),
+					});
+					return;
+				}
+				if (message.type === "SAVE_NOTE") {
+					if (
+						!validateNoteText(message.text) ||
+						!Number.isSafeInteger(message.tabId) ||
+						typeof message.pageKey !== "string"
+					)
+						throw new Error("invalid-note");
+					const tab = await chrome.tabs.get(message.tabId);
+					const [active] = await chrome.tabs.query({
+						active: true,
+						lastFocusedWindow: true,
+					});
+					if (
+						active?.id !== tab.id ||
+						tab.incognito ||
+						!tab.windowId ||
+						!tab.url ||
+						!/^https?:\/\//.test(tab.url)
+					)
+						throw new Error("page-changed");
+					const canonical = canonicalPageUrl(tab.url);
+					const pageKey = await createCaptureIdentity([
+						"page-resource:v1",
+						canonical,
+					]);
+					if (pageKey !== message.pageKey) throw new Error("page-changed");
+					const url = await sanitizeUrlForIngestion(canonical);
+					if (!url) throw new Error("page-url-unavailable");
+					const parsed = new URL(url);
+					const now = Date.now();
+					const note: PageNote = {
+						id:
+							typeof message.id === "string" ? message.id : crypto.randomUUID(),
+						text: message.text,
+						createdAt:
+							typeof message.id === "string"
+								? ((await db.listPageNotes(pageKey)).find(
+										(item) => item.id === message.id,
+									)?.createdAt ?? now)
+								: now,
+						updatedAt: now,
+						url,
+						origin: parsed.origin,
+						host: parsed.hostname,
+						site: parsed.hostname.replace(/^www\\./i, ""),
+						title: (tab.title ?? "").slice(0, 300) || null,
+						favicon: tab.favIconUrl ?? null,
+						pageKey,
+						tabId: tab.id,
+						windowId: tab.windowId,
+						eventId: null,
+					};
+					const saved = await db.saveNote(note);
+					if (typeof message.id !== "string") {
+						try {
+							const ack = await push(
+								"NOTE_SAVED",
+								tab.id,
+								tab.windowId,
+								{ noteId: saved.id },
+								now,
+								{ url, favicon: tab.favIconUrl },
+							);
+							if (ack.status === "persisted" && "id" in ack)
+								await db.linkNoteEvent(saved.id, ack.id);
+						} catch (error) {
+							logger.warn("note saved but activity link failed", {
+								code: error instanceof Error ? error.message : "unknown",
+							});
+						}
+					}
+					sendResponse({ note: saved });
+					return;
+				}
+				if (typeof message.id !== "string") throw new Error("invalid-note-id");
+				sendResponse(await db.deleteNote(message.id));
+			} catch (error) {
+				sendResponse({
+					ok: false,
+					code: error instanceof Error ? error.message : "notes-unavailable",
+				});
+			}
+		})();
 		return true;
 	}
 
@@ -312,10 +527,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			extensionId: chrome.runtime.id,
 			pipeline,
 			find: async (id) => getPageObservationById(await getDb(), id),
-			eligible: async (tabId) => {
-				await trackingReady;
-				return trackingEnabled && (await isForegroundTab(tabId));
-			},
+			eligible: (tabId) => isCaptureEligible(tabId, message.timestamp),
 			captureIdentity: createCaptureIdentity,
 		})
 			.then(sendResponse)
@@ -330,10 +542,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			extensionId: chrome.runtime.id,
 			pipeline,
 			find: async (id) => (await getDb()).findEvent(id),
-			eligible: async (tabId) => {
-				await trackingReady;
-				return trackingEnabled && (await isForegroundTab(tabId));
-			},
+			eligible: (tabId) => isCaptureEligible(tabId, message.timestamp),
 			captureIdentity: createCaptureIdentity,
 		})
 			.then(sendResponse)
@@ -367,7 +576,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	}
 
 	if (message?.type === "GET_COUNTS") {
-		getStorageCounts()
+		getStorageCounts(true)
 			.then((counts) => {
 				try {
 					sendResponse(counts);
@@ -485,6 +694,26 @@ if (chrome.runtime.onMessageExternal) {
 				return false;
 			}
 
+			if (message?.type === "GET_TRACKING") {
+				void readTracking()
+					.then((enabled) => sendResponse({ enabled }))
+					.catch(() =>
+						sendResponse({ ok: false, code: "tracking-status-unavailable" }),
+					);
+				return true;
+			}
+			if (message?.type === "SET_TRACKING") {
+				if (typeof message.enabled !== "boolean") {
+					sendResponse({ ok: false, code: "tracking-update-failed" });
+					return false;
+				}
+				void setTracking(message.enabled)
+					.then((enabled) => sendResponse({ enabled }))
+					.catch(() =>
+						sendResponse({ ok: false, code: "tracking-update-failed" }),
+					);
+				return true;
+			}
 			if (message?.type === "GET_ASSISTANT_CONNECTIONS") {
 				respondAssistantConnections(sendResponse);
 				return true;

@@ -7,6 +7,7 @@ import {
 	logger,
 	normalizeEvent,
 	type PageCaptureSiteSummary,
+	type PageNote,
 	type PageObservationSummary,
 	pageObservationBudgetFailure,
 	pageObservationSizeBytes,
@@ -19,8 +20,10 @@ import {
 	sanitizeEventForIngestion,
 	sanitizePageObservationForIngestion,
 	searchHistory as searchHistoryCore,
+	searchNoteRows,
 	searchQueryFromUrl,
 	storageErrorCode,
+	validateNoteText,
 } from "@tabot/shared";
 import type {
 	Collection,
@@ -62,6 +65,7 @@ let deriveSearchJobId: (kind: Kind, id: string) => string;
 let deriveSearchPassageId: (id: string) => string;
 let deriveSearchCacheId: (id: string) => string;
 let deriveSearchBackfillId: () => string;
+let deriveNoteDocumentId: (id: string) => string;
 type Kind = "event" | "page";
 type Envelope = Document & {
 	_id: string;
@@ -106,6 +110,7 @@ let database:
 			records: Collection<Envelope>;
 			passages: Collection<SearchPassage>;
 			embeddings: Collection<SearchEmbeddingCache>;
+			notes: Collection<PageNote & Document>;
 			meta: Collection<Document>;
 	  }>
 	| undefined;
@@ -293,6 +298,7 @@ const getDb = () => {
 		deriveSearchCacheId = (id) => deriveDocId("tabot:search-embedding:v1", id);
 		deriveSearchBackfillId = () =>
 			deriveDocId("tabot:meta:v1", SEARCH_BACKFILL_ID);
+		deriveNoteDocumentId = (id) => deriveDocId("tabot:notes:v1", id);
 		const db = await openDB(DB_NAME);
 		try {
 			const info = await db.storageInfo?.();
@@ -325,13 +331,17 @@ const getDb = () => {
 			});
 			const embeddings =
 				db.collection<SearchEmbeddingCache>("search_embeddings");
+			const notes = db.collection<PageNote & Document>("notes");
+			await notes.createIndex("pageKey");
+			await notes.createIndex("host");
+			await notes.createIndex("createdAt");
 			const meta = db.collection<Document>("meta");
 			await runLegacyMigration(
 				records,
 				meta,
 				deriveDocId("tabot:meta:v1", MIGRATION_ID),
 			);
-			return { db, records, passages, embeddings, meta };
+			return { db, records, passages, embeddings, notes, meta };
 		} catch (error) {
 			// Initialization can fail after openDB has acquired its worker/OPFS lock.
 			await db.close().catch(() => undefined);
@@ -1165,6 +1175,113 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			query,
 			{ ...options, candidateOrder },
 		);
+	},
+	listPageNotes: async (
+		pageKey: string,
+		fallback?: Pick<PageNote, "url" | "host" | "title">,
+	): Promise<PageNote[]> => {
+		if (typeof pageKey !== "string" || pageKey.length > 256)
+			throw new Error("invalid-page-key");
+		const { notes } = await getDb();
+		const exact = await notes.find({ pageKey });
+		// ponytail: URL/title fallback can conflate query variants; add per-site identity rules if needed.
+		const matchingUrl = fallback
+			? await notes.find({
+					url: fallback.url,
+					host: fallback.host,
+					title: fallback.title,
+				})
+			: [];
+		const rows = [
+			...new Map(
+				[...matchingUrl, ...exact].map((note) => [note.id, note]),
+			).values(),
+		];
+		return rows.sort((a, b) => b.createdAt - a.createdAt).slice(0, 50);
+	},
+	saveNote: (input: PageNote) =>
+		serializeMutation(async () => {
+			if (
+				!input ||
+				typeof input.id !== "string" ||
+				input.id.length > 64 ||
+				!validateNoteText(input.text) ||
+				!Number.isSafeInteger(input.createdAt) ||
+				!Number.isSafeInteger(input.updatedAt) ||
+				!/^https?:\/\//.test(input.url) ||
+				!/^https?:\/\//.test(input.origin) ||
+				!input.host ||
+				!input.pageKey ||
+				!Number.isSafeInteger(input.tabId) ||
+				!Number.isSafeInteger(input.windowId)
+			)
+				throw new Error("invalid-note");
+			const { notes } = await getDb();
+			const documentId = deriveNoteDocumentId(input.id);
+			const existing = await notes.findOne({ _id: documentId });
+			if (existing) {
+				const original = existing as unknown as PageNote;
+				if (
+					original.pageKey !== input.pageKey &&
+					(original.url !== input.url ||
+						original.host !== input.host ||
+						original.title !== input.title)
+				)
+					throw new Error("note-page-mismatch");
+				const updated = {
+					...original,
+					text: input.text,
+					updatedAt: input.updatedAt,
+					pageKey: input.pageKey,
+				};
+				await notes.updateOne({ _id: documentId }, { $set: updated });
+				return updated;
+			}
+			await notes.insert({ ...input, _id: documentId } as PageNote & Document);
+			return input;
+		}),
+	linkNoteEvent: (id: string, eventId: string) =>
+		serializeMutation(async () => {
+			const { notes } = await getDb();
+			const documentId = deriveNoteDocumentId(id);
+			const note = await notes.findOne({ _id: documentId });
+			if (!note) return false;
+			await notes.updateOne({ _id: documentId }, { $set: { eventId } });
+			return true;
+		}),
+	deleteNote: (id: string) =>
+		serializeMutation(async () => ({
+			deleted: await (await getDb()).notes.deleteOne({
+				_id: deriveNoteDocumentId(id),
+			}),
+		})),
+	searchNotes: async (
+		query: string,
+		options: {
+			from?: number;
+			to?: number;
+			domain?: string;
+			limit?: number;
+		} = {},
+	) => {
+		if (
+			!query.trim() ||
+			query.length > 200 ||
+			(options.limit !== undefined &&
+				(!Number.isSafeInteger(options.limit) ||
+					options.limit < 1 ||
+					options.limit > 20))
+		)
+			throw new Error("invalid-note-search");
+		const rows = (await (await getDb()).notes.find()) as unknown as PageNote[];
+		return searchNoteRows(rows, query, options);
+	},
+	listNotesBetween: async (from: number, to: number): Promise<PageNote[]> => {
+		if (!Number.isFinite(from) || !Number.isFinite(to) || from > to)
+			throw new Error("invalid-note-range");
+		return ((await (await getDb()).notes.find()) as unknown as PageNote[])
+			.filter((note) => note.createdAt >= from && note.createdAt <= to)
+			.sort((a, b) => a.createdAt - b.createdAt);
 	},
 	getSearchStatus: async (): Promise<SearchAvailability> => {
 		const { records, passages, meta } = await getDb();

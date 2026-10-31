@@ -55,6 +55,9 @@ type RecordFilter = {
 	recordKind?: string | { $in?: string[] };
 	originalId?: { $nin?: string[] };
 	pageKey?: string;
+	url?: string;
+	host?: string;
+	title?: string | null;
 	searchSourceId?: { $in?: string[] };
 	timestamp?: { $gte?: number; $lte?: number };
 	origin?: string | { $in?: string[] };
@@ -74,6 +77,9 @@ const matches = (row: Record<string, unknown>, query: RecordFilter): boolean =>
 				query.recordKind.$in.includes(row.recordKind as string))) &&
 	!query.originalId?.$nin?.includes(row.originalId as string) &&
 	(!query.pageKey || row.pageKey === query.pageKey) &&
+	(query.url === undefined || row.url === query.url) &&
+	(query.host === undefined || row.host === query.host) &&
+	(query.title === undefined || row.title === query.title) &&
 	(!query._id ||
 		(typeof query._id === "string"
 			? row._id === query._id
@@ -262,6 +268,29 @@ const passages = {
 			if (matches(row, query)) storedPassages.delete(id);
 	},
 };
+const noteRows = new Map<string, Record<string, unknown>>();
+const notes = {
+	createIndex: async () => {},
+	find: async (query: RecordFilter = {}) =>
+		[...noteRows.values()].filter((row) => matches(row, query)),
+	findOne: async (query: RecordFilter) =>
+		[...noteRows.values()].find((row) => matches(row, query)) ?? null,
+	insert: async (row: Record<string, unknown>) => {
+		assert.ok(isDocId(row._id), "note documents must use valid TalaDB ULIDs");
+		noteRows.set(row._id as string, row);
+		return row._id;
+	},
+	updateOne: async (
+		query: RecordFilter,
+		update: { $set?: Record<string, unknown> },
+	) => {
+		const row = [...noteRows.values()].find((item) => matches(item, query));
+		if (!row) return false;
+		Object.assign(row, update.$set);
+		return true;
+	},
+	deleteOne: async ({ _id }: { _id: string }) => noteRows.delete(_id),
+};
 const metaRows = new Map<string, Record<string, unknown>>();
 const meta = {
 	findOne: async ({ _id }: { _id: string }) =>
@@ -313,11 +342,13 @@ mock.module("../node_modules/taladb/dist/index.browser.mjs", {
 				collection: (name: string) =>
 					name === "meta"
 						? meta
-						: name === "search_passages"
-							? passages
-							: name === "search_embeddings"
-								? embeddings
-								: records,
+						: name === "notes"
+							? notes
+							: name === "search_passages"
+								? passages
+								: name === "search_embeddings"
+									? embeddings
+									: records,
 				close: async () => {
 					closes++;
 					activeHandles--;
@@ -525,6 +556,79 @@ try {
 	assert.equal(opens, 7);
 	await requestCount();
 	assert.equal(opens, 7, "successful startup must reuse handle");
+	const note = {
+		id: "note-uuid",
+		text: "Applied for this job",
+		createdAt: Date.now(),
+		updatedAt: Date.now(),
+		url: "https://www.linkedin.com/jobs/view",
+		origin: "https://www.linkedin.com",
+		host: "www.linkedin.com",
+		site: "linkedin.com",
+		title: "Job",
+		favicon: null,
+		pageKey: "page-key",
+		tabId: 1,
+		windowId: 1,
+		eventId: null,
+	};
+	const savedNote = await request("saveNote", [note]);
+	assert.equal(savedNote.ok, true);
+	assert.deepEqual(savedNote.value, note);
+	const noteDocumentId = deriveDocId("tabot:notes:v1", note.id);
+	assert.ok(isDocId(noteDocumentId));
+	assert.equal(noteRows.get(noteDocumentId)?.id, note.id);
+	const listedNotes = await request("listPageNotes", [note.pageKey]);
+	assert.equal(listedNotes.ok, true);
+	assert.deepEqual(listedNotes.value, [{ ...note, _id: noteDocumentId }]);
+	const fallback = { url: note.url, host: note.host, title: note.title };
+	const fallbackNotes = await request("listPageNotes", [
+		"different-page-key",
+		fallback,
+	]);
+	assert.equal((fallbackNotes.value as unknown[]).length, 1);
+	const unrelatedNotes = await request("listPageNotes", [
+		"different-page-key",
+		{ ...fallback, title: "Different page title" },
+	]);
+	assert.deepEqual(unrelatedNotes.value, []);
+	const secondNote = {
+		...note,
+		id: "note-uuid-2",
+		pageKey: "different-page-key",
+		createdAt: note.createdAt + 1,
+		updatedAt: note.updatedAt + 1,
+	};
+	assert.equal((await request("saveNote", [secondNote])).ok, true);
+	const notesAfterSecondSave = await request("listPageNotes", [
+		"different-page-key",
+		fallback,
+	]);
+	assert.deepEqual(
+		(notesAfterSecondSave.value as { id: string }[]).map(({ id }) => id),
+		[secondNote.id, note.id],
+	);
+	const editedNote = {
+		...note,
+		pageKey: "different-page-key",
+		text: "Updated note",
+		updatedAt: note.updatedAt + 2,
+	};
+	assert.deepEqual((await request("saveNote", [editedNote])).value, {
+		...editedNote,
+		_id: noteDocumentId,
+	});
+	assert.equal(
+		(await request("linkNoteEvent", [note.id, "event-note"])).value,
+		true,
+	);
+	assert.equal(noteRows.get(noteDocumentId)?.eventId, "event-note");
+	assert.deepEqual((await request("deleteNote", [note.id])).value, {
+		deleted: true,
+	});
+	assert.deepEqual((await request("deleteNote", [secondNote.id])).value, {
+		deleted: true,
+	});
 	const searchBackfillId = deriveDocId(
 		"tabot:meta:v1",
 		"semantic-search-backfill:v3",

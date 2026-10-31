@@ -1,4 +1,5 @@
 import { logger } from "../lib/logger";
+import type { PageNote } from "../notes/notes";
 import type { StoredPageObservation } from "../pages/observations";
 import { sanitizeEventForIngestion } from "../privacy/ingest";
 import type {
@@ -159,6 +160,21 @@ export class TabotDatabase {
 		this.request<PageCaptureSiteSummary[]>("getPageCaptureSiteSummaries");
 	searchHistory = (query: string, options?: HistorySearchOptions) =>
 		this.request<HistorySearchResult[]>("searchHistory", [query, options]);
+	listPageNotes = (
+		pageKey: string,
+		fallback?: Pick<PageNote, "url" | "host" | "title">,
+	) => this.request<PageNote[]>("listPageNotes", [pageKey, fallback]);
+	saveNote = (note: PageNote) => this.request<PageNote>("saveNote", [note]);
+	linkNoteEvent = (id: string, eventId: string) =>
+		this.request<boolean>("linkNoteEvent", [id, eventId]);
+	deleteNote = (id: string) =>
+		this.request<{ deleted: boolean }>("deleteNote", [id]);
+	searchNotes = (
+		query: string,
+		options?: { from?: number; to?: number; domain?: string; limit?: number },
+	) => this.request<PageNote[]>("searchNotes", [query, options]);
+	listNotesBetween = (from: number, to: number) =>
+		this.request<PageNote[]>("listNotesBetween", [from, to]);
 	getSearchStatus = () =>
 		this.request<SearchAvailability>("getSearchStatus", []);
 	getLegacyMigrationStatus = () =>

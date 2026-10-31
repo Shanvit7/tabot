@@ -49,6 +49,7 @@ The content script and Chrome APIs collect these signals:
 | `SCROLL` | viewport and discovered nested scroll containers | scroll offset |
 | `CLICK` | document click | client coordinates |
 | `KEY_ACTIVITY` | document keydown | event only |
+| `NOTE_SAVED` | extension popup after durable note save | note ID and page URL; no note text |
 | `SW_WINDOW_FOCUS` | `chrome.windows.onFocusChanged` | window ID focus transition (see SW telemetry section) |
 
 `SCROLL` and `KEY_ACTIVITY` are throttled to 150 ms by TanStack Pacer before messaging the background worker. Typed/key values, form values, screenshots and whole-page DOM snapshots are never recorded. Visible text excerpts are a separate opt-in signal: exact-origin consent, one-second foreground dwell or trusted interaction, four fragments / 4,000 characters maximum, and no page-load snapshots.
@@ -110,7 +111,9 @@ TalaDB stores event and page envelopes in one OPFS-backed `records` collection, 
 
 The extension offscreen owner serializes database mutations, validates input, checks existing IDs, rejects conflicting reuse, and atomically inserts missing event/page rows through TalaDB `records.insertMany()`. Only a successful durable call (or identical committed replay) resolves persisted ACK or increases insert totals. Retrying never overwrites enrichment or invents new IDs; ambiguous owner responses reconcile by stable ID after reconnect.
 
-Transient storage failures retry three attempts; permanent failure/exhaustion stops writer starts and retains bounded held work. Recovery alarm/suitable later event retries transient held work after cooldown; internal `RETRY_INGEST` explicitly resumes held work first. Tracking pause stops new capture, not active commits. Popup closure/sender timeout never abort persistence. In-memory queues, retries, held rows and timers are lost on termination; committed history remains subject to browser storage guarantees. Native events and destroyed documents cannot generally replay. No zero-loss/exactly-once claim.
+User-authored page notes live in a separate OPFS `notes` collection because they are editable/deletable. Each stores timestamp, sanitized canonical page URL, host/subdomain, title, page key, and tab/window identity. Popup reads and writes go through the background and offscreen owner. Successful note creation emits `NOTE_SAVED` with the note ID and page URL; it is an explicit activity even when general tracking is paused. Sessions associate via that event. Notes stay local; MCP exposes bounded, PII-redacted read-only search and page lookup.
+
+Transient storage failures retry three attempts; permanent failure/exhaustion stops writer starts and retains bounded held work. Recovery alarm/suitable later event retries transient held work after cooldown; internal `RETRY_INGEST` explicitly resumes held work first. Tracking pause stops automatic capture, not explicit `NOTE_SAVED` events or active commits. Popup closure/sender timeout never abort persistence. In-memory queues, retries, held rows and timers are lost on termination; committed history remains subject to browser storage guarantees. Native events and destroyed documents cannot generally replay. No zero-loss/exactly-once claim.
 
 Read errors return explicit unavailable results, never empty history/zero counts. Home/popup retain last good snapshots and expose degraded state. Runtime counters reset on restart; durable count comes from TalaDB. Legacy buffer-named fields are documented queue aliases, not SAB statistics. The offscreen document hosts TalaDB's DedicatedWorker; it is not an ingestion scheduler or durable job database.
 
@@ -121,6 +124,8 @@ All derivation functions live in `packages/shared/src` and are pure over `Stored
 ### 1. Meaningful events
 
 `deriveMeaningfulEvents` removes `TAB_UPDATED` noise unless URL identity changed. A `NAVIGATION` always remains, including a reload at same URL. It also derives URL/page transitions while retaining source event IDs.
+
+`NOTE_SAVED` is a behavioral event and counts as a session interaction. It is emitted only after note persistence succeeds and carries no note text.
 
 ### 2. Sessions
 

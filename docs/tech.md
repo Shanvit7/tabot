@@ -594,7 +594,7 @@ The required decision is:
 
 If yes, retain the strongest evidence-grounded signals in tool results. If no, identify the minimum additional metadata required and why; do not expand collection simply because data is available.
 
-The current ChatGPT integration serves requested, sanitized activity summaries, bounded recurring-pattern evidence and origin-only metrics (§16), not raw history or the whole live snapshot. Sessions are inspectable locally but have no dedicated MCP tool. Source inspection and deterministic checks do not establish representative real-browsing usefulness. This product-quality evaluation is deferred; it does not block the implemented storage migration.
+The current ChatGPT integration serves sanitized activity search/matches/timeline, plus user-requested PII-redacted note search and page lookup; it does not expose raw history or the whole live snapshot. Notes stay local and are only returned on explicit read-only tool calls. Source inspection and deterministic checks do not establish representative real-browsing usefulness. This product-quality evaluation is deferred; it does not block the implemented storage migration.
 
 ---
 
@@ -697,19 +697,17 @@ Marketplace rollout requires setting `CHATGPT_MARKETPLACE_URL` in the production
 - One auth Durable Object stores client registrations, hashed codes/access/refresh tokens and authorization transactions. Access lasts **1 hour**; refresh lasts **30 days** and rotates on use. Advertised scope is `tabot.context`. `/mcp` routes by verified token installation binding, never caller-provided installation ID.
 - Revocation deletes the presented token, not every sibling token/client registration. Revoking refresh does not automatically erase an already-issued access token; registrations have no expiry/self-service deletion. No cross-device pairing, account login or guaranteed complete connection erasure is provided.
 
-### Seven read-only tools
+### Five read-only tools
 
 Tool names are protocol contracts, not product labels. Every tool advertises `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: false`.
 
 | Tool / arguments | Implemented selection and limits |
 | --- | --- |
-| `search_context({ query, hours? })` | Query 1–200 characters; optional integer 1–168 hours. Local domain/sequence token-substring matching over ready contexts; maximum 8 results. No semantic/content search. |
-| `get_recent_context({ hours })` | Required integer 1–168 hours; time-overlapping ready contexts, maximum 20. Source is derived before range selection. |
-| `get_current_context({})` | Most recent ready context overlapping the last 24 hours; no real-time/task guarantee, missing returns `found: false`. |
-| `get_context({ id })` | ID 1–256 characters; one exact context, including non-ready. Missing returns `found: false`, never an unscoped history dump. |
-| `list_recurring_patterns({ limit? })` | Integer 1–20, default 10. Recurrent-only filtering before limiting; newest first. Up to 500 recent contexts from up to 500 recent sessions; scope/truncation reported. |
-| `get_memory({ id })` | ID 1–256 characters; one pattern from the recent-context scope, or `found: false`. Origin-only supporting occurrences and real `get_context` IDs. |
-| `get_activity_metrics({ from, to, origin? })` | Safe integer Unix milliseconds with `0 <= from < to <= now`; `[from,to)`, `from: 0` means retained history. Optional exact HTTP(S) origin, max 256 characters, with no credentials/path/query/fragment/trailing slash. Validated again locally. |
+| `search_activity({ query, limit?, cursor? })` | 1–200 character query, max 8 results, snapshot cursor. Returns selected sites/timestamps and redacted previews. |
+| `find_activity_matches({ anchors, limit?, cursor?, maxGapHours? })` | 1–8 activity anchors; up to 8 literal same-page/site/time matches; gap 1–720 hours. |
+| `get_activity_timeline({ anchors, limit?, cursor?, maxGapHours? })` | The same bounded anchors and matches, ordered chronologically. |
+| `search_notes({ query, from?, to?, site?, limit? })` | Local lexical note search, optional timestamp/domain filters, max 8 results. Note text/title are PII-redacted before return; session is derived locally. |
+| `get_page_notes({ url })` | HTTP(S) URL, max 2,048 characters. Canonical page-key lookup; returns up to 8 PII-redacted notes with host/time/session, no path. |
 
 Server entry is `apps/mcp-server/src/index.ts`; schemas are in `apps/mcp-server/src/mcp/schema/`, auth code in `apps/mcp-server/src/auth/`, and shared configuration in `apps/mcp-server/src/config.ts`. Extension relay dispatch/projections are in `apps/extension/relay/relay.ts`. Tools return one JSON text content block; relay failures become MCP `isError` results. `get_session` and `get_page_context` do not exist. Local `LiveBrowserContext` APIs are not directly exposed by MCP.
 

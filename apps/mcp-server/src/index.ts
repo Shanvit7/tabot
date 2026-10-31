@@ -20,7 +20,9 @@ import { logEvent } from "./log";
 import { ERROR_CODES, RelayError } from "./mcp/protocol";
 import {
 	findActivityMatchesInputSchema,
+	getPageNotesInputSchema,
 	searchActivityInputSchema,
+	searchNotesInputSchema,
 } from "./mcp/schema";
 import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./mcp/tools";
 
@@ -110,6 +112,28 @@ const createMcpServer = (
 			inputSchema: findActivityMatchesInputSchema,
 		},
 		(params) => call(TOOL_NAMES.FIND_ACTIVITY_MATCHES, params),
+	);
+
+	server.registerTool(
+		TOOL_NAMES.SEARCH_NOTES,
+		{
+			title: "Search notes",
+			description: TOOL_DESCRIPTIONS.SEARCH_NOTES,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: searchNotesInputSchema,
+		},
+		(params) => call(TOOL_NAMES.SEARCH_NOTES, params),
+	);
+
+	server.registerTool(
+		TOOL_NAMES.GET_PAGE_NOTES,
+		{
+			title: "Get page notes",
+			description: TOOL_DESCRIPTIONS.GET_PAGE_NOTES,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: getPageNotesInputSchema,
+		},
+		(params) => call(TOOL_NAMES.GET_PAGE_NOTES, params),
 	);
 
 	server.registerTool(

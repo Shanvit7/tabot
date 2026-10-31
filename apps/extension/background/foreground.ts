@@ -35,12 +35,16 @@ export const isForegroundTab = async (tabId: number): Promise<boolean> => {
 
 // Persist only the last observed foreground sample, never an open-ended timer.
 // The queue orders overlapping Chrome events; semantic state survives SW restarts.
-export const startForegroundTracking = (emit: Emit) => {
+export const startForegroundTracking = (
+	emit: Emit,
+	isEnabled: () => boolean | Promise<boolean> = () => true,
+) => {
 	let queue = Promise.resolve();
-	const sample = (enabled = true) => {
+	const sample = (enabled?: boolean) => {
 		const timestamp = Date.now();
 		queue = queue
 			.then(async () => {
+				const shouldTrack = enabled ?? (await isEnabled());
 				const stored = await chrome.storage.session.get(STATE_KEY);
 				const savedPrevious = stored[STATE_KEY] as ForegroundState | undefined;
 				const previous = savedPrevious
@@ -58,7 +62,7 @@ export const startForegroundTracking = (emit: Emit) => {
 						await chrome.storage.session.set({ [STATE_KEY]: previous });
 					else await chrome.storage.session.remove(STATE_KEY);
 				}
-				const windows = enabled
+				const windows = shouldTrack
 					? await chrome.windows.getAll({ populate: true })
 					: [];
 				const window = windows.find(
@@ -66,7 +70,7 @@ export const startForegroundTracking = (emit: Emit) => {
 				);
 				const tab = window?.tabs?.find((tab) => tab.active);
 				const active =
-					enabled &&
+					shouldTrack &&
 					tab?.id !== undefined &&
 					!tab.incognito &&
 					(await chrome.idle.queryState(IDLE_SECONDS)) === "active";

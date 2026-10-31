@@ -36,12 +36,18 @@ let lastOptions: unknown;
 const getDb = async (): Promise<
 	Pick<
 		TabotDatabase,
-		"searchHistory" | "getSearchStatus" | "getPageObservation"
+		| "searchHistory"
+		| "searchNotes"
+		| "getSearchStatus"
+		| "getPageObservation"
+		| "readEvents"
 	>
 > => {
 	opens++;
 	if (fail) throw new Error("offline");
 	return {
+		searchNotes: async () => [],
+		readEvents: async () => [],
 		searchHistory: async (query, options) => {
 			assert.equal(query, "guide");
 			lastOptions = options;
@@ -118,6 +124,7 @@ assert.deepEqual(
 	{
 		results: [],
 		searchStatus: { mode: "keyword", indexing: true, model: "loading" },
+		notes: [],
 	},
 );
 assert.deepEqual(lastOptions, {
@@ -210,6 +217,8 @@ const wiredResponse = JSON.parse(
 			{ type: "SEARCH_HISTORY", query: "guide" },
 			sender,
 			async () => ({
+				searchNotes: async () => [],
+				readEvents: async () => [],
 				searchHistory: (query, options) =>
 					searchHistory([navigation], [capturedPage], query, options),
 				getSearchStatus: async () => ({

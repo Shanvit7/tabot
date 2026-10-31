@@ -1,6 +1,8 @@
 # Tabot MCP relay
 
-Tabot exposes three read-only MCP tools. `search_activity` searches locally retained browser activity and redacted page previews, returning up to 8 results with site, time range, activity IDs, and reusable `anchors`. Pass `nextCursor` with the same query to continue; `null` means no more results. Pages use a fixed timestamp snapshot.
+Tabot exposes five read-only MCP tools. `search_activity` searches locally retained browser activity and redacted page previews, returning up to 8 results with site, time range, activity IDs, and reusable `anchors`. Pass `nextCursor` with the same query to continue; `null` means no more results. Pages use a fixed timestamp snapshot.
+
+`search_notes` searches user-written notes by text, timestamp range, or site domain. `get_page_notes` returns notes for one canonical page URL. Both return PII-redacted note text, host, timestamps, and derived session when available; page paths stay on-device. Note content leaves the device only on these authorized read-only tool calls.
 
 `find_activity_matches` accepts 1–8 `{kind,id}` anchors from search and returns up to 8 matches for the same page, same site, or timestamps within `maxGapHours`. Each match lists `matchedBy` and `matchedAnchorIds`; this is literal matching, not a relevance score or inferred intent. `maxGapHours` defaults to 168 and is capped at 720.
 
@@ -21,7 +23,7 @@ Dev Worker settings are in gitignored `apps/mcp-server/.dev.vars`; never copy pr
 
 ## Connect ChatGPT or Claude
 
-Use the full MCP URL ending in `/mcp`. ChatGPT developer connections and Claude custom connectors each require OAuth consent in the same Chrome profile where the Tabot extension is installed and running. After deploying a tool schema/name change, refresh the connector's tool list. Confirm `search_activity`, `find_activity_matches`, and `get_activity_timeline` are discovered.
+Use the full MCP URL ending in `/mcp`. ChatGPT developer connections and Claude custom connectors each require OAuth consent in the same Chrome profile where the Tabot extension is installed and running. After deploying a tool schema/name change, refresh the connector's tool list. Confirm `search_activity`, `find_activity_matches`, `get_activity_timeline`, `search_notes`, and `get_page_notes` are discovered.
 
 The extension must stay connected while calls are served. `/health` and OAuth discovery prove only Worker availability; they do not prove extension connectivity. Check relay state in the extension service-worker console:
 
