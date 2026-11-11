@@ -1,6 +1,11 @@
 import {
+	BEHAVIOR_MODEL_LIMITS,
+	buildWorkflowHandoff,
+	deriveSiteDomain,
+	discoverHandwiredWorkflows,
 	type StoredTabEvent,
 	safeRecallUrl,
+	sanitizeEventsForRead,
 	sessionForNote,
 	sessionize,
 	type TabotDatabase,
@@ -21,18 +26,42 @@ type HistoryReader = Pick<
 	| "getSearchStatus"
 	| "getPageObservation"
 	| "readEvents"
+	| "getWorkflowCheckpoint"
+	| "createWorkflowHandoff"
+	| "listWorkflowScriptDrafts"
+	| "deleteWorkflowScriptDraft"
 >;
 
 export const readDashboardHistory = async (
 	message: unknown,
 	senderUrl: string | undefined,
 	getDb: () => Promise<HistoryReader>,
+	trackingEnabled: () => Promise<boolean> = async () => false,
 ): Promise<DashboardHistoryResponse> => {
 	if (!isDashboardSender(senderUrl))
 		return { ok: false, code: "unauthorized-sender" };
 	if (!isRecord(message)) return { ok: false, code: "invalid-request" };
 	const search = message.type === "SEARCH_HISTORY";
-	if (search) {
+	const workflows = message.type === "GET_WORKFLOW_CANDIDATES";
+	const createHandoff = message.type === "CREATE_WORKFLOW_HANDOFF";
+	const listScripts = message.type === "GET_WORKFLOW_SCRIPT_DRAFTS";
+	const deleteScript = message.type === "DELETE_WORKFLOW_SCRIPT_DRAFT";
+	if (workflows || listScripts) {
+		// Tracking is rechecked for grants; saved drafts remain readable while paused.
+	} else if (
+		createHandoff &&
+		(typeof message.candidateId !== "string" ||
+			!/^handwired-v1-[a-f0-9]{8}$/.test(message.candidateId))
+	) {
+		return { ok: false, code: "invalid-request" };
+	} else if (
+		deleteScript &&
+		(typeof message.id !== "string" || message.id.length > 128)
+	) {
+		return { ok: false, code: "invalid-request" };
+	} else if (createHandoff || deleteScript) {
+		// The validated request is handled by the owner below.
+	} else if (search) {
 		if (
 			typeof message.query !== "string" ||
 			!message.query.trim() ||
@@ -70,6 +99,56 @@ export const readDashboardHistory = async (
 	}
 	try {
 		const db = await getDb();
+		if (listScripts) return { drafts: await db.listWorkflowScriptDrafts() };
+		if (deleteScript) return db.deleteWorkflowScriptDraft(message.id as string);
+		if (workflows || createHandoff) {
+			if (!(await trackingEnabled()))
+				return { ok: false, code: "tracking-disabled" };
+			const checkpoint = await db.getWorkflowCheckpoint();
+			if (!checkpoint) {
+				if (createHandoff)
+					return { ok: false, code: "workflow-model-not-ready" };
+				return {
+					candidates: [],
+					modelReady: false,
+					trainedThrough: null,
+					sourceCount: 0,
+					truncated: false,
+				};
+			}
+			const events = await db.readEvents({
+				limit: BEHAVIOR_MODEL_LIMITS.events + 1,
+				types: ["NAVIGATION", "TAB_ACTIVATED"],
+			});
+			const retained = await sanitizeEventsForRead(events);
+			const candidates = discoverHandwiredWorkflows(
+				retained.slice(-BEHAVIOR_MODEL_LIMITS.events),
+				checkpoint,
+			);
+			if (createHandoff) {
+				const candidate = candidates.find(
+					(item) => item.id === message.candidateId,
+				);
+				if (!candidate)
+					return { ok: false, code: "workflow-candidate-not-found" };
+				await db.createWorkflowHandoff({
+					payload: buildWorkflowHandoff(candidate),
+					sourceIds: [
+						...new Set(candidate.occurrences.flatMap((item) => item.sourceIds)),
+					],
+				});
+				return { prepared: true };
+			}
+			return {
+				candidates,
+				modelReady: true,
+				trainedThrough: checkpoint.trainedThrough,
+				sourceCount: checkpoint.sourceIds.length,
+				truncated:
+					events.length > BEHAVIOR_MODEL_LIMITS.events ||
+					candidates.length === 50,
+			};
+		}
 		if (search) {
 			const options = {
 				from: message.from as number | undefined,
@@ -104,7 +183,7 @@ export const readDashboardHistory = async (
 						updatedAt: note.updatedAt,
 						url: note.url,
 						host: note.host,
-						site: note.site,
+						site: deriveSiteDomain(note.host),
 						title: note.title,
 						favicon: safeRecallUrl(note.favicon ?? undefined)?.href ?? null,
 						session: session
@@ -142,7 +221,13 @@ export const readDashboardHistory = async (
 	} catch {
 		return {
 			ok: false,
-			code: search ? "search-unavailable" : "preview-unavailable",
+			code: search
+				? "search-unavailable"
+				: workflows || createHandoff
+					? "workflow-unavailable"
+					: listScripts || deleteScript
+						? "workflow-script-unavailable"
+						: "preview-unavailable",
 		};
 	}
 };

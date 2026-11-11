@@ -1,28 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Counter from "~/../components/animata/text/counter";
+import { readActiveTrackingDuration } from "~/lib/history";
 
 const SECOND_MS = 1_000;
+const REFRESH_MS = 30_000;
 const formatTwoDigits = (value: number) =>
 	String(Math.floor(value)).padStart(2, "0");
-export const TrackingDuration = ({
-	firstEventTimestamp,
-	enabled,
-}: {
-	firstEventTimestamp: number;
-	enabled: boolean;
-}) => {
-	// ponytail: pause-adjusted within this view; lifetime totals need persisted tracking intervals.
-	const [elapsedMs, setElapsedMs] = useState(() =>
-		Math.max(0, Date.now() - firstEventTimestamp),
-	);
+
+export const TrackingDuration = ({ enabled }: { enabled: boolean }) => {
+	const [elapsedMs, setElapsedMs] = useState(0);
+	const [active, setActive] = useState(false);
+	const activeRef = useRef(active);
 	useEffect(() => {
-		if (!enabled) return;
-		let lastTick = Date.now();
+		activeRef.current = active;
+	}, [active]);
+	useEffect(() => {
+		let ticksSinceRefresh = REFRESH_MS / SECOND_MS;
+		const refresh = () => {
+			ticksSinceRefresh = 0;
+			void readActiveTrackingDuration()
+				.then(({ durationMs, active: isActive }) => {
+					setElapsedMs(durationMs);
+					setActive(isActive);
+				})
+				.catch(() => setActive(false));
+		};
+		refresh();
 		const timer = window.setInterval(() => {
-			const now = Date.now();
-			const delta = now - lastTick;
-			lastTick = now;
-			setElapsedMs((elapsed) => elapsed + delta);
+			if (enabled && activeRef.current)
+				setElapsedMs((elapsed) => elapsed + SECOND_MS);
+			ticksSinceRefresh += 1;
+			if (ticksSinceRefresh >= REFRESH_MS / SECOND_MS) refresh();
 		}, SECOND_MS);
 		return () => window.clearInterval(timer);
 	}, [enabled]);
@@ -35,7 +43,7 @@ export const TrackingDuration = ({
 	return (
 		<p className="flex items-baseline gap-1.5 whitespace-nowrap text-sm">
 			<span className="text-xs text-muted-foreground">
-				{enabled ? "Tracking for" : "Tracking paused at"}
+				{enabled ? "Tracking for" : "Tracked for"}
 			</span>
 			<span className="flex items-baseline gap-1">
 				<Counter targetValue={hours} className={unitClass} />

@@ -3,7 +3,7 @@ import type { StoredTabEvent } from "../events/db";
 import { logger } from "../lib/logger";
 import type { StoredPageObservation } from "../pages/observations";
 import {
-	parseRecentSearchQuestion,
+	parseTemporalRecallQuery,
 	projectActivitySearchResults,
 	searchHistory,
 } from "../recall/history-search";
@@ -107,17 +107,38 @@ assert.equal(titleMatch[0]?.pageTitle, "Database in the browser");
 assert.equal(titleMatch[0]?.pageExcerptAvailable, false);
 assert.deepEqual(titleMatch[0]?.evidenceKinds, ["title-only"]);
 
-const searchNow = 1_800_000_000_000;
-const recentSearch = parseRecentSearchQuestion(
+const searchNow = new Date(2026, 10, 10, 13, 25).getTime();
+const temporalActivity = parseTemporalRecallQuery(
+	"What did I do 2 days ago?",
+	searchNow,
+);
+assert.ok(temporalActivity);
+assert.equal(temporalActivity.query, "");
+const expectedActivityDay = new Date(searchNow);
+expectedActivityDay.setDate(expectedActivityDay.getDate() - 2);
+expectedActivityDay.setHours(0, 0, 0, 0);
+assert.equal(temporalActivity.from, expectedActivityDay.getTime());
+const expectedNextDay = new Date(expectedActivityDay);
+expectedNextDay.setDate(expectedNextDay.getDate() + 1);
+assert.equal(temporalActivity.to, expectedNextDay.getTime() - 1);
+const temporalTopic = parseTemporalRecallQuery(
+	"Find pages about TalaDB yesterday",
+	searchNow,
+);
+assert.equal(temporalTopic?.query, "TalaDB");
+assert.equal(parseTemporalRecallQuery("what did I do", searchNow), undefined);
+assert.equal(
+	parseTemporalRecallQuery("what was I working on yesterday", searchNow)?.query,
+	"",
+);
+const recentSearch = parseTemporalRecallQuery(
 	"what did i search 5 mins ago",
 	searchNow,
 );
 assert.ok(recentSearch);
-assert.deepEqual(recentSearch, {
-	from: searchNow - 6 * 60_000,
-	to: searchNow - 4 * 60_000,
-	nearestTo: searchNow - 5 * 60_000,
-});
+assert.equal(recentSearch.query, "");
+assert.equal(recentSearch.from, searchNow - 5 * 60_000);
+assert.equal(recentSearch.to, searchNow - 4 * 60_000 - 1);
 const timedSearch = await searchHistory(
 	[
 		event(
@@ -133,10 +154,18 @@ const timedSearch = await searchHistory(
 	],
 	[],
 	"",
-	{ ...recentSearch, limit: 5 },
+	{
+		...recentSearch,
+		limit: 5,
+		candidateOrder: ["https://www.google.com/search"],
+	},
 );
 assert.equal(timedSearch.length, 1);
 assert.deepEqual(timedSearch[0]?.searchQueries, ["database"]);
+const activityFallback = await searchHistory(events.slice(0, 1), [], "", {
+	candidateOrder: ["https://example.com/docs/pkce"],
+});
+assert.equal(activityFallback[0]?.url, "https://example.com/docs/pkce");
 const paginationEvents = [
 	event("page-a", "https://a.example/pkce", 500),
 	event("page-b", "https://b.example/pkce", 501),
@@ -167,7 +196,9 @@ assert.equal(semanticOnly[0]?.pageExcerptAvailable, true);
 
 const externalActivity = projectActivitySearchResults(exact.slice(0, 1))[0];
 assert.equal(externalActivity?.site, "https://example.com");
-assert.equal(externalActivity?.preview?.includes("PKCE"), true);
+assert.equal(Object.hasOwn(externalActivity ?? {}, "preview"), false);
+assert.equal(Object.hasOwn(externalActivity ?? {}, "title"), false);
+assert.doesNotMatch(JSON.stringify(externalActivity), /PKCE|OAuth callback/);
 assert.equal(JSON.stringify(externalActivity).includes("/docs/pkce"), false);
 assert.equal(Object.hasOwn(externalActivity?.anchors[0] ?? {}, "url"), false);
 const titleOnlyActivity = projectActivitySearchResults(
@@ -186,8 +217,9 @@ const titleOnlyActivity = projectActivitySearchResults(
 		"OAuth callback settings",
 	),
 )[0];
-assert.equal(titleOnlyActivity?.title, "OAuth callback settings");
-assert.equal(titleOnlyActivity?.preview, null);
+assert.equal(Object.hasOwn(titleOnlyActivity ?? {}, "title"), false);
+assert.equal(Object.hasOwn(titleOnlyActivity ?? {}, "preview"), false);
+assert.doesNotMatch(JSON.stringify(titleOnlyActivity), /OAuth callback/);
 assert.deepEqual(titleOnlyActivity?.matchedFrom, ["title-only"]);
 const pathOnlyResult = projectActivitySearchResults(
 	await searchHistory(
@@ -196,7 +228,7 @@ const pathOnlyResult = projectActivitySearchResults(
 		"internal",
 	),
 )[0];
-assert.equal(pathOnlyResult?.preview, null);
+assert.equal(Object.hasOwn(pathOnlyResult ?? {}, "preview"), false);
 assert.equal(
 	JSON.stringify(pathOnlyResult).includes("/account/internal"),
 	false,

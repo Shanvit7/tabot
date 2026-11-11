@@ -1,5 +1,53 @@
 import assert from "node:assert/strict";
+import { activeDuration, activeSpans } from "@tabot/shared";
 import { isForegroundTab, startForegroundTracking } from "./foreground";
+
+const activityStart = 1_700_000_000_000;
+const activeEvents = [
+	{
+		id: "1",
+		type: "PAGE_VISIBLE" as const,
+		tabId: 1,
+		windowId: 1,
+		timestamp: activityStart,
+	},
+	{
+		id: "2",
+		type: "PAGE_VISIBLE" as const,
+		tabId: 1,
+		windowId: 1,
+		timestamp: activityStart + 30_000,
+	},
+	{
+		id: "3",
+		type: "PAGE_HIDDEN" as const,
+		tabId: 1,
+		windowId: 1,
+		timestamp: activityStart + 50_000,
+	},
+	{
+		id: "4",
+		type: "PAGE_VISIBLE" as const,
+		tabId: 1,
+		windowId: 1,
+		timestamp: activityStart + 100_000,
+	},
+	{
+		id: "5",
+		type: "PAGE_VISIBLE" as const,
+		tabId: 1,
+		windowId: 1,
+		timestamp: activityStart + 130_000,
+	},
+];
+assert.equal(
+	activeDuration(
+		activeSpans(activeEvents),
+		activityStart,
+		activityStart + 130_000,
+	),
+	80_000,
+);
 
 const savedNow = Date.now;
 let now = 1_700_000_000_000;

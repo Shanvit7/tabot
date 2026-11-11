@@ -1,5 +1,5 @@
-import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import {
 	CHATGPT_TUTORIAL_CHAPTERS,
 	CHATGPT_TUTORIAL_DURATION,
@@ -7,7 +7,7 @@ import {
 	getTutorialChapter,
 	getTypedText,
 	getVerificationStage,
-} from '../components/assistant/chatgpt-tutorial/timeline.ts';
+} from "../components/assistant/chatgpt-tutorial/timeline.ts";
 
 assert.equal(CHATGPT_TUTORIAL_CHAPTERS.length, 5);
 assert.equal(CHATGPT_TUTORIAL_DURATION, 78 * CHATGPT_TUTORIAL_FPS);
@@ -32,73 +32,73 @@ for (let frame = CHATGPT_TUTORIAL_DURATION - 1; frame >= 0; frame--) {
 }
 
 const verification = CHATGPT_TUTORIAL_CHAPTERS.find(
-	({ id }) => id === 'verify',
+	({ id }) => id === "verify",
 );
 assert.equal(verification.durationInFrames, 30 * CHATGPT_TUTORIAL_FPS);
 // Direct seeks and replay must restore the search and answer, not retain later state.
 for (const [frame, stage] of [
-	[0, 'compose'],
-	[179, 'compose'],
-	[180, 'calling'],
-	[239, 'calling'],
-	[240, 'answer'],
-	[479, 'answer'],
-	[899, 'answer'],
-	[200, 'calling'],
-	[60, 'compose'],
+	[0, "compose"],
+	[179, "compose"],
+	[180, "calling"],
+	[239, "calling"],
+	[240, "answer"],
+	[479, "answer"],
+	[899, "answer"],
+	[200, "calling"],
+	[60, "compose"],
 ]) {
 	assert.equal(getVerificationStage(frame), stage);
 }
-assert.equal(getVerificationStage(verification.durationInFrames - 1), 'answer');
+assert.equal(getVerificationStage(verification.durationInFrames - 1), "answer");
 
 const privacy = CHATGPT_TUTORIAL_CHAPTERS.find(
-	({ id }) => id === 'authorize',
+	({ id }) => id === "authorize",
 ).body;
 assert.match(privacy, /on-device/);
 assert.match(privacy, /doesn’t store browsing data on its servers/);
 assert.match(privacy, /results reach ChatGPT/);
 
-assert.equal(getTypedText('Tabot', 10, 30, 30), '');
-assert.equal(getTypedText('Tabot', 30, 30, 30), '');
-assert.equal(getTypedText('Tabot', 45, 30, 30), 'Ta');
-assert.equal(getTypedText('Tabot', 60, 30, 30), 'Tabot');
-assert.equal(getTypedText('Tabot', 90, 30, 30), 'Tabot');
+assert.equal(getTypedText("Tabot", 10, 30, 30), "");
+assert.equal(getTypedText("Tabot", 30, 30, 30), "");
+assert.equal(getTypedText("Tabot", 45, 30, 30), "Ta");
+assert.equal(getTypedText("Tabot", 60, 30, 30), "Tabot");
+assert.equal(getTypedText("Tabot", 90, 30, 30), "Tabot");
 // Replay out of order must reconstruct the same form value.
-assert.equal(getTypedText('Tabot', 45, 30, 30), 'Ta');
+assert.equal(getTypedText("Tabot", 45, 30, 30), "Ta");
 
 const verificationSource = readFileSync(
 	new URL(
-		'../components/assistant/chatgpt-tutorial/verify-scene.tsx',
+		"../components/assistant/chatgpt-tutorial/verify-scene.tsx",
 		import.meta.url,
 	),
-	'utf8',
+	"utf8",
 );
 assert.doesNotMatch(verificationSource, /sources|timestamps|UTC/);
 assert.match(verificationSource, /summarize my research/);
 assert.match(verificationSource, /getTypedText\(summary/);
 
 const directory = new URL(
-	'../components/assistant/chatgpt-tutorial/',
+	"../components/assistant/chatgpt-tutorial/",
 	import.meta.url,
 );
 const sources = [
 	new URL(
-		'../components/assistant/chatgpt-connection-tutorial.tsx',
+		"../components/assistant/chatgpt-connection-tutorial.tsx",
 		import.meta.url,
 	),
-	new URL('../routes/_workspace.assistant.tsx', import.meta.url),
+	new URL("../routes/_workspace.assistant.tsx", import.meta.url),
 	...readdirSync(directory)
-		.filter((file) => file.endsWith('.tsx'))
+		.filter((file) => file.endsWith(".tsx"))
 		.map((file) => new URL(file, directory)),
 ];
 for (const source of sources) {
 	assert.doesNotMatch(
-		readFileSync(source, 'utf8'),
+		readFileSync(source, "utf8"),
 		/\b[\w-]+-\[/,
 		`Use standard Tailwind utilities in ${source.pathname}`,
 	);
 }
 
 console.log(
-	'ChatGPT tutorial: timeline, seeking, and standard Tailwind utilities passed.',
+	"ChatGPT tutorial: timeline, seeking, and standard Tailwind utilities passed.",
 );

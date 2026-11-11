@@ -1,14 +1,20 @@
 # Tabot MCP relay
 
-Tabot exposes five read-only MCP tools. `search_activity` searches locally retained browser activity and redacted page previews, returning up to 8 results with site, time range, activity IDs, and reusable `anchors`. Pass `nextCursor` with the same query to continue; `null` means no more results. Pages use a fixed timestamp snapshot.
+Tabot exposes seven read-only MCP tools and one explicit draft-save tool. `search_activity` searches locally retained browser activity, returning up to 8 results with site, time range, activity IDs, and reusable `anchors`; page titles, paths, and visible text are excluded. Pass `nextCursor` with the same query to continue; `null` means no more results. Pages use a fixed timestamp snapshot.
 
-`search_notes` searches user-written notes by text, timestamp range, or site domain. `get_page_notes` returns notes for one canonical page URL. Both return PII-redacted note text, host, timestamps, and derived session when available; page paths stay on-device. Note content leaves the device only on these authorized read-only tool calls.
+`search_notes` searches user-written notes by text, timestamp range, or site domain. `get_page_notes` returns notes for one canonical page URL. `get_site_notes` returns up to 50 notes for a website domain, including all its subdomains. Note results include derived site domain, host, redacted text, timestamps, and derived session when available; page paths stay on-device. Note content leaves the device only on these authorized read-only tool calls.
 
 `find_activity_matches` accepts 1–8 `{kind,id}` anchors from search and returns up to 8 matches for the same page, same site, or timestamps within `maxGapHours`. Each match lists `matchedBy` and `matchedAnchorIds`; this is literal matching, not a relevance score or inferred intent. `maxGapHours` defaults to 168 and is capped at 720.
 
 `get_activity_timeline` accepts the same anchors and options, then returns selected anchors plus one page of matches in chronological order. Items use `role: "anchor"` or `role: "match"`; pagination applies to matches, while anchors repeat on each page.
 
-Full URL paths and raw browser events stay on-device. Only selected sites, timestamps, activity IDs, redacted previews, and match conditions leave the device on explicit tool calls. No results mean no matching retained activity, not proof of absence. The MCP client owns conversation and orchestration. Tabot does not expose legacy context, memory, recurring-pattern, or activity-metric tools.
+Full URL paths, page titles/text, and raw browser events stay on-device. Read tools share only their documented projections on explicit calls. No results mean no matching retained activity, not proof of absence. The MCP client owns conversation and orchestration. Tabot does not expose legacy context, memory, recurring-pattern, or activity-metric tools.
+
+## ChatGPT workflow handoff
+
+One click on **Ask ChatGPT** prepares the selected routine in the extension's local TalaDB owner and opens ChatGPT with a static instruction. No routine data or grant is placed in the URL. ChatGPT fetches the pending handoff through `get_pending_workflow_handoff` or resource `tabot://workflows/pending`. That payload contains only the site-origin sequence, repeat/prediction counts, time range, and one-time save grant—no page titles, paths, content, or guessed goal. ChatGPT must explain what this evidence does and does not show, ask what the user is trying to accomplish, and assess feasibility before proposing steps.
+
+`save_workflow_script` is the only write tool. After the user confirms the exact script, it accepts a strict bounded version-1 declarative script and stores an **unreviewed draft** in local TalaDB. Its one-time grant is bound to the pending candidate, exact handoff digest, local retained evidence, and allowed origins; it expires after 15 minutes. The extension validates again before durable ACK. Same-script retries reconcile unknown ACKs; a different script cannot reuse a consumed grant. The MCP relay never stores the payload or executes scripts. Draft review/import and user-run execution are not implemented yet.
 
 ## Development
 
@@ -23,15 +29,15 @@ Dev Worker settings are in gitignored `apps/mcp-server/.dev.vars`; never copy pr
 
 ## Connect ChatGPT or Claude
 
-Use the full MCP URL ending in `/mcp`. ChatGPT developer connections and Claude custom connectors each require OAuth consent in the same Chrome profile where the Tabot extension is installed and running. After deploying a tool schema/name change, refresh the connector's tool list. Confirm `search_activity`, `find_activity_matches`, `get_activity_timeline`, `search_notes`, and `get_page_notes` are discovered.
+Use the full MCP URL ending in `/mcp`. ChatGPT developer connections and Claude custom connectors each require OAuth consent in the same Chrome profile where the Tabot extension is installed and running. After deploying a tool schema/name change, refresh the connector's tool list. Confirm `get_pending_workflow_handoff`, `search_activity`, `find_activity_matches`, `get_activity_timeline`, `search_notes`, `get_page_notes`, `get_site_notes`, and `save_workflow_script` are discovered. Resource `tabot://workflows/pending` is available to clients that support MCP resources.
 
-The extension must stay connected while calls are served. `/health` and OAuth discovery prove only Worker availability; they do not prove extension connectivity. Check relay state in the extension service-worker console:
+The extension must stay connected while calls are served. `/health` and OAuth discovery prove only Worker availability; they do not prove extension connectivity. From the **Tabot popup or side-panel DevTools console** (not the service-worker console, which cannot answer its own runtime message), run:
 
 ```js
-chrome.runtime.sendMessage({ type: 'GET_RELAY_STATUS' }, console.log)
+chrome.runtime.sendMessage({ type: 'RUN_RELAY_SANITY_CHECK' }, console.log)
 ```
 
-Expect `state: 'connected'` and the intended relay URL. Production and dev credentials are separate.
+Check `relay.state`, `roundTrip.ok`, and `assistants.chatgpt`. A successful round trip proves the Worker routes to this extension installation; `assistants.chatgpt` confirms this installation has a ChatGPT OAuth grant. If both pass but ChatGPT still reports offline, ChatGPT is likely using an OAuth token bound to another installation or relay environment. Production and dev credentials are separate. Dev Worker logs include an 8-character installation tag for comparing authenticated relay upgrades with offline dispatches; bearer tokens are never logged.
 
 ## Checks
 
@@ -39,6 +45,7 @@ Expect `state: 'connected'` and the intended relay URL. Production and dev crede
 pnpm --filter mcp-server check
 pnpm --filter extension check:activityRelay
 pnpm --filter @tabot/shared check:historySearch
+pnpm --filter @tabot/shared check:automationScripts
 ```
 
 Checks use synthetic fixtures and local mocks; they do not deploy or establish whether database-query matches are useful on real browser history.

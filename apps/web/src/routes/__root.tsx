@@ -4,6 +4,7 @@ import {
 	Outlet,
 	Scripts,
 } from "@tanstack/react-router";
+import { NotFound } from "~/components/not-found";
 import "~/styles/app.css";
 
 const RootLayout = () => (
@@ -34,4 +35,5 @@ export const Route = createRootRoute({
 		],
 	}),
 	component: RootLayout,
+	notFoundComponent: NotFound,
 });

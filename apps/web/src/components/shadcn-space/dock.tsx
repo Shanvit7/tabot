@@ -168,8 +168,8 @@ export const Dock = () => {
 	const matchRoute = useMatchRoute();
 	const navigation = [
 		{ to: "/home", label: "Home", Icon: Home03 },
-		{ to: "/ai", label: "AI", Icon: CircuitBoard },
 		{ to: "/assistant", label: "Assistant", Icon: Bot },
+		{ to: "/ai", label: "AI", Icon: CircuitBoard },
 	] as const;
 
 	return (

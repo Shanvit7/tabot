@@ -7,6 +7,15 @@ import type {
 	HistorySearchResult,
 	SearchAvailability,
 } from "../recall/history-search";
+import type {
+	WorkflowAutomationScript,
+	WorkflowScriptDraft,
+} from "../workflows/automation-script";
+import type { BehaviorCheckpoint } from "../workflows/behavior-model";
+import type {
+	WorkflowHandoff,
+	WorkflowHandoffRequest,
+} from "../workflows/workflow-handoff";
 import type { TabEventMetadata, TabEventType } from "./events";
 import { normalizeEvent } from "./ingest";
 
@@ -53,11 +62,19 @@ export interface InsertEventsResult {
 	ignoredPages?: Record<string, string>;
 }
 export type StoredIngestRecord = StoredTabEvent | StoredPageObservation;
+export type WorkflowTrainingResult = {
+	status: "trained" | "unchanged" | "insufficient-data" | "stale" | "cancelled";
+	examples: number;
+	truncated: boolean;
+};
 export type EventRange = {
 	from?: number;
 	to?: number;
 	fromInclusive?: boolean;
 	toInclusive?: boolean;
+	limit?: number;
+	type?: TabEventType;
+	types?: TabEventType[];
 };
 export type PageObservationSummary = Omit<
 	StoredPageObservation,
@@ -173,10 +190,43 @@ export class TabotDatabase {
 		query: string,
 		options?: { from?: number; to?: number; domain?: string; limit?: number },
 	) => this.request<PageNote[]>("searchNotes", [query, options]);
+	listNotesForSite = (site: string) =>
+		this.request<PageNote[]>("listNotesForSite", [site]);
 	listNotesBetween = (from: number, to: number) =>
 		this.request<PageNote[]>("listNotesBetween", [from, to]);
 	getSearchStatus = () =>
 		this.request<SearchAvailability>("getSearchStatus", []);
+	getWorkflowCheckpoint = () =>
+		this.request<BehaviorCheckpoint | null>("getWorkflowCheckpoint", []);
+	createWorkflowHandoff = (request: WorkflowHandoffRequest) =>
+		this.request<void>("createWorkflowHandoff", [request]);
+	getPendingWorkflowHandoff = () =>
+		this.request<WorkflowHandoff | null>("getPendingWorkflowHandoff", []);
+	saveWorkflowScriptDraft = (
+		grantToken: string,
+		candidateId: string,
+		handoffDigest: string,
+		script: WorkflowAutomationScript,
+	) =>
+		this.request<WorkflowScriptDraft>("saveWorkflowScriptDraft", [
+			grantToken,
+			candidateId,
+			handoffDigest,
+			script,
+		]);
+	listWorkflowScriptDrafts = () =>
+		this.request<WorkflowScriptDraft[]>("listWorkflowScriptDrafts", []);
+	deleteWorkflowScriptDraft = (id: string) =>
+		this.request<{ deleted: boolean }>("deleteWorkflowScriptDraft", [id]);
+	getWorkflowTrainingGeneration = () =>
+		this.request<number>("getWorkflowTrainingGeneration", []);
+	advanceWorkflowTrainingGeneration = () =>
+		this.request<number>("advanceWorkflowTrainingGeneration", []);
+	resetWorkflowModel = () => this.request<void>("resetWorkflowModel", []);
+	trainWorkflowModel = (expectedGeneration: number) =>
+		this.request<WorkflowTrainingResult>("trainWorkflowModel", [
+			expectedGeneration,
+		]);
 	getLegacyMigrationStatus = () =>
 		this.request<{
 			pendingRetirement: boolean;

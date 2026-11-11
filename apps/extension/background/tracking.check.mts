@@ -5,6 +5,26 @@ import { setImmediate as nextTurn } from "node:timers/promises";
 import * as shared from "@tabot/shared";
 
 const rows: shared.StoredIngestRecord[] = [];
+const savedNotes = [
+	{
+		id: "note-1",
+		text: "Project notes",
+		createdAt: 123,
+		title: "Project guide",
+		host: "example.com",
+		url: "https://example.com/guide?secret=hidden",
+		tabId: 12,
+	},
+	{
+		id: "note-2",
+		text: "Project notes elsewhere",
+		createdAt: 124,
+		title: "Other guide",
+		host: "other.example",
+		url: "https://other.example/guide",
+		tabId: 13,
+	},
+];
 mock.module("@tabot/shared", {
 	namedExports: {
 		...shared,
@@ -20,7 +40,12 @@ mock.module("@tabot/shared", {
 });
 mock.module("../storage/client", {
 	namedExports: {
-		getStorageDb: async () => ({ findEvent: async () => undefined }),
+		getStorageDb: async () => ({
+			findEvent: async () => undefined,
+			advanceWorkflowTrainingGeneration: async () => 0,
+			searchNotes: async (query: string, options?: { domain?: string }) =>
+				shared.searchNoteRows(savedNotes, query, options),
+		}),
 	},
 });
 mock.module("../relay/relay", {
@@ -29,6 +54,7 @@ mock.module("../relay/relay", {
 		approveAuthorizationTransaction: async () => {},
 		getAssistantConnections: async () => [],
 		getRelayStatus: () => ({}),
+		runRelaySanityCheck: async () => ({}),
 	},
 });
 
@@ -165,6 +191,53 @@ const pageEvent = (timestamp: number) => {
 };
 try {
 	await import("../background");
+	const popup = {
+		id: chrome.runtime.id,
+		url: `chrome-extension://${chrome.runtime.id}/popup.html`,
+	};
+	assert.equal(
+		internal(
+			{ type: "SEARCH_NOTES", query: "Project" },
+			{ id: chrome.runtime.id, url: tab.url },
+			() => {},
+		),
+		false,
+	);
+	assert.deepEqual(
+		await send({ type: "SEARCH_NOTES", query: " " }, false, popup),
+		{ ok: false, code: "invalid-query" },
+	);
+	assert.deepEqual(
+		await send({ type: "SEARCH_NOTES", query: "x".repeat(201) }, false, popup),
+		{ ok: false, code: "invalid-query" },
+	);
+	assert.deepEqual(
+		await send(
+			{ type: "SEARCH_NOTES", query: "Project", origin: "https://example.com" },
+			false,
+			popup,
+		),
+		{
+			notes: [
+				{
+					id: "note-1",
+					text: "Project notes",
+					createdAt: 123,
+					title: "Project guide",
+					host: "example.com",
+					url: "https://example.com/guide",
+				},
+			],
+		},
+	);
+	assert.deepEqual(
+		await send(
+			{ type: "SEARCH_NOTES", query: "missing", origin: "https://example.com" },
+			false,
+			popup,
+		),
+		{ notes: [] },
+	);
 	for (let i = 0; i < 30; i++) await nextTurn();
 	assert.ok(rows.some((row) => "type" in row && row.type === "PAGE_VISIBLE"));
 	const beforePause = rows.length;
@@ -196,7 +269,6 @@ try {
 	assert.deepEqual(await send({ type: "GET_TRACKING" }, true), {
 		enabled: false,
 	});
-
 	// A status read waits for an in-flight preference write and reports committed value.
 	holdWrites = true;
 	const pendingResume = toggle(true);

@@ -3,6 +3,7 @@ export const logEvent = (
 	event: string,
 	fields: {
 		requestId?: string;
+		installationTag?: string;
 		route?: string;
 		tool?: string;
 		status?: number;

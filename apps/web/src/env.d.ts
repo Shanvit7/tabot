@@ -2,6 +2,7 @@ declare module "*.css";
 
 interface ImportMetaEnv {
 	readonly BASE_URL: string;
+	readonly DEV: boolean;
 	readonly VITE_CHROME_WEB_STORE_URL?: string;
 	readonly VITE_SITE_URL?: string;
 	readonly VITE_TABOT_EXTENSION_ID?: string;

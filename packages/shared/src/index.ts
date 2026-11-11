@@ -8,6 +8,13 @@ export {
 	type WeekDay,
 } from "./activities/activity-stats";
 export {
+	ACTIVITY_GAP_MS,
+	type ActiveSpan,
+	activeDuration,
+	activeSpans,
+	foregroundEvents,
+} from "./activities/foreground";
+export {
 	type ActivityRef,
 	type ActivityTransition,
 	activityRef,
@@ -45,6 +52,7 @@ export {
 	countEvents,
 	createEventsDb,
 	deletePageObservations,
+	type EventRange,
 	getAllEvents,
 	getEventsBetween,
 	getPageCaptureSiteSummaries,
@@ -60,6 +68,7 @@ export {
 	sanitizeEventsForRead,
 	storedTabEventSchema,
 	TabotDatabase,
+	type WorkflowTrainingResult,
 } from "./events/db";
 export {
 	EVENT_TYPES,
@@ -112,6 +121,7 @@ export {
 	type MemoryDomain,
 } from "./memories/memories";
 export {
+	deriveSiteDomain,
 	type NewPageNote,
 	noteMatchesDomain,
 	type PageNote,
@@ -159,7 +169,7 @@ export {
 	type HistorySearchCitation,
 	type HistorySearchOptions,
 	type HistorySearchResult,
-	parseRecentSearchQuestion,
+	parseTemporalRecallQuery,
 	projectActivitySearchResults,
 	type SearchAvailability,
 	safeRecallUrl,
@@ -251,3 +261,39 @@ export {
 	type TrackingMessage,
 	type TrackingTransport,
 } from "./tracking/tracking";
+export {
+	isWorkflowAutomationScript,
+	isWorkflowScriptDraft,
+	isWorkflowScriptSaveGrant,
+	WORKFLOW_SCRIPT_LIMITS,
+	type WorkflowAutomationScript,
+	type WorkflowScriptDraft,
+	type WorkflowScriptGrantRequest,
+	type WorkflowScriptSaveGrant,
+	type WorkflowScriptStep,
+} from "./workflows/automation-script";
+export {
+	BEHAVIOR_MODEL_LIMITS,
+	BEHAVIOR_MODEL_SCHEMA,
+	type BehaviorCheckpoint,
+	type BehaviorTraining,
+	buildNextSiteExamples,
+	createBehaviorPredictor,
+	isBehaviorCheckpoint,
+	type NextSiteExample,
+	trainBehaviorCheckpoint,
+} from "./workflows/behavior-model";
+export {
+	discoverHandwiredWorkflows,
+	HANDWIRED_WORKFLOW_LIMITS,
+	type WorkflowCandidate,
+} from "./workflows/discovery";
+export {
+	buildWorkflowHandoff,
+	isWorkflowHandoff,
+	isWorkflowHandoffPayload,
+	type WorkflowHandoff,
+	type WorkflowHandoffPayload,
+	type WorkflowHandoffRequest,
+	workflowHandoffDigest,
+} from "./workflows/workflow-handoff";

@@ -1,3 +1,4 @@
+import { getDomain } from "tldts";
 import type { Session } from "../sessions/sessions";
 
 export interface PageNote {
@@ -16,6 +17,9 @@ export interface PageNote {
 	windowId: number;
 	eventId: string | null;
 }
+
+export const deriveSiteDomain = (host: string): string =>
+	getDomain(host, { allowPrivateDomains: true }) ?? host.toLowerCase();
 
 export type NewPageNote = Omit<
 	PageNote,

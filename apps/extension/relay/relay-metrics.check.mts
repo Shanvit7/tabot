@@ -68,7 +68,40 @@ const seedPage = {
 	segments: ["OAuth callback nonce"],
 };
 const searchOptions: { limit?: number; offset?: number; to?: number }[] = [];
+const savedWorkflowScripts: unknown[][] = [];
 const db = {
+	getPendingWorkflowHandoff: async () => ({
+		payload: {
+			candidateId: "handwired-v1-1234abcd",
+			sites: [
+				"https://www.linkedin.com",
+				"https://google.com",
+				"https://www.linkedin.com",
+			],
+			occurrences: 2,
+			modelMatches: 3,
+			firstAt: 100,
+			lastAt: 200,
+			evidenceType: "site-navigation-only",
+		},
+		grant: {
+			token: "123e4567-e89b-42d3-a456-426614174000",
+			candidateId: "handwired-v1-1234abcd",
+			expiresAt: Date.now() + 60_000,
+			origins: ["https://www.linkedin.com", "https://google.com"],
+			handoffDigest: "a".repeat(64),
+		},
+	}),
+	saveWorkflowScriptDraft: async (...args: unknown[]) => {
+		savedWorkflowScripts.push(args);
+		return {
+			id: "draft-id",
+			candidateId: "handwired-v1-1234abcd",
+			savedAt: 1,
+			status: "draft",
+			script: args[3],
+		};
+	},
 	searchHistory: async (
 		_query: string,
 		options?: { limit?: number; offset?: number; to?: number },
@@ -116,6 +149,7 @@ class TestSocket {
 }
 const originalChrome = globalThis.chrome;
 const originalWebSocket = globalThis.WebSocket;
+const originalFetch = globalThis.fetch;
 globalThis.chrome = {
 	storage: {
 		local: {
@@ -126,6 +160,16 @@ globalThis.chrome = {
 	},
 } as unknown as typeof chrome;
 globalThis.WebSocket = TestSocket as unknown as typeof WebSocket;
+globalThis.fetch = (async (input) => {
+	const url = String(input);
+	if (url.endsWith("/ping"))
+		return new Response(JSON.stringify({ ok: true, result: { pong: true } }));
+	if (url.endsWith("/connection"))
+		return new Response(
+			JSON.stringify({ chatgpt: true, claude: false, order: ["chatgpt"] }),
+		);
+	return new Response(null, { status: 404 });
+}) as typeof fetch;
 const request = async (method: string, params: unknown) => {
 	const requestId = `request-${responses.length}`;
 	socket.onmessage?.({
@@ -137,9 +181,15 @@ const request = async (method: string, params: unknown) => {
 	return response;
 };
 try {
-	const { startRelay } = await import("./relay");
+	const { runRelaySanityCheck, startRelay } = await import("./relay");
 	startRelay();
 	await nextTurn();
+	const diagnostics = await runRelaySanityCheck();
+	assert.equal(diagnostics.roundTrip.ok, true);
+	assert.equal(
+		"chatgpt" in diagnostics.assistants && diagnostics.assistants.chatgpt,
+		true,
+	);
 	const response = await request("search_activity", {
 		query: "OAuth",
 		limit: 1,
@@ -154,7 +204,15 @@ try {
 	assert.match(firstPage.nextCursor, /^\d+:1$/);
 	const json = JSON.stringify(firstPage.results);
 	assert.match(json, /example\.test/);
-	assert.doesNotMatch(json, /private|secret|relatedEvidence/);
+	assert.doesNotMatch(json, /private|secret|OAuth callback|relatedEvidence/);
+	assert.equal(Object.hasOwn(firstPage.results[0] ?? {}, "preview"), false);
+	assert.equal(Object.hasOwn(firstPage.results[0] ?? {}, "title"), false);
+	const handoff = await request("get_pending_workflow_handoff", {});
+	assert.ok(handoff);
+	assert.equal((handoff.result as { ready: boolean }).ready, true);
+	const handoffJson = JSON.stringify(handoff.result);
+	assert.match(handoffJson, /linkedin\.com.*google\.com.*linkedin\.com/);
+	assert.doesNotMatch(handoffJson, /sourceIds|private|secret|page text/);
 	const nextPage = await request("search_activity", {
 		query: "OAuth",
 		limit: 1,
@@ -191,7 +249,12 @@ try {
 	assert.match(related.nextCursor ?? "", /^\d{1,16}:1$/);
 	assert.ok(related.matches[0]?.matchedBy.includes("same_site"));
 	assert.ok(related.matches[0]?.matchedAnchorIds.includes("event-1"));
-	assert.doesNotMatch(JSON.stringify(related.matches), /private|secret/);
+	assert.equal(Object.hasOwn(related.matches[0] ?? {}, "preview"), false);
+	assert.equal(Object.hasOwn(related.matches[0] ?? {}, "title"), false);
+	assert.doesNotMatch(
+		JSON.stringify(related.matches),
+		/private|secret|OAuth callback/,
+	);
 	assert.equal(related.matches[0]?.kind, "event");
 	const trailResponse = await request("get_activity_timeline", {
 		anchors: [{ kind: "event", id: "event-1" }],
@@ -199,7 +262,11 @@ try {
 	});
 	assert.ok(trailResponse?.result);
 	const trail = trailResponse.result as {
-		items: { id: string; role: string; timestamp: number }[];
+		items: {
+			id: string;
+			role: string;
+			timestamp: number;
+		}[];
 	};
 	assert.deepEqual(
 		trail.items.map(({ id }) => id),
@@ -209,7 +276,9 @@ try {
 		trail.items.map(({ role }) => role),
 		["anchor", "match"],
 	);
-	assert.doesNotMatch(JSON.stringify(trail), /private|secret/);
+	assert.equal(Object.hasOwn(trail.items[0] ?? {}, "preview"), false);
+	assert.equal(Object.hasOwn(trail.items[0] ?? {}, "title"), false);
+	assert.doesNotMatch(JSON.stringify(trail), /private|secret|OAuth callback/);
 	const relatedPage2 = await request("find_activity_matches", {
 		anchors: [
 			{ kind: "event", id: "event-1" },
@@ -225,6 +294,35 @@ try {
 	};
 	assert.equal(secondRelated.count, 1);
 	assert.equal(secondRelated.nextCursor, null);
+	const workflowScript = {
+		version: 1,
+		name: "Open a site",
+		description: "Open the selected site.",
+		trigger: "manual",
+		origins: ["https://www.linkedin.com"],
+		inputs: [],
+		steps: [{ type: "navigate", url: "https://www.linkedin.com/" }],
+	};
+	const saveScript = await request("save_workflow_script", {
+		candidateId: "handwired-v1-1234abcd",
+		grantToken: "12345678-1234-1234-1234-123456789012",
+		handoffDigest: "a".repeat(64),
+		script: workflowScript,
+	});
+	assert.equal((saveScript.result as { status: string }).status, "draft");
+	assert.equal(savedWorkflowScripts.length, 1);
+	const invalidScript = await request("save_workflow_script", {
+		candidateId: "handwired-v1-1234abcd",
+		grantToken: "12345678-1234-1234-1234-123456789012",
+		handoffDigest: "a".repeat(64),
+		script: { ...workflowScript, code: "alert(1)" },
+	});
+	assert.match(invalidScript.error?.message ?? "", /Invalid workflow script/);
+	assert.equal(
+		savedWorkflowScripts.length,
+		1,
+		"invalid script never reaches local owner",
+	);
 	const invalidRelatedCursor = await request("find_activity_matches", {
 		anchors: [{ kind: "event", id: "event-1" }],
 		cursor: `${Date.now() + 100_000}:1`,
@@ -254,4 +352,5 @@ try {
 	mock.restoreAll();
 	globalThis.chrome = originalChrome;
 	globalThis.WebSocket = originalWebSocket;
+	globalThis.fetch = originalFetch;
 }

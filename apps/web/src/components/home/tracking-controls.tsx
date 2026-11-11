@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TrackingDuration } from "~/components/home/tracking-duration";
 import { TrackingToggle } from "~/components/home/tracking-toggle";
-import {
-	readHistoryCounts,
-	readTrackingState,
-	setTrackingEnabled,
-} from "~/lib/history";
+import { readTrackingState, setTrackingEnabled } from "~/lib/history";
 
 export const TrackingControls = () => {
 	const [trackingEnabled, setTrackingEnabledState] = useState<boolean | null>(
@@ -14,9 +10,6 @@ export const TrackingControls = () => {
 	const trackingOperation = useRef(false);
 	const [trackingBusy, setTrackingBusy] = useState(false);
 	const [trackingError, setTrackingError] = useState("");
-	const [firstEventTimestamp, setFirstEventTimestamp] = useState<number | null>(
-		null,
-	);
 	const refreshTracking = useCallback(async () => {
 		if (trackingOperation.current) return;
 		trackingOperation.current = true;
@@ -31,17 +24,6 @@ export const TrackingControls = () => {
 			trackingOperation.current = false;
 			setTrackingBusy(false);
 		}
-	}, []);
-	useEffect(() => {
-		let active = true;
-		void readHistoryCounts()
-			.then(({ firstEventTimestamp: timestamp }) => {
-				if (active) setFirstEventTimestamp(timestamp);
-			})
-			.catch(() => undefined);
-		return () => {
-			active = false;
-		};
 	}, []);
 	useEffect(() => {
 		const refreshOnVisibility = () => {
@@ -78,11 +60,8 @@ export const TrackingControls = () => {
 				onToggle={() => void toggleTracking()}
 				onRetry={() => void refreshTracking()}
 			/>
-			{firstEventTimestamp !== null && trackingEnabled !== null && (
-				<TrackingDuration
-					firstEventTimestamp={firstEventTimestamp}
-					enabled={trackingEnabled}
-				/>
+			{trackingEnabled !== null && (
+				<TrackingDuration enabled={trackingEnabled} />
 			)}
 		</div>
 	);

@@ -3,6 +3,9 @@
 import {
 	type AssistantConnections,
 	canonicalPageUrl,
+	deriveSiteDomain,
+	isWorkflowAutomationScript,
+	isWorkflowHandoff,
 	logger,
 	type PageNote,
 	parseAssistantConnections,
@@ -48,6 +51,9 @@ const FIND_ACTIVITY_MATCHES_METHOD = "find_activity_matches";
 const GET_ACTIVITY_TIMELINE_METHOD = "get_activity_timeline";
 const SEARCH_NOTES_METHOD = "search_notes";
 const GET_PAGE_NOTES_METHOD = "get_page_notes";
+const GET_SITE_NOTES_METHOD = "get_site_notes";
+const GET_PENDING_WORKFLOW_HANDOFF_METHOD = "get_pending_workflow_handoff";
+const SAVE_WORKFLOW_SCRIPT_METHOD = "save_workflow_script";
 const ACTIVITY_RESULT_LIMIT = 8;
 const MAX_ACTIVITY_OFFSET = 999_999;
 const MAX_ACTIVITY_QUERY_CHARS = 200;
@@ -99,6 +105,58 @@ export const getAssistantConnections =
 		if (!connections) throw new Error("Invalid connection status response");
 		return connections;
 	};
+
+/** Check current extension socket routing and OAuth grants without exposing credentials. */
+export const runRelaySanityCheck = async () => {
+	let roundTrip: { ok: boolean; status?: number; error?: string };
+	try {
+		const credentials = await loadCredentials();
+		if (!credentials) throw new Error("credentials_missing");
+		const response = await fetch(
+			`${HTTP_BASE}/relay/${encodeURIComponent(credentials.installationId)}/ping`,
+			{
+				method: "POST",
+				headers: { Authorization: `Bearer ${credentials.token}` },
+				signal: AbortSignal.timeout(5_000),
+			},
+		);
+		const body = (await response.json().catch(() => null)) as {
+			ok?: boolean;
+			result?: { pong?: boolean };
+			error?: { message?: string };
+		} | null;
+		roundTrip = {
+			ok: response.ok && body?.ok === true && body.result?.pong === true,
+			status: response.status,
+			...(!response.ok || body?.ok !== true || body.result?.pong !== true
+				? { error: body?.error?.message ?? "relay_ping_failed" }
+				: {}),
+		};
+	} catch (error) {
+		roundTrip = {
+			ok: false,
+			error: error instanceof Error ? error.message : "relay_ping_failed",
+		};
+	}
+
+	let assistants: AssistantConnections | { error: string };
+	try {
+		assistants = await getAssistantConnections();
+	} catch (error) {
+		assistants = {
+			error:
+				error instanceof Error ? error.message : "connection_status_failed",
+		};
+	}
+	const result = { relay: getRelayStatus(), roundTrip, assistants };
+	if (process.env.NODE_ENV !== "production")
+		logger.debug("relay sanity check", {
+			state: result.relay.state,
+			roundTrip: roundTrip.ok,
+			chatgptConnected: "chatgpt" in assistants ? assistants.chatgpt : null,
+		});
+	return result;
+};
 
 /**
  * Prove this extension owns a one-time OAuth authorization transaction. The
@@ -342,7 +400,6 @@ const findActivityMatches = async (params: unknown) => {
 			kind: isPage ? "page" : "event",
 			timestamp: source.timestamp,
 			site: origin,
-			preview: isPage ? source.segments.join(" ").slice(0, 240) : null,
 			matchedBy: [...new Set(matches.flatMap((match) => match.reasons))],
 			matchedAnchorIds: matches.map((match) => match.id),
 		};
@@ -364,7 +421,6 @@ const getActivityTimeline = async (params: unknown) => {
 			kind: "event" | "page";
 			timestamp: number;
 			site: string | null;
-			preview: string | null;
 			matchedBy: string[];
 			matchedAnchorIds: string[];
 		}[];
@@ -389,7 +445,6 @@ const getActivityTimeline = async (params: unknown) => {
 			kind: isPage ? "page" : "event",
 			timestamp: source.timestamp,
 			site: safeRecallUrl(source.url)?.origin ?? null,
-			preview: isPage ? source.segments.join(" ").slice(0, 240) : null,
 			role: "anchor",
 		};
 	});
@@ -419,6 +474,7 @@ const noteResult = async (
 		updatedAt: note.updatedAt,
 		origin: new URL(note.origin).origin,
 		host: note.host,
+		site: deriveSiteDomain(note.host),
 		title: title || null,
 		session: session
 			? {
@@ -525,12 +581,92 @@ const getPageNotes = async (params: unknown) => {
 	};
 };
 
+const getSiteNotes = async (params: unknown) => {
+	const input = params as { site?: unknown } | null;
+	if (
+		typeof input?.site !== "string" ||
+		!input.site.trim() ||
+		input.site.length > 253
+	)
+		throw new Error("site must be a domain.");
+	let site: string;
+	try {
+		const parsed = new URL(
+			input.site.includes("://") ? input.site : `https://${input.site}`,
+		);
+		if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+			throw new Error("site must be a domain.");
+		site = deriveSiteDomain(parsed.hostname);
+	} catch {
+		throw new Error("site must be a domain.");
+	}
+	const db = await getDb();
+	const [notes, events] = await Promise.all([
+		db.listNotesForSite(site),
+		db.readEvents(),
+	]);
+	const sessions = sessionize(events as StoredTabEvent[]);
+	return {
+		site,
+		count: notes.length,
+		notes: await Promise.all(notes.map((note) => noteResult(note, sessions))),
+	};
+};
+
+const saveWorkflowScript = async (params: unknown) => {
+	if (
+		!params ||
+		typeof params !== "object" ||
+		Array.isArray(params) ||
+		Object.keys(params).some(
+			(key) =>
+				!["candidateId", "grantToken", "handoffDigest", "script"].includes(key),
+		)
+	)
+		throw new Error("Invalid workflow script save request.");
+	const input = params as Record<string, unknown>;
+	if (
+		typeof input.candidateId !== "string" ||
+		!/^handwired-v1-[a-f0-9]{8}$/.test(input.candidateId) ||
+		typeof input.grantToken !== "string" ||
+		!/^[0-9a-f-]{36}$/i.test(input.grantToken) ||
+		typeof input.handoffDigest !== "string" ||
+		!/^[a-f0-9]{64}$/.test(input.handoffDigest) ||
+		!isWorkflowAutomationScript(input.script)
+	)
+		throw new Error("Invalid workflow script save request.");
+	return (await getDb()).saveWorkflowScriptDraft(
+		input.grantToken,
+		input.candidateId,
+		input.handoffDigest,
+		input.script,
+	);
+};
+
+const getPendingWorkflowHandoff = async (params: unknown) => {
+	if (
+		params !== undefined &&
+		(!params ||
+			typeof params !== "object" ||
+			Array.isArray(params) ||
+			Object.keys(params).length > 0)
+	)
+		throw new Error("Invalid workflow handoff request.");
+	const handoff = await getDb().then((db) => db.getPendingWorkflowHandoff());
+	return handoff && isWorkflowHandoff(handoff)
+		? { ready: true, ...handoff }
+		: { ready: false };
+};
+
 const handlers: Record<string, (params: unknown) => Promise<unknown>> = {
 	[SEARCH_NOTES_METHOD]: searchNotes,
 	[GET_PAGE_NOTES_METHOD]: getPageNotes,
+	[GET_SITE_NOTES_METHOD]: getSiteNotes,
 	[SEARCH_ACTIVITY_METHOD]: searchActivity,
 	[FIND_ACTIVITY_MATCHES_METHOD]: findActivityMatches,
 	[GET_ACTIVITY_TIMELINE_METHOD]: getActivityTimeline,
+	[GET_PENDING_WORKFLOW_HANDOFF_METHOD]: getPendingWorkflowHandoff,
+	[SAVE_WORKFLOW_SCRIPT_METHOD]: saveWorkflowScript,
 };
 
 const handleRequest = async (message: ServerRequest) => {
@@ -598,6 +734,8 @@ const startHeartbeat = () => {
 const scheduleReconnect = () => {
 	if (reconnectTimer) return;
 	const delay = backoffMs + Math.floor(Math.random() * 500);
+	if (process.env.NODE_ENV !== "production")
+		logger.debug("relay reconnect scheduled", { delayMs: delay });
 	backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX_MS);
 	reconnectTimer = setTimeout(() => {
 		reconnectTimer = null;
@@ -614,6 +752,8 @@ const connect = async (): Promise<void> => {
 	if (connecting || socket) return;
 	connecting = true;
 	status.state = "connecting";
+	if (process.env.NODE_ENV !== "production")
+		logger.debug("relay connecting", { relayUrl: RELAY_URL });
 	try {
 		const { installationId, token } = await ensureCredentials();
 		status.installationId = installationId;
@@ -626,15 +766,30 @@ const connect = async (): Promise<void> => {
 			status.state = "connected";
 			status.lastError = null;
 			startHeartbeat();
-			logger.info("relay connected", { installationId });
+			logger.info("relay connected", {
+				relayUrl: RELAY_URL,
+				...(process.env.NODE_ENV !== "production"
+					? { installationTag: installationId.slice(-8) }
+					: {}),
+			});
 		};
 		ws.onmessage = onMessage;
 		ws.onerror = () => {
 			status.lastError = "socket error";
+			if (process.env.NODE_ENV !== "production")
+				logger.warn("relay socket error", { relayUrl: RELAY_URL });
 		};
-		ws.onclose = () => {
+		ws.onclose = (event) => {
 			teardown();
 			status.state = "offline";
+			status.lastError = `socket closed (${event.code})`;
+			if (process.env.NODE_ENV !== "production")
+				logger.warn("relay disconnected", {
+					relayUrl: RELAY_URL,
+					code: event.code,
+					reason: event.reason,
+					wasClean: event.wasClean,
+				});
 			scheduleReconnect();
 		};
 	} catch (error) {

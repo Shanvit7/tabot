@@ -1,11 +1,20 @@
 import {
+	type AssistantConnections,
+	parseAssistantConnections,
+	type WorkflowScriptDraft,
+} from "@tabot/shared";
+import {
 	type DashboardNoteResult,
 	type DashboardPagePreview,
+	type DashboardWorkflowCandidates,
 	type HistorySearchResult,
 	isDashboardNotes,
 	isDashboardPagePreview,
 	isDashboardSearchAvailability,
 	isDashboardSearchResults,
+	isDashboardWorkflowCandidates,
+	isDashboardWorkflowHandoffPrepared,
+	isDashboardWorkflowScriptDrafts,
 	isRecord,
 	type SearchAvailability,
 } from "@tabot/shared/dashboard";
@@ -13,6 +22,13 @@ import { createTrackingClient } from "@tabot/shared/tracking";
 import { createClientOnlyFn } from "@tanstack/react-start";
 
 // Browser-only transport: never send history or search terms through Start server functions.
+export class ExtensionUnavailableError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "ExtensionUnavailableError";
+	}
+}
+
 type ExtensionRuntime = {
 	sendMessage: (
 		id: string,
@@ -28,6 +44,15 @@ const failureMessage = (code: unknown): string => {
 		return "This search request could not be read. Reload the dashboard and try again.";
 	if (code === "tracking-update-failed")
 		return "Could not update tracking. Try again.";
+	if (code === "tracking-disabled") return "Resume browser tracking first.";
+	if (code === "workflow-candidate-not-found")
+		return "This pattern changed or is no longer available. Refresh and try again.";
+	if (code === "workflow-model-not-ready")
+		return "Wait for Handwired to finish learning, then try again.";
+	if (code === "workflow-evidence-unavailable")
+		return "Some selected history was deleted. Refresh before sharing this pattern.";
+	if (code === "workflow-unavailable")
+		return "Could not prepare this handoff. Refresh the pattern and try again.";
 	return "Tabot could not read local storage. Reload the extension, then try again. This does not mean your history is empty.";
 };
 
@@ -36,7 +61,7 @@ const request = createClientOnlyFn(
 		const extensionId = import.meta.env.VITE_TABOT_EXTENSION_ID;
 		if (!extensionId || !/^[a-p]{32}$/.test(extensionId))
 			return Promise.reject(
-				new Error(
+				new ExtensionUnavailableError(
 					"Connect Tabot first: set VITE_TABOT_EXTENSION_ID to the ID shown in chrome://extensions, then restart the dashboard.",
 				),
 			);
@@ -47,7 +72,7 @@ const request = createClientOnlyFn(
 		).chrome?.runtime;
 		if (!runtime?.sendMessage)
 			return Promise.reject(
-				new Error(
+				new ExtensionUnavailableError(
 					"Open this dashboard in Chrome with the Tabot extension installed and enabled.",
 				),
 			);
@@ -55,7 +80,7 @@ const request = createClientOnlyFn(
 			const timer = setTimeout(
 				() =>
 					reject(
-						new Error(
+						new ExtensionUnavailableError(
 							"Tabot took too long to respond. Reload the extension and try again.",
 						),
 					),
@@ -66,7 +91,7 @@ const request = createClientOnlyFn(
 					clearTimeout(timer);
 					if (runtime.lastError) {
 						reject(
-							new Error(
+							new ExtensionUnavailableError(
 								"Tabot is not reachable. Enable or reload the extension in chrome://extensions, then retry.",
 							),
 						);
@@ -83,7 +108,9 @@ const request = createClientOnlyFn(
 			} catch {
 				clearTimeout(timer);
 				reject(
-					new Error("Tabot is not reachable. Reload the extension and retry."),
+					new ExtensionUnavailableError(
+						"Tabot is not reachable. Reload the extension and retry.",
+					),
 				);
 			}
 		});
@@ -117,6 +144,20 @@ const trackingClient = createTrackingClient(request);
 export const readTrackingState = trackingClient.read;
 export const setTrackingEnabled = trackingClient.set;
 
+export const readActiveTrackingDuration = async (): Promise<{
+	durationMs: number;
+	active: boolean;
+}> => {
+	const response = await request({ type: "GET_ACTIVE_TRACKING_DURATION" });
+	if (
+		typeof response.durationMs !== "number" ||
+		!Number.isFinite(response.durationMs) ||
+		typeof response.active !== "boolean"
+	)
+		throw new Error("Active tracking duration could not be read.");
+	return { durationMs: response.durationMs, active: response.active };
+};
+
 export const readHistoryCounts = async (): Promise<{
 	eventCount: number;
 	pageCount: number;
@@ -146,6 +187,58 @@ export const readHistoryCounts = async (): Promise<{
 		firstEventTimestamp:
 			typeof firstEventTimestamp === "number" ? firstEventTimestamp : null,
 	};
+};
+
+export const readAssistantConnections =
+	async (): Promise<AssistantConnections> => {
+		const response = await request({ type: "GET_ASSISTANT_CONNECTIONS" });
+		const connections = parseAssistantConnections(response);
+		if (!connections)
+			throw new Error(
+				"ChatGPT connection status is unavailable. Reload the extension.",
+			);
+		return connections;
+	};
+
+export const readWorkflowCandidates =
+	async (): Promise<DashboardWorkflowCandidates> => {
+		const response = await request({ type: "GET_WORKFLOW_CANDIDATES" });
+		if (!isDashboardWorkflowCandidates(response))
+			throw new Error(
+				"Workflow response is incompatible. Reload Tabot extension.",
+			);
+		return response;
+	};
+
+export const createWorkflowHandoff = async (
+	candidateId: string,
+): Promise<void> => {
+	const response = await request({
+		type: "CREATE_WORKFLOW_HANDOFF",
+		candidateId,
+	});
+	if (!isDashboardWorkflowHandoffPrepared(response))
+		throw new Error(failureMessage(response.code));
+};
+
+export const readWorkflowScriptDrafts = async (): Promise<
+	WorkflowScriptDraft[]
+> => {
+	const response = await request({ type: "GET_WORKFLOW_SCRIPT_DRAFTS" });
+	if (!isDashboardWorkflowScriptDrafts(response))
+		throw new Error(
+			"Saved automation drafts are incompatible. Reload the extension.",
+		);
+	return response.drafts;
+};
+
+export const deleteWorkflowScriptDraft = async (
+	id: string,
+): Promise<boolean> => {
+	const response = await request({ type: "DELETE_WORKFLOW_SCRIPT_DRAFT", id });
+	if (typeof response.deleted !== "boolean")
+		throw new Error(failureMessage(response.code));
+	return response.deleted;
 };
 
 export const readPagePreview = async (

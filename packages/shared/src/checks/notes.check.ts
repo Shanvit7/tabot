@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import type { StoredTabEvent } from "../events/db";
 import {
+	deriveSiteDomain,
 	noteMatchesDomain,
 	searchNoteRows,
 	sessionForNote,
@@ -18,6 +19,10 @@ assert.equal(validateNoteText(" \n "), false);
 assert.equal(validateNoteText("x".repeat(4_001)), false);
 assert.equal(noteMatchesDomain("docs.example.com", "example.com"), true);
 assert.equal(noteMatchesDomain("badexample.com", "example.com"), false);
+assert.equal(deriveSiteDomain("sales.linkedin.com"), "linkedin.com");
+assert.equal(deriveSiteDomain("www.linkedin.com"), "linkedin.com");
+assert.equal(deriveSiteDomain("docs.example.co.uk"), "example.co.uk");
+assert.equal(deriveSiteDomain("team.github.io"), "team.github.io");
 
 const note = {
 	id: "note-1",
@@ -29,6 +34,14 @@ const note = {
 	updatedAt: 100,
 };
 assert.deepEqual(searchNoteRows([note], "research docs"), [note]);
+assert.deepEqual(
+	searchNoteRows([note], "research", { domain: "example.com" }),
+	[note],
+);
+assert.deepEqual(
+	searchNoteRows([note], "research", { domain: "other.com" }),
+	[],
+);
 assert.deepEqual(searchNoteRows([note], "missing"), []);
 
 const event: StoredTabEvent = {

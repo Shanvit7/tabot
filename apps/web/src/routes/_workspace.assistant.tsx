@@ -2,7 +2,6 @@ import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import { Player, type PlayerRef } from "@remotion/player";
 import {
 	chatGptConnectPromptUrl,
-	CLAUDE_MCP_SERVER_URL as MCP_SERVER_URL,
 	resolveChatGptConnectUrl,
 } from "@tabot/shared";
 import { createFileRoute } from "@tanstack/react-router";
@@ -23,6 +22,8 @@ import {
 	CHATGPT_TUTORIAL_HEIGHT,
 	CHATGPT_TUTORIAL_WIDTH,
 } from "~/components/assistant/chatgpt-tutorial/timeline";
+
+const MCP_SERVER_URL = `https://tabot-mcp${import.meta.env.DEV ? "-dev" : ""}.shanvit7.workers.dev/mcp`;
 
 const steps = [
 	{
@@ -100,10 +101,10 @@ const Assistant = () => {
 						className="bg-work-raised"
 					>
 						<FluidTabs.Tab
-							label="Video demo"
+							label="Demo"
 							className="cursor-pointer gap-2 text-work-ink"
 						>
-							<Play aria-hidden="true" className="size-4" /> Video demo
+							<Play aria-hidden="true" className="size-4" /> Demo
 						</FluidTabs.Tab>
 						<FluidTabs.Tab
 							label="Instructions"

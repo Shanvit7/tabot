@@ -1,3 +1,4 @@
+import * as chrono from "chrono-node";
 import type { StoredTabEvent } from "../events/db";
 import type { StoredPageObservation } from "../pages/observations";
 import { searchQueryFromUrl } from "../privacy/ingest";
@@ -86,8 +87,6 @@ export type ActivitySearchResult = {
 	lastSeen: number;
 	eventCount: number;
 	pageCount: number;
-	title?: string;
-	preview: string | null;
 	matchedFrom: SearchEvidenceKind[];
 	matchedTerms: string[];
 	anchors: Pick<HistorySearchCitation, "kind" | "id" | "timestamp">[];
@@ -99,34 +98,36 @@ export const tokenizeRecallText = (text: string): string[] =>
 		.toLowerCase()
 		.match(/[\p{L}\p{N}]+/gu) ?? [];
 
-export const parseRecentSearchQuestion = (query: string, now = Date.now()) => {
-	const match = query
-		.trim()
-		.match(
-			/^what did i search(?: for)?(?:\s+.*?)?\s+(\d{1,4})\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)\s+ago[?.!]*$/i,
-		);
-	if (!match) return undefined;
-	const amount = Number(match[1]);
-	if (!Number.isSafeInteger(amount) || amount < 1) return undefined;
-	const unit = match[2]?.toLowerCase();
-	const duration =
-		amount *
-		(unit?.startsWith("s")
-			? 1_000
-			: unit?.startsWith("m")
-				? 60_000
-				: unit?.startsWith("h")
-					? 3_600_000
-					: 86_400_000);
-	if (!Number.isFinite(duration) || duration > 365 * 86_400_000)
-		return undefined;
-	const target = now - duration;
-	const tolerance = 60_000;
-	return {
-		from: Math.max(0, target - tolerance),
-		to: Math.min(now, target + tolerance),
-		nearestTo: target,
-	};
+export const parseTemporalRecallQuery = (query: string, now = Date.now()) => {
+	const result = chrono.parse(query, new Date(now), { forwardDate: false })[0];
+	if (!result) return undefined;
+	const start = result.start.date();
+	let from: number;
+	let to: number;
+	if (result.start.isCertain("minute")) {
+		start.setSeconds(0, 0);
+		from = start.getTime();
+		to = from + 60_000 - 1;
+	} else if (result.start.isCertain("hour")) {
+		start.setMinutes(0, 0, 0);
+		from = start.getTime();
+		to = from + 60 * 60_000 - 1;
+	} else {
+		start.setHours(0, 0, 0, 0);
+		from = start.getTime();
+		const nextDay = new Date(start);
+		nextDay.setDate(nextDay.getDate() + 1);
+		to = nextDay.getTime() - 1;
+	}
+	const remainingQuery =
+		`${query.slice(0, result.index)} ${query.slice(result.index + result.text.length)}`
+			.replace(/[?.!,]+/g, " ")
+			.replace(
+				/^\s*(?:what did i (?:do|visit|browse|search)(?: for)?|what was i (?:doing|working on|looking at)|what pages did i visit|find pages about|show me|search for|pages about)\b/i,
+				" ",
+			)
+			.trim();
+	return { from, to, query: remainingQuery };
 };
 
 const yieldTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -221,7 +222,9 @@ export const searchHistory = async (
 		48,
 	);
 	if (
-		(!terms.length && options.nearestTo === undefined) ||
+		(!terms.length &&
+			options.nearestTo === undefined &&
+			!options.candidateOrder?.length) ||
 		(options.nearestTo !== undefined && !Number.isFinite(options.nearestTo)) ||
 		(options.from !== undefined && !Number.isFinite(options.from)) ||
 		(options.to !== undefined && !Number.isFinite(options.to)) ||
@@ -431,7 +434,7 @@ export const searchHistory = async (
 		.slice(offset, offset + limit);
 };
 
-/** Keep URL paths and raw browser-event fields out of activity search responses. */
+/** Keep page titles, excerpts, URL paths, and raw event fields out of assistant activity results. */
 export const projectActivitySearchResults = (
 	results: HistorySearchResult[],
 ): ActivitySearchResult[] =>
@@ -441,8 +444,6 @@ export const projectActivitySearchResults = (
 		lastSeen: result.lastSeen,
 		eventCount: result.eventCount,
 		pageCount: result.pageCount,
-		...(result.pageTitle ? { title: result.pageTitle } : {}),
-		preview: result.pageExcerptAvailable ? result.excerpt.slice(0, 240) : null,
 		matchedFrom: result.evidenceKinds,
 		matchedTerms: result.matchedTerms,
 		anchors: result.sources.map(({ kind, id, timestamp }) => ({

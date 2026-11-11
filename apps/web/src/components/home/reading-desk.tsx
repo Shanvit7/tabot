@@ -1,7 +1,13 @@
-import { parseRecentSearchQuestion } from "@tabot/shared/dashboard";
 import { Debouncer } from "@tanstack/pacer";
 import { Search, X } from "lucide-react";
-import { domAnimation, LazyMotion, MotionConfig, m } from "motion/react";
+import {
+	AnimatePresence,
+	domAnimation,
+	LazyMotion,
+	MotionConfig,
+	m,
+	useReducedMotion,
+} from "motion/react";
 import { useEffect, useReducer, useRef, useState } from "react";
 import {
 	initialReadingDeskSearchState,
@@ -13,11 +19,14 @@ import { TrackingControls } from "~/components/home/tracking-controls";
 import { searchRetainedPages } from "~/lib/history";
 import { cn } from "~/lib/utils";
 
+const searchableTerms = ["a page", "a site", "yesterday’s activity"] as const;
+
 export const ReadingDesk = () => {
+	const reduceMotion = useReducedMotion();
 	const [input, setInput] = useState("");
+	const [searchableTermIndex, setSearchableTermIndex] = useState(0);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const query = input.trim();
-	const recentSearchQuestion = Boolean(parseRecentSearchQuestion(query));
 	const [composing, setComposing] = useState(false);
 	const searchDebouncer = useRef<Debouncer<() => void> | null>(null);
 	const [searchState, dispatchSearch] = useReducer(
@@ -28,6 +37,20 @@ export const ReadingDesk = () => {
 		const initialQuery = new URLSearchParams(window.location.search).get("q");
 		if (initialQuery) setInput(initialQuery.slice(0, 240));
 	}, []);
+
+	useEffect(() => {
+		if (reduceMotion || query) return;
+		const timer = window.setInterval(
+			() =>
+				setSearchableTermIndex(
+					(current) => (current + 1) % searchableTerms.length,
+				),
+			2200,
+		);
+		return () => window.clearInterval(timer);
+	}, [query, reduceMotion]);
+
+	const searchableTerm = searchableTerms[searchableTermIndex];
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: retryCount intentionally resubmits unchanged query.
 	useEffect(() => {
@@ -97,16 +120,36 @@ export const ReadingDesk = () => {
 									: "flex min-h-[60svh] flex-col justify-center",
 							)}
 						>
-							<h1 className="mb-6 text-center text-2xl font-medium tracking-tight">
-								{searchState.searching
-									? "Finding your way back…"
-									: searchState.searchError
-										? "Find a page again."
-										: searchState.results.length > 0
-											? "You’ve been here before."
-											: query
-												? "No match this time."
-												: "Find a page again."}
+							<h1
+								aria-label="Find your way back to a page, a site, or yesterday’s activity"
+								className="mb-6 text-center text-2xl font-medium tracking-tight"
+							>
+								<span aria-hidden="true">Find your way back to</span>
+								<span
+									aria-hidden="true"
+									className="ml-1 inline-grid overflow-hidden align-bottom [perspective:600px]"
+								>
+									<AnimatePresence mode="wait" initial={false}>
+										<m.span
+											key={reduceMotion || query ? "a page" : searchableTerm}
+											initial={
+												reduceMotion
+													? false
+													: { opacity: 0, rotateX: -80, y: 12 }
+											}
+											animate={{ opacity: 1, rotateX: 0, y: 0 }}
+											exit={
+												reduceMotion
+													? undefined
+													: { opacity: 0, rotateX: 80, y: -12 }
+											}
+											transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+											className="bg-transparent font-semibold text-foreground underline decoration-primary decoration-2 underline-offset-4"
+										>
+											{reduceMotion || query ? "a page" : searchableTerm}
+										</m.span>
+									</AnimatePresence>
+								</span>
 							</h1>
 							<search>
 								<form
@@ -144,8 +187,7 @@ export const ReadingDesk = () => {
 											)
 												event.preventDefault();
 										}}
-										placeholder="What do you remember?"
-										aria-describedby="history-help"
+										placeholder="Try a site name, page title, or date"
 										className="h-11 min-w-0 flex-1 bg-transparent px-1 text-base outline-none placeholder:text-muted-foreground"
 									/>
 									{input && (
@@ -168,7 +210,6 @@ export const ReadingDesk = () => {
 				</MotionConfig>
 				<SearchResultSection
 					query={query}
-					recentSearchQuestion={recentSearchQuestion}
 					state={searchState}
 					onRetrySearch={() => dispatchSearch({ type: "retry" })}
 					onSelectPage={(url) => dispatchSearch({ type: "select", url })}

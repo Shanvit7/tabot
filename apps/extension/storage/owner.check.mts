@@ -53,7 +53,8 @@ type RecordFilter = {
 	$and?: RecordFilter[];
 	$or?: RecordFilter[];
 	recordKind?: string | { $in?: string[] };
-	originalId?: { $nin?: string[] };
+	originalId?: { $in?: string[]; $nin?: string[] };
+	"payload.type"?: string | { $in?: string[] };
 	pageKey?: string;
 	url?: string;
 	host?: string;
@@ -76,6 +77,15 @@ const matches = (row: Record<string, unknown>, query: RecordFilter): boolean =>
 			: !query.recordKind.$in ||
 				query.recordKind.$in.includes(row.recordKind as string))) &&
 	!query.originalId?.$nin?.includes(row.originalId as string) &&
+	(!query.originalId?.$in ||
+		query.originalId.$in.includes(row.originalId as string)) &&
+	(!query["payload.type"] ||
+		(typeof query["payload.type"] === "string"
+			? (row.payload as Record<string, unknown>)?.type === query["payload.type"]
+			: !query["payload.type"].$in ||
+				query["payload.type"].$in.includes(
+					(row.payload as Record<string, unknown>)?.type as string,
+				))) &&
 	(!query.pageKey || row.pageKey === query.pageKey) &&
 	(query.url === undefined || row.url === query.url) &&
 	(query.host === undefined || row.host === query.host) &&
@@ -293,6 +303,10 @@ const notes = {
 };
 const metaRows = new Map<string, Record<string, unknown>>();
 const meta = {
+	find: async ({ kind }: { kind?: string }) =>
+		[...metaRows.values()].filter(
+			(row) => kind === undefined || row.kind === kind,
+		),
 	findOne: async ({ _id }: { _id: string }) =>
 		_id === expectedMarkerId ? marker : (metaRows.get(_id) ?? null),
 	updateOne: async (
@@ -311,6 +325,7 @@ const meta = {
 			marker = row;
 		} else metaRows.set(row._id as string, row);
 	},
+	deleteOne: async ({ _id }: { _id: string }) => metaRows.delete(_id),
 };
 const embeddings = {
 	findOne: async ({ _id }: { _id: string }) =>
@@ -595,11 +610,28 @@ try {
 	const secondNote = {
 		...note,
 		id: "note-uuid-2",
+		host: "jobs.linkedin.com",
+		url: "https://jobs.linkedin.com/view",
+		origin: "https://jobs.linkedin.com",
+		site: "jobs.linkedin.com",
 		pageKey: "different-page-key",
 		createdAt: note.createdAt + 1,
 		updatedAt: note.updatedAt + 1,
 	};
 	assert.equal((await request("saveNote", [secondNote])).ok, true);
+	const siteNotes = await request("listNotesForSite", ["linkedin.com"]);
+	assert.deepEqual(
+		(siteNotes.value as { id: string }[]).map(({ id }) => id),
+		[secondNote.id, note.id],
+	);
+	assert.equal(
+		(
+			noteRows.get(deriveDocId("tabot:notes:v1", secondNote.id)) as {
+				site: string;
+			}
+		).site,
+		"linkedin.com",
+	);
 	const notesAfterSecondSave = await request("listPageNotes", [
 		"different-page-key",
 		fallback,
@@ -686,17 +718,18 @@ try {
 		133,
 		"replayed commit must not duplicate source record",
 	);
+	const searchTimestamp = Date.now();
 	const searchEvent = {
 		...event,
 		id: `${event.source.instanceId}:103`,
-		timestamp: Date.now(),
+		timestamp: searchTimestamp,
 		url: "https://docs.example.com/guide",
 		source: { ...event.source, sequence: 103 },
 	};
 	const searchPage = {
 		id: "61b8dc2a-7709-4b78-b3a3-9b6900c6b1a5",
 		kind: "page-observation",
-		timestamp: Date.now(),
+		timestamp: searchTimestamp,
 		tabId: 1,
 		windowId: 1,
 		pageKey: "c".repeat(64),
@@ -729,7 +762,6 @@ try {
 			[...storedPassages.values()].some((row) => row.sourceKind === "page"),
 		"both URL-only events and page passages get vectors",
 	);
-	const searchTimestamp = searchPage.timestamp;
 	const searchResult = await request("searchHistory", [
 		"callback nonce",
 		{
@@ -745,6 +777,32 @@ try {
 		),
 		true,
 	);
+	const activityDate = new Date();
+	activityDate.setDate(activityDate.getDate() - 2);
+	activityDate.setHours(12, 0, 0, 0);
+	const activityEvent = {
+		...event,
+		id: `${event.source.instanceId}:105`,
+		timestamp: activityDate.getTime(),
+		url: "https://docs.example.com/retained-page",
+		source: { ...event.source, sequence: 105 },
+	};
+	const activityId = deriveDocId(
+		"tabot:records:v1",
+		`event:${activityEvent.id}`,
+	);
+	storedRecords.set(activityId, {
+		_id: activityId,
+		recordKind: "event",
+		originalId: activityEvent.id,
+		timestamp: activityEvent.timestamp,
+		origin: "https://docs.example.com",
+		payload: activityEvent,
+	});
+	const activityRecall = await request("searchHistory", [
+		"What did I do 2 days ago?",
+	]);
+	assert.equal(activityRecall.value[0]?.url, activityEvent.url);
 	const relatedEvidence = await request("readRelatedActivity", [
 		[searchTimestamp],
 		[],
@@ -753,7 +811,7 @@ try {
 		1_000,
 		8,
 		0,
-		Date.now(),
+		searchTimestamp,
 	]);
 	assert.equal(relatedEvidence.ok, true);
 	assert.ok(
@@ -825,6 +883,177 @@ try {
 		"what did i search 5 mins ago",
 	]);
 	assert.deepEqual(timeGoogleSearch.value[0]?.searchQueries, ["database"]);
+	failure = undefined;
+	const modelInstance = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+	const modelEvents = Array.from({ length: 12 }, (_, repeat) =>
+		["alpha", "beta", "gamma"].map((site, index) => {
+			const sequence = 1_000 + repeat * 3 + index;
+			return {
+				...event,
+				id: `${modelInstance}:${sequence}`,
+				type: "TAB_ACTIVATED",
+				tabId: index + 1,
+				timestamp:
+					Date.now() - 90 * 24 * 60 * 60_000 + repeat * 60_000 + index * 1_000,
+				url: `https://${site}.example/path`,
+				source: { instanceId: modelInstance, sequence },
+			};
+		}),
+	).flat();
+	await request("commitIngest", [modelEvents]);
+	const generation = await request("getWorkflowTrainingGeneration");
+	assert.equal(generation.value, 0);
+	const staleTraining = await request("trainWorkflowModel", [1]);
+	assert.equal(
+		(staleTraining.value as { status: string }).status,
+		"stale",
+		"training rejects stale tracking generation",
+	);
+	const [trained, overlappingTraining] = await Promise.all([
+		request("trainWorkflowModel", [generation.value]),
+		request("trainWorkflowModel", [generation.value]),
+	]);
+	assert.equal(
+		trained.value && (trained.value as { status: string }).status,
+		"trained",
+	);
+	assert.deepEqual(
+		overlappingTraining.value,
+		trained.value,
+		"overlapping auto-training triggers share one pass",
+	);
+	const checkpoint = await request("getWorkflowCheckpoint");
+	assert.equal(checkpoint.ok, true);
+	assert.equal((checkpoint.value as { schema?: number }).schema, 2);
+	assert.ok(
+		(checkpoint.value as { sourceIds: string[] }).sourceIds.includes(
+			`${modelInstance}:1000`,
+		),
+		"training includes retained history older than 30 days",
+	);
+	await request("advanceWorkflowTrainingGeneration");
+	assert.equal(
+		(await request("getWorkflowCheckpoint")).value !== null,
+		true,
+		"pause generation preserves checkpoint",
+	);
+	const sourceId = (checkpoint.value as { sourceIds: string[] }).sourceIds[0];
+	const sourceRow = [...storedRecords.values()].find(
+		(row) => row.originalId === sourceId,
+	);
+	assert.ok(sourceRow);
+	storedRecords.delete(sourceRow._id as string);
+	assert.equal(
+		(await request("getWorkflowCheckpoint")).value,
+		null,
+		"deleted source invalidates checkpoint",
+	);
+	await request("resetWorkflowModel");
+	assert.equal(
+		(await request("getWorkflowCheckpoint")).value,
+		null,
+		"reset removes checkpoint",
+	);
+	const automationCandidateId = "handwired-v1-1234abcd";
+	const automationOrigin = "https://example.com";
+	const automationHandoff = {
+		payload: {
+			candidateId: automationCandidateId,
+			sites: [automationOrigin],
+			occurrences: 2,
+			modelMatches: 2,
+			firstAt: 1,
+			lastAt: 2,
+			evidenceType: "site-navigation-only",
+		},
+		sourceIds: [event.id],
+	};
+	const preparedHandoff = await request("createWorkflowHandoff", [
+		automationHandoff,
+	]);
+	assert.equal(preparedHandoff.ok, true, JSON.stringify(preparedHandoff));
+	const pendingHandoff = (await request("getPendingWorkflowHandoff")).value as {
+		payload: { candidateId: string };
+		grant: { token: string; handoffDigest: string };
+	};
+	assert.equal(pendingHandoff.payload.candidateId, automationCandidateId);
+	const grantToken = pendingHandoff.grant.token;
+	const handoffDigest = pendingHandoff.grant.handoffDigest;
+	const automationScript = {
+		version: 1,
+		name: "Open example",
+		description: "Open the selected site.",
+		trigger: "manual",
+		origins: [automationOrigin],
+		inputs: [],
+		steps: [{ type: "navigate", url: `${automationOrigin}/` }],
+	} as const;
+	const savedAutomation = await request("saveWorkflowScriptDraft", [
+		grantToken,
+		automationCandidateId,
+		handoffDigest,
+		automationScript,
+	]);
+	assert.equal(savedAutomation.ok, true);
+	assert.equal(
+		(savedAutomation.value as { status: string }).status,
+		"draft",
+		"MCP save stores draft, never runnable state",
+	);
+	assert.equal(
+		(await request("getPendingWorkflowHandoff")).value,
+		null,
+		"saving consumes and clears pending handoff",
+	);
+	assert.equal(
+		(
+			await request("saveWorkflowScriptDraft", [
+				grantToken,
+				automationCandidateId,
+				"b".repeat(64),
+				automationScript,
+			])
+		).code,
+		"storage-unavailable",
+		"save grant is bound to reviewed handoff digest",
+	);
+	assert.deepEqual(
+		(
+			await request("saveWorkflowScriptDraft", [
+				grantToken,
+				automationCandidateId,
+				handoffDigest,
+				automationScript,
+			])
+		).value,
+		savedAutomation.value,
+		"retry after an unknown ACK reconciles stable local draft",
+	);
+	assert.equal(
+		(
+			await request("saveWorkflowScriptDraft", [
+				grantToken,
+				automationCandidateId,
+				handoffDigest,
+				{ ...automationScript, name: "Changed" },
+			])
+		).code,
+		"storage-unavailable",
+		"a consumed grant cannot save a different script",
+	);
+	assert.equal(
+		((await request("listWorkflowScriptDrafts")).value as unknown[]).length,
+		1,
+	);
+	const savedId = (savedAutomation.value as { id: string }).id;
+	assert.deepEqual(
+		(await request("deleteWorkflowScriptDraft", [savedId])).value,
+		{ deleted: true },
+	);
+	assert.equal(
+		((await request("listWorkflowScriptDrafts")).value as unknown[]).length,
+		0,
+	);
 	failure = "write-quota";
 	assert.equal(
 		(

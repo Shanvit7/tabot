@@ -21,6 +21,9 @@ import { ERROR_CODES, RelayError } from "./mcp/protocol";
 import {
 	findActivityMatchesInputSchema,
 	getPageNotesInputSchema,
+	getPendingWorkflowHandoffInputSchema,
+	getSiteNotesInputSchema,
+	saveWorkflowScriptInputSchema,
 	searchActivityInputSchema,
 	searchNotesInputSchema,
 } from "./mcp/schema";
@@ -46,6 +49,11 @@ type ToolDispatch = (method: string, params: unknown) => Promise<unknown>;
 
 const READ_ONLY_ANNOTATIONS = {
 	readOnlyHint: true,
+	openWorldHint: false,
+	destructiveHint: false,
+};
+const DRAFT_SAVE_ANNOTATIONS = {
+	readOnlyHint: false,
 	openWorldHint: false,
 	destructiveHint: false,
 };
@@ -126,6 +134,17 @@ const createMcpServer = (
 	);
 
 	server.registerTool(
+		TOOL_NAMES.GET_SITE_NOTES,
+		{
+			title: "Get site notes",
+			description: TOOL_DESCRIPTIONS.GET_SITE_NOTES,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: getSiteNotesInputSchema,
+		},
+		(params) => call(TOOL_NAMES.GET_SITE_NOTES, params),
+	);
+
+	server.registerTool(
 		TOOL_NAMES.GET_PAGE_NOTES,
 		{
 			title: "Get page notes",
@@ -145,6 +164,54 @@ const createMcpServer = (
 			inputSchema: findActivityMatchesInputSchema,
 		},
 		(params) => call(TOOL_NAMES.GET_ACTIVITY_TIMELINE, params),
+	);
+
+	server.registerTool(
+		TOOL_NAMES.GET_PENDING_WORKFLOW_HANDOFF,
+		{
+			title: "Get the selected workflow handoff",
+			description: TOOL_DESCRIPTIONS.GET_PENDING_WORKFLOW_HANDOFF,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: getPendingWorkflowHandoffInputSchema,
+		},
+		(params) => call(TOOL_NAMES.GET_PENDING_WORKFLOW_HANDOFF, params),
+	);
+
+	server.registerTool(
+		TOOL_NAMES.SAVE_WORKFLOW_SCRIPT,
+		{
+			title: "Save workflow draft",
+			description: TOOL_DESCRIPTIONS.SAVE_WORKFLOW_SCRIPT,
+			annotations: DRAFT_SAVE_ANNOTATIONS,
+			inputSchema: saveWorkflowScriptInputSchema,
+		},
+		(params) => call(TOOL_NAMES.SAVE_WORKFLOW_SCRIPT, params),
+	);
+
+	server.registerResource(
+		"pending-workflow-handoff",
+		"tabot://workflows/pending",
+		{
+			title: "Pending workflow handoff",
+			description:
+				"The single local site-route handoff explicitly selected in Tabot. No page content or inferred intent.",
+			mimeType: "application/json",
+		},
+		async (uri) => {
+			const result = await dispatch(
+				TOOL_NAMES.GET_PENDING_WORKFLOW_HANDOFF,
+				{},
+			);
+			return {
+				contents: [
+					{
+						uri: uri.href,
+						mimeType: "application/json",
+						text: JSON.stringify(result),
+					},
+				],
+			};
+		},
 	);
 
 	return server;
@@ -296,6 +363,12 @@ const dispatchToInstallation = async (
 		const code =
 			Object.values(ERROR_CODES).find((known) => known === body.error.code) ??
 			ERROR_CODES.INTERNAL;
+		if (env.MCP_PUBLIC_URL.includes("-dev."))
+			logEvent("installation_dispatch_failed", {
+				tool: method,
+				code,
+				installationTag: installationId.slice(-8),
+			});
 		throw new RelayError(code, body.error.message);
 	}
 	return body.result;
@@ -678,6 +751,10 @@ app.get("/relay", async (c) => {
 	const token = c.req.header("Sec-WebSocket-Protocol")?.trim() ?? "";
 	const installationId = await verifyInstallationToken(secret, token);
 	if (!installationId) return c.text("Unauthorized", 401);
+	if (c.env.MCP_PUBLIC_URL.includes("-dev."))
+		logEvent("relay_upgrade_authenticated", {
+			installationTag: installationId.slice(-8),
+		});
 	return installationStub(c.env, installationId).fetch(c.req.raw);
 });
 

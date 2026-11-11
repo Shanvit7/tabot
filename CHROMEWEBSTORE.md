@@ -9,6 +9,7 @@ Draft permission/privacy update for the 0.2.2 extension release, including TalaD
 - Category: Productivity
 - Language: English
 - Single purpose: Turn local browser activity into structured browsing context that users can review and share.
+- Popup update: Users can search their saved page notes locally in the extension popup and open matching pages. Refresh popup screenshots to reflect note search and page-note controls.
 - Feature update: Context durations count foreground browsing, excluding hidden tabs, idle/lock, sleep, and gaps between browsing stretches. Elapsed coverage remains separately available. Activities shows observation-based estimates and can send a selected period or site's aggregate metrics to an authorized ChatGPT connection. Recurring patterns can ask the connected assistant to discover repeated browsing patterns or explain selected evidence. Users can search recorded URLs, already-redacted page excerpts, and PII-redacted phrases from supported search providers on-device, with local source citations. Eligible page titles and short visible excerpts are captured automatically while tracking is active, redacted before persistence, and remain local. Titles are bounded to 512 characters; excerpts stay capped at four fragments.
 
 ## Permissions justification
@@ -43,7 +44,7 @@ Before submission: verify live privacy-policy URL, publisher/contact details, fu
 
 ## Version history
 
-Unreleased update: retain only PII-redacted phrases from recognized search providers locally and answer relative “what did I search N minutes ago” lookups using event timestamps; unrelated query parameters remain stripped. Automatically capture bounded, PII-redacted page titles alongside visible excerpts and index title evidence locally. Recurring-pattern assistant lookup now matches the dashboard across all retained browsing stretches. Existing selected-pattern links still work when new occurrences extend that pattern. Separate visits no longer fuse across inactivity gaps during cleanup. No new permissions or raw-history uploads.
+Unreleased update: search saved page notes directly in the popup. No new permissions or uploads. Also retain only PII-redacted phrases from recognized search providers locally and answer relative “what did I search N minutes ago” lookups using event timestamps; unrelated query parameters remain stripped. Automatically capture bounded, PII-redacted page titles alongside visible excerpts and index title evidence locally. Recurring-pattern assistant lookup now matches the dashboard across all retained browsing stretches. Existing selected-pattern links still work when new occurrences extend that pattern. Separate visits no longer fuse across inactivity gaps during cleanup. No new permissions or raw-history uploads.
 
 | Version | Changes | Status |
 | --- | --- | --- |

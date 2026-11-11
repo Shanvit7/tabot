@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspaceRouteImport } from './routes/_workspace'
+import { Route as ExtensionNotConnectedRouteImport } from './routes/extension-not-connected'
 import { Route as WorkspaceAiRouteImport } from './routes/_workspace.ai'
 import { Route as WorkspaceAssistantRouteImport } from './routes/_workspace.assistant'
 import { Route as WorkspaceHomeRouteImport } from './routes/_workspace.home'
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const WorkspaceRoute = WorkspaceRouteImport.update({
   id: '/_workspace',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExtensionNotConnectedRoute = ExtensionNotConnectedRouteImport.update({
+  id: '/extension-not-connected',
+  path: '/extension-not-connected',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorkspaceAiRoute = WorkspaceAiRouteImport.update({
@@ -42,12 +48,14 @@ const WorkspaceHomeRoute = WorkspaceHomeRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/ai': typeof WorkspaceAiRoute
   '/assistant': typeof WorkspaceAssistantRoute
   '/home': typeof WorkspaceHomeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/ai': typeof WorkspaceAiRoute
   '/assistant': typeof WorkspaceAssistantRoute
   '/home': typeof WorkspaceHomeRoute
@@ -56,19 +64,21 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_workspace': typeof WorkspaceRouteWithChildren
+  '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/_workspace/ai': typeof WorkspaceAiRoute
   '/_workspace/assistant': typeof WorkspaceAssistantRoute
   '/_workspace/home': typeof WorkspaceHomeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/ai' | '/assistant' | '/home'
+  fullPaths: '/' | '/extension-not-connected' | '/ai' | '/assistant' | '/home'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/ai' | '/assistant' | '/home'
+  to: '/' | '/extension-not-connected' | '/ai' | '/assistant' | '/home'
   id:
     | '__root__'
     | '/'
     | '/_workspace'
+    | '/extension-not-connected'
     | '/_workspace/ai'
     | '/_workspace/assistant'
     | '/_workspace/home'
@@ -77,6 +87,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   WorkspaceRoute: typeof WorkspaceRouteWithChildren
+  ExtensionNotConnectedRoute: typeof ExtensionNotConnectedRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -93,6 +104,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof WorkspaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/extension-not-connected': {
+      id: '/extension-not-connected'
+      path: '/extension-not-connected'
+      fullPath: '/extension-not-connected'
+      preLoaderRoute: typeof ExtensionNotConnectedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_workspace/ai': {
@@ -138,6 +156,7 @@ const WorkspaceRouteWithChildren = WorkspaceRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   WorkspaceRoute: WorkspaceRouteWithChildren,
+  ExtensionNotConnectedRoute: ExtensionNotConnectedRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,17 +1,27 @@
 import {
+	BEHAVIOR_MODEL_LIMITS,
+	type BehaviorCheckpoint,
+	deriveSiteDomain,
 	EventConflictError,
+	type EventRange,
 	eventIdentity,
 	type HistorySearchOptions,
 	type HistorySearchResult,
 	type InsertEventsResult,
+	isBehaviorCheckpoint,
+	isWorkflowAutomationScript,
+	isWorkflowHandoff,
+	isWorkflowHandoffPayload,
+	isWorkflowScriptDraft,
 	logger,
 	normalizeEvent,
+	noteMatchesDomain,
 	type PageCaptureSiteSummary,
 	type PageNote,
 	type PageObservationSummary,
 	pageObservationBudgetFailure,
 	pageObservationSizeBytes,
-	parseRecentSearchQuestion,
+	parseTemporalRecallQuery,
 	type SearchAvailability,
 	type StoredIngestRecord,
 	type StoredPageObservation,
@@ -23,7 +33,14 @@ import {
 	searchNoteRows,
 	searchQueryFromUrl,
 	storageErrorCode,
+	trainBehaviorCheckpoint,
 	validateNoteText,
+	type WorkflowHandoff,
+	type WorkflowHandoffRequest,
+	type WorkflowScriptDraft,
+	type WorkflowScriptGrantRequest,
+	type WorkflowTrainingResult,
+	workflowHandoffDigest,
 } from "@tabot/shared";
 import type {
 	Collection,
@@ -56,15 +73,25 @@ const isHttpOrigin = (value: string) => {
 const LEGACY_DATABASE = "tabot_events";
 const MIGRATION_ID = "legacy-indexeddb-to-taladb:v1";
 const SEARCH_BACKFILL_ID = "semantic-search-backfill:v3";
+const WORKFLOW_MODEL_ID = "workflow-behavior:v1";
 const SEARCH_MODEL_VERSION = "multi-qa-MiniLM-L6-cos-v1:3c96c1df:chunks-v1";
 const SEARCH_DIMENSIONS = 384;
 // search-quality.check.mts: 0.20 improves recall without no-answer hits on labeled cases.
 const SEARCH_MIN_COSINE_SIMILARITY = 0.2;
+const WORKFLOW_SCRIPT_SAVE_GRANT_MS = 15 * 60_000;
+const MAX_WORKFLOW_SCRIPT_GRANTS = 10;
+const WORKFLOW_HANDOFF_PENDING_KEY = "workflow-handoff-pending:v1";
+const MAX_WORKFLOW_SCRIPT_DRAFTS = 50;
+const MAX_WORKFLOW_SCRIPT_SOURCE_IDS = 24;
 let deriveDocumentId: (kind: Kind, id: string) => string;
 let deriveSearchJobId: (kind: Kind, id: string) => string;
 let deriveSearchPassageId: (id: string) => string;
 let deriveSearchCacheId: (id: string) => string;
 let deriveSearchBackfillId: () => string;
+let deriveWorkflowModelId: () => string;
+let deriveWorkflowScriptSaveGrantId: (token: string) => string;
+let deriveWorkflowHandoffId: () => string;
+let deriveWorkflowScriptDraftId: (token: string) => string;
 let deriveNoteDocumentId: (id: string) => string;
 type Kind = "event" | "page";
 type Envelope = Document & {
@@ -81,6 +108,24 @@ type Envelope = Document & {
 	searchSourceId?: string;
 	identity: string;
 	payload: Document;
+};
+type WorkflowHandoffPendingRow = Document & {
+	_id: string;
+	kind: "workflow-handoff-pending";
+	payload: WorkflowHandoff["payload"];
+	grantToken: string;
+	expiresAt: number;
+};
+type WorkflowScriptSaveGrantRow = Document & {
+	_id: string;
+	kind: "workflow-script-save-grant";
+	candidateId: string;
+	origins: string[];
+	sourceIds: string[];
+	handoffDigest: string;
+	expiresAt: number;
+	consumedAt: number | null;
+	scriptFingerprint?: string;
 };
 type SearchPassage = Document & {
 	_id: string;
@@ -298,6 +343,14 @@ const getDb = () => {
 		deriveSearchCacheId = (id) => deriveDocId("tabot:search-embedding:v1", id);
 		deriveSearchBackfillId = () =>
 			deriveDocId("tabot:meta:v1", SEARCH_BACKFILL_ID);
+		deriveWorkflowModelId = () =>
+			deriveDocId("tabot:meta:v1", WORKFLOW_MODEL_ID);
+		deriveWorkflowHandoffId = () =>
+			deriveDocId("tabot:meta:v1", WORKFLOW_HANDOFF_PENDING_KEY);
+		deriveWorkflowScriptSaveGrantId = (token) =>
+			deriveDocId("tabot:workflow-save-grant:v1", token);
+		deriveWorkflowScriptDraftId = (token) =>
+			deriveDocId("tabot:workflow-script-draft:v1", token);
 		deriveNoteDocumentId = (id) => deriveDocId("tabot:notes:v1", id);
 		const db = await openDB(DB_NAME);
 		try {
@@ -367,6 +420,49 @@ const serializeMutation = <T>(work: () => Promise<T>): Promise<T> => {
 			queuedMutations--;
 		});
 	return result;
+};
+
+type WorkflowModelState = {
+	generation: number;
+	checkpoint: BehaviorCheckpoint | null;
+};
+const readWorkflowModelState = async (
+	meta: Collection<Document>,
+): Promise<WorkflowModelState> => {
+	const row = await meta.findOne({ _id: deriveWorkflowModelId() });
+	return {
+		generation:
+			row &&
+			typeof row.generation === "number" &&
+			Number.isSafeInteger(row.generation) &&
+			row.generation >= 0
+				? row.generation
+				: 0,
+		checkpoint:
+			row && isBehaviorCheckpoint(row.checkpoint) ? row.checkpoint : null,
+	};
+};
+
+const writeWorkflowModelState = async (
+	meta: Collection<Document>,
+	state: WorkflowModelState,
+) => {
+	const id = deriveWorkflowModelId();
+	const existing = await meta.findOne({ _id: id });
+	const document = { _id: id, ...state };
+	if (existing) await meta.updateOne({ _id: id }, { $set: { ...state } });
+	else await meta.insert(document);
+};
+
+const checkpointSourcesRetained = async (
+	records: Collection<Envelope>,
+	checkpoint: BehaviorCheckpoint,
+) => {
+	const rows = await records.find({
+		recordKind: "event",
+		originalId: { $in: checkpoint.sourceIds },
+	});
+	return rows.length === checkpoint.sourceIds.length;
 };
 
 const isPage = (row: StoredIngestRecord): row is StoredPageObservation =>
@@ -864,6 +960,7 @@ const eventRange = (
 		to?: number;
 		fromInclusive?: boolean;
 		toInclusive?: boolean;
+		limit?: number;
 	},
 ) =>
 	rows
@@ -882,6 +979,11 @@ const eventRange = (
 		.sort(
 			(a, b) =>
 				a.timestamp - b.timestamp || a.originalId.localeCompare(b.originalId),
+		)
+		.slice(
+			range?.limit === undefined
+				? 0
+				: -Math.max(1, Math.min(5_000, Math.trunc(range.limit))),
 		);
 const pageSummary = (row: StoredPageObservation): PageObservationSummary => {
 	const {
@@ -893,8 +995,439 @@ const pageSummary = (row: StoredPageObservation): PageObservationSummary => {
 	return { ...summary, segmentCount: segments.length };
 };
 
+const isHttpsOrigin = (value: string) => {
+	try {
+		const url = new URL(value);
+		return url.protocol === "https:" && url.origin === value;
+	} catch {
+		return false;
+	}
+};
+const workflowScriptFingerprint = async (script: unknown) => {
+	const digest = await crypto.subtle.digest(
+		"SHA-256",
+		new TextEncoder().encode(JSON.stringify(script)),
+	);
+	return Array.from(new Uint8Array(digest), (byte) =>
+		byte.toString(16).padStart(2, "0"),
+	).join("");
+};
+const persistWorkflowScriptSaveGrant = async (
+	request: WorkflowScriptGrantRequest,
+) => {
+	if (
+		!request ||
+		!/^handwired-v1-[a-f0-9]{8}$/.test(request.candidateId) ||
+		!Array.isArray(request.origins) ||
+		request.origins.length < 1 ||
+		request.origins.length > 8 ||
+		!request.origins.every(isHttpsOrigin) ||
+		new Set(request.origins).size !== request.origins.length ||
+		!Array.isArray(request.sourceIds) ||
+		request.sourceIds.length < 1 ||
+		request.sourceIds.length > MAX_WORKFLOW_SCRIPT_SOURCE_IDS ||
+		!request.sourceIds.every(
+			(id) => typeof id === "string" && id.length > 0 && id.length <= 128,
+		) ||
+		new Set(request.sourceIds).size !== request.sourceIds.length ||
+		!/^[a-f0-9]{64}$/.test(request.handoffDigest)
+	)
+		throw new Error("invalid-workflow-script-grant");
+	const { meta, records } = await getDb();
+	const retained = await records.find({
+		recordKind: "event",
+		originalId: { $in: request.sourceIds },
+	});
+	if (retained.length !== request.sourceIds.length)
+		throw new Error("workflow-evidence-unavailable");
+	const grants = (await meta.find({
+		kind: "workflow-script-save-grant",
+	})) as WorkflowScriptSaveGrantRow[];
+	const now = Date.now();
+	const activeGrants = grants.filter((grant) => grant.expiresAt > now);
+	for (const expired of grants.filter((grant) => grant.expiresAt <= now))
+		await meta.deleteOne({ _id: expired._id });
+	if (activeGrants.length >= MAX_WORKFLOW_SCRIPT_GRANTS)
+		throw new Error("workflow-script-grant-limit");
+	const drafts = await meta.find({ kind: "workflow-script" });
+	if (drafts.length >= MAX_WORKFLOW_SCRIPT_DRAFTS)
+		throw new Error("workflow-script-draft-limit");
+	const token = crypto.randomUUID();
+	const expiresAt = now + WORKFLOW_SCRIPT_SAVE_GRANT_MS;
+	await meta.insert({
+		_id: deriveWorkflowScriptSaveGrantId(token),
+		kind: "workflow-script-save-grant",
+		candidateId: request.candidateId,
+		origins: request.origins,
+		sourceIds: request.sourceIds,
+		handoffDigest: request.handoffDigest,
+		expiresAt,
+		consumedAt: null,
+	});
+	return {
+		token,
+		candidateId: request.candidateId,
+		expiresAt,
+		origins: request.origins,
+		handoffDigest: request.handoffDigest,
+	};
+};
+const createWorkflowHandoff = (request: WorkflowHandoffRequest) =>
+	serializeMutation(async () => {
+		if (
+			!request ||
+			!isWorkflowHandoffPayload(request.payload) ||
+			!Array.isArray(request.sourceIds) ||
+			request.sourceIds.length < 1 ||
+			request.sourceIds.length > MAX_WORKFLOW_SCRIPT_SOURCE_IDS ||
+			!request.sourceIds.every(
+				(id) => typeof id === "string" && id.length > 0 && id.length <= 128,
+			) ||
+			new Set(request.sourceIds).size !== request.sourceIds.length
+		)
+			throw new Error("invalid-workflow-handoff");
+		const handoffDigest = await workflowHandoffDigest(request.payload);
+		const { meta } = await getDb();
+		const pending = (await meta.findOne({
+			_id: deriveWorkflowHandoffId(),
+		})) as WorkflowHandoffPendingRow | null;
+		if (pending && /^[0-9a-f-]{36}$/i.test(pending.grantToken))
+			await meta.deleteOne({
+				_id: deriveWorkflowScriptSaveGrantId(pending.grantToken),
+			});
+		await meta.deleteOne({ _id: deriveWorkflowHandoffId() });
+		const grant = await persistWorkflowScriptSaveGrant({
+			candidateId: request.payload.candidateId,
+			origins: [...new Set(request.payload.sites)],
+			sourceIds: request.sourceIds,
+			handoffDigest,
+		});
+		try {
+			await meta.insert({
+				_id: deriveWorkflowHandoffId(),
+				kind: "workflow-handoff-pending",
+				payload: request.payload,
+				grantToken: grant.token,
+				expiresAt: grant.expiresAt,
+			});
+		} catch (error) {
+			await meta.deleteOne({
+				_id: deriveWorkflowScriptSaveGrantId(grant.token),
+			});
+			throw error;
+		}
+	});
+const getPendingWorkflowHandoff = () =>
+	serializeMutation(async () => {
+		const { meta, records } = await getDb();
+		const pending = (await meta.findOne({
+			_id: deriveWorkflowHandoffId(),
+		})) as WorkflowHandoffPendingRow | null;
+		if (pending?.kind !== "workflow-handoff-pending") return null;
+		const clearPending = async () => {
+			await meta.deleteOne({ _id: deriveWorkflowHandoffId() });
+			if (/^[0-9a-f-]{36}$/i.test(pending.grantToken))
+				await meta.deleteOne({
+					_id: deriveWorkflowScriptSaveGrantId(pending.grantToken),
+				});
+		};
+		if (
+			!isWorkflowHandoffPayload(pending.payload) ||
+			typeof pending.grantToken !== "string" ||
+			!Number.isSafeInteger(pending.expiresAt) ||
+			pending.expiresAt <= Date.now()
+		) {
+			await clearPending();
+			return null;
+		}
+		const grantRow = (await meta.findOne({
+			_id: deriveWorkflowScriptSaveGrantId(pending.grantToken),
+		})) as WorkflowScriptSaveGrantRow | null;
+		const handoffDigest = await workflowHandoffDigest(pending.payload);
+		if (
+			grantRow?.kind !== "workflow-script-save-grant" ||
+			grantRow.consumedAt !== null ||
+			grantRow.expiresAt !== pending.expiresAt ||
+			grantRow.candidateId !== pending.payload.candidateId ||
+			grantRow.handoffDigest !== handoffDigest ||
+			grantRow.origins.length !== new Set(pending.payload.sites).size ||
+			!grantRow.origins.every(
+				(origin, index) =>
+					origin === [...new Set(pending.payload.sites)][index],
+			)
+		) {
+			await clearPending();
+			return null;
+		}
+		const retained = await records.find({
+			recordKind: "event",
+			originalId: { $in: grantRow.sourceIds },
+		});
+		if (retained.length !== grantRow.sourceIds.length) {
+			await clearPending();
+			return null;
+		}
+		const handoff = {
+			payload: pending.payload,
+			grant: {
+				token: pending.grantToken,
+				candidateId: grantRow.candidateId,
+				expiresAt: grantRow.expiresAt,
+				origins: grantRow.origins,
+				handoffDigest: grantRow.handoffDigest,
+			},
+		};
+		return isWorkflowHandoff(handoff) ? handoff : null;
+	});
+const saveWorkflowScriptDraft = (
+	grantToken: string,
+	candidateId: string,
+	handoffDigest: string,
+	script: unknown,
+) =>
+	serializeMutation(async () => {
+		if (
+			typeof grantToken !== "string" ||
+			!/^[0-9a-f-]{36}$/i.test(grantToken) ||
+			!/^handwired-v1-[a-f0-9]{8}$/.test(candidateId) ||
+			!/^[a-f0-9]{64}$/.test(handoffDigest) ||
+			!isWorkflowAutomationScript(script)
+		)
+			throw new Error("invalid-workflow-script");
+		const { meta, records } = await getDb();
+		const grantId = deriveWorkflowScriptSaveGrantId(grantToken);
+		const grant = (await meta.findOne({
+			_id: grantId,
+		})) as WorkflowScriptSaveGrantRow | null;
+		if (
+			!grant ||
+			grant.candidateId !== candidateId ||
+			grant.handoffDigest !== handoffDigest ||
+			grant.expiresAt <= Date.now() ||
+			!script.origins.every((origin) => grant.origins.includes(origin))
+		)
+			throw new Error("workflow-script-grant-invalid");
+		const retained = await records.find({
+			recordKind: "event",
+			originalId: { $in: grant.sourceIds },
+		});
+		if (retained.length !== grant.sourceIds.length)
+			throw new Error("workflow-evidence-unavailable");
+		const fingerprint = await workflowScriptFingerprint(script);
+		const draftId = deriveWorkflowScriptDraftId(grantToken);
+		const stored = await meta.findOne({ _id: draftId });
+		if (
+			grant.consumedAt !== null &&
+			(grant.scriptFingerprint !== fingerprint || !stored)
+		)
+			throw new Error("workflow-script-grant-used");
+		if (
+			stored &&
+			(!isWorkflowScriptDraft(stored) || stored.fingerprint !== fingerprint)
+		)
+			throw new Error("workflow-script-grant-used");
+		const savedAt =
+			stored && isWorkflowScriptDraft(stored) ? stored.savedAt : Date.now();
+		const draft: WorkflowScriptDraft = {
+			id: draftId,
+			candidateId,
+			savedAt,
+			status: "draft",
+			script,
+		};
+		if (!stored)
+			await meta.insert({
+				...draft,
+				_id: draftId,
+				kind: "workflow-script",
+				grantId,
+				fingerprint,
+			});
+		if (grant.consumedAt === null) {
+			const updated = await meta.updateOne(
+				{ _id: grantId },
+				{ $set: { consumedAt: Date.now(), scriptFingerprint: fingerprint } },
+			);
+			if (!updated) throw new Error("workflow-script-save-unknown");
+		}
+		const pending = await meta.findOne({ _id: deriveWorkflowHandoffId() });
+		if (pending?.grantToken === grantToken)
+			await meta.deleteOne({ _id: deriveWorkflowHandoffId() });
+		return draft;
+	});
+const listWorkflowScriptDrafts = async () => {
+	const rows = await (await getDb()).meta.find({ kind: "workflow-script" });
+	return rows
+		.filter(isWorkflowScriptDraft)
+		.sort((left, right) => right.savedAt - left.savedAt)
+		.slice(0, MAX_WORKFLOW_SCRIPT_DRAFTS);
+};
+const deleteWorkflowScriptDraft = (id: string) =>
+	serializeMutation(async () => {
+		if (typeof id !== "string" || id.length > 128)
+			throw new Error("invalid-workflow-script-id");
+		const { meta } = await getDb();
+		const row = await meta.findOne({ _id: id });
+		if (row?.kind !== "workflow-script") return { deleted: false };
+		return { deleted: await meta.deleteOne({ _id: id }) };
+	});
+
+const getWorkflowCheckpoint = () =>
+	serializeMutation(async () => {
+		const { meta, records } = await getDb();
+		const state = await readWorkflowModelState(meta);
+		if (!state.checkpoint) return null;
+		if (await checkpointSourcesRetained(records, state.checkpoint))
+			return state.checkpoint;
+		await writeWorkflowModelState(meta, {
+			generation: state.generation + 1,
+			checkpoint: null,
+		});
+		return null;
+	});
+
+const getWorkflowTrainingGeneration = () =>
+	serializeMutation(async () => {
+		const { meta } = await getDb();
+		return (await readWorkflowModelState(meta)).generation;
+	});
+
+const advanceWorkflowTrainingGeneration = () =>
+	serializeMutation(async () => {
+		const { meta } = await getDb();
+		const state = await readWorkflowModelState(meta);
+		await writeWorkflowModelState(meta, {
+			generation: state.generation + 1,
+			checkpoint: state.checkpoint,
+		});
+		return state.generation + 1;
+	});
+
+const resetWorkflowModel = () =>
+	serializeMutation(async () => {
+		const { meta } = await getDb();
+		const state = await readWorkflowModelState(meta);
+		await writeWorkflowModelState(meta, {
+			generation: state.generation + 1,
+			checkpoint: null,
+		});
+	});
+
+let workflowTrainingPromise: Promise<WorkflowTrainingResult> | null = null;
+let workflowTrainingQueuedGeneration: number | null = null;
+const trainWorkflowModelOnce = async (
+	expectedGeneration: number,
+): Promise<WorkflowTrainingResult> => {
+	if (!Number.isSafeInteger(expectedGeneration))
+		throw new Error("invalid-training-generation");
+	await getWorkflowCheckpoint();
+	const { meta } = await getDb();
+	const initial = await readWorkflowModelState(meta);
+	if (initial.generation !== expectedGeneration)
+		return { status: "stale", examples: 0, truncated: false };
+	const rows = await (await getDb()).records.aggregate([
+		{
+			$match: {
+				recordKind: "event",
+				"payload.type": { $in: ["NAVIGATION", "TAB_ACTIVATED"] },
+			},
+		},
+		{ $sort: { timestamp: -1 } },
+		{ $limit: BEHAVIOR_MODEL_LIMITS.events + 1 },
+	]);
+	const events = withPayload<StoredTabEvent>(
+		rows.reverse() as Envelope[],
+		"event",
+	);
+	const safeEvents = await Promise.all(events.map(sanitizeEventForIngestion));
+	const training = await trainBehaviorCheckpoint(
+		safeEvents.slice(-BEHAVIOR_MODEL_LIMITS.events),
+		async () => {
+			const current = await readWorkflowModelState(meta);
+			return current.generation !== initial.generation;
+		},
+	);
+	if (training.cancelled)
+		return {
+			status: "cancelled",
+			examples: training.examples,
+			truncated: events.length > BEHAVIOR_MODEL_LIMITS.events,
+		};
+	if (!training.checkpoint)
+		return {
+			status: "insufficient-data",
+			examples: training.examples,
+			truncated: events.length > BEHAVIOR_MODEL_LIMITS.events,
+		};
+	return serializeMutation(async () => {
+		const { meta: currentMeta, records } = await getDb();
+		const current = await readWorkflowModelState(currentMeta);
+		if (current.generation !== initial.generation)
+			return {
+				status: "stale",
+				examples: training.examples,
+				truncated: events.length > BEHAVIOR_MODEL_LIMITS.events,
+			};
+		if (!(await checkpointSourcesRetained(records, training.checkpoint)))
+			return {
+				status: "stale",
+				examples: training.examples,
+				truncated: events.length > BEHAVIOR_MODEL_LIMITS.events,
+			};
+		if (current.checkpoint?.revision === training.checkpoint.revision)
+			return {
+				status: "unchanged",
+				examples: training.examples,
+				truncated: events.length > BEHAVIOR_MODEL_LIMITS.events,
+			};
+		await writeWorkflowModelState(currentMeta, {
+			generation: current.generation,
+			checkpoint: training.checkpoint,
+		});
+		return {
+			status: "trained",
+			examples: training.examples,
+			truncated: events.length > BEHAVIOR_MODEL_LIMITS.events,
+		};
+	});
+};
+const trainWorkflowModel = (
+	expectedGeneration: number,
+): Promise<WorkflowTrainingResult> => {
+	if (workflowTrainingPromise) {
+		// A new alarm may represent navigation outside the active training snapshot.
+		workflowTrainingQueuedGeneration = expectedGeneration;
+		return workflowTrainingPromise;
+	}
+	workflowTrainingPromise = (async () => {
+		const result = await trainWorkflowModelOnce(expectedGeneration);
+		while (workflowTrainingQueuedGeneration !== null) {
+			const queuedGeneration = workflowTrainingQueuedGeneration;
+			workflowTrainingQueuedGeneration = null;
+			await trainWorkflowModelOnce(queuedGeneration);
+		}
+		return result;
+	})().finally(() => {
+		workflowTrainingPromise = null;
+		workflowTrainingQueuedGeneration = null;
+	});
+	return workflowTrainingPromise;
+};
+
 const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 	commitIngest: (rows) => commitIngest(rows),
+	getWorkflowCheckpoint: () => getWorkflowCheckpoint(),
+	createWorkflowHandoff: (request) => createWorkflowHandoff(request),
+	getPendingWorkflowHandoff: () => getPendingWorkflowHandoff(),
+	saveWorkflowScriptDraft: (grantToken, candidateId, handoffDigest, script) =>
+		saveWorkflowScriptDraft(grantToken, candidateId, handoffDigest, script),
+	listWorkflowScriptDrafts: () => listWorkflowScriptDrafts(),
+	deleteWorkflowScriptDraft: (id) => deleteWorkflowScriptDraft(id),
+	getWorkflowTrainingGeneration: () => getWorkflowTrainingGeneration(),
+	advanceWorkflowTrainingGeneration: () => advanceWorkflowTrainingGeneration(),
+	resetWorkflowModel: () => resetWorkflowModel(),
+	trainWorkflowModel: (expectedGeneration) =>
+		trainWorkflowModel(expectedGeneration),
 	countEvents: async () =>
 		(await getDb()).records.count({ recordKind: "event" }),
 	countPages: async () => (await getDb()).records.count({ recordKind: "page" }),
@@ -906,11 +1439,38 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		]);
 		return rows[0]?.timestamp ?? null;
 	},
-	readEvents: async (range) =>
-		withPayload<StoredTabEvent>(
-			eventRange(await (await getDb()).records.find(), range),
+	readEvents: async (range: EventRange | undefined) => {
+		const { records } = await getDb();
+		if (range?.limit !== undefined) {
+			if (!Number.isSafeInteger(range.limit) || range.limit < 1)
+				throw new Error("invalid-read-limit");
+			const operators = {
+				...(range.from !== undefined
+					? { [range.fromInclusive === false ? "$gt" : "$gte"]: range.from }
+					: {}),
+				...(range.to !== undefined
+					? { [range.toInclusive ? "$lte" : "$lt"]: range.to }
+					: {}),
+			};
+			const rows = await records.aggregate([
+				{
+					$match: {
+						recordKind: "event",
+						...(range.type ? { "payload.type": range.type } : {}),
+						...(range.types ? { "payload.type": { $in: range.types } } : {}),
+						...(Object.keys(operators).length ? { timestamp: operators } : {}),
+					},
+				},
+				{ $sort: { timestamp: -1 } },
+				{ $limit: Math.max(1, Math.min(5_000, Math.trunc(range.limit))) },
+			]);
+			return withPayload<StoredTabEvent>(rows.reverse() as Envelope[], "event");
+		}
+		return withPayload<StoredTabEvent>(
+			eventRange(await records.find(), range),
 			"event",
-		),
+		);
+	},
 	findEvent: async (id) =>
 		(await getDb()).records
 			.findOne({ recordKind: "event", originalId: id })
@@ -1029,27 +1589,50 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				(!Number.isSafeInteger(options.offset) || options.offset < 0))
 		)
 			throw new Error("invalid-search-request");
-		const temporal = parseRecentSearchQuestion(query);
-		if (temporal) {
-			const { records } = await getDb();
-			const from = Math.max(temporal.from, options.from ?? 0);
-			const to = Math.min(temporal.to, options.to ?? Number.MAX_SAFE_INTEGER);
-			if (from > to) return [];
-			const rows = await records.find({
-				recordKind: "event",
-				timestamp: { $gte: from, $lte: to },
-				...(options.origin ? { origin: options.origin } : {}),
-			});
-			const events = withPayload<StoredTabEvent>(rows, "event").filter(
-				(event) => Boolean(searchQueryFromUrl(event.url)),
+		const temporalRecall = parseTemporalRecallQuery(query);
+		let temporalFallback: (() => Promise<HistorySearchResult[]>) | undefined;
+		if (temporalRecall) {
+			const from = Math.max(temporalRecall.from, options.from ?? 0);
+			const to = Math.min(
+				temporalRecall.to,
+				options.to ?? Number.MAX_SAFE_INTEGER,
 			);
-			return searchHistoryCore(events, [], "", {
-				...options,
-				...temporal,
-				from,
-				to,
-				candidateOrder: undefined,
-			});
+			if (from > to) return [];
+			const { records } = await getDb();
+			temporalFallback = async () => {
+				const filter = {
+					timestamp: { $gte: from, $lte: to },
+					...(options.origin ? { origin: options.origin } : {}),
+				};
+				const [eventRows, pageRows] = await Promise.all([
+					records.find({ recordKind: "event", ...filter }),
+					records.find({ recordKind: "page", ...filter }),
+				]);
+				const chronological = [...eventRows, ...pageRows].sort(
+					(a, b) => b.timestamp - a.timestamp,
+				);
+				const candidateOrder = chronological.flatMap((row) => {
+					const url = safeRecallUrl(
+						(row.payload as { url?: string }).url,
+					)?.href;
+					return url ? [url] : [];
+				});
+				return searchHistoryCore(
+					withPayload<StoredTabEvent>(
+						chronological.filter((row) => row.recordKind === "event"),
+						"event",
+					),
+					withPayload<StoredPageObservation>(
+						chronological.filter((row) => row.recordKind === "page"),
+						"page",
+					),
+					"",
+					{ ...options, from, to, candidateOrder },
+				);
+			};
+			if (!temporalRecall.query) return temporalFallback();
+			query = temporalRecall.query;
+			options = { ...options, from, to };
 		}
 		const { records, passages, meta } = await getDb();
 		if (!searchBackfillReady) {
@@ -1075,12 +1658,13 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					...timeFilter,
 				}),
 			]);
-			return searchHistoryCore(
+			const results = searchHistoryCore(
 				withPayload<StoredTabEvent>(eventRows, "event"),
 				withPayload<StoredPageObservation>(pageRows, "page"),
 				query,
 				options,
 			);
+			return results.length || !temporalFallback ? results : temporalFallback();
 		}
 		scheduleSearchIndexer();
 		const limit = options.limit ?? 20;
@@ -1169,12 +1753,13 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		const candidateOrder = fuseCandidateUrls(rankedUrls);
 		const eventRows = sourceRows.filter((row) => row.recordKind === "event");
 		const pageRows = sourceRows.filter((row) => row.recordKind === "page");
-		return searchHistoryCore(
+		const results = searchHistoryCore(
 			withPayload<StoredTabEvent>(eventRows, "event"),
 			withPayload<StoredPageObservation>(pageRows, "page"),
 			query,
 			{ ...options, candidateOrder },
 		);
+		return results.length || !temporalFallback ? results : temporalFallback();
 	},
 	listPageNotes: async (
 		pageKey: string,
@@ -1233,12 +1818,14 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					text: input.text,
 					updatedAt: input.updatedAt,
 					pageKey: input.pageKey,
+					site: deriveSiteDomain(input.host),
 				};
 				await notes.updateOne({ _id: documentId }, { $set: updated });
 				return updated;
 			}
-			await notes.insert({ ...input, _id: documentId } as PageNote & Document);
-			return input;
+			const note = { ...input, site: deriveSiteDomain(input.host) };
+			await notes.insert({ ...note, _id: documentId } as PageNote & Document);
+			return note;
 		}),
 	linkNoteEvent: (id: string, eventId: string) =>
 		serializeMutation(async () => {
@@ -1255,6 +1842,18 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				_id: deriveNoteDocumentId(id),
 			}),
 		})),
+	listNotesForSite: async (site: string): Promise<PageNote[]> => {
+		if (typeof site !== "string" || site.length > 253)
+			throw new Error("invalid-note-site");
+		const rows = (await (await getDb()).notes.find()) as unknown as PageNote[];
+		const domain = deriveSiteDomain(site);
+		return rows
+			.filter(
+				(note) => note.site === domain || noteMatchesDomain(note.host, domain),
+			)
+			.sort((a, b) => b.createdAt - a.createdAt)
+			.slice(0, 50);
+	},
 	searchNotes: async (
 		query: string,
 		options: {

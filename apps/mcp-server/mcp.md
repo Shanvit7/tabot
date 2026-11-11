@@ -1,14 +1,18 @@
 # MCP tool surface and AI-response review
 
-Tabot exposes five read-only MCP tools for locally captured browser activity and user-written notes. Examples show representative JSON wrapped in one MCP text block. Timestamps are Unix milliseconds. No tool returns full URL paths or raw browser-event fields.
+Tabot exposes seven read-only MCP tools and one explicit draft-save write. Examples show representative JSON wrapped in one MCP text block. Timestamps are Unix milliseconds. Activity results contain site origins, bounded counts, match metadata, and anchors—not titles, page text, paths, or raw browser-event fields.
 
 ## `search_notes`
 
-Search user notes. Note text and titles are PII-redacted before leaving the extension. Results include site host, timestamps and derived session details when available; full page paths and tab identifiers remain local.
+Search user notes. Optional `site` filter matches a domain and its subdomains. Note text and titles are PII-redacted before leaving the extension. Results include derived site domain, host, timestamps and derived session details when available; full page paths and tab identifiers remain local.
 
 ## `get_page_notes`
 
 Get up to 8 notes for an HTTP(S) page. The extension canonicalizes the URL locally and matches by the shared page key. The result returns redacted note text, host, timestamps and session details; it does not return the path.
+
+## `get_site_notes`
+
+Get up to 50 notes for a website domain, including subdomains. For example, `linkedin.com` includes notes from `www.linkedin.com` and other LinkedIn subdomains. Result includes derived site domain, host, redacted text, timestamps and session details; page paths stay local. `search_notes` also accepts `site` as a domain filter and returns this derived site association.
 
 ## `search_activity`
 
@@ -41,8 +45,6 @@ Search captured activity using a natural-language or keyword query.
       "lastSeen": 1782864000000,
       "eventCount": 5,
       "pageCount": 1,
-      "title": "OAuth callback guide",
-      "preview": "Configure the callback URL in your application settings…",
       "matchedFrom": ["title-only", "auto-snippet"],
       "matchedTerms": ["oauth", "callback"],
       "anchors": [
@@ -53,7 +55,7 @@ Search captured activity using a natural-language or keyword query.
 }
 ```
 
-`count` is number of results on this page, not total matches. `title` is the captured page title when available. `preview` is redacted and capped; null means there is no matching captured page text. `matchedFrom` identifies whether results matched a title, automatic or interaction excerpt, search phrase, or URL. Pass `anchors` to the other activity tools. No results mean no matching retained activity, not proof that a visit never happened.
+`count` is number of results on this page, not total matches. `matchedFrom` identifies the type of local evidence that matched without returning its text. Pass `anchors` to the other activity tools. No results mean no matching retained activity, not proof that a visit never happened.
 
 ## `find_activity_matches`
 
@@ -87,7 +89,6 @@ Find captured activity matching the same page, site, or time window as 1–8 sel
       "kind": "event",
       "timestamp": 1782864100000,
       "site": "https://docs.example.test",
-      "preview": null,
       "matchedBy": ["same_site", "within_time_window"],
       "matchedAnchorIds": ["page-abc"]
     }
@@ -113,7 +114,6 @@ Show a chronological view around selected anchors, with one page of matching act
       "kind": "page",
       "timestamp": 1782864000000,
       "site": "https://docs.example.test",
-      "preview": "Configure the OAuth callback URL…",
       "role": "anchor"
     },
     {
@@ -121,7 +121,6 @@ Show a chronological view around selected anchors, with one page of matching act
       "kind": "event",
       "timestamp": 1782864100000,
       "site": "https://docs.example.test",
-      "preview": null,
       "matchedBy": ["same_site", "within_time_window"],
       "matchedAnchorIds": ["page-abc"],
       "role": "match"
@@ -132,13 +131,19 @@ Show a chronological view around selected anchors, with one page of matching act
 
 `count` and `nextCursor` describe matches only. Anchor entries repeat on every page; pagination applies to matches. Clients can deduplicate anchors for display while preserving their role. Never present query matches as user-confirmed workflow steps.
 
+## One-click workflow handoff
+
+The user selects **Ask ChatGPT** on a Handwired-discovered routine card. Tabot stores one short-lived pending handoff locally and opens ChatGPT with static instructions only. ChatGPT fetches the user-selected site-origin sequence, recurrence counts, timestamps, and single-use save grant through `get_pending_workflow_handoff` or resource `tabot://workflows/pending`. The handoff has no goal, page titles, paths, page text, or event IDs. If `ready` is false, tell the user to return to Tabot and select a routine.
+
+ChatGPT explains navigation-only evidence limits, asks what the user wants to accomplish, and evaluates feasibility before suggesting a script. It must ask for confirmation of the exact script before calling `save_workflow_script`. The grant is candidate-, evidence-, origin-, and digest-bound; it expires after 15 minutes. Save stores an unreviewed draft locally; there is no runner in this flow.
+
 ## Errors and transport shape
 
 A failed tool call returns `isError: true` and a text block containing the error message. Successful calls currently serialize JSON into one text block, rather than using typed `structuredContent`. Keep text fallback for client compatibility if structured output is added.
 
 ## Assessment
 
-- Search returns compact, bounded results with query matches, timestamps, previews, and reusable activity anchors.
+- Search returns compact, bounded results with query matches, timestamps, and reusable activity anchors; no page content.
 - Related activity uses exact same-page, same-site, and time-window conditions; it does not infer semantic relatedness, intent, or automation.
 - Keep full URL paths, raw browser events, and unbounded content private. Follow `docs/automations-plan.md`: user-stated goal, explicit activity selection, per-item feedback, and local user approval are required before automation.
 

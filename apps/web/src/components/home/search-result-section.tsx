@@ -5,13 +5,11 @@ import { SearchPageResults } from "~/components/home/search-page-results";
 
 export const SearchResultSection = ({
 	query,
-	recentSearchQuestion,
 	state,
 	onRetrySearch,
 	onSelectPage,
 }: {
 	query: string;
-	recentSearchQuestion: boolean;
 	state: ReadingDeskSearchState;
 	onRetrySearch: () => void;
 	onSelectPage: (url: string) => void;
@@ -32,7 +30,6 @@ export const SearchResultSection = ({
 		>
 			<SearchFeedback
 				query={query}
-				recentSearchQuestion={recentSearchQuestion}
 				state={state}
 				onRetrySearch={onRetrySearch}
 			/>

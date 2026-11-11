@@ -149,27 +149,43 @@ assert.deepEqual(
 		"search_activity",
 		"find_activity_matches",
 		"search_notes",
+		"get_site_notes",
 		"get_page_notes",
 		"get_activity_timeline",
+		"get_pending_workflow_handoff",
+		"save_workflow_script",
 	],
 );
-assert.deepEqual(list.body.result.tools[0].inputSchema.required, ["query"]);
-assert.equal(list.body.result.tools[0].inputSchema.properties.limit.maximum, 8);
-assert.match(
-	list.body.result.tools[0].inputSchema.properties.cursor.pattern,
-	/\\d/,
+const searchTool = list.body.result.tools.find(
+	(tool) => tool.name === "search_activity",
 );
+const saveTool = list.body.result.tools.find(
+	(tool) => tool.name === "save_workflow_script",
+);
+assert.deepEqual(searchTool.inputSchema.required, ["query"]);
+assert.equal(searchTool.inputSchema.properties.limit.maximum, 8);
+assert.match(searchTool.inputSchema.properties.cursor.pattern, /\\d/);
 assert.deepEqual(list.body.result.tools[2].inputSchema.required, ["query"]);
-assert.deepEqual(list.body.result.tools[3].inputSchema.required, ["url"]);
-assert.deepEqual(list.body.result.tools[4].inputSchema.required, ["anchors"]);
+assert.deepEqual(list.body.result.tools[3].inputSchema.required, ["site"]);
+assert.deepEqual(list.body.result.tools[4].inputSchema.required, ["url"]);
+assert.deepEqual(list.body.result.tools[5].inputSchema.required, ["anchors"]);
 assert.equal(
-	list.body.result.tools[4].inputSchema.properties.anchors.maxItems,
+	list.body.result.tools[5].inputSchema.properties.anchors.maxItems,
 	8,
 );
 assert.equal(
-	list.body.result.tools[4].inputSchema.properties.maxGapHours.maximum,
+	list.body.result.tools[5].inputSchema.properties.maxGapHours.maximum,
 	720,
 );
+assert.deepEqual(saveTool.inputSchema.required, [
+	"candidateId",
+	"grantToken",
+	"handoffDigest",
+	"script",
+]);
+assert.equal(saveTool.annotations.readOnlyHint, false);
+assert.equal(saveTool.annotations.destructiveHint, false);
+assert.doesNotMatch(saveTool.description, /run the script/i);
 const result = await rpc("tools/call", {
 	name: "search_activity",
 	arguments: { query: "auth callback", limit: 3 },
