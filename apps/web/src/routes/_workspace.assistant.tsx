@@ -2,6 +2,7 @@ import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import { Player, type PlayerRef } from "@remotion/player";
 import {
 	chatGptConnectPromptUrl,
+	chatGptPromptUrl,
 	resolveChatGptConnectUrl,
 } from "@tabot/shared";
 import { createFileRoute } from "@tanstack/react-router";
@@ -12,6 +13,7 @@ import {
 	Download,
 	ListOrdered,
 	Play,
+	RefreshCw,
 } from "lucide-react";
 import {
 	AnimatePresence,
@@ -29,10 +31,14 @@ import {
 	CHATGPT_TUTORIAL_HEIGHT,
 	CHATGPT_TUTORIAL_WIDTH,
 } from "~/components/assistant/chatgpt-tutorial/timeline";
+import { readAssistantConnections } from "~/lib/history";
 
 const MCP_SERVER_URL = `https://tabot-mcp${import.meta.env.DEV ? "-dev" : ""}.shanvit7.workers.dev/mcp`;
 const PLUGIN_DESCRIPTION =
 	"Search your local browser activity with ChatGPT. Your browsing history stays on your device; only results you request are shared.";
+const CHATGPT_DIAGNOSE_URL = chatGptPromptUrl(
+	"Help me diagnose why my Tabot MCP connection is not working in ChatGPT. First check whether Tabot tools are available in this conversation. If available, make one safe, read-only call with valid arguments and report the exact result. If unavailable or failing, guide me one step at a time through checking the ChatGPT MCP server registration, OAuth authorization, and that the Tabot Chrome extension is enabled in the same Chrome profile. Don't guess UI labels or claim success without verification. Never ask me to share passwords, tokens, or browsing history.",
+);
 
 const steps = [
 	{
@@ -72,16 +78,49 @@ const Assistant = () => {
 	const [descriptionCopyStatus, setDescriptionCopyStatus] = useState<
 		"idle" | "copied" | "error"
 	>("idle");
+	const [chatGptConnected, setChatGptConnected] = useState<boolean | null>(
+		null,
+	);
+	const [connectionCheck, setConnectionCheck] = useState<
+		"idle" | "checking" | "connected" | "disconnected" | "error"
+	>("idle");
 
 	useEffect(() => {
 		let active = true;
 		void resolveChatGptConnectUrl().then((url) => {
 			if (active) setConnectUrl(url);
 		});
+		const refreshConnection = () => {
+			void readAssistantConnections()
+				.then(({ chatgpt }) => {
+					if (!active) return;
+					setChatGptConnected(chatgpt);
+					if (!chatgpt) setTab((current) => (current === 2 ? 1 : current));
+				})
+				.catch(() => {
+					if (active) setChatGptConnected(null);
+				});
+		};
+		refreshConnection();
+		window.addEventListener("focus", refreshConnection);
 		return () => {
 			active = false;
+			window.removeEventListener("focus", refreshConnection);
 		};
 	}, []);
+
+	const checkConnection = async () => {
+		setConnectionCheck("checking");
+		try {
+			const { chatgpt } = await readAssistantConnections();
+			setChatGptConnected(chatgpt);
+			setConnectionCheck(chatgpt ? "connected" : "disconnected");
+			window.dispatchEvent(new Event("tabot:connection-check"));
+			if (!chatgpt) setTab(1);
+		} catch {
+			setConnectionCheck("error");
+		}
+	};
 
 	const copyServerUrl = async () => {
 		try {
@@ -134,6 +173,14 @@ const Assistant = () => {
 						>
 							<ListOrdered aria-hidden="true" className="size-4" /> Instructions
 						</FluidTabs.Tab>
+						{chatGptConnected && (
+							<FluidTabs.Tab
+								label="Connected"
+								className="cursor-pointer gap-2 text-work-ink"
+							>
+								<Check aria-hidden="true" className="size-4" /> Connected
+							</FluidTabs.Tab>
+						)}
 					</FluidTabs.List>
 				</FluidTabs>
 
@@ -142,7 +189,13 @@ const Assistant = () => {
 						<m.section
 							key={tab}
 							role="tabpanel"
-							aria-label={tab === 0 ? "Video demo" : "Instructions"}
+							aria-label={
+								tab === 0
+									? "Video demo"
+									: tab === 1
+										? "Instructions"
+										: "ChatGPT connection status"
+							}
 							initial={reduceMotion ? false : { opacity: 0, y: 6 }}
 							animate={{ opacity: 1, y: 0 }}
 							exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
@@ -167,7 +220,7 @@ const Assistant = () => {
 										className="absolute! inset-0! h-full! w-full!"
 									/>
 								</div>
-							) : (
+							) : tab === 1 ? (
 								<div className="max-w-3xl">
 									<div className="mb-2 flex items-center justify-between gap-3">
 										<h2 className="text-base font-semibold text-work-ink">
@@ -343,6 +396,71 @@ const Assistant = () => {
 										))}
 									</ol>
 								</div>
+							) : (
+								<section
+									aria-label="ChatGPT connection status"
+									className="max-w-3xl rounded-xl border border-work-line bg-work-surface"
+								>
+									<div className="space-y-4 p-5 sm:p-6">
+										<div>
+											<h3 className="font-heading text-lg font-semibold leading-6 tracking-tight text-work-ink">
+												Having trouble connecting?
+											</h3>
+											<p className="mt-1 max-w-prose text-base leading-7 text-work-muted">
+												Check your connection or walk through the setup steps.
+											</p>
+										</div>
+										<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+											<a
+												href={CHATGPT_DIAGNOSE_URL}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+											>
+												<OpenAIMono aria-hidden="true" className="size-4" />
+												Ask ChatGPT to diagnose
+												<span className="sr-only">(opens in a new tab)</span>
+											</a>
+											<button
+												type="button"
+												disabled={connectionCheck === "checking"}
+												onClick={() => void checkConnection()}
+												className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-work-line px-4 text-sm font-semibold text-work-ink transition-colors hover:bg-work-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait disabled:opacity-70"
+											>
+												<RefreshCw
+													aria-hidden="true"
+													className={`size-4 ${connectionCheck === "checking" ? "animate-spin" : ""}`}
+												/>
+												{connectionCheck === "checking"
+													? "Checking…"
+													: "Check connection"}
+											</button>
+											<button
+												type="button"
+												onClick={() => setTab(1)}
+												className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-4 text-sm font-semibold text-work-ink hover:bg-work-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+											>
+												Review setup steps
+											</button>
+										</div>
+										{connectionCheck !== "idle" &&
+											connectionCheck !== "checking" && (
+												<p
+													role="status"
+													className="text-sm leading-6 text-work-muted"
+												>
+													{connectionCheck === "connected"
+														? "Connection is working."
+														: connectionCheck === "disconnected"
+															? "Connection is not active. Review setup steps to reconnect."
+															: "Could not check connection. Keep Tabot open in this Chrome profile and try again."}
+												</p>
+											)}
+										<p className="text-sm leading-6 text-work-muted">
+											To disconnect, remove Tabot from ChatGPT Settings → Apps.
+										</p>
+									</div>
+								</section>
 							)}
 						</m.section>
 					</AnimatePresence>

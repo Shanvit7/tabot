@@ -1,0 +1,111 @@
+.wayfinder.iso[data-theme="light"] {
+	--anatomy-paper: #fafbf8;
+	--anatomy-top: #ffffff;
+	--anatomy-shade-0: #c9cec5;
+	--anatomy-shade-1: #d6dbd2;
+	--anatomy-shade-2: #e3e7df;
+	--anatomy-shade-3: #f0f2ec;
+	--anatomy-hi: #27352b;
+	--anatomy-mid: #73816f;
+	--anatomy-lo: #a7b2a0;
+	--anatomy-faint: #d3dacf;
+	--anatomy-lit: #233529;
+	--anatomy-halo: #8b9584;
+	--anatomy-halo-opacity: 0.18;
+	--anatomy-weight: 0.6px;
+}
+
+.wayfinder [data-material="sign"] {
+	--anatomy-paper: #829f24;
+	--anatomy-top: #c8f34a;
+	--anatomy-shade-0: #637b20;
+	--anatomy-shade-1: #829f24;
+	--anatomy-shade-2: #a6ca2b;
+	--anatomy-shade-3: #bfff00;
+	--anatomy-hi: #4f6520;
+	--anatomy-mid: #6d8625;
+	--anatomy-lo: #91ad31;
+	--anatomy-faint: #a5c54c;
+}
+
+.wayfinder [data-material="face"] {
+	--anatomy-paper: #f6f8ec;
+	--anatomy-top: #ffffff;
+	--anatomy-shade-0: #d8dfc8;
+	--anatomy-shade-1: #e3e9d6;
+	--anatomy-shade-2: #edf1e4;
+	--anatomy-shade-3: #f8f9f1;
+}
+
+.wayfinder [data-material="metal"] {
+	--anatomy-paper: #52634a;
+	--anatomy-top: #7f906f;
+	--anatomy-shade-0: #344632;
+	--anatomy-shade-1: #45583d;
+	--anatomy-shade-2: #617452;
+	--anatomy-shade-3: #7a8b69;
+	--anatomy-hi: #31412e;
+	--anatomy-mid: #45583d;
+	--anatomy-lo: #6a7a5e;
+	--anatomy-faint: #718165;
+}
+
+.wayfinder [data-material="trail"] {
+	--anatomy-paper: #ffffff;
+	--anatomy-top: #ffffff;
+	--anatomy-shade-0: #e9ede2;
+	--anatomy-shade-1: #edf0e8;
+	--anatomy-shade-2: #f4f6f1;
+	--anatomy-shade-3: #ffffff;
+	--anatomy-faint: #e1e6da;
+}
+
+.wayfinder .anatomy-screw {
+	fill: var(--anatomy-mid);
+}
+
+.wayfinder-number {
+	fill: var(--primary);
+	font-family: inherit;
+	font-weight: 800;
+	letter-spacing: -1.2px;
+	filter: drop-shadow(0 0 0 var(--primary));
+	animation: wayfinder-neon-start 1.6s steps(1, end) both;
+}
+
+@keyframes wayfinder-neon-start {
+	0%,
+	8%,
+	13%,
+	19%,
+	35% {
+		opacity: 0.12;
+		filter: drop-shadow(0 0 0 var(--primary));
+	}
+	9%,
+	14%,
+	20%,
+	36%,
+	42% {
+		opacity: 1;
+		filter: drop-shadow(0 0 3px var(--primary));
+	}
+	43%,
+	49% {
+		opacity: 0.35;
+		filter: drop-shadow(0 0 1px var(--primary));
+	}
+	50%,
+	100% {
+		opacity: 1;
+		filter: drop-shadow(0 0 3px var(--primary));
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wayfinder-number {
+		animation: none;
+		opacity: 1;
+		filter: none;
+	}
+}

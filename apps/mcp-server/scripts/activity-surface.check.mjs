@@ -22,6 +22,8 @@ const { default: app } = await import("../src/index.ts");
 let dispatches = 0;
 let relatedDispatches = 0;
 let noteDispatches = 0;
+let libraryDispatches = 0;
+const pageRef = `example.test:${"a".repeat(64)}`;
 const relatedActivity = {
 	count: 1,
 	nextCursor: null,
@@ -65,6 +67,37 @@ const env = {
 		get: () => ({
 			fetch: async (request) => {
 				const { method, params } = await request.json();
+				if (
+					method === "list_sites" ||
+					method === "list_site_pages" ||
+					(method === "get_page_notes" && params.pageRef)
+				) {
+					libraryDispatches++;
+					assert.deepEqual(
+						params,
+						method === "list_sites"
+							? {}
+							: method === "list_site_pages"
+								? { site: "example.test", limit: 2 }
+								: { pageRef },
+					);
+					return Response.json({
+						ok: true,
+						result: {
+							count: 1,
+							nextCursor: null,
+							...(method === "list_sites"
+								? {
+										sites: [
+											{ site: "example.test", pageCount: 22, noteCount: 52 },
+										],
+									}
+								: method === "list_site_pages"
+									? { pages: [{ pageRef, noteCount: 52 }] }
+									: { notes: [{ id: "note-id" }] }),
+						},
+					});
+				}
 				if (method === "search_notes" || method === "get_page_notes") {
 					noteDispatches++;
 					const cursor = noteDispatches > 2 ? "1700000000000:1" : undefined;
@@ -161,6 +194,8 @@ assert.deepEqual(
 		"search_activity",
 		"find_activity_matches",
 		"search_notes",
+		"list_sites",
+		"list_site_pages",
 		"get_site_notes",
 		"get_page_notes",
 		"get_activity_timeline",
@@ -174,17 +209,48 @@ assert.equal(searchTool.inputSchema.properties.limit.maximum, 8);
 assert.match(searchTool.inputSchema.properties.cursor.pattern, /\\d/);
 assert.deepEqual(list.body.result.tools[2].inputSchema.required, ["query"]);
 assert.ok(list.body.result.tools[2].inputSchema.properties.cursor);
-assert.deepEqual(list.body.result.tools[3].inputSchema.required, ["site"]);
-assert.deepEqual(list.body.result.tools[4].inputSchema.required, ["url"]);
-assert.ok(list.body.result.tools[4].inputSchema.properties.cursor);
-assert.deepEqual(list.body.result.tools[5].inputSchema.required, ["anchors"]);
+const tool = (name) =>
+	list.body.result.tools.find((entry) => entry.name === name);
+assert.deepEqual(tool("get_site_notes").inputSchema.required, ["site"]);
+assert.ok(tool("get_page_notes").inputSchema.properties.pageRef);
+assert.ok(tool("get_page_notes").inputSchema.properties.cursor);
+assert.deepEqual(tool("list_site_pages").inputSchema.required, ["site"]);
+assert.equal(tool("list_sites").inputSchema.properties.limit.maximum, 8);
+assert.deepEqual(tool("get_activity_timeline").inputSchema.required, [
+	"anchors",
+]);
 assert.equal(
-	list.body.result.tools[5].inputSchema.properties.anchors.maxItems,
+	tool("get_activity_timeline").inputSchema.properties.anchors.maxItems,
 	8,
 );
 assert.equal(
-	list.body.result.tools[5].inputSchema.properties.maxGapHours.maximum,
+	tool("get_activity_timeline").inputSchema.properties.maxGapHours.maximum,
 	720,
+);
+for (const [name, args] of [
+	["list_sites", {}],
+	["list_site_pages", { site: "example.test", limit: 2 }],
+	["get_page_notes", { pageRef }],
+]) {
+	const result = await rpc("tools/call", { name, arguments: args });
+	assert.equal(result.body.result.isError, undefined);
+	assert.equal(JSON.parse(result.body.result.content[0].text).count, 1);
+}
+assert.equal(libraryDispatches, 3);
+for (const [name, args] of [
+	["get_page_notes", {}],
+	["get_page_notes", { url: "https://example.test", pageRef }],
+	["get_page_notes", { pageRef: "invalid" }],
+	["list_sites", { limit: 9 }],
+	["list_site_pages", {}],
+]) {
+	const result = await rpc("tools/call", { name, arguments: args });
+	assert.ok(result.body.error || result.body.result?.isError);
+}
+assert.equal(
+	libraryDispatches,
+	3,
+	"Invalid selectors and pagination never dispatch",
 );
 const result = await rpc("tools/call", {
 	name: "search_activity",

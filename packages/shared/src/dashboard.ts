@@ -1,3 +1,4 @@
+import type { LibraryResponse } from "./library";
 import type { StoredPageObservation } from "./pages/observations";
 import {
 	isWorkflowScriptDraft,
@@ -47,6 +48,7 @@ export type DashboardWorkflowCandidates = {
 	truncated: boolean;
 };
 export type DashboardHistoryResponse =
+	| LibraryResponse
 	| DashboardWorkflowCandidates
 	| { prepared: true }
 	| { note: { id: string; text: string; updatedAt: number } }
@@ -240,7 +242,7 @@ export const isDashboardNotes = (
 					timestamp(item.session.start) &&
 					timestamp(item.session.end) &&
 					item.session.start <= item.session.end &&
-					count(item.session.durationMs))),
+					timestamp(item.session.durationMs))),
 	);
 
 export const isDashboardSearchAvailability = (

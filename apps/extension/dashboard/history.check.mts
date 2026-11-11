@@ -12,6 +12,12 @@ import {
 	isDashboardSearchResults,
 	isDashboardWorkflowCandidates,
 } from "@tabot/shared/dashboard";
+import {
+	browseLibrary,
+	isLibraryResponse,
+	type LibraryRequest,
+	type LibraryResponse,
+} from "@tabot/shared/library";
 import { readDashboardHistory } from "./history";
 
 const sender = "http://localhost:3000/home";
@@ -82,6 +88,14 @@ for (const untrusted of [
 	);
 	assert.deepEqual(
 		await readDashboardHistory(
+			{ type: "BROWSE_LIBRARY", level: "sites" },
+			untrusted,
+			getDb,
+		),
+		{ ok: false, code: "unauthorized-sender" },
+	);
+	assert.deepEqual(
+		await readDashboardHistory(
 			{ type: "SEARCH_HISTORY", query: "guide" },
 			untrusted,
 			getDb,
@@ -109,6 +123,13 @@ for (const request of [
 	{ ...previewRequest, url: "javascript:alert(1)" },
 	{ ...previewRequest, url: `${url}?secret=yes` },
 	{ type: "GET_EVENTS" },
+	{ type: "BROWSE_LIBRARY", level: "pages" },
+	{ type: "BROWSE_LIBRARY", level: "notes" },
+	{ type: "BROWSE_LIBRARY", level: "pages", site: "https://example.com" },
+	{ type: "BROWSE_LIBRARY", level: "notes", url: `${url}?secret=yes` },
+	{ type: "BROWSE_LIBRARY", level: "sites", offset: -1 },
+	{ type: "BROWSE_LIBRARY", level: "sites", limit: 21 },
+	{ type: "BROWSE_LIBRARY", level: "sites", from: 2, to: 1 },
 ])
 	assert.deepEqual(await readDashboardHistory(request, sender, getDb), {
 		ok: false,
@@ -440,6 +461,59 @@ const editedNote = await readDashboardHistory(
 assert.deepEqual(editedNote, {
 	note: { id: "note-1", text: "Updated note", updatedAt: 123 },
 });
+const libraryRequest = {
+	type: "BROWSE_LIBRARY",
+	level: "pages",
+	site: "example.com",
+	offset: 20,
+} as const;
+const libraryResult = await browseLibrary(
+	Array.from({ length: 25 }, (_, index) => ({
+		...navigation,
+		id: `library-${index}`,
+		url: `https://example.com/page-${index}`,
+	})),
+	[],
+	[],
+	libraryRequest,
+);
+let receivedLibrary: LibraryRequest | undefined;
+const libraryResponse = await readDashboardHistory(
+	libraryRequest,
+	sender,
+	async () => ({
+		...(await getDb()),
+		browseLibrary: async (request) => {
+			receivedLibrary = request;
+			return libraryResult;
+		},
+	}),
+);
+assert.deepEqual(receivedLibrary, libraryRequest);
+assert.ok(isLibraryResponse(libraryResponse));
+assert.equal(libraryResponse.total, 25);
+assert.equal(libraryResponse.pages.length, 5);
+assert.equal(libraryResponse.hasMore, false);
+assert.deepEqual(await readDashboardHistory(libraryRequest, sender, getDb), {
+	ok: false,
+	code: "library-unavailable",
+});
+assert.deepEqual(
+	await readDashboardHistory(libraryRequest, sender, async () => ({
+		...(await getDb()),
+		browseLibrary: async () => {
+			throw new Error("read-failed");
+		},
+	})),
+	{ ok: false, code: "library-unavailable" },
+);
+assert.deepEqual(
+	await readDashboardHistory(libraryRequest, sender, async () => ({
+		...(await getDb()),
+		browseLibrary: async () => ({ total: 0 }) as LibraryResponse,
+	})),
+	{ ok: false, code: "library-unavailable" },
+);
 console.log(
 	"dashboard history: authorization, validation, local Handwired discovery, bounded projection, missing captures and explicit read failures passed",
 );

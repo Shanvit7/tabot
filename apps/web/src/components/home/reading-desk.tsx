@@ -36,11 +36,14 @@ export const ReadingDesk = () => {
 	const searchDebouncer = useRef<Debouncer<() => void> | null>(null);
 	const loadingLists = useRef(new Set<string>());
 	const queryRef = useRef(query);
-	queryRef.current = query;
 	const [searchState, dispatchSearch] = useReducer(
 		readingDeskSearchReducer,
 		initialReadingDeskSearchState,
 	);
+	useEffect(() => {
+		queryRef.current = query;
+	}, [query]);
+
 	useEffect(() => {
 		const initialQuery = new URLSearchParams(window.location.search).get("q");
 		if (initialQuery) setInput(initialQuery.slice(0, 240));
@@ -63,8 +66,7 @@ export const ReadingDesk = () => {
 		query &&
 			!searchState.searching &&
 			!searchState.searchError &&
-			((!searchState.results.length && !searchState.notes.length) ||
-				filteredEmpty),
+			filteredEmpty,
 	);
 	const searchFailed = Boolean(query && searchState.searchError);
 
@@ -131,7 +133,7 @@ export const ReadingDesk = () => {
 							aria-label="Find a page"
 							className={cn(
 								"mx-auto flex max-w-2xl flex-col justify-center transition-[min-height,padding-top] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-								query ? "min-h-0 pt-10 sm:pt-14" : "min-h-[60svh]",
+								query ? "min-h-0 pt-10 sm:pt-14" : "min-h-[60svh] pt-6",
 							)}
 						>
 							{noMatches || searchFailed ? (
@@ -253,7 +255,6 @@ export const ReadingDesk = () => {
 					query={query}
 					state={searchState}
 					onRetrySearch={() => dispatchSearch({ type: "retry" })}
-					onSelectPage={(url) => dispatchSearch({ type: "select", url })}
 					onUpdateNote={async (id, text) => {
 						const note = await updateDashboardNote(id, text);
 						dispatchSearch({ type: "update-note", note });

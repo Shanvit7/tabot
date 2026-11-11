@@ -211,7 +211,8 @@ const addSource = (
 		.slice(0, 5);
 };
 
-export const searchHistory = async (
+/** Unpaginated keyword projection; empty query includes every retained URL. */
+export const collectHistoryResults = async (
 	events: StoredTabEvent[],
 	pages: StoredPageObservation[],
 	query: string,
@@ -222,9 +223,6 @@ export const searchHistory = async (
 		48,
 	);
 	if (
-		(!terms.length &&
-			options.nearestTo === undefined &&
-			!options.candidateOrder?.length) ||
 		(options.nearestTo !== undefined && !Number.isFinite(options.nearestTo)) ||
 		(options.from !== undefined && !Number.isFinite(options.from)) ||
 		(options.to !== undefined && !Number.isFinite(options.to)) ||
@@ -354,7 +352,6 @@ export const searchHistory = async (
 	}
 
 	const averageLength = totalLength / (corpus.length || 1);
-	const limit = Math.max(1, Math.min(20, Math.floor(options.limit ?? 10)));
 	const results: HistorySearchResult[] = [];
 	const candidateRanks = new Map(
 		(options.candidateOrder ?? []).map((url, index) => [url, index]),
@@ -378,7 +375,12 @@ export const searchHistory = async (
 				(frequency + k1 * (1 - b + b * (item.length / averageLength)));
 		}
 		const candidateRank = candidateRanks.get(document.url) ?? -1;
-		if (score || candidateRank >= 0 || options.nearestTo !== undefined) {
+		if (
+			(!terms.length && !options.candidateOrder?.length) ||
+			score ||
+			candidateRank >= 0 ||
+			options.nearestTo !== undefined
+		) {
 			const url = new URL(document.url);
 			results.push({
 				url: document.url,
@@ -414,24 +416,39 @@ export const searchHistory = async (
 		}
 		if (index > 0 && index % 512 === 0) await yieldTurn();
 	}
+	return results.sort((a, b) => {
+		if (options.nearestTo !== undefined)
+			return (
+				Math.abs(a.lastSeen - options.nearestTo) -
+				Math.abs(b.lastSeen - options.nearestTo)
+			);
+		const leftRank = candidateRanks.get(a.url) ?? -1;
+		const rightRank = candidateRanks.get(b.url) ?? -1;
+		if (leftRank >= 0 || rightRank >= 0)
+			return (
+				(leftRank < 0 ? Infinity : leftRank) -
+				(rightRank < 0 ? Infinity : rightRank)
+			);
+		return b.score - a.score || b.lastSeen - a.lastSeen;
+	});
+};
+
+export const searchHistory = async (
+	events: StoredTabEvent[],
+	pages: StoredPageObservation[],
+	query: string,
+	options: HistorySearchOptions = {},
+): Promise<HistorySearchResult[]> => {
+	if (
+		!tokenizeRecallText(query.slice(0, 240)).length &&
+		options.nearestTo === undefined &&
+		!options.candidateOrder?.length
+	)
+		return [];
+	const results = await collectHistoryResults(events, pages, query, options);
 	const offset = options.offset ?? 0;
-	return results
-		.sort((a, b) => {
-			if (options.nearestTo !== undefined)
-				return (
-					Math.abs(a.lastSeen - options.nearestTo) -
-					Math.abs(b.lastSeen - options.nearestTo)
-				);
-			const leftRank = candidateRanks.get(a.url) ?? -1;
-			const rightRank = candidateRanks.get(b.url) ?? -1;
-			if (leftRank >= 0 || rightRank >= 0)
-				return (
-					(leftRank < 0 ? Infinity : leftRank) -
-					(rightRank < 0 ? Infinity : rightRank)
-				);
-			return b.score - a.score || b.lastSeen - a.lastSeen;
-		})
-		.slice(offset, offset + limit);
+	const limit = Math.max(1, Math.min(20, Math.floor(options.limit ?? 10)));
+	return results.slice(offset, offset + limit);
 };
 
 /** Keep page titles, excerpts, URL paths, and raw event fields out of assistant activity results. */

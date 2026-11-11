@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
 	Children,
 	type ComponentProps,
@@ -138,7 +138,11 @@ function FluidTabsRoot({
 	);
 }
 
-type FluidTabsListProps = ComponentProps<"nav"> & {
+type FluidTabsListProps = Omit<
+	ComponentProps<typeof motion.nav>,
+	"children"
+> & {
+	children: ReactNode;
 	"aria-label"?: string;
 };
 
@@ -151,11 +155,14 @@ function FluidTabsList({
 	...props
 }: FluidTabsListProps) {
 	const { activeIndex, setActiveIndex, setFocusedIndex } = useFluidTabs();
+	const reduceMotion = useReducedMotion();
 	const tabs = Children.toArray(children).filter(isValidElement);
 	const count = tabs.length;
 
 	return (
-		<nav
+		<motion.nav
+			layout={!reduceMotion}
+			transition={INDICATOR_SPRING}
 			aria-label={ariaLabel}
 			className={cn(
 				"relative overflow-visible rounded-full bg-muted p-1 shadow-sm",
@@ -184,7 +191,7 @@ function FluidTabsList({
 					</FluidTabSlot>
 				))}
 			</div>
-		</nav>
+		</motion.nav>
 	);
 }
 
@@ -205,7 +212,7 @@ function FluidTabsLabel({ className, ...props }: ComponentProps<"span">) {
 	return <span className={cn("whitespace-nowrap", className)} {...props} />;
 }
 
-type FluidTabsTabProps = ComponentProps<"button"> & {
+type FluidTabsTabProps = ComponentProps<typeof motion.button> & {
 	label?: string;
 };
 
@@ -221,9 +228,12 @@ function FluidTabsTab({
 		useFluidTabs();
 	const { index } = useFluidTabSlot();
 	const isSelected = activeIndex === index;
+	const reduceMotion = useReducedMotion();
 
 	return (
-		<button
+		<motion.button
+			layout={!reduceMotion}
+			transition={INDICATOR_SPRING}
 			type="button"
 			role="tab"
 			aria-selected={isSelected}
@@ -263,7 +273,7 @@ function FluidTabsTab({
 			>
 				{children}
 			</motion.span>
-		</button>
+		</motion.button>
 	);
 }
 

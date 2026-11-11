@@ -22,6 +22,8 @@ import {
 	findActivityMatchesInputSchema,
 	getPageNotesInputSchema,
 	getSiteNotesInputSchema,
+	listSitePagesInputSchema,
+	listSitesInputSchema,
 	searchActivityInputSchema,
 	searchNotesInputSchema,
 } from "./mcp/schema";
@@ -129,6 +131,27 @@ const createMcpServer = (
 			inputSchema: searchNotesInputSchema,
 		},
 		(params) => call(TOOL_NAMES.SEARCH_NOTES, params),
+	);
+
+	server.registerTool(
+		TOOL_NAMES.LIST_SITES,
+		{
+			title: "Browse retained sites",
+			description: TOOL_DESCRIPTIONS.LIST_SITES,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: listSitesInputSchema,
+		},
+		(params) => call(TOOL_NAMES.LIST_SITES, params),
+	);
+	server.registerTool(
+		TOOL_NAMES.LIST_SITE_PAGES,
+		{
+			title: "Browse pages on a site",
+			description: TOOL_DESCRIPTIONS.LIST_SITE_PAGES,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: listSitePagesInputSchema,
+		},
+		(params) => call(TOOL_NAMES.LIST_SITE_PAGES, params),
 	);
 
 	server.registerTool(

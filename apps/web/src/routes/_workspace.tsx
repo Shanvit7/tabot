@@ -17,21 +17,30 @@ const WorkspaceLayout = () => {
 
 	useEffect(() => {
 		let active = true;
-		void readHistoryCounts()
-			.then(async () => {
-				const connections = await readAssistantConnections().catch(() => null);
-				if (!active) return;
-				const isConnected = connections?.chatgpt === true;
-				setChatGptConnected(isConnected);
-				if (!isConnected && !matchRoute({ to: "/assistant", fuzzy: false }))
-					void navigate({ to: "/assistant", replace: true });
-			})
-			.catch(() => {
-				if (active)
-					void navigate({ to: "/extension-not-connected", replace: true });
-			});
+		const refreshConnection = () => {
+			void readHistoryCounts()
+				.then(async () => {
+					const connections = await readAssistantConnections().catch(
+						() => null,
+					);
+					if (!active) return;
+					const isConnected = connections?.chatgpt === true;
+					setChatGptConnected(isConnected);
+					if (!isConnected && !matchRoute({ to: "/assistant", fuzzy: false }))
+						void navigate({ to: "/assistant", replace: true });
+				})
+				.catch(() => {
+					if (active)
+						void navigate({ to: "/extension-not-connected", replace: true });
+				});
+		};
+		refreshConnection();
+		window.addEventListener("focus", refreshConnection);
+		window.addEventListener("tabot:connection-check", refreshConnection);
 		return () => {
 			active = false;
+			window.removeEventListener("focus", refreshConnection);
+			window.removeEventListener("tabot:connection-check", refreshConnection);
 		};
 	}, [matchRoute, navigate]);
 

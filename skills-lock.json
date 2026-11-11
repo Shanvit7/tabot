@@ -7,6 +7,12 @@
 			"skillPath": "skills/agent-browser/SKILL.md",
 			"computedHash": ""
 		},
+		"anatomy": {
+			"source": "wheresryan22/anatomy",
+			"sourceType": "github",
+			"skillPath": "SKILL.md",
+			"computedHash": "a9a04fcc6d8e5e8229657523b02779954821b31d630617cdb6457dfd34cd0993"
+		},
 		"changesets": {
 			"source": "cloudflare/sandbox-sdk",
 			"sourceType": "github",

@@ -1,8 +1,12 @@
 // Exercises the public evidence-search dispatch against an in-memory store.
 import assert from "node:assert/strict";
 import { mock } from "node:test";
-import { setImmediate as nextTurn } from "node:timers/promises";
+import {
+	setTimeout as delay,
+	setImmediate as nextTurn,
+} from "node:timers/promises";
 import * as shared from "@tabot/shared";
+import { browseLibrary, type LibraryRequest } from "@tabot/shared/library";
 
 const searchResult = {
 	url: "https://example.test/private/path?token=secret",
@@ -69,7 +73,44 @@ const seedPage = {
 };
 const searchOptions: { limit?: number; offset?: number; to?: number }[] = [];
 const savedWorkflowScripts: unknown[][] = [];
+const libraryRequests: LibraryRequest[] = [];
+const libraryNotes = Array.from({ length: 53 }, (_, index) => ({
+	id: `saved-note-${index}`,
+	text: `Saved note ${index}`,
+	createdAt: 50 + index,
+	updatedAt: 50 + index,
+	url:
+		index === 52
+			? "https://example.test/orphan"
+			: "https://example.test/private/path",
+	origin: "https://example.test",
+	host: "example.test",
+	site: "example.test",
+	title: "A saved title",
+	favicon: null,
+	pageKey: "saved-page-key",
+	tabId: 1,
+	windowId: 1,
+	eventId: null,
+}));
 const db = {
+	browseLibrary: async (request: LibraryRequest) => {
+		libraryRequests.push(request);
+		return browseLibrary(
+			[
+				seedEvent,
+				...Array.from({ length: 23 }, (_, index) => ({
+					...seedEvent,
+					id: `library-event-${index}`,
+					timestamp: 20 + index,
+					url: `https://example.test/page-${index}`,
+				})),
+			],
+			[],
+			libraryNotes,
+			request,
+		);
+	},
 	getPendingWorkflowHandoff: async () => ({
 		payload: {
 			candidateId: "handwired-v1-1234abcd",
@@ -153,6 +194,7 @@ const originalFetch = globalThis.fetch;
 globalThis.chrome = {
 	storage: {
 		local: {
+			set: async () => {},
 			get: async () => ({
 				tabot_relay_credentials: { installationId: "test", token: "test" },
 			}),
@@ -175,7 +217,12 @@ const request = async (method: string, params: unknown) => {
 	socket.onmessage?.({
 		data: JSON.stringify({ type: "request", method, requestId, params }),
 	});
-	await nextTurn();
+	for (
+		let attempt = 0;
+		attempt < 200 && responses.at(-1)?.requestId !== requestId;
+		attempt++
+	)
+		await delay(5);
 	const response = responses.at(-1);
 	assert.equal(response?.requestId, requestId);
 	return response;
@@ -205,8 +252,101 @@ try {
 	const json = JSON.stringify(firstPage.results);
 	assert.match(json, /example\.test/);
 	assert.doesNotMatch(json, /private|secret|OAuth callback|relatedEvidence/);
-	assert.equal(Object.hasOwn(firstPage.results[0] ?? {}, "preview"), false);
-	assert.equal(Object.hasOwn(firstPage.results[0] ?? {}, "title"), false);
+	assert.equal(
+		Object.hasOwn(
+			(firstPage.results[0] as object | undefined) ?? {},
+			"preview",
+		),
+		false,
+	);
+	assert.equal(
+		Object.hasOwn((firstPage.results[0] as object | undefined) ?? {}, "title"),
+		false,
+	);
+	const sites = (await request("list_sites", {}))?.result as {
+		total: number;
+		sites: { site: string; pageCount: number; noteCount: number }[];
+	};
+	assert.equal(sites.total, 1);
+	assert.deepEqual(
+		sites.sites.map(({ site, pageCount, noteCount }) => ({
+			site,
+			pageCount,
+			noteCount,
+		})),
+		[{ site: "example.test", pageCount: 25, noteCount: 53 }],
+	);
+	const listedResponse = await request("list_site_pages", {
+		site: "example.test",
+		limit: 2,
+	});
+	assert.equal(
+		listedResponse?.error,
+		undefined,
+		JSON.stringify(listedResponse),
+	);
+	const listed = listedResponse?.result as {
+		total: number;
+		nextCursor: string;
+		pages: { pageRef: string; noteCount: number; captureAvailable: boolean }[];
+	};
+	assert.equal(listed.total, 25);
+	assert.match(listed.nextCursor, /^\d+:2$/);
+	assert.doesNotMatch(
+		JSON.stringify({ sites, listed }),
+		/private|orphan|saved title|page-\d|favicon|url|excerpt/,
+	);
+	const pageWithNotes = listed.pages.find((page) => page.noteCount === 52);
+	assert.ok(pageWithNotes);
+	assert.match(pageWithNotes.pageRef, /^example\.test:[a-f0-9]{64}$/);
+	assert.equal(pageWithNotes.captureAvailable, false);
+	let noteCursor: string | null | undefined;
+	const noteIds: string[] = [];
+	do {
+		const response = await request("get_page_notes", {
+			pageRef: pageWithNotes.pageRef,
+			...(noteCursor ? { cursor: noteCursor } : {}),
+		});
+		assert.equal(response?.error, undefined);
+		const page = response?.result as {
+			total: number;
+			nextCursor: string | null;
+			notes: { id: string }[];
+		};
+		assert.equal(page.total, 52);
+		assert.doesNotMatch(JSON.stringify(page), /private\/path|pageKey/);
+		noteIds.push(...page.notes.map((note) => note.id));
+		noteCursor = page.nextCursor;
+	} while (noteCursor);
+	assert.equal(
+		new Set(noteIds).size,
+		52,
+		"Opaque references paginate beyond the legacy 50-note cap",
+	);
+	const orphan = listed.pages.find((page) => page.noteCount === 1);
+	assert.ok(orphan);
+	const orphanNotes = (
+		await request("get_page_notes", { pageRef: orphan.pageRef })
+	)?.result as { count: number };
+	assert.equal(orphanNotes.count, 1, "Note-only pages need no capture");
+	const requestCount = libraryRequests.length;
+	for (const [method, input] of [
+		["list_site_pages", { site: "https://example.test/path" }],
+		["list_sites", { limit: 9 }],
+		["list_sites", { from: 20, to: 10 }],
+		["get_page_notes", { pageRef: "invalid" }],
+		[
+			"get_page_notes",
+			{ pageRef: pageWithNotes.pageRef, url: "https://example.test" },
+		],
+	]) {
+		assert.ok((await request(method as string, input))?.error);
+	}
+	assert.equal(
+		libraryRequests.length,
+		requestCount,
+		"Invalid requests never reach storage",
+	);
 	const handoff = await request("get_pending_workflow_handoff", {});
 	assert.ok(handoff);
 	assert.equal((handoff.result as { ready: boolean }).ready, true);

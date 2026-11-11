@@ -2,10 +2,12 @@ import type {
 	DashboardNoteResult,
 	HistorySearchResult,
 } from "@tabot/shared/dashboard";
+import type { LibrarySite } from "@tabot/shared/library";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, FileText, Pencil, StickyNote, X } from "lucide-react";
+import { Check, Pencil, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { PageFavicon } from "~/components/home/page-favicon";
+import { PageNotes } from "~/components/home/page-notes";
 import { PageReader } from "~/components/home/page-reader";
 import { dateLabel, urlLabel } from "~/components/home/reading-desk-utils";
 import { Button } from "~/components/ui/button";
@@ -16,6 +18,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "~/components/ui/sheet";
+import { cn } from "~/lib/utils";
 
 const description = (page: HistorySearchResult) => {
 	if (page.pageExcerptAvailable) return page.excerpt;
@@ -26,6 +29,14 @@ const description = (page: HistorySearchResult) => {
 };
 
 export const SearchEverythingBoard = ({
+	pagesOnly = false,
+	notesOnly = false,
+	sites = [],
+	sitesTotal = 0,
+	sitesHasMore = false,
+	sitesLoading = false,
+	sitesError = "",
+	onBrowseSites,
 	results,
 	notes,
 	noteCountsByUrl,
@@ -37,6 +48,14 @@ export const SearchEverythingBoard = ({
 	loadingMoreNotes,
 	loadMoreError,
 }: {
+	pagesOnly?: boolean;
+	notesOnly?: boolean;
+	sites?: LibrarySite[];
+	sitesTotal?: number;
+	sitesHasMore?: boolean;
+	sitesLoading?: boolean;
+	sitesError?: string;
+	onBrowseSites?: () => void;
 	results: HistorySearchResult[];
 	notes: DashboardNoteResult[];
 	noteCountsByUrl: Map<string, number>;
@@ -114,225 +133,266 @@ export const SearchEverythingBoard = ({
 	]);
 	return (
 		<>
-			<div className="grid grid-cols-2 items-start gap-3 sm:gap-5">
-				<section aria-labelledby="everything-pages-heading" className="min-w-0">
-					<h2
-						id="everything-pages-heading"
-						className="mb-2 flex items-center gap-2 text-sm font-medium"
-					>
-						<FileText aria-hidden="true" className="size-4" /> Pages{" "}
-						<span className="text-muted-foreground tabular-nums">
-							{results.length}
-							{hasMorePages ? "+" : ""}
-						</span>
-					</h2>
-					<ul
-						ref={pagesScrollRef}
-						aria-label="Matching pages"
-						className="relative h-[min(65svh,42rem)] min-h-32 overflow-y-auto overscroll-y-contain pr-1 motion-reduce:scroll-auto [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
-					>
-						<li
-							aria-hidden="true"
-							className="w-full"
-							style={{ height: pagesVirtualizer.getTotalSize() }}
-						/>
-						{pagesVirtualizer.getVirtualItems().map((virtualRow) => {
-							const page = results[virtualRow.index];
-							if (!page)
+			<div
+				className={cn(
+					"grid items-start gap-3 sm:gap-5",
+					!pagesOnly && !notesOnly && "grid-cols-1 md:grid-cols-3",
+				)}
+			>
+				{!pagesOnly && !notesOnly && (
+					<section aria-label="Matching sites" className="min-w-0">
+						<ul className="max-h-[min(65svh,42rem)] min-h-32 overflow-y-auto overscroll-y-contain pr-1 [scrollbar-width:thin]">
+							{sites.map((site) => (
+								<li
+									key={site.site}
+									className="border-b border-border last:border-0"
+								>
+									<a
+										href={`https://${site.site}/`}
+										target="_blank"
+										rel="noreferrer"
+										className="flex min-w-0 items-center gap-2 py-3 focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
+									>
+										<PageFavicon
+											page={{
+												url: site.url,
+												host: site.site,
+												favicon: site.favicon,
+											}}
+										/>
+										<span className="min-w-0 flex-1">
+											<span className="block truncate text-sm font-medium underline underline-offset-4">
+												{site.site}
+											</span>
+											<span className="block text-xs text-muted-foreground">
+												{site.pageCount} pages · {site.noteCount} notes
+											</span>
+										</span>
+									</a>
+								</li>
+							))}
+							{!sites.length && (
+								<li className="py-3 text-xs text-muted-foreground">
+									{sitesError ||
+										(sitesLoading ? "Loading sites…" : "No matching sites")}
+								</li>
+							)}
+						</ul>
+						{(sitesHasMore || sitesTotal > 0) && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={onBrowseSites}
+								className="mt-1"
+							>
+								Browse all sites
+							</Button>
+						)}
+					</section>
+				)}
+				{!notesOnly && (
+					<section aria-label="Matching pages" className="min-w-0">
+						<ul
+							ref={pagesScrollRef}
+							aria-label="Matching pages"
+							className="relative h-[min(65svh,42rem)] min-h-32 overflow-y-auto overscroll-y-contain pr-1 motion-reduce:scroll-auto [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
+						>
+							<li
+								aria-hidden="true"
+								className="w-full"
+								style={{ height: pagesVirtualizer.getTotalSize() }}
+							/>
+							{pagesVirtualizer.getVirtualItems().map((virtualRow) => {
+								const page = results[virtualRow.index];
+								if (!page)
+									return (
+										<li
+											key="pages-loader"
+											className="absolute left-0 top-0 w-full pb-2"
+											style={{ transform: `translateY(${virtualRow.start}px)` }}
+										>
+											{loadMoreError ? (
+												<button
+													type="button"
+													onClick={() => onLoadMore("pages")}
+													className="w-full py-3 text-center text-xs text-destructive underline underline-offset-4"
+												>
+													Couldn’t load pages. Retry
+												</button>
+											) : (
+												<p
+													role="status"
+													className="py-3 text-center text-xs text-muted-foreground"
+												>
+													{loadingMorePages
+														? "Loading pages…"
+														: "Loading more pages on scroll"}
+												</p>
+											)}
+										</li>
+									);
 								return (
 									<li
-										key="pages-loader"
+										key={virtualRow.key}
+										data-index={virtualRow.index}
+										ref={pagesVirtualizer.measureElement}
 										className="absolute left-0 top-0 w-full pb-2"
 										style={{ transform: `translateY(${virtualRow.start}px)` }}
 									>
-										{loadMoreError ? (
+										<div className="relative flex min-h-28 w-full min-w-0 flex-col items-start gap-2 rounded-lg border border-border bg-work-surface p-2.5 transition-colors hover:border-work-ink/40 hover:bg-muted/40 sm:p-3">
 											<button
 												type="button"
-												onClick={() => onLoadMore("pages")}
-												className="w-full py-3 text-center text-xs text-destructive underline underline-offset-4"
-											>
-												Couldn’t load pages. Retry
-											</button>
-										) : (
-											<p
-												role="status"
-												className="py-3 text-center text-xs text-muted-foreground"
-											>
-												{loadingMorePages
-													? "Loading pages…"
-													: "Loading more pages on scroll"}
-											</p>
-										)}
-									</li>
-								);
-							return (
-								<li
-									key={virtualRow.key}
-									data-index={virtualRow.index}
-									ref={pagesVirtualizer.measureElement}
-									className="absolute left-0 top-0 w-full pb-2"
-									style={{ transform: `translateY(${virtualRow.start}px)` }}
-								>
-									<div className="relative flex min-h-28 w-full min-w-0 flex-col items-start gap-2 rounded-lg border border-border bg-work-surface p-2.5 transition-colors hover:border-work-ink/40 hover:bg-muted/40 sm:p-3">
-										<button
-											type="button"
-											onClick={() => setActive({ type: "page", item: page })}
-											aria-label={`Show details for ${urlLabel(page)}`}
-											className="absolute inset-0 z-10 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-										/>
-										<span className="flex min-w-0 items-center gap-2">
-											<PageFavicon page={page} />
+												onClick={() => setActive({ type: "page", item: page })}
+												aria-label={`Show details for ${urlLabel(page)}`}
+												className="absolute inset-0 z-10 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+											/>
+											<span className="flex min-w-0 items-center gap-2">
+												<PageFavicon page={page} />
+												<a
+													href={page.url}
+													target="_blank"
+													rel="noreferrer"
+													className="relative z-20 truncate text-xs text-muted-foreground underline-offset-4 hover:underline focus-visible:underline"
+												>
+													{page.host}
+												</a>
+											</span>
 											<a
 												href={page.url}
 												target="_blank"
 												rel="noreferrer"
-												className="relative z-20 truncate text-xs text-muted-foreground underline-offset-4 hover:underline focus-visible:underline"
+												className="relative z-20 line-clamp-2 w-full wrap-break-word text-sm font-medium leading-5 underline underline-offset-4 hover:decoration-2 focus-visible:decoration-2"
 											>
-												{page.host}
+												{urlLabel(page)}
 											</a>
-										</span>
-										<a
-											href={page.url}
-											target="_blank"
-											rel="noreferrer"
-											className="relative z-20 line-clamp-2 w-full wrap-break-word text-sm font-medium leading-5 underline underline-offset-4 hover:decoration-2 focus-visible:decoration-2"
-										>
-											{urlLabel(page)}
-										</a>
-										<p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-											{description(page)}
-										</p>
-										<div className="mt-auto flex w-full items-center justify-between gap-2">
-											<span className="text-xs tabular-nums text-muted-foreground">
-												{noteCountsByUrl.get(page.url)
-													? `${noteCountsByUrl.get(page.url)} notes · `
-													: ""}
-												{dateLabel(page.lastSeen)}
-											</span>
+											<p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+												{description(page)}
+											</p>
+											<div className="mt-auto flex w-full items-center justify-between gap-2">
+												<span className="text-xs tabular-nums text-muted-foreground">
+													{noteCountsByUrl.get(page.url)
+														? `${noteCountsByUrl.get(page.url)} notes · `
+														: ""}
+													{dateLabel(page.lastSeen)}
+												</span>
+											</div>
 										</div>
-									</div>
+									</li>
+								);
+							})}
+							{!results.length && !hasMorePages && (
+								<li className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+									No matching pages
 								</li>
-							);
-						})}
-						{!results.length && !hasMorePages && (
-							<li className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-								No matching pages
-							</li>
-						)}
-					</ul>
-				</section>
-				<section aria-labelledby="everything-notes-heading" className="min-w-0">
-					<h2
-						id="everything-notes-heading"
-						className="mb-2 flex items-center gap-2 text-sm font-medium"
-					>
-						<StickyNote aria-hidden="true" className="size-4" /> Notes{" "}
-						<span className="text-muted-foreground tabular-nums">
-							{notes.length}
-							{hasMoreNotes ? "+" : ""}
-						</span>
-					</h2>
-					<ul
-						ref={notesScrollRef}
-						aria-label="Matching notes"
-						className="relative h-[min(65svh,42rem)] min-h-32 overflow-y-auto overscroll-y-contain pr-1 motion-reduce:scroll-auto [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
-					>
-						<li
-							aria-hidden="true"
-							className="w-full"
-							style={{ height: notesVirtualizer.getTotalSize() }}
-						/>
-						{notesVirtualizer.getVirtualItems().map((virtualRow) => {
-							const note = notes[virtualRow.index];
-							if (!note)
+							)}
+						</ul>
+					</section>
+				)}
+				{!pagesOnly && (
+					<section aria-label="Matching notes" className="min-w-0">
+						<ul
+							ref={notesScrollRef}
+							aria-label="Matching notes"
+							className="relative h-[min(65svh,42rem)] min-h-32 overflow-y-auto overscroll-y-contain pr-1 motion-reduce:scroll-auto [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
+						>
+							<li
+								aria-hidden="true"
+								className="w-full"
+								style={{ height: notesVirtualizer.getTotalSize() }}
+							/>
+							{notesVirtualizer.getVirtualItems().map((virtualRow) => {
+								const note = notes[virtualRow.index];
+								if (!note)
+									return (
+										<li
+											key="notes-loader"
+											className="absolute left-0 top-0 w-full pb-2"
+											style={{ transform: `translateY(${virtualRow.start}px)` }}
+										>
+											{loadMoreError ? (
+												<button
+													type="button"
+													onClick={() => onLoadMore("notes")}
+													className="w-full py-3 text-center text-xs text-destructive underline underline-offset-4"
+												>
+													Couldn’t load notes. Retry
+												</button>
+											) : (
+												<p
+													role="status"
+													className="py-3 text-center text-xs text-muted-foreground"
+												>
+													{loadingMoreNotes
+														? "Loading notes…"
+														: "Loading more notes on scroll"}
+												</p>
+											)}
+										</li>
+									);
 								return (
 									<li
-										key="notes-loader"
+										key={virtualRow.key}
+										data-index={virtualRow.index}
+										ref={notesVirtualizer.measureElement}
 										className="absolute left-0 top-0 w-full pb-2"
 										style={{ transform: `translateY(${virtualRow.start}px)` }}
 									>
-										{loadMoreError ? (
+										<div className="relative flex min-h-28 w-full min-w-0 flex-col items-start gap-2 rounded-lg border border-border bg-work-surface p-2.5 text-left transition-colors hover:border-work-ink/40 hover:bg-muted/40 sm:p-3">
 											<button
 												type="button"
-												onClick={() => onLoadMore("notes")}
-												className="w-full py-3 text-center text-xs text-destructive underline underline-offset-4"
-											>
-												Couldn’t load notes. Retry
-											</button>
-										) : (
-											<p
-												role="status"
-												className="py-3 text-center text-xs text-muted-foreground"
-											>
-												{loadingMoreNotes
-													? "Loading notes…"
-													: "Loading more notes on scroll"}
-											</p>
-										)}
-									</li>
-								);
-							return (
-								<li
-									key={virtualRow.key}
-									data-index={virtualRow.index}
-									ref={notesVirtualizer.measureElement}
-									className="absolute left-0 top-0 w-full pb-2"
-								>
-									<div className="relative flex min-h-28 w-full min-w-0 flex-col items-start gap-2 rounded-lg border border-border bg-work-surface p-2.5 text-left transition-colors hover:border-work-ink/40 hover:bg-muted/40 sm:p-3">
-										<button
-											type="button"
-											onClick={() => {
-												setActive({ type: "note", item: note });
-												setDraft(note.text);
-												setEditingNote(false);
-												setSaveError("");
-											}}
-											aria-label={`Show note details from ${note.host}`}
-											className="absolute inset-0 z-10 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-										/>
-										<span className="flex w-full min-w-0 items-center justify-between gap-2 text-xs text-muted-foreground">
-											<span className="flex min-w-0 items-center gap-2">
-												<PageFavicon page={note} />
+												onClick={() => {
+													setActive({ type: "note", item: note });
+													setDraft(note.text);
+													setEditingNote(false);
+													setSaveError("");
+												}}
+												aria-label={`Show note details from ${note.host}`}
+												className="absolute inset-0 z-10 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+											/>
+											<span className="flex w-full min-w-0 items-center justify-between gap-2 text-xs text-muted-foreground">
+												<span className="flex min-w-0 items-center gap-2">
+													<PageFavicon page={note} />
+													<a
+														href={note.url}
+														target="_blank"
+														rel="noreferrer"
+														className="relative z-20 truncate underline-offset-4 hover:underline focus-visible:underline"
+													>
+														{note.host}
+													</a>
+												</span>
+												<time
+													className="shrink-0 tabular-nums"
+													dateTime={new Date(note.updatedAt).toISOString()}
+												>
+													{dateLabel(note.updatedAt)}
+												</time>
+											</span>
+											<span className="line-clamp-3 w-full whitespace-pre-wrap wrap-break-word text-sm leading-5">
+												{note.text}
+											</span>
+											<div className="mt-auto flex w-full min-w-0 items-center justify-between gap-2">
 												<a
 													href={note.url}
 													target="_blank"
 													rel="noreferrer"
-													className="relative z-20 truncate underline-offset-4 hover:underline focus-visible:underline"
+													className="relative z-20 line-clamp-1 min-w-0 text-xs text-muted-foreground underline underline-offset-4 hover:decoration-2 focus-visible:decoration-2"
 												>
-													{note.host}
+													{note.title ?? note.host}
 												</a>
-											</span>
-											<time
-												className="shrink-0 tabular-nums"
-												dateTime={new Date(note.updatedAt).toISOString()}
-											>
-												{dateLabel(note.updatedAt)}
-											</time>
-										</span>
-										<span className="line-clamp-3 w-full whitespace-pre-wrap wrap-break-word text-sm leading-5">
-											{note.text}
-										</span>
-										<div className="mt-auto flex w-full min-w-0 items-center justify-between gap-2">
-											<a
-												href={note.url}
-												target="_blank"
-												rel="noreferrer"
-												className="relative z-20 line-clamp-1 min-w-0 text-xs text-muted-foreground underline underline-offset-4 hover:decoration-2 focus-visible:decoration-2"
-											>
-												{note.title ?? note.host}
-											</a>
+											</div>
 										</div>
-									</div>
+									</li>
+								);
+							})}
+							{!notes.length && !hasMoreNotes && (
+								<li className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+									No matching notes
 								</li>
-							);
-						})}
-						{!notes.length && !hasMoreNotes && (
-							<li className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-								No matching notes
-							</li>
-						)}
-					</ul>
-				</section>
+							)}
+						</ul>
+					</section>
+				)}
 			</div>
 			<Sheet
 				open={active !== null}
@@ -371,10 +431,17 @@ export const SearchEverythingBoard = ({
 							</SheetHeader>
 							<div className="flex flex-col gap-5 overflow-y-auto px-5 pb-6">
 								{active.type === "page" ? (
-									<PageReader
-										key={`${active.item.url}-${active.item.sources[0]?.id}`}
-										page={active.item}
-									/>
+									<>
+										<PageReader
+											key={`${active.item.url}-${active.item.sources[0]?.id}`}
+											page={active.item}
+										/>
+										<PageNotes
+											key={active.item.url}
+											url={active.item.url}
+											onUpdateNote={onUpdateNote}
+										/>
+									</>
 								) : (
 									<>
 										{editingNote ? (

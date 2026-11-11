@@ -18,6 +18,11 @@ import {
 	isRecord,
 	type SearchAvailability,
 } from "@tabot/shared/dashboard";
+import {
+	isLibraryResponse,
+	type LibraryRequest,
+	type LibraryResponse,
+} from "@tabot/shared/library";
 import { createTrackingClient } from "@tabot/shared/tracking";
 import { createClientOnlyFn } from "@tanstack/react-start";
 
@@ -167,6 +172,17 @@ export const searchRetainedPages = async (
 	};
 };
 
+export const browseRetainedLibrary = async (
+	options: LibraryRequest,
+): Promise<LibraryResponse> => {
+	const response = await request({ type: "BROWSE_LIBRARY", ...options });
+	if (!isLibraryResponse(response))
+		throw new Error(
+			"Library response is incompatible. Reload the latest Tabot extension.",
+		);
+	return response;
+};
+
 const trackingClient = createTrackingClient(request);
 export const readTrackingState = trackingClient.read;
 export const setTrackingEnabled = trackingClient.set;
@@ -179,6 +195,7 @@ export const readActiveTrackingDuration = async (): Promise<{
 	if (
 		typeof response.durationMs !== "number" ||
 		!Number.isFinite(response.durationMs) ||
+		response.durationMs < 0 ||
 		typeof response.active !== "boolean"
 	)
 		throw new Error("Active tracking duration could not be read.");
@@ -189,9 +206,11 @@ export const readHistoryCounts = async (): Promise<{
 	eventCount: number;
 	pageCount: number;
 	firstEventTimestamp: number | null;
+	lastEventTimestamp: number | null;
 }> => {
 	const response = await request({ type: "GET_COUNTS" });
 	const firstEventTimestamp = response.firstEventTimestamp;
+	const lastEventTimestamp = response.lastEventTimestamp;
 	if (
 		typeof response.eventCount !== "number" ||
 		!Number.isSafeInteger(response.eventCount) ||
@@ -203,7 +222,15 @@ export const readHistoryCounts = async (): Promise<{
 			firstEventTimestamp !== null &&
 			(typeof firstEventTimestamp !== "number" ||
 				!Number.isFinite(firstEventTimestamp) ||
-				firstEventTimestamp < 0))
+				firstEventTimestamp < 0)) ||
+		(lastEventTimestamp !== undefined &&
+			lastEventTimestamp !== null &&
+			(typeof lastEventTimestamp !== "number" ||
+				!Number.isFinite(lastEventTimestamp) ||
+				lastEventTimestamp < 0)) ||
+		(typeof firstEventTimestamp === "number" &&
+			typeof lastEventTimestamp === "number" &&
+			firstEventTimestamp > lastEventTimestamp)
 	)
 		throw new Error(
 			"History counts could not be read. Reload the latest Tabot extension.",
@@ -213,6 +240,8 @@ export const readHistoryCounts = async (): Promise<{
 		pageCount: response.pageCount,
 		firstEventTimestamp:
 			typeof firstEventTimestamp === "number" ? firstEventTimestamp : null,
+		lastEventTimestamp:
+			typeof lastEventTimestamp === "number" ? lastEventTimestamp : null,
 	};
 };
 

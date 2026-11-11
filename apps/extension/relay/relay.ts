@@ -17,6 +17,8 @@ import {
 	sessionForNote,
 	sessionize,
 } from "@tabot/shared";
+import type { DashboardNoteResult } from "@tabot/shared/dashboard";
+import { isLibraryRequest, type LibraryPage } from "@tabot/shared/library";
 import { createCaptureIdentity } from "../ingestion/capture-identity";
 import { getStorageDb } from "../storage/client";
 
@@ -52,6 +54,8 @@ const GET_ACTIVITY_TIMELINE_METHOD = "get_activity_timeline";
 const SEARCH_NOTES_METHOD = "search_notes";
 const GET_PAGE_NOTES_METHOD = "get_page_notes";
 const GET_SITE_NOTES_METHOD = "get_site_notes";
+const LIST_SITES_METHOD = "list_sites";
+const LIST_SITE_PAGES_METHOD = "list_site_pages";
 const GET_PENDING_WORKFLOW_HANDOFF_METHOD = "get_pending_workflow_handoff";
 const SAVE_WORKFLOW_SCRIPT_METHOD = "save_workflow_script";
 const ACTIVITY_RESULT_LIMIT = 8;
@@ -459,10 +463,10 @@ const getActivityTimeline = async (params: unknown) => {
 };
 
 const noteResult = async (
-	note: PageNote,
+	note: PageNote | DashboardNoteResult,
 	sessions: ReturnType<typeof sessionize>,
 ) => {
-	const session = sessionForNote(note, sessions);
+	const session = "origin" in note ? sessionForNote(note, sessions) : undefined;
 	const [{ redacted: text }, { redacted: title }] = await Promise.all([
 		piiRedactor.redact(note.text),
 		piiRedactor.redact(note.title ?? ""),
@@ -472,7 +476,7 @@ const noteResult = async (
 		text: text.slice(0, 4_000),
 		createdAt: note.createdAt,
 		updatedAt: note.updatedAt,
-		origin: new URL(note.origin).origin,
+		origin: new URL("origin" in note ? note.origin : note.url).origin,
 		host: note.host,
 		site: deriveSiteDomain(note.host),
 		title: title || null,
@@ -483,7 +487,158 @@ const noteResult = async (
 					durationMs: session.duration,
 					sites: session.domains,
 				}
-			: null,
+			: "session" in note
+				? note.session
+				: null,
+	};
+};
+
+const pageReference = async (page: LibraryPage) =>
+	`${encodeURIComponent(page.site)}:${await createCaptureIdentity(["library-page:v1", page.url])}`;
+
+const listLibrary = async (params: unknown, level: "sites" | "pages") => {
+	if (!params || typeof params !== "object" || Array.isArray(params))
+		throw new Error("Invalid library request.");
+	const input = params as Record<string, unknown>;
+	if (
+		Object.keys(input).some(
+			(key) =>
+				!["query", "site", "from", "to", "limit", "cursor"].includes(key),
+		)
+	)
+		throw new Error("Invalid library request.");
+	const { snapshot, offset } = decodePageCursor(input.cursor);
+	const limit = input.limit ?? ACTIVITY_RESULT_LIMIT;
+	if (
+		typeof limit !== "number" ||
+		!Number.isSafeInteger(limit) ||
+		limit < 1 ||
+		limit > ACTIVITY_RESULT_LIMIT
+	)
+		throw new Error("limit must be an integer from 1 to 8.");
+	const request = {
+		level,
+		query: input.query,
+		site: input.site,
+		from: input.from,
+		to: input.to,
+		limit,
+		offset,
+	};
+	if (!isLibraryRequest(request))
+		throw new Error("Invalid library scope, query or time range.");
+	request.to = Math.min(request.to ?? snapshot, snapshot);
+	if (!isLibraryRequest(request))
+		throw new Error("Time range starts after the cursor snapshot.");
+	const data = await (await getDb()).browseLibrary(request);
+	return {
+		total: data.total,
+		count: data.sites.length + data.pages.length,
+		nextCursor: nextPageCursor(
+			data.hasMore,
+			snapshot,
+			offset,
+			data.sites.length + data.pages.length,
+		),
+		...(level === "sites"
+			? {
+					sites: data.sites.map(({ site, pageCount, noteCount, lastSeen }) => ({
+						site,
+						pageCount,
+						noteCount,
+						lastSeen,
+					})),
+				}
+			: {
+					pages: await Promise.all(
+						data.pages.map(async (page) => ({
+							pageRef: await pageReference(page),
+							site: page.site,
+							host: page.host,
+							firstSeen: page.firstSeen,
+							lastSeen: page.lastSeen,
+							noteCount: page.noteCount,
+							captureAvailable: page.pageExcerptAvailable,
+						})),
+					),
+				}),
+	};
+};
+
+const getReferencedPageNotes = async (input: Record<string, unknown>) => {
+	if (
+		typeof input.pageRef !== "string" ||
+		!/^[a-z0-9.%A-F-]{1,765}:[a-f0-9]{64}$/.test(input.pageRef)
+	)
+		throw new Error(
+			"pageRef must be a page reference returned by list_site_pages.",
+		);
+	let site: string;
+	try {
+		site = decodeURIComponent(
+			input.pageRef.slice(0, input.pageRef.lastIndexOf(":")),
+		);
+	} catch {
+		throw new Error("Invalid page reference.");
+	}
+	const { snapshot, offset } = decodePageCursor(input.cursor);
+	const limit = input.limit ?? ACTIVITY_RESULT_LIMIT;
+	if (
+		typeof limit !== "number" ||
+		!Number.isSafeInteger(limit) ||
+		limit < 1 ||
+		limit > ACTIVITY_RESULT_LIMIT
+	)
+		throw new Error("limit must be an integer from 1 to 8.");
+	if (!isLibraryRequest({ level: "pages", site }))
+		throw new Error("Invalid page reference site.");
+	const db = await getDb();
+	// ponytail: scan this site's pages to resolve private references; add a local ref index if this becomes slow.
+	for (let pageOffset = 0; ; pageOffset += 20) {
+		const batch = await db.browseLibrary({
+			level: "pages",
+			site,
+			to: snapshot,
+			limit: 20,
+			offset: pageOffset,
+		});
+		for (const page of batch.pages) {
+			if ((await pageReference(page)) !== input.pageRef) continue;
+			const data = await db.browseLibrary({
+				level: "notes",
+				url: page.url,
+				limit,
+				offset,
+				to: snapshot,
+			});
+			return {
+				found: true,
+				pageRef: input.pageRef,
+				site,
+				host: page.host,
+				total: data.total,
+				count: data.notes.length,
+				nextCursor: nextPageCursor(
+					data.hasMore,
+					snapshot,
+					offset,
+					data.notes.length,
+				),
+				notes: await Promise.all(
+					data.notes.map((note) => noteResult(note, [])),
+				),
+			};
+		}
+		if (!batch.hasMore) break;
+	}
+	return {
+		found: false,
+		pageRef: input.pageRef,
+		site,
+		total: 0,
+		count: 0,
+		nextCursor: null,
+		notes: [],
 	};
 };
 
@@ -554,11 +709,17 @@ const searchNotes = async (params: unknown) => {
 };
 
 const getPageNotes = async (params: unknown) => {
-	const input = params as {
-		url?: unknown;
-		limit?: unknown;
-		cursor?: unknown;
-	} | null;
+	if (!params || typeof params !== "object" || Array.isArray(params))
+		throw new Error("Invalid page notes request.");
+	const input = params as Record<string, unknown>;
+	if (
+		Object.keys(input).some(
+			(key) => !["url", "pageRef", "limit", "cursor"].includes(key),
+		) ||
+		(input.url === undefined) === (input.pageRef === undefined)
+	)
+		throw new Error("Provide exactly one of url or pageRef.");
+	if (input.pageRef !== undefined) return getReferencedPageNotes(input);
 	if (typeof input?.url !== "string" || input.url.length > 2_048)
 		throw new Error("url must be an http or https page URL.");
 	let parsed: URL;
@@ -567,7 +728,11 @@ const getPageNotes = async (params: unknown) => {
 	} catch {
 		throw new Error("url must be an http or https page URL.");
 	}
-	if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+	if (
+		(parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+		parsed.username ||
+		parsed.password
+	)
 		throw new Error("url must be an http or https page URL.");
 	const requestedLimit = input.limit ?? ACTIVITY_RESULT_LIMIT;
 	if (
@@ -691,6 +856,8 @@ const handlers: Record<string, (params: unknown) => Promise<unknown>> = {
 	[SEARCH_NOTES_METHOD]: searchNotes,
 	[GET_PAGE_NOTES_METHOD]: getPageNotes,
 	[GET_SITE_NOTES_METHOD]: getSiteNotes,
+	[LIST_SITES_METHOD]: (params) => listLibrary(params, "sites"),
+	[LIST_SITE_PAGES_METHOD]: (params) => listLibrary(params, "pages"),
 	[SEARCH_ACTIVITY_METHOD]: searchActivity,
 	[FIND_ACTIVITY_MATCHES_METHOD]: findActivityMatches,
 	[GET_ACTIVITY_TIMELINE_METHOD]: getActivityTimeline,

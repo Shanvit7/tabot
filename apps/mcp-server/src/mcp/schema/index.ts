@@ -3,6 +3,8 @@ export {
 	getPageNotesInputSchema,
 	getPendingWorkflowHandoffInputSchema,
 	getSiteNotesInputSchema,
+	listSitePagesInputSchema,
+	listSitesInputSchema,
 	saveWorkflowScriptInputSchema,
 	searchActivityInputSchema,
 	searchNotesInputSchema,

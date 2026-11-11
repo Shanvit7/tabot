@@ -18,6 +18,7 @@ import {
 	isDashboardPagePreview,
 	isRecord,
 } from "@tabot/shared/dashboard";
+import { isLibraryRequest, isLibraryResponse } from "@tabot/shared/library";
 import { isDashboardSender } from "./sender";
 
 type HistoryReader = Pick<
@@ -32,6 +33,7 @@ type HistoryReader = Pick<
 	Partial<
 		Pick<
 			TabotDatabase,
+			| "browseLibrary"
 			| "updateNoteText"
 			| "createWorkflowHandoff"
 			| "listWorkflowScriptDrafts"
@@ -48,6 +50,20 @@ export const readDashboardHistory = async (
 	if (!isDashboardSender(senderUrl))
 		return { ok: false, code: "unauthorized-sender" };
 	if (!isRecord(message)) return { ok: false, code: "invalid-request" };
+	if (message.type === "BROWSE_LIBRARY") {
+		if (!isLibraryRequest(message))
+			return { ok: false, code: "invalid-request" };
+		try {
+			const db = await getDb();
+			if (!db.browseLibrary) return { ok: false, code: "library-unavailable" };
+			const response = await db.browseLibrary(message);
+			return isLibraryResponse(response)
+				? response
+				: { ok: false, code: "library-unavailable" };
+		} catch {
+			return { ok: false, code: "library-unavailable" };
+		}
+	}
 	const search = message.type === "SEARCH_HISTORY";
 	const updateNote = message.type === "UPDATE_NOTE";
 	const workflows = message.type === "GET_WORKFLOW_CANDIDATES";

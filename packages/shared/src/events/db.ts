@@ -1,4 +1,10 @@
 import { logger } from "../lib/logger";
+import {
+	isLibraryRequest,
+	isLibraryResponse,
+	type LibraryRequest,
+	type LibraryResponse,
+} from "../library";
 import type { PageNote } from "../notes/notes";
 import type { StoredPageObservation } from "../pages/observations";
 import { sanitizeEventForIngestion } from "../privacy/ingest";
@@ -141,6 +147,8 @@ export class TabotDatabase {
 	countPages = () => this.request<number>("countPages");
 	getFirstEventTimestamp = () =>
 		this.request<number | null>("getFirstEventTimestamp");
+	getLastEventTimestamp = () =>
+		this.request<number | null>("getLastEventTimestamp");
 	readEvents = (range?: EventRange) =>
 		this.request<StoredTabEvent[]>("readEvents", [range]);
 	findEvent = (id: string) =>
@@ -175,6 +183,13 @@ export class TabotDatabase {
 		]);
 	getPageCaptureSiteSummaries = () =>
 		this.request<PageCaptureSiteSummary[]>("getPageCaptureSiteSummaries");
+	browseLibrary = async (request: LibraryRequest): Promise<LibraryResponse> => {
+		if (!isLibraryRequest(request)) throw new Error("invalid-library-request");
+		const response = await this.request<unknown>("browseLibrary", [request]);
+		if (!isLibraryResponse(response))
+			throw new Error("invalid-library-response");
+		return response;
+	};
 	searchHistory = (query: string, options?: HistorySearchOptions) =>
 		this.request<HistorySearchResult[]>("searchHistory", [query, options]);
 	listPageNotes = (

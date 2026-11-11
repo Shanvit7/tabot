@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import Counter from "~/../components/animata/text/counter";
 import { readActiveTrackingDuration } from "~/lib/history";
 
 const SECOND_MS = 1_000;
@@ -9,31 +8,66 @@ const formatTwoDigits = (value: number) =>
 
 export const TrackingDuration = ({ enabled }: { enabled: boolean }) => {
 	const [elapsedMs, setElapsedMs] = useState(0);
-	const [active, setActive] = useState(false);
-	const activeRef = useRef(active);
+	const [readStatus, setReadStatus] = useState<"loading" | "ready" | "error">(
+		"loading",
+	);
+	const hasLoadedRef = useRef(false);
+	const activeRef = useRef(false);
+
 	useEffect(() => {
-		activeRef.current = active;
-	}, [active]);
-	useEffect(() => {
-		let ticksSinceRefresh = REFRESH_MS / SECOND_MS;
+		let mounted = true;
+		let refreshing = false;
+		let lastRefreshAt = 0;
+		activeRef.current = false;
 		const refresh = () => {
-			ticksSinceRefresh = 0;
+			if (refreshing) return;
+			refreshing = true;
+			lastRefreshAt = performance.now();
 			void readActiveTrackingDuration()
-				.then(({ durationMs, active: isActive }) => {
+				.then(({ durationMs, active }) => {
+					if (!mounted) return;
 					setElapsedMs(durationMs);
-					setActive(isActive);
+					hasLoadedRef.current = true;
+					setReadStatus("ready");
+					activeRef.current = active;
 				})
-				.catch(() => setActive(false));
+				.catch(() => {
+					if (!mounted) return;
+					activeRef.current = false;
+					if (!hasLoadedRef.current) setReadStatus("error");
+				})
+				.finally(() => {
+					refreshing = false;
+				});
+		};
+		const refreshWhenVisible = () => {
+			if (document.visibilityState === "visible") refresh();
 		};
 		refresh();
 		const timer = window.setInterval(() => {
 			if (enabled && activeRef.current)
 				setElapsedMs((elapsed) => elapsed + SECOND_MS);
-			ticksSinceRefresh += 1;
-			if (ticksSinceRefresh >= REFRESH_MS / SECOND_MS) refresh();
+			if (performance.now() - lastRefreshAt >= REFRESH_MS) refresh();
 		}, SECOND_MS);
-		return () => window.clearInterval(timer);
+		window.addEventListener("focus", refreshWhenVisible);
+		document.addEventListener("visibilitychange", refreshWhenVisible);
+		return () => {
+			mounted = false;
+			window.clearInterval(timer);
+			window.removeEventListener("focus", refreshWhenVisible);
+			document.removeEventListener("visibilitychange", refreshWhenVisible);
+		};
 	}, [enabled]);
+
+	if (readStatus !== "ready")
+		return (
+			<p role="status" className="text-sm text-muted-foreground">
+				{readStatus === "loading"
+					? "Loading tracking time…"
+					: "Tracking time unavailable"}
+			</p>
+		);
+
 	const elapsedSeconds = Math.floor(elapsedMs / SECOND_MS);
 	const hours = Math.floor(elapsedSeconds / 3_600);
 	const minutes = Math.floor((elapsedSeconds % 3_600) / 60);
@@ -41,24 +75,19 @@ export const TrackingDuration = ({ enabled }: { enabled: boolean }) => {
 	const unitClass =
 		"text-base font-semibold tabular-nums leading-none text-foreground";
 	return (
-		<p className="flex items-baseline gap-1.5 whitespace-nowrap text-sm">
+		<p
+			role="timer"
+			className="flex items-baseline gap-1.5 whitespace-nowrap text-sm"
+		>
 			<span className="text-xs text-muted-foreground">
 				{enabled ? "Tracking for" : "Tracked for"}
 			</span>
 			<span className="flex items-baseline gap-1">
-				<Counter targetValue={hours} className={unitClass} />
+				<span className={unitClass}>{hours}</span>
 				<span>h</span>
-				<Counter
-					format={formatTwoDigits}
-					targetValue={minutes}
-					className={unitClass}
-				/>
+				<span className={unitClass}>{formatTwoDigits(minutes)}</span>
 				<span>m</span>
-				<Counter
-					format={formatTwoDigits}
-					targetValue={seconds}
-					className={unitClass}
-				/>
+				<span className={unitClass}>{formatTwoDigits(seconds)}</span>
 				<span>s</span>
 			</span>
 		</p>

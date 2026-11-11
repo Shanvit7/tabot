@@ -73,13 +73,12 @@ const getStorageCounts = async (includeFirstEventTimestamp = false) => {
 		countEvents(db),
 		db.countPages(),
 	]);
-	return includeFirstEventTimestamp
-		? {
-				eventCount,
-				pageCount,
-				firstEventTimestamp: await db.getFirstEventTimestamp(),
-			}
-		: { eventCount, pageCount };
+	if (!includeFirstEventTimestamp) return { eventCount, pageCount };
+	const [firstEventTimestamp, lastEventTimestamp] = await Promise.all([
+		db.getFirstEventTimestamp(),
+		db.getLastEventTimestamp(),
+	]);
+	return { eventCount, pageCount, firstEventTimestamp, lastEventTimestamp };
 };
 const pipeline = createEventPipeline<StoredIngestRecord>({
 	commit: async (rows) => {
@@ -763,6 +762,7 @@ if (chrome.runtime.onMessageExternal) {
 			}
 
 			if (
+				message?.type === "BROWSE_LIBRARY" ||
 				message?.type === "SEARCH_HISTORY" ||
 				message?.type === "UPDATE_NOTE" ||
 				message?.type === "GET_PAGE_PREVIEW" ||

@@ -640,6 +640,39 @@ try {
 		(notesAfterSecondSave.value as { id: string }[]).map(({ id }) => id),
 		[secondNote.id, note.id],
 	);
+	const librarySites = await request("browseLibrary", [
+		{ level: "sites", site: "linkedin.com" },
+	]);
+	assert.equal(librarySites.ok, true);
+	assert.equal(
+		(
+			librarySites.value as {
+				sites: { pageCount: number; noteCount: number }[];
+			}
+		).sites[0]?.pageCount,
+		2,
+	);
+	assert.equal(
+		(
+			librarySites.value as {
+				sites: { pageCount: number; noteCount: number }[];
+			}
+		).sites[0]?.noteCount,
+		2,
+	);
+	const libraryNotes = await request("browseLibrary", [
+		{ level: "notes", url: note.url },
+	]);
+	assert.equal(libraryNotes.ok, true);
+	assert.equal(
+		(libraryNotes.value as { notes: { id: string }[] }).notes[0]?.id,
+		note.id,
+	);
+	const invalidLibrary = await request("browseLibrary", [
+		{ level: "pages", site: "javascript:alert(1)" },
+	]);
+	assert.equal(invalidLibrary.ok, false);
+	assert.equal(invalidLibrary.code, "storage-unavailable");
 	const editedNote = {
 		...note,
 		pageKey: "different-page-key",
@@ -817,6 +850,13 @@ try {
 		origin: "https://docs.example.com",
 		payload: activityEvent,
 	});
+	const timestamps = [...storedRecords.values()]
+		.filter((record) => record.recordKind === "event")
+		.map((record) => record.timestamp as number);
+	assert.equal(
+		(await request("getLastEventTimestamp")).value,
+		Math.max(...timestamps),
+	);
 	const activityRecall = await request("searchHistory", [
 		"What did I do 2 days ago?",
 	]);

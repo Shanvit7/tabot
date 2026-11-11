@@ -42,6 +42,11 @@ import {
 	type WorkflowTrainingResult,
 	workflowHandoffDigest,
 } from "@tabot/shared";
+import {
+	browseLibrary,
+	isLibraryRequest,
+	type LibraryRequest,
+} from "@tabot/shared/library";
 import type {
 	Collection,
 	Document,
@@ -1428,6 +1433,20 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 	resetWorkflowModel: () => resetWorkflowModel(),
 	trainWorkflowModel: (expectedGeneration) =>
 		trainWorkflowModel(expectedGeneration),
+	browseLibrary: async (request: LibraryRequest) => {
+		if (!isLibraryRequest(request)) throw new Error("invalid-library-request");
+		const { records, notes } = await getDb();
+		const [rows, retainedNotes] = await Promise.all([
+			records.find({ recordKind: { $in: ["event", "page"] } }),
+			notes.find(),
+		]);
+		return browseLibrary(
+			withPayload<StoredTabEvent>(rows, "event"),
+			withPayload<StoredPageObservation>(rows, "page"),
+			retainedNotes,
+			request,
+		);
+	},
 	countEvents: async () =>
 		(await getDb()).records.count({ recordKind: "event" }),
 	countPages: async () => (await getDb()).records.count({ recordKind: "page" }),
@@ -1435,6 +1454,14 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		const rows = await (await getDb()).records.aggregate([
 			{ $match: { recordKind: "event" } },
 			{ $sort: { timestamp: 1 } },
+			{ $limit: 1 },
+		]);
+		return rows[0]?.timestamp ?? null;
+	},
+	getLastEventTimestamp: async () => {
+		const rows = await (await getDb()).records.aggregate([
+			{ $match: { recordKind: "event" } },
+			{ $sort: { timestamp: -1 } },
 			{ $limit: 1 },
 		]);
 		return rows[0]?.timestamp ?? null;
@@ -1658,7 +1685,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					...timeFilter,
 				}),
 			]);
-			const results = searchHistoryCore(
+			const results = await searchHistoryCore(
 				withPayload<StoredTabEvent>(eventRows, "event"),
 				withPayload<StoredPageObservation>(pageRows, "page"),
 				query,
@@ -1753,7 +1780,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		const candidateOrder = fuseCandidateUrls(rankedUrls);
 		const eventRows = sourceRows.filter((row) => row.recordKind === "event");
 		const pageRows = sourceRows.filter((row) => row.recordKind === "page");
-		const results = searchHistoryCore(
+		const results = await searchHistoryCore(
 			withPayload<StoredTabEvent>(eventRows, "event"),
 			withPayload<StoredPageObservation>(pageRows, "page"),
 			query,
