@@ -117,14 +117,41 @@ const request = createClientOnlyFn(
 	},
 );
 
+export const updateDashboardNote = async (
+	id: string,
+	text: string,
+): Promise<{ id: string; text: string; updatedAt: number }> => {
+	const response = await request({ type: "UPDATE_NOTE", id, text });
+	if (
+		!isRecord(response.note) ||
+		response.note.id !== id ||
+		response.note.text !== text ||
+		typeof response.note.updatedAt !== "number" ||
+		!Number.isSafeInteger(response.note.updatedAt) ||
+		response.note.updatedAt < 0
+	)
+		throw new Error(
+			"Note could not be updated. Reload the dashboard and retry.",
+		);
+	return response.note as { id: string; text: string; updatedAt: number };
+};
+
 export const searchRetainedPages = async (
 	query: string,
+	offset = 0,
+	noteOffset = 0,
 ): Promise<{
 	results: HistorySearchResult[];
 	notes: DashboardNoteResult[];
 	searchStatus: SearchAvailability;
 }> => {
-	const response = await request({ type: "SEARCH_HISTORY", query, limit: 20 });
+	const response = await request({
+		type: "SEARCH_HISTORY",
+		query,
+		limit: 20,
+		offset,
+		noteOffset,
+	});
 	if (
 		!isDashboardSearchResults(response.results) ||
 		!isDashboardSearchAvailability(response.searchStatus) ||

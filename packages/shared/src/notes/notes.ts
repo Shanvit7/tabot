@@ -58,7 +58,13 @@ export const searchNoteRows = <
 >(
 	notes: T[],
 	query: string,
-	options: { from?: number; to?: number; domain?: string; limit?: number } = {},
+	options: {
+		from?: number;
+		to?: number;
+		domain?: string;
+		limit?: number;
+		offset?: number;
+	} = {},
 ): T[] => {
 	const tokens = [
 		...new Set(query.toLowerCase().trim().split(/\s+/).filter(Boolean)),
@@ -82,6 +88,6 @@ export const searchNoteRows = <
 		}))
 		.filter(({ score }) => score > 0)
 		.sort((a, b) => b.score - a.score || b.note.createdAt - a.note.createdAt)
-		.slice(0, options.limit ?? 20)
+		.slice(options.offset ?? 0, (options.offset ?? 0) + (options.limit ?? 20))
 		.map(({ note }) => note);
 };

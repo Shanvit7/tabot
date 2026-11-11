@@ -2,7 +2,6 @@ import type {
 	DashboardPagePreview,
 	HistorySearchResult,
 } from "@tabot/shared/dashboard";
-import { ArrowUpRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MatchedText } from "~/components/home/matched-text";
 import { PageReaderContent } from "~/components/home/page-reader-content";
@@ -68,7 +67,14 @@ export const PageReader = ({ page }: { page: HistorySearchResult }) => {
 		<article aria-label="Selected page" className="min-w-0 md:col-span-3">
 			<header className="border-b border-border pb-4">
 				<h2 className="wrap-break-word font-heading text-lg font-semibold tracking-tight">
-					{urlLabel(page)}
+					<a
+						href={page.url}
+						target="_blank"
+						rel="noreferrer"
+						className="underline underline-offset-4 hover:decoration-2 focus-visible:decoration-2"
+					>
+						{urlLabel(page)}
+					</a>
 				</h2>
 				<p className="mt-1 break-all text-sm text-muted-foreground">
 					{page.host} · {pageCaptureLabel(page, preview)}
@@ -121,15 +127,6 @@ export const PageReader = ({ page }: { page: HistorySearchResult }) => {
 						</ul>
 					</details>
 				)}
-				<a
-					href={page.url}
-					target="_blank"
-					rel="noreferrer"
-					className={actionClass}
-				>
-					Open page<span className="sr-only"> in new tab</span>
-					<ArrowUpRight aria-hidden="true" className="size-4" />
-				</a>
 			</footer>
 		</article>
 	);

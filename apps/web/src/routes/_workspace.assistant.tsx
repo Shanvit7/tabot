@@ -5,7 +5,14 @@ import {
 	resolveChatGptConnectUrl,
 } from "@tabot/shared";
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Copy, ListOrdered, Play } from "lucide-react";
+import {
+	Check,
+	ChevronDown,
+	Copy,
+	Download,
+	ListOrdered,
+	Play,
+} from "lucide-react";
 import {
 	AnimatePresence,
 	domAnimation,
@@ -24,6 +31,8 @@ import {
 } from "~/components/assistant/chatgpt-tutorial/timeline";
 
 const MCP_SERVER_URL = `https://tabot-mcp${import.meta.env.DEV ? "-dev" : ""}.shanvit7.workers.dev/mcp`;
+const PLUGIN_DESCRIPTION =
+	"Search your local browser activity with ChatGPT. Your browsing history stays on your device; only results you request are shared.";
 
 const steps = [
 	{
@@ -37,7 +46,7 @@ const steps = [
 	{
 		title: "Configure Tabot",
 		description:
-			"Copy the server URL below into ChatGPT’s server URL field. Name it Tabot, choose OAuth, and leave advanced settings unchanged.",
+			"Name it Tabot, choose OAuth, and paste the server URL below. Leave advanced settings unchanged.",
 		serverUrl: MCP_SERVER_URL,
 	},
 	{
@@ -60,6 +69,9 @@ const Assistant = () => {
 	const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
 		"idle",
 	);
+	const [descriptionCopyStatus, setDescriptionCopyStatus] = useState<
+		"idle" | "copied" | "error"
+	>("idle");
 
 	useEffect(() => {
 		let active = true;
@@ -79,6 +91,16 @@ const Assistant = () => {
 			setCopyStatus("error");
 		}
 		window.setTimeout(() => setCopyStatus("idle"), 1800);
+	};
+
+	const copyPluginDescription = async () => {
+		try {
+			await navigator.clipboard.writeText(PLUGIN_DESCRIPTION);
+			setDescriptionCopyStatus("copied");
+		} catch {
+			setDescriptionCopyStatus("error");
+		}
+		window.setTimeout(() => setDescriptionCopyStatus("idle"), 1800);
 	};
 
 	return (
@@ -182,44 +204,138 @@ const Assistant = () => {
 														{step.description}
 													</p>
 													{step.serverUrl && (
-														<div>
-															<div className="mt-2 flex items-center gap-2">
-																<code className="min-w-0 flex-1 break-all rounded-md bg-work-raised px-2 py-1.5 font-mono text-xs leading-5 text-work-ink">
-																	{step.serverUrl}
-																</code>
-																<button
-																	type="button"
-																	onClick={() => void copyServerUrl()}
-																	aria-label={
-																		copyStatus === "copied"
-																			? "Tabot server URL copied"
-																			: "Copy Tabot server URL"
-																	}
-																	className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-work-line px-2.5 text-xs font-medium text-work-ink hover:bg-work-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-																>
-																	{copyStatus === "copied" ? (
-																		<Check
-																			aria-hidden="true"
-																			className="size-3.5"
-																		/>
-																	) : (
-																		<Copy
-																			aria-hidden="true"
-																			className="size-3.5"
-																		/>
-																	)}
-																	{copyStatus === "copied" ? "Copied" : "Copy"}
-																</button>
+														<div className="mt-3 text-sm">
+															<div>
+																<h4 className="font-medium text-work-ink">
+																	Server URL
+																</h4>
+																<div className="mt-2 flex flex-wrap items-center gap-2">
+																	<code className="min-w-0 flex-1 basis-48 select-text break-all rounded-md bg-work-raised px-3 py-2 font-mono text-xs leading-5 text-work-ink">
+																		{step.serverUrl}
+																	</code>
+																	<button
+																		type="button"
+																		onClick={() => void copyServerUrl()}
+																		aria-label={
+																			copyStatus === "copied"
+																				? "Tabot server URL copied"
+																				: "Copy Tabot server URL"
+																		}
+																		className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-work-line px-3 text-xs font-medium text-work-ink transition-colors hover:bg-work-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+																	>
+																		{copyStatus === "copied" ? (
+																			<Check
+																				aria-hidden="true"
+																				className="size-3.5"
+																			/>
+																		) : (
+																			<Copy
+																				aria-hidden="true"
+																				className="size-3.5"
+																			/>
+																		)}
+																		<span role="status">
+																			{copyStatus === "copied"
+																				? "Copied URL"
+																				: "Copy URL"}
+																		</span>
+																	</button>
+																</div>
+																{copyStatus === "error" && (
+																	<p
+																		role="status"
+																		className="mt-1 text-xs text-work-muted"
+																	>
+																		Couldn’t copy. Select the URL to copy it
+																		manually.
+																	</p>
+																)}
 															</div>
-															{copyStatus === "error" && (
-																<p
-																	role="status"
-																	className="mt-1 text-xs text-work-muted"
-																>
-																	Couldn’t copy. Select the URL to copy it
-																	manually.
-																</p>
-															)}
+															<details className="group/details mt-3 border-t border-work-line">
+																<summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md text-work-muted transition-colors hover:text-work-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+																	<ChevronDown
+																		aria-hidden="true"
+																		className="size-4 shrink-0 transition-transform group-open/details:rotate-180 motion-reduce:transition-none"
+																	/>
+																	<span className="font-medium">
+																		Add description and logo
+																	</span>
+																	<span className="text-xs">Optional</span>
+																</summary>
+																<div className="space-y-4 pb-3 pl-6">
+																	<div>
+																		<h4 className="font-medium text-work-ink">
+																			Description
+																		</h4>
+																		<p className="mt-2 max-w-prose select-text rounded-md bg-work-raised px-3 py-2 text-sm leading-6 text-work-ink">
+																			{PLUGIN_DESCRIPTION}
+																		</p>
+																		<button
+																			type="button"
+																			onClick={() =>
+																				void copyPluginDescription()
+																			}
+																			aria-label={
+																				descriptionCopyStatus === "copied"
+																					? "Description copied"
+																					: "Copy description"
+																			}
+																			className="mt-2 inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-work-line px-3 text-xs font-medium text-work-ink transition-colors hover:bg-work-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+																		>
+																			{descriptionCopyStatus === "copied" ? (
+																				<Check
+																					aria-hidden="true"
+																					className="size-3.5"
+																				/>
+																			) : (
+																				<Copy
+																					aria-hidden="true"
+																					className="size-3.5"
+																				/>
+																			)}
+																			<span role="status">
+																				{descriptionCopyStatus === "copied"
+																					? "Copied description"
+																					: "Copy description"}
+																			</span>
+																		</button>
+																		{descriptionCopyStatus === "error" && (
+																			<p
+																				role="status"
+																				className="mt-1 text-xs text-work-muted"
+																			>
+																				Couldn’t copy. Select the description to
+																				copy it manually.
+																			</p>
+																		)}
+																	</div>
+																	<div className="border-t border-work-line pt-4">
+																		<h4 className="font-medium text-work-ink">
+																			Logo
+																		</h4>
+																		<div className="mt-2 flex flex-wrap items-center gap-3">
+																			<img
+																				src={`${import.meta.env.BASE_URL}logo.png`}
+																				alt="Tabot logo preview"
+																				width="64"
+																				height="64"
+																				className="size-16 shrink-0 rounded-lg border border-work-line object-contain"
+																			/>
+																			<a
+																				href={`${import.meta.env.BASE_URL}logo.png`}
+																				download="tabot-logo.png"
+																				className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-work-line px-3 text-xs font-medium text-work-ink transition-colors hover:bg-work-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+																			>
+																				<Download
+																					aria-hidden="true"
+																					className="size-3.5"
+																				/>{" "}
+																				Download logo
+																			</a>
+																		</div>
+																	</div>
+																</div>
+															</details>
 														</div>
 													)}
 												</div>

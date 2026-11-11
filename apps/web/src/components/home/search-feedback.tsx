@@ -2,11 +2,9 @@ import type { ReadingDeskSearchState } from "~/components/home/reading-desk-stat
 import { actionClass } from "~/components/home/reading-desk-utils";
 
 export const SearchFeedback = ({
-	query,
 	state,
 	onRetrySearch,
 }: {
-	query: string;
 	state: ReadingDeskSearchState;
 	onRetrySearch: () => void;
 }) => (
@@ -36,13 +34,5 @@ export const SearchFeedback = ({
 				</button>
 			</div>
 		)}
-		{!state.searching &&
-			!state.searchError &&
-			!state.results.length &&
-			!state.notes.length && (
-				<p className="py-8 text-center text-sm leading-6 text-muted-foreground">
-					{`No saved activity matches “${query}”.`}
-				</p>
-			)}
 	</>
 );

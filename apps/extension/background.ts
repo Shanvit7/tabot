@@ -764,6 +764,7 @@ if (chrome.runtime.onMessageExternal) {
 
 			if (
 				message?.type === "SEARCH_HISTORY" ||
+				message?.type === "UPDATE_NOTE" ||
 				message?.type === "GET_PAGE_PREVIEW" ||
 				message?.type === "GET_WORKFLOW_CANDIDATES" ||
 				message?.type === "CREATE_WORKFLOW_HANDOFF" ||

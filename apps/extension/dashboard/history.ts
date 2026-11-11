@@ -10,6 +10,7 @@ import {
 	sessionize,
 	type TabotDatabase,
 	UUID_PATTERN,
+	validateNoteText,
 } from "@tabot/shared";
 import {
 	type DashboardHistoryResponse,
@@ -27,10 +28,16 @@ type HistoryReader = Pick<
 	| "getPageObservation"
 	| "readEvents"
 	| "getWorkflowCheckpoint"
-	| "createWorkflowHandoff"
-	| "listWorkflowScriptDrafts"
-	| "deleteWorkflowScriptDraft"
->;
+> &
+	Partial<
+		Pick<
+			TabotDatabase,
+			| "updateNoteText"
+			| "createWorkflowHandoff"
+			| "listWorkflowScriptDrafts"
+			| "deleteWorkflowScriptDraft"
+		>
+	>;
 
 export const readDashboardHistory = async (
 	message: unknown,
@@ -42,6 +49,7 @@ export const readDashboardHistory = async (
 		return { ok: false, code: "unauthorized-sender" };
 	if (!isRecord(message)) return { ok: false, code: "invalid-request" };
 	const search = message.type === "SEARCH_HISTORY";
+	const updateNote = message.type === "UPDATE_NOTE";
 	const workflows = message.type === "GET_WORKFLOW_CANDIDATES";
 	const createHandoff = message.type === "CREATE_WORKFLOW_HANDOFF";
 	const listScripts = message.type === "GET_WORKFLOW_SCRIPT_DRAFTS";
@@ -61,6 +69,13 @@ export const readDashboardHistory = async (
 		return { ok: false, code: "invalid-request" };
 	} else if (createHandoff || deleteScript) {
 		// The validated request is handled by the owner below.
+	} else if (updateNote) {
+		if (
+			typeof message.id !== "string" ||
+			message.id.length > 64 ||
+			!validateNoteText(message.text)
+		)
+			return { ok: false, code: "invalid-request" };
 	} else if (search) {
 		if (
 			typeof message.query !== "string" ||
@@ -71,6 +86,14 @@ export const readDashboardHistory = async (
 					!Number.isInteger(message.limit) ||
 					message.limit < 1 ||
 					message.limit > 20)) ||
+			(message.offset !== undefined &&
+				(typeof message.offset !== "number" ||
+					!Number.isSafeInteger(message.offset) ||
+					message.offset < 0)) ||
+			(message.noteOffset !== undefined &&
+				(typeof message.noteOffset !== "number" ||
+					!Number.isSafeInteger(message.noteOffset) ||
+					message.noteOffset < 0)) ||
 			(message.from !== undefined &&
 				(typeof message.from !== "number" ||
 					!Number.isFinite(message.from) ||
@@ -99,8 +122,25 @@ export const readDashboardHistory = async (
 	}
 	try {
 		const db = await getDb();
-		if (listScripts) return { drafts: await db.listWorkflowScriptDrafts() };
-		if (deleteScript) return db.deleteWorkflowScriptDraft(message.id as string);
+		if (updateNote) {
+			if (!db.updateNoteText)
+				return { ok: false, code: "note-update-unavailable" };
+			const note = await db.updateNoteText(
+				message.id as string,
+				message.text as string,
+			);
+			return note ? { note } : { ok: false, code: "note-not-found" };
+		}
+		if (listScripts) {
+			if (!db.listWorkflowScriptDrafts)
+				return { ok: false, code: "workflow-script-unavailable" };
+			return { drafts: await db.listWorkflowScriptDrafts() };
+		}
+		if (deleteScript) {
+			if (!db.deleteWorkflowScriptDraft)
+				return { ok: false, code: "workflow-script-unavailable" };
+			return db.deleteWorkflowScriptDraft(message.id as string);
+		}
 		if (workflows || createHandoff) {
 			if (!(await trackingEnabled()))
 				return { ok: false, code: "tracking-disabled" };
@@ -131,6 +171,8 @@ export const readDashboardHistory = async (
 				);
 				if (!candidate)
 					return { ok: false, code: "workflow-candidate-not-found" };
+				if (!db.createWorkflowHandoff)
+					return { ok: false, code: "workflow-unavailable" };
 				await db.createWorkflowHandoff({
 					payload: buildWorkflowHandoff(candidate),
 					sourceIds: [
@@ -155,7 +197,9 @@ export const readDashboardHistory = async (
 				to: message.to as number | undefined,
 				origin: message.origin as string | undefined,
 				limit: (message.limit as number | undefined) ?? 20,
+				offset: (message.offset as number | undefined) ?? 0,
 			};
+			const noteOffset = (message.noteOffset as number | undefined) ?? 0;
 			const domain = options.origin
 				? new URL(options.origin).hostname
 				: undefined;
@@ -166,6 +210,7 @@ export const readDashboardHistory = async (
 					to: options.to,
 					domain,
 					limit: options.limit,
+					offset: noteOffset,
 				}),
 				db.readEvents(),
 				db.getSearchStatus(),

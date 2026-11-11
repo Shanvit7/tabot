@@ -15,6 +15,12 @@ import React, { type PropsWithChildren, useRef } from "react";
 import { Bot } from "~/components/animate-ui/icons/hugeicons/bot";
 import { CircuitBoard } from "~/components/animate-ui/icons/hugeicons/circuit-board";
 import { Home03 } from "~/components/animate-ui/icons/hugeicons/home-03";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
 export interface AppleDockProps extends VariantProps<typeof appleDockVariants> {
@@ -163,7 +169,7 @@ const AppleDockIcon = ({
 
 AppleDockIcon.displayName = "AppleDockIcon";
 
-export const Dock = () => {
+export const Dock = ({ chatGptConnected }: { chatGptConnected: boolean }) => {
 	const reduceMotion = useReducedMotion();
 	const matchRoute = useMatchRoute();
 	const navigation = [
@@ -177,49 +183,66 @@ export const Dock = () => {
 			aria-label="Primary navigation"
 			className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 z-50 -translate-x-1/2"
 		>
-			<AppleDock
-				className="mt-0 h-auto w-fit gap-1 rounded-2xl border-work-line bg-white/95 p-1.5 shadow-[0_12px_40px_-20px_rgba(21,37,27,0.4)] backdrop-blur-xl"
-				iconSize={60}
-				iconMagnification={68}
-			>
-				{navigation.map(({ to, label, Icon }) => {
-					const isActive = matchRoute({ to, fuzzy: false });
+			<TooltipProvider>
+				<AppleDock
+					className="mt-0 h-auto w-fit gap-1 rounded-2xl border-work-line bg-white/95 p-1.5 shadow-[0_12px_40px_-20px_rgba(21,37,27,0.4)] backdrop-blur-xl"
+					iconSize={60}
+					iconMagnification={68}
+				>
+					{navigation.map(({ to, label, Icon }) => {
+						const isActive = matchRoute({ to, fuzzy: false });
+						const disabled = to === "/home" && !chatGptConnected;
 
-					return (
-						<AppleDockIcon key={to} className="rounded-xl" padding={0}>
-							<Link
-								to={to}
-								activeOptions={{ exact: true }}
-								className="relative flex size-full flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-xl px-1 text-work-muted transition-colors hover:text-work-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-work-ink [&[data-status=active]]:text-primary-foreground"
-							>
-								{isActive && (
-									<motion.span
-										aria-hidden="true"
-										layoutId="tabot-dock-active"
-										initial={false}
-										transition={
-											reduceMotion
-												? { duration: 0 }
-												: { type: "spring", stiffness: 420, damping: 34 }
-										}
-										className="absolute inset-0 rounded-xl bg-primary"
-									/>
-								)}
-								<Icon
-									aria-hidden="true"
-									size={20}
-									animate={false}
-									animateOnHover={reduceMotion ? false : "default"}
-									className="relative z-10"
-								/>
-								<span className="relative z-10 text-xs font-medium">
-									{label}
-								</span>
-							</Link>
-						</AppleDockIcon>
-					);
-				})}
-			</AppleDock>
+						return (
+							<AppleDockIcon key={to} className="rounded-xl" padding={0}>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Link
+											to={to}
+											activeOptions={{ exact: true }}
+											aria-disabled={disabled}
+											tabIndex={disabled ? -1 : undefined}
+											onClick={(event) => {
+												if (disabled) event.preventDefault();
+											}}
+											className={`relative flex size-full flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-xl px-1 text-work-muted transition-colors hover:text-work-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-work-ink [&[data-status=active]]:text-primary-foreground ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+										>
+											{isActive && (
+												<motion.span
+													aria-hidden="true"
+													layoutId="tabot-dock-active"
+													initial={false}
+													transition={
+														reduceMotion
+															? { duration: 0 }
+															: { type: "spring", stiffness: 420, damping: 34 }
+													}
+													className="absolute inset-0 rounded-xl bg-primary"
+												/>
+											)}
+											<Icon
+												aria-hidden="true"
+												size={20}
+												animate={false}
+												animateOnHover={reduceMotion ? false : "default"}
+												className="relative z-10"
+											/>
+											<span className="relative z-10 text-xs font-medium">
+												{label}
+											</span>
+										</Link>
+									</TooltipTrigger>
+									{disabled && (
+										<TooltipContent>
+											Connect ChatGPT first to use Home.
+										</TooltipContent>
+									)}
+								</Tooltip>
+							</AppleDockIcon>
+						);
+					})}
+				</AppleDock>
+			</TooltipProvider>
 		</nav>
 	);
 };

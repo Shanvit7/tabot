@@ -58,6 +58,36 @@ const ACTIVITY_RESULT_LIMIT = 8;
 const MAX_ACTIVITY_OFFSET = 999_999;
 const MAX_ACTIVITY_QUERY_CHARS = 200;
 
+const decodePageCursor = (
+	cursor: unknown,
+): { snapshot: number; offset: number } => {
+	if (cursor === undefined) return { snapshot: Date.now(), offset: 0 };
+	const match =
+		typeof cursor === "string" && /^(\d{1,16}):([1-9]\d{0,5})$/.exec(cursor);
+	if (!match) throw new Error("cursor must be a valid next-page cursor.");
+	const snapshot = Number(match[1]);
+	const offset = Number(match[2]);
+	if (
+		!Number.isSafeInteger(snapshot) ||
+		snapshot < 1 ||
+		snapshot > Date.now() ||
+		!Number.isSafeInteger(offset) ||
+		offset > MAX_ACTIVITY_OFFSET
+	)
+		throw new Error("cursor must be a valid next-page cursor.");
+	return { snapshot, offset };
+};
+
+const nextPageCursor = (
+	hasMore: boolean,
+	snapshot: number,
+	offset: number,
+	count: number,
+): string | null =>
+	hasMore && offset + count <= MAX_ACTIVITY_OFFSET
+		? `${snapshot}:${offset + count}`
+		: null;
+
 interface Credentials {
 	installationId: string;
 	token: string;
@@ -239,35 +269,19 @@ const searchActivity = async (params: unknown) => {
 	)
 		throw new Error("limit must be an integer from 1 to 8.");
 	const limit = (requestedLimit as number | undefined) ?? ACTIVITY_RESULT_LIMIT;
-	const cursor = input?.cursor;
-	let snapshot = Date.now();
-	let offset = 0;
-	if (cursor !== undefined) {
-		const match =
-			typeof cursor === "string" && /^(\d{1,16}):(\d{1,6})$/.exec(cursor);
-		if (!match) throw new Error("cursor must be a valid next-page cursor.");
-		snapshot = Number(match[1]);
-		offset = Number(match[2]);
-		if (
-			!Number.isSafeInteger(snapshot) ||
-			snapshot < 1 ||
-			snapshot > Date.now() ||
-			!Number.isSafeInteger(offset) ||
-			offset < 1 ||
-			offset > MAX_ACTIVITY_OFFSET
-		)
-			throw new Error("cursor must be a valid next-page cursor.");
-	}
+	const { snapshot, offset } = decodePageCursor(input?.cursor);
 	const page = await getDb().then((db) =>
 		db.searchHistory(query, { limit: limit + 1, offset, to: snapshot }),
 	);
 	const results = page.slice(0, limit);
 	return {
 		count: results.length,
-		nextCursor:
-			page.length > limit && offset + results.length <= MAX_ACTIVITY_OFFSET
-				? `${snapshot}:${offset + results.length}`
-				: null,
+		nextCursor: nextPageCursor(
+			page.length > limit,
+			snapshot,
+			offset,
+			results.length,
+		),
 		results: projectActivitySearchResults(results),
 	};
 };
@@ -315,25 +329,7 @@ const findActivityMatches = async (params: unknown) => {
 		throw new Error("maxGapHours must be an integer from 1 to 720.");
 	const maxGapMs =
 		((requestedGap as number | undefined) ?? 168) * 60 * 60 * 1_000;
-	const requestedCursor = input?.cursor;
-	let snapshot = Date.now();
-	let offset = 0;
-	if (requestedCursor !== undefined) {
-		const match =
-			typeof requestedCursor === "string" &&
-			/^(\d{1,16}):([1-9]\d{0,5})$/.exec(requestedCursor);
-		if (!match) throw new Error("cursor must be a valid next-page cursor.");
-		snapshot = Number(match[1]);
-		offset = Number(match[2]);
-		if (
-			!Number.isSafeInteger(snapshot) ||
-			snapshot < 1 ||
-			snapshot > Date.now() ||
-			!Number.isSafeInteger(offset) ||
-			offset > MAX_ACTIVITY_OFFSET
-		)
-			throw new Error("cursor must be a valid next-page cursor.");
-	}
+	const { snapshot, offset } = decodePageCursor(input?.cursor);
 	const references = anchors as { kind: "event" | "page"; id: string }[];
 	const db = await getDb();
 	const seeds = await Promise.all(
@@ -406,8 +402,12 @@ const findActivityMatches = async (params: unknown) => {
 	});
 	return {
 		count: page.length,
-		nextCursor:
-			rows.length > limit ? `${snapshot}:${offset + page.length}` : null,
+		nextCursor: nextPageCursor(
+			rows.length > limit,
+			snapshot,
+			offset,
+			page.length,
+		),
 		matches: results,
 	};
 };
@@ -494,6 +494,7 @@ const searchNotes = async (params: unknown) => {
 		to?: unknown;
 		site?: unknown;
 		limit?: unknown;
+		cursor?: unknown;
 	} | null;
 	const query = typeof input?.query === "string" ? input.query.trim() : "";
 	if (!query || query.length > MAX_ACTIVITY_QUERY_CHARS)
@@ -518,33 +519,46 @@ const searchNotes = async (params: unknown) => {
 		(typeof input.site !== "string" || input.site.length > 253)
 	)
 		throw new Error("site must be a domain.");
-	const limit =
-		input?.limit === undefined ? ACTIVITY_RESULT_LIMIT : input.limit;
+	const requestedLimit = input?.limit ?? ACTIVITY_RESULT_LIMIT;
 	if (
-		!Number.isSafeInteger(limit) ||
-		(limit as number) < 1 ||
-		(limit as number) > ACTIVITY_RESULT_LIMIT
+		!Number.isSafeInteger(requestedLimit) ||
+		(requestedLimit as number) < 1 ||
+		(requestedLimit as number) > ACTIVITY_RESULT_LIMIT
 	)
 		throw new Error("limit must be an integer from 1 to 8.");
+	const limit = requestedLimit as number;
+	const { snapshot, offset } = decodePageCursor(input?.cursor);
 	const db = await getDb();
 	const [notes, events] = await Promise.all([
 		db.searchNotes(query, {
 			from: input.from as number | undefined,
-			to: input.to as number | undefined,
+			to: Math.min((input.to as number | undefined) ?? snapshot, snapshot),
 			domain: input.site as string | undefined,
-			limit: limit as number,
+			limit: limit + 1,
+			offset,
 		}),
 		db.readEvents(),
 	]);
 	const sessions = sessionize(events as StoredTabEvent[]);
+	const page = notes.slice(0, limit);
 	return {
-		count: notes.length,
-		notes: await Promise.all(notes.map((note) => noteResult(note, sessions))),
+		count: page.length,
+		nextCursor: nextPageCursor(
+			notes.length > limit,
+			snapshot,
+			offset,
+			page.length,
+		),
+		notes: await Promise.all(page.map((note) => noteResult(note, sessions))),
 	};
 };
 
 const getPageNotes = async (params: unknown) => {
-	const input = params as { url?: unknown } | null;
+	const input = params as {
+		url?: unknown;
+		limit?: unknown;
+		cursor?: unknown;
+	} | null;
 	if (typeof input?.url !== "string" || input.url.length > 2_048)
 		throw new Error("url must be an http or https page URL.");
 	let parsed: URL;
@@ -555,6 +569,15 @@ const getPageNotes = async (params: unknown) => {
 	}
 	if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
 		throw new Error("url must be an http or https page URL.");
+	const requestedLimit = input.limit ?? ACTIVITY_RESULT_LIMIT;
+	if (
+		!Number.isSafeInteger(requestedLimit) ||
+		(requestedLimit as number) < 1 ||
+		(requestedLimit as number) > ACTIVITY_RESULT_LIMIT
+	)
+		throw new Error("limit must be an integer from 1 to 8.");
+	const limit = requestedLimit as number;
+	const { snapshot, offset } = decodePageCursor(input.cursor);
 	const pageKey = await createCaptureIdentity([
 		"page-resource:v1",
 		canonicalPageUrl(parsed.href),
@@ -565,19 +588,25 @@ const getPageNotes = async (params: unknown) => {
 		db.readEvents(),
 	]);
 	const sessions = sessionize(events as StoredTabEvent[]);
+	const eligibleNotes = notes.filter((note) => note.createdAt <= snapshot);
+	const candidates = eligibleNotes.slice(offset, offset + limit + 1);
+	const page = candidates.slice(0, limit);
 	const [{ redacted: title }] = await Promise.all([
-		piiRedactor.redact(notes[0]?.title ?? ""),
+		piiRedactor.redact(page[0]?.title ?? ""),
 	]);
 	return {
-		found: notes.length > 0,
+		found: page.length > 0,
 		origin: parsed.origin,
 		host: parsed.hostname,
 		title: title || null,
-		notes: await Promise.all(
-			notes
-				.slice(0, ACTIVITY_RESULT_LIMIT)
-				.map((note) => noteResult(note, sessions)),
+		count: page.length,
+		nextCursor: nextPageCursor(
+			candidates.length > limit,
+			snapshot,
+			offset,
+			page.length,
 		),
+		notes: await Promise.all(page.map((note) => noteResult(note, sessions))),
 	};
 };
 

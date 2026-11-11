@@ -67,16 +67,28 @@ const env = {
 				const { method, params } = await request.json();
 				if (method === "search_notes" || method === "get_page_notes") {
 					noteDispatches++;
+					const cursor = noteDispatches > 2 ? "1700000000000:1" : undefined;
 					assert.deepEqual(
 						params,
 						method === "search_notes"
-							? { query: "OAuth setup", limit: 4 }
-							: { url: "https://example.test/docs" },
+							? {
+									query: "OAuth setup",
+									limit: 4,
+									...(cursor ? { cursor } : {}),
+								}
+							: {
+									url: "https://example.test/docs",
+									...(cursor ? { cursor } : {}),
+								},
 					);
 					return Response.json({
 						ok: true,
 						result: {
 							count: 1,
+							nextCursor:
+								noteDispatches === 1 || noteDispatches === 2
+									? "1700000000000:1"
+									: null,
 							notes: [
 								{ id: "note-id", text: "OAuth setup", host: "example.test" },
 							],
@@ -152,22 +164,19 @@ assert.deepEqual(
 		"get_site_notes",
 		"get_page_notes",
 		"get_activity_timeline",
-		"get_pending_workflow_handoff",
-		"save_workflow_script",
 	],
 );
 const searchTool = list.body.result.tools.find(
 	(tool) => tool.name === "search_activity",
 );
-const saveTool = list.body.result.tools.find(
-	(tool) => tool.name === "save_workflow_script",
-);
 assert.deepEqual(searchTool.inputSchema.required, ["query"]);
 assert.equal(searchTool.inputSchema.properties.limit.maximum, 8);
 assert.match(searchTool.inputSchema.properties.cursor.pattern, /\\d/);
 assert.deepEqual(list.body.result.tools[2].inputSchema.required, ["query"]);
+assert.ok(list.body.result.tools[2].inputSchema.properties.cursor);
 assert.deepEqual(list.body.result.tools[3].inputSchema.required, ["site"]);
 assert.deepEqual(list.body.result.tools[4].inputSchema.required, ["url"]);
+assert.ok(list.body.result.tools[4].inputSchema.properties.cursor);
 assert.deepEqual(list.body.result.tools[5].inputSchema.required, ["anchors"]);
 assert.equal(
 	list.body.result.tools[5].inputSchema.properties.anchors.maxItems,
@@ -177,15 +186,6 @@ assert.equal(
 	list.body.result.tools[5].inputSchema.properties.maxGapHours.maximum,
 	720,
 );
-assert.deepEqual(saveTool.inputSchema.required, [
-	"candidateId",
-	"grantToken",
-	"handoffDigest",
-	"script",
-]);
-assert.equal(saveTool.annotations.readOnlyHint, false);
-assert.equal(saveTool.annotations.destructiveHint, false);
-assert.doesNotMatch(saveTool.description, /run the script/i);
 const result = await rpc("tools/call", {
 	name: "search_activity",
 	arguments: { query: "auth callback", limit: 3 },
@@ -203,7 +203,9 @@ const notesResult = await rpc("tools/call", {
 	name: "search_notes",
 	arguments: { query: "OAuth setup", limit: 4 },
 });
-assert.equal(JSON.parse(notesResult.body.result.content[0].text).count, 1);
+const notePage = JSON.parse(notesResult.body.result.content[0].text);
+assert.equal(notePage.count, 1);
+assert.equal(notePage.nextCursor, "1700000000000:1");
 const pageNotesResult = await rpc("tools/call", {
 	name: "get_page_notes",
 	arguments: { url: "https://example.test/docs" },
@@ -213,6 +215,26 @@ assert.equal(
 	"note-id",
 );
 assert.equal(noteDispatches, 2);
+const nextNotesPage = await rpc("tools/call", {
+	name: "search_notes",
+	arguments: { query: "OAuth setup", limit: 4, cursor: notePage.nextCursor },
+});
+assert.equal(
+	JSON.parse(nextNotesPage.body.result.content[0].text).nextCursor,
+	null,
+);
+const nextPageNotesPage = await rpc("tools/call", {
+	name: "get_page_notes",
+	arguments: {
+		url: "https://example.test/docs",
+		cursor: JSON.parse(pageNotesResult.body.result.content[0].text).nextCursor,
+	},
+});
+assert.equal(
+	JSON.parse(nextPageNotesPage.body.result.content[0].text).nextCursor,
+	null,
+);
+assert.equal(noteDispatches, 4);
 const relatedResult = await rpc("tools/call", {
 	name: "find_activity_matches",
 	arguments: {

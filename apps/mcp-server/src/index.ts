@@ -21,9 +21,7 @@ import { ERROR_CODES, RelayError } from "./mcp/protocol";
 import {
 	findActivityMatchesInputSchema,
 	getPageNotesInputSchema,
-	getPendingWorkflowHandoffInputSchema,
 	getSiteNotesInputSchema,
-	saveWorkflowScriptInputSchema,
 	searchActivityInputSchema,
 	searchNotesInputSchema,
 } from "./mcp/schema";
@@ -166,6 +164,8 @@ const createMcpServer = (
 		(params) => call(TOOL_NAMES.GET_ACTIVITY_TIMELINE, params),
 	);
 
+	// Coming soon after 0.3: local workflow automation handoff/draft tools and resource.
+	/*
 	server.registerTool(
 		TOOL_NAMES.GET_PENDING_WORKFLOW_HANDOFF,
 		{
@@ -213,6 +213,7 @@ const createMcpServer = (
 			};
 		},
 	);
+	*/
 
 	return server;
 };

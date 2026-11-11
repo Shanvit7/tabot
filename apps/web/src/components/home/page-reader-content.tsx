@@ -78,14 +78,9 @@ export const PageReaderContent = ({
 				{page.pageExcerptAvailable && "Search again for a fresh excerpt."}
 			</p>
 		)}
-		{preview && (
+		{preview?.redacted && (
 			<p className="mt-6 text-xs leading-5 text-muted-foreground">
-				<time dateTime={new Date(preview.timestamp).toISOString()}>
-					Captured {dateLabel(preview.timestamp)}
-				</time>
-				{preview.coverage.partial && " · Partial"}
-				{preview.coverage.truncated && " · Text cut off"}
-				{preview.redacted && " · Sensitive text hidden"}
+				Sensitive text hidden.
 			</p>
 		)}
 		<dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3 border-t pt-4 text-xs text-muted-foreground">

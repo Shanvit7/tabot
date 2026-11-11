@@ -43,6 +43,18 @@ assert.deepEqual(
 	[],
 );
 assert.deepEqual(searchNoteRows([note], "missing"), []);
+assert.deepEqual(
+	searchNoteRows(
+		[
+			note,
+			{ ...note, id: "note-2", createdAt: 200 },
+			{ ...note, id: "note-3", createdAt: 300 },
+		],
+		"research",
+		{ limit: 1, offset: 1 },
+	),
+	[{ ...note, id: "note-2", createdAt: 200 }],
+);
 
 const event: StoredTabEvent = {
 	id: "event-1",

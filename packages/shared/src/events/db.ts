@@ -182,13 +182,24 @@ export class TabotDatabase {
 		fallback?: Pick<PageNote, "url" | "host" | "title">,
 	) => this.request<PageNote[]>("listPageNotes", [pageKey, fallback]);
 	saveNote = (note: PageNote) => this.request<PageNote>("saveNote", [note]);
+	updateNoteText = (id: string, text: string) =>
+		this.request<{ id: string; text: string; updatedAt: number } | null>(
+			"updateNoteText",
+			[id, text],
+		);
 	linkNoteEvent = (id: string, eventId: string) =>
 		this.request<boolean>("linkNoteEvent", [id, eventId]);
 	deleteNote = (id: string) =>
 		this.request<{ deleted: boolean }>("deleteNote", [id]);
 	searchNotes = (
 		query: string,
-		options?: { from?: number; to?: number; domain?: string; limit?: number },
+		options?: {
+			from?: number;
+			to?: number;
+			domain?: string;
+			limit?: number;
+			offset?: number;
+		},
 	) => this.request<PageNote[]>("searchNotes", [query, options]);
 	listNotesForSite = (site: string) =>
 		this.request<PageNote[]>("listNotesForSite", [site]);

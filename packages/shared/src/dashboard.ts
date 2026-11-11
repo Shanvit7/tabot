@@ -49,6 +49,7 @@ export type DashboardWorkflowCandidates = {
 export type DashboardHistoryResponse =
 	| DashboardWorkflowCandidates
 	| { prepared: true }
+	| { note: { id: string; text: string; updatedAt: number } }
 	| { drafts: WorkflowScriptDraft[] }
 	| { deleted: boolean }
 	| {

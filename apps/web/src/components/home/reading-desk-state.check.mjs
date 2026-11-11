@@ -15,6 +15,25 @@ const success = readingDeskSearchReducer(initialReadingDeskSearchState, {
 assert.equal(success.searching, false);
 assert.equal(success.results, results);
 assert.equal(success.notes, notes);
+const paged = readingDeskSearchReducer(initialReadingDeskSearchState, {
+	type: "success",
+	results: Array.from({ length: 20 }, (_, index) => ({
+		url: `https://example.com/${index}`,
+	})),
+	notes: Array.from({ length: 20 }, (_, index) => ({ id: `note-${index}` })),
+	searchStatus: { mode: "keyword" },
+});
+assert.equal(paged.hasMorePages, true);
+assert.equal(paged.hasMoreNotes, true);
+const appended = readingDeskSearchReducer(paged, {
+	type: "load-more-success",
+	list: "pages",
+	results: [{ url: "https://example.com/next" }],
+	notes: [],
+});
+assert.equal(appended.results.length, 21);
+assert.equal(appended.hasMorePages, false);
+assert.equal(appended.notes.length, 20);
 
 const retry = readingDeskSearchReducer(success, { type: "retry" });
 assert.equal(retry.retryCount, 1);

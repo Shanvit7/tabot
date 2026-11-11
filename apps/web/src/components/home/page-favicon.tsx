@@ -1,11 +1,10 @@
-import type { HistorySearchResult } from "@tabot/shared/dashboard";
 import { useState } from "react";
 import { faviconOf } from "~/lib/site-format";
 
 export const PageFavicon = ({
 	page,
 }: {
-	page: Pick<HistorySearchResult, "url" | "host" | "favicon">;
+	page: { url: string; host: string; favicon?: string | null };
 }) => {
 	const [failed, setFailed] = useState(false);
 	const fallback = faviconOf(new URL(page.url).origin);

@@ -21,6 +21,10 @@ export const searchNotesInputSchema = {
 	to: z.number().finite().min(0).optional(),
 	site: z.string().trim().min(1).max(253).optional(),
 	limit: z.number().int().min(1).max(8).optional(),
+	cursor: z
+		.string()
+		.regex(/^\d{1,16}:[1-9]\d{0,5}$/)
+		.optional(),
 };
 
 export const getSiteNotesInputSchema = {
@@ -129,6 +133,11 @@ export const getPageNotesInputSchema = {
 				return false;
 			}
 		}),
+	limit: z.number().int().min(1).max(8).optional(),
+	cursor: z
+		.string()
+		.regex(/^\d{1,16}:[1-9]\d{0,5}$/)
+		.optional(),
 };
 
 /** Input shape for `find_activity_matches`. */

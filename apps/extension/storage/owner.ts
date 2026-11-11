@@ -1827,6 +1827,18 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			await notes.insert({ ...note, _id: documentId } as PageNote & Document);
 			return note;
 		}),
+	updateNoteText: (id: string, text: string) =>
+		serializeMutation(async () => {
+			if (typeof id !== "string" || id.length > 64 || !validateNoteText(text))
+				throw new Error("invalid-note");
+			const { notes } = await getDb();
+			const documentId = deriveNoteDocumentId(id);
+			const existing = await notes.findOne({ _id: documentId });
+			if (!existing) return null;
+			const updatedAt = Date.now();
+			await notes.updateOne({ _id: documentId }, { $set: { text, updatedAt } });
+			return { id, text, updatedAt };
+		}),
 	linkNoteEvent: (id: string, eventId: string) =>
 		serializeMutation(async () => {
 			const { notes } = await getDb();
@@ -1861,6 +1873,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			to?: number;
 			domain?: string;
 			limit?: number;
+			offset?: number;
 		} = {},
 	) => {
 		if (
@@ -1869,7 +1882,9 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			(options.limit !== undefined &&
 				(!Number.isSafeInteger(options.limit) ||
 					options.limit < 1 ||
-					options.limit > 20))
+					options.limit > 20)) ||
+			(options.offset !== undefined &&
+				(!Number.isSafeInteger(options.offset) || options.offset < 0))
 		)
 			throw new Error("invalid-note-search");
 		const rows = (await (await getDb()).notes.find()) as unknown as PageNote[];

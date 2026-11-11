@@ -103,6 +103,8 @@ for (const request of [
 	{ type: "SEARCH_HISTORY", query: "guide", from: 2, to: 1 },
 	{ type: "SEARCH_HISTORY", query: "guide", from: "yesterday" },
 	{ type: "SEARCH_HISTORY", query: "guide", origin: "javascript:alert(1)" },
+	{ type: "UPDATE_NOTE", id: "note-1", text: " " },
+	{ type: "UPDATE_NOTE", id: "note-1", text: "x".repeat(4_001) },
 	{ ...previewRequest, id: "../events" },
 	{ ...previewRequest, url: "javascript:alert(1)" },
 	{ ...previewRequest, url: `${url}?secret=yes` },
@@ -122,6 +124,8 @@ assert.deepEqual(
 			to: 2000,
 			origin: "https://example.com",
 			limit: 10,
+			offset: 40,
+			noteOffset: 60,
 		},
 		sender,
 		getDb,
@@ -137,6 +141,7 @@ assert.deepEqual(lastOptions, {
 	to: 2000,
 	origin: "https://example.com",
 	limit: 10,
+	offset: 40,
 });
 Object.assign(page.coverage, { internalDocumentId: "internal-document" });
 const response = await readDashboardHistory(previewRequest, sender, getDb);
@@ -414,11 +419,27 @@ const scriptsWhilePaused = await readDashboardHistory(
 	{ type: "GET_WORKFLOW_SCRIPT_DRAFTS" },
 	sender,
 	async () => ({
+		...(await getDb()),
 		listWorkflowScriptDrafts: async () => [],
 	}),
 	async () => false,
 );
 assert.deepEqual(scriptsWhilePaused, { drafts: [] });
+const editedNote = await readDashboardHistory(
+	{ type: "UPDATE_NOTE", id: "note-1", text: "Updated note" },
+	sender,
+	async () => ({
+		...(await getDb()),
+		updateNoteText: async (noteId: string, text: string) => ({
+			id: noteId,
+			text,
+			updatedAt: 123,
+		}),
+	}),
+);
+assert.deepEqual(editedNote, {
+	note: { id: "note-1", text: "Updated note", updatedAt: 123 },
+});
 console.log(
 	"dashboard history: authorization, validation, local Handwired discovery, bounded projection, missing captures and explicit read failures passed",
 );

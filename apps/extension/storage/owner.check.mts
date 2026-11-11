@@ -650,6 +650,24 @@ try {
 		...editedNote,
 		_id: noteDocumentId,
 	});
+	const dashboardUpdated = await request("updateNoteText", [
+		note.id,
+		"Edited from dashboard",
+	]);
+	assert.equal(dashboardUpdated.ok, true);
+	assert.equal(
+		(dashboardUpdated.value as { text: string }).text,
+		"Edited from dashboard",
+	);
+	assert.ok(
+		(dashboardUpdated.value as { updatedAt: number }).updatedAt >=
+			note.updatedAt,
+	);
+	assert.equal(noteRows.get(noteDocumentId)?.text, "Edited from dashboard");
+	assert.equal(
+		(await request("updateNoteText", ["missing-note", "Updated"])).value,
+		null,
+	);
 	assert.equal(
 		(await request("linkNoteEvent", [note.id, "event-note"])).value,
 		true,

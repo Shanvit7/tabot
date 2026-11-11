@@ -502,58 +502,14 @@ try {
 	assert.equal(discovery.status, 200);
 	const discoveryText = await discovery.text();
 	assert.match(discoveryText, /search_activity/);
-	assert.match(discoveryText, /get_pending_workflow_handoff/);
-	assert.match(discoveryText, /save_workflow_script/);
+	assert.doesNotMatch(discoveryText, /get_pending_workflow_handoff/);
+	assert.doesNotMatch(discoveryText, /save_workflow_script/);
 	const resources = await mcp(tokens.access_token, {
 		method: "resources/list",
 		params: {},
 	});
-	assert.match(await resources.text(), /tabot:\/\/workflows\/pending/);
-	const resourceRead = await mcp(tokens.access_token, {
-		method: "resources/read",
-		params: { uri: "tabot://workflows/pending" },
-	});
-	assert.equal(resourceRead.status, 200);
-	assert.equal(
-		dispatches,
-		1,
-		"resource reads only the authorized installation",
-	);
-	const invalidScriptTool = await mcp(tokens.access_token, {
-		method: "tools/call",
-		params: {
-			name: "save_workflow_script",
-			arguments: {
-				candidateId: "handwired-v1-1234abcd",
-				grantToken: "123e4567-e89b-42d3-a456-426614174000",
-				handoffDigest: "a".repeat(64),
-				script: {
-					version: 1,
-					name: "Unsafe",
-					description: "",
-					trigger: "manual",
-					origins: ["https://example.com"],
-					inputs: [],
-					steps: [{ type: "execute", code: "alert(1)" }],
-				},
-			},
-		},
-	});
-	assert.equal(invalidScriptTool.status, 200);
-	assert.equal(dispatches, 1, "invalid scripts never reach extension");
-	const pendingHandoffTool = await mcp(tokens.access_token, {
-		method: "tools/call",
-		params: {
-			name: "get_pending_workflow_handoff",
-			arguments: {},
-		},
-	});
-	assert.match(await pendingHandoffTool.text(), /private-error-sentinel/);
-	assert.equal(
-		dispatches,
-		2,
-		"handoff tool routes to the authorized installation",
-	);
+	assert.doesNotMatch(await resources.text(), /tabot:\/\/workflows\/pending/);
+	assert.equal(dispatches, 0, "disabled workflow resource never dispatches");
 	for (const [resource, scopes, expected] of [
 		["https://other.invalid/mcp", ["tabot.context"], 401],
 		["https://test.invalid/mcp", [], 403],
@@ -566,43 +522,12 @@ try {
 		});
 		assert.equal((await mcp(wrong.access_token)).status, expected);
 	}
-	assert.equal(dispatches, 2, "wrong audience/scope never dispatch");
+	assert.equal(dispatches, 0, "wrong audience/scope never dispatch");
 	const toolResponse = await mcp(tokens.access_token, {
 		method: "tools/call",
 		params: { name: "search_activity", arguments: { query: "test" } },
 	});
 	assert.match(await toolResponse.text(), /private-error-sentinel/);
-	const validScriptTool = await mcp(tokens.access_token, {
-		method: "tools/call",
-		params: {
-			name: "save_workflow_script",
-			arguments: {
-				candidateId: "handwired-v1-1234abcd",
-				grantToken: "123e4567-e89b-42d3-a456-426614174000",
-				handoffDigest: "a".repeat(64),
-				script: {
-					version: 1,
-					name: "Open the selected site",
-					description: "Open this site manually.",
-					trigger: "manual",
-					origins: ["https://www.linkedin.com"],
-					inputs: [],
-					steps: [
-						{
-							type: "navigate",
-							url: "https://www.linkedin.com/",
-						},
-					],
-				},
-			},
-		},
-	});
-	assert.match(await validScriptTool.text(), /private-error-sentinel/);
-	assert.equal(
-		dispatches,
-		4,
-		"valid script is relayed once to its installation",
-	);
 	const toolLog = logs.find(
 		(entry) => entry.requestId === toolResponse.headers.get("X-Request-Id"),
 	);

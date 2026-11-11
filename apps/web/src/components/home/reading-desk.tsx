@@ -16,19 +16,27 @@ import {
 import { messageOf } from "~/components/home/reading-desk-utils";
 import { SearchResultSection } from "~/components/home/search-result-section";
 import { TrackingControls } from "~/components/home/tracking-controls";
-import { searchRetainedPages } from "~/lib/history";
+import { searchRetainedPages, updateDashboardNote } from "~/lib/history";
 import { cn } from "~/lib/utils";
 
-const searchableTerms = ["a page", "a site", "yesterday’s activity"] as const;
+const searchableTerms = [
+	"a page you visited",
+	"a site you remember",
+	"yesterday’s activity",
+] as const;
 
 export const ReadingDesk = () => {
 	const reduceMotion = useReducedMotion();
 	const [input, setInput] = useState("");
+	const [filteredEmpty, setFilteredEmpty] = useState(false);
 	const [searchableTermIndex, setSearchableTermIndex] = useState(0);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const query = input.trim();
 	const [composing, setComposing] = useState(false);
 	const searchDebouncer = useRef<Debouncer<() => void> | null>(null);
+	const loadingLists = useRef(new Set<string>());
+	const queryRef = useRef(query);
+	queryRef.current = query;
 	const [searchState, dispatchSearch] = useReducer(
 		readingDeskSearchReducer,
 		initialReadingDeskSearchState,
@@ -51,6 +59,14 @@ export const ReadingDesk = () => {
 	}, [query, reduceMotion]);
 
 	const searchableTerm = searchableTerms[searchableTermIndex];
+	const noMatches = Boolean(
+		query &&
+			!searchState.searching &&
+			!searchState.searchError &&
+			((!searchState.results.length && !searchState.notes.length) ||
+				filteredEmpty),
+	);
+	const searchFailed = Boolean(query && searchState.searchError);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: retryCount intentionally resubmits unchanged query.
 	useEffect(() => {
@@ -114,43 +130,68 @@ export const ReadingDesk = () => {
 							transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
 							aria-label="Find a page"
 							className={cn(
-								"mx-auto max-w-2xl",
-								query
-									? "pt-10 sm:pt-14"
-									: "flex min-h-[60svh] flex-col justify-center",
+								"mx-auto flex max-w-2xl flex-col justify-center transition-[min-height,padding-top] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+								query ? "min-h-0 pt-10 sm:pt-14" : "min-h-[60svh]",
 							)}
 						>
-							<h1
-								aria-label="Find your way back to a page, a site, or yesterday’s activity"
-								className="mb-6 text-center text-2xl font-medium tracking-tight"
-							>
-								<span aria-hidden="true">Find your way back to</span>
-								<span
-									aria-hidden="true"
-									className="ml-1 inline-grid overflow-hidden align-bottom [perspective:600px]"
+							{noMatches || searchFailed ? (
+								<h1
+									aria-live="polite"
+									className="mb-6 text-center text-2xl font-medium tracking-tight"
 								>
-									<AnimatePresence mode="wait" initial={false}>
-										<m.span
-											key={reduceMotion || query ? "a page" : searchableTerm}
-											initial={
-												reduceMotion
-													? false
-													: { opacity: 0, rotateX: -80, y: 12 }
-											}
-											animate={{ opacity: 1, rotateX: 0, y: 0 }}
-											exit={
-												reduceMotion
-													? undefined
-													: { opacity: 0, rotateX: 80, y: -12 }
-											}
-											transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-											className="bg-transparent font-semibold text-foreground underline decoration-primary decoration-2 underline-offset-4"
+									{noMatches
+										? "Nothing came up. Try another search."
+										: "Your saved pages aren’t available right now."}
+								</h1>
+							) : (
+								<h1
+									aria-label={
+										query
+											? `Find your way back to "${query}"`
+											: "Find your way back to a page you visited, a site you remember, or yesterday’s activity"
+									}
+									className="mb-6 text-center text-2xl font-medium tracking-tight"
+								>
+									<span aria-hidden="true">Find your way back to</span>
+									{query ? (
+										<span
+											aria-hidden="true"
+											className="ml-1 inline-block max-w-[60vw] truncate align-bottom font-semibold text-foreground underline decoration-primary decoration-2 underline-offset-4 sm:max-w-sm"
 										>
-											{reduceMotion || query ? "a page" : searchableTerm}
-										</m.span>
-									</AnimatePresence>
-								</span>
-							</h1>
+											&ldquo;{query}&rdquo;
+										</span>
+									) : (
+										<span
+											aria-hidden="true"
+											className="ml-1 inline-grid overflow-hidden align-bottom [perspective:600px]"
+										>
+											<AnimatePresence mode="wait" initial={false}>
+												<m.span
+													key={searchableTerm}
+													initial={
+														reduceMotion
+															? false
+															: { opacity: 0, rotateX: -80, y: 12 }
+													}
+													animate={{ opacity: 1, rotateX: 0, y: 0 }}
+													exit={
+														reduceMotion
+															? undefined
+															: { opacity: 0, rotateX: 80, y: -12 }
+													}
+													transition={{
+														duration: 0.3,
+														ease: [0.16, 1, 0.3, 1],
+													}}
+													className="bg-transparent font-semibold text-foreground underline decoration-primary decoration-2 underline-offset-4"
+												>
+													{reduceMotion ? "a page" : searchableTerm}
+												</m.span>
+											</AnimatePresence>
+										</span>
+									)}
+								</h1>
+							)}
 							<search>
 								<form
 									onSubmit={(event) => {
@@ -213,6 +254,43 @@ export const ReadingDesk = () => {
 					state={searchState}
 					onRetrySearch={() => dispatchSearch({ type: "retry" })}
 					onSelectPage={(url) => dispatchSearch({ type: "select", url })}
+					onUpdateNote={async (id, text) => {
+						const note = await updateDashboardNote(id, text);
+						dispatchSearch({ type: "update-note", note });
+						return note;
+					}}
+					onLoadMore={(list) => {
+						const requestKey = `${query}:${list}`;
+						if (
+							loadingLists.current.has(requestKey) ||
+							!(list === "pages"
+								? searchState.hasMorePages
+								: searchState.hasMoreNotes)
+						)
+							return;
+						loadingLists.current.add(requestKey);
+						dispatchSearch({ type: "load-more-start", list });
+						void searchRetainedPages(
+							query,
+							list === "pages" ? searchState.results.length : 0,
+							list === "notes" ? searchState.notes.length : 0,
+						)
+							.then(({ results, notes }) => {
+								if (queryRef.current === query)
+									dispatchSearch({
+										type: "load-more-success",
+										list,
+										results,
+										notes,
+									});
+							})
+							.catch(() => {
+								if (queryRef.current === query)
+									dispatchSearch({ type: "load-more-error", list });
+							})
+							.finally(() => loadingLists.current.delete(requestKey));
+					}}
+					onEmptyChange={setFilteredEmpty}
 				/>
 			</div>
 		</main>
