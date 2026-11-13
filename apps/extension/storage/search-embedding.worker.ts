@@ -36,10 +36,20 @@ let queue = Promise.resolve();
 self.onmessage = (event: MessageEvent<{ id: number; text: string }>) => {
 	queue = queue.then(async () => {
 		const { id, text } = event.data;
-		if (!Number.isSafeInteger(id) || typeof text !== "string" || !text.trim())
+		if (!Number.isSafeInteger(id)) return;
+		if (typeof text !== "string" || !text.trim()) {
+			self.postMessage({ id, error: "invalid-embedding-request" });
 			return;
+		}
+		let extractor: FeatureExtractionPipeline;
 		try {
-			const extractor = await getEmbedder();
+			extractor = await getEmbedder();
+		} catch {
+			embedder = undefined;
+			self.postMessage({ id, error: "model-load-failed" });
+			return;
+		}
+		try {
 			const result = await extractor(text, {
 				pooling: "mean",
 				normalize: true,
@@ -48,15 +58,14 @@ self.onmessage = (event: MessageEvent<{ id: number; text: string }>) => {
 			if (
 				vector.length !== DIMENSIONS ||
 				vector.some((value) => !Number.isFinite(value))
-			)
-				throw new Error("embedding-invalid");
+			) {
+				self.postMessage({ id, error: "embedding-invalid" });
+				return;
+			}
 			self.postMessage({ id, vector });
-		} catch (error) {
+		} catch {
 			embedder = undefined;
-			self.postMessage({
-				id,
-				error: error instanceof Error ? error.message : "embedding-unavailable",
-			});
+			self.postMessage({ id, error: "embedding-inference-failed" });
 		}
 	});
 };

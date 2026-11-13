@@ -1,18 +1,13 @@
 import { eventBytes, UUID_PATTERN } from "../events/ingest";
 import { sanitizeUrlForIngestion } from "../privacy/ingest";
-import { piiRedactor } from "../privacy/pii-redactor";
+import { sensitiveDataRedactor } from "../privacy/sensitive-data";
 
 export const PAGE_OBSERVATION_PROTOCOL_VERSION = 2;
 export const MAX_PAGE_OBSERVATION_BYTES = 32 * 1024;
 export const MAX_PAGE_SEGMENTS = 4;
 export const MAX_PAGE_SEGMENT_CHARS = 1000;
-export const PAGE_PRIVACY_POLICY_VERSION = 1;
-const SECRET_PATTERNS = [
-	/\b(?:password|passwd|secret|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|client[_ -]?secret)\b\s*[:=]\s*["']?[A-Za-z0-9._~+/-]{6,}={0,2}/gi,
-	/\bBearer\s+[A-Za-z0-9._~+/-]{10,}={0,2}/gi,
-	/\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\b/g,
-	/-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----[\s\S]{0,4000}?-----END [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----/g,
-];
+export const PAGE_PRIVACY_POLICY_VERSION = 2;
+const SUPPORTED_PAGE_PRIVACY_POLICY_VERSIONS = [1, PAGE_PRIVACY_POLICY_VERSION];
 
 export type PageObservationTrigger =
 	| "auto-dwell"
@@ -72,7 +67,9 @@ export const normalizePageObservation = (
 				segment.length > MAX_PAGE_SEGMENT_CHARS,
 		) ||
 		!observation.privacy ||
-		observation.privacy.policyVersion !== PAGE_PRIVACY_POLICY_VERSION ||
+		!SUPPORTED_PAGE_PRIVACY_POLICY_VERSIONS.includes(
+			observation.privacy.policyVersion,
+		) ||
 		typeof observation.privacy.redacted !== "boolean" ||
 		!Array.isArray(observation.privacy.findings) ||
 		observation.privacy.findings.length > 32 ||
@@ -125,23 +122,10 @@ export const sanitizePageObservationForIngestion = async (
 	const sanitizeText = async (value: string) => {
 		if (value.length > MAX_PAGE_SEGMENT_CHARS)
 			throw new Error("page-segment-too-large");
-		let text = value;
-		const findings: string[] = [];
-		for (const pattern of SECRET_PATTERNS) {
-			pattern.lastIndex = 0;
-			if (pattern.test(text)) {
-				findings.push("SECRET");
-				pattern.lastIndex = 0;
-				text = text.replace(pattern, "[SECRET]");
-			}
-		}
-		const result = await piiRedactor.redact(text);
+		const result = await sensitiveDataRedactor.redact(value);
 		return {
 			text: result.redacted.trim(),
-			findings: [
-				...findings,
-				...result.findings.map((finding) => finding.type),
-			],
+			findings: result.findings.map((finding) => finding.type),
 		};
 	};
 	const [title, segments] = await Promise.all([

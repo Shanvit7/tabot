@@ -72,11 +72,14 @@ const seedPage = {
 	segments: ["OAuth callback nonce"],
 };
 const searchOptions: { limit?: number; offset?: number; to?: number }[] = [];
-const savedWorkflowScripts: unknown[][] = [];
 const libraryRequests: LibraryRequest[] = [];
+const relayTestToken = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB";
 const libraryNotes = Array.from({ length: 53 }, (_, index) => ({
 	id: `saved-note-${index}`,
-	text: `Saved note ${index}`,
+	text:
+		index === 51
+			? `sensitive-check john@example.com ${relayTestToken}`
+			: `Saved note ${index}`,
 	createdAt: 50 + index,
 	updatedAt: 50 + index,
 	url:
@@ -86,7 +89,7 @@ const libraryNotes = Array.from({ length: 53 }, (_, index) => ({
 	origin: "https://example.test",
 	host: "example.test",
 	site: "example.test",
-	title: "A saved title",
+	title: index === 51 ? `john@example.com ${relayTestToken}` : "A saved title",
 	favicon: null,
 	pageKey: "saved-page-key",
 	tabId: 1,
@@ -94,6 +97,9 @@ const libraryNotes = Array.from({ length: 53 }, (_, index) => ({
 	eventId: null,
 }));
 const db = {
+	listPageNotes: async () =>
+		libraryNotes.filter((note) => note.id === "saved-note-51"),
+	readEvents: async () => [],
 	browseLibrary: async (request: LibraryRequest) => {
 		libraryRequests.push(request);
 		return browseLibrary(
@@ -110,38 +116,6 @@ const db = {
 			libraryNotes,
 			request,
 		);
-	},
-	getPendingWorkflowHandoff: async () => ({
-		payload: {
-			candidateId: "handwired-v1-1234abcd",
-			sites: [
-				"https://www.linkedin.com",
-				"https://google.com",
-				"https://www.linkedin.com",
-			],
-			occurrences: 2,
-			modelMatches: 3,
-			firstAt: 100,
-			lastAt: 200,
-			evidenceType: "site-navigation-only",
-		},
-		grant: {
-			token: "123e4567-e89b-42d3-a456-426614174000",
-			candidateId: "handwired-v1-1234abcd",
-			expiresAt: Date.now() + 60_000,
-			origins: ["https://www.linkedin.com", "https://google.com"],
-			handoffDigest: "a".repeat(64),
-		},
-	}),
-	saveWorkflowScriptDraft: async (...args: unknown[]) => {
-		savedWorkflowScripts.push(args);
-		return {
-			id: "draft-id",
-			candidateId: "handwired-v1-1234abcd",
-			savedAt: 1,
-			status: "draft",
-			script: args[3],
-		};
 	},
 	searchHistory: async (
 		_query: string,
@@ -302,6 +276,7 @@ try {
 	assert.equal(pageWithNotes.captureAvailable, false);
 	let noteCursor: string | null | undefined;
 	const noteIds: string[] = [];
+	const noteResults: { id: string; text: string; title: string | null }[] = [];
 	do {
 		const response = await request("get_page_notes", {
 			pageRef: pageWithNotes.pageRef,
@@ -311,17 +286,45 @@ try {
 		const page = response?.result as {
 			total: number;
 			nextCursor: string | null;
-			notes: { id: string }[];
+			notes: { id: string; text: string; title: string | null }[];
 		};
 		assert.equal(page.total, 52);
 		assert.doesNotMatch(JSON.stringify(page), /private\/path|pageKey/);
 		noteIds.push(...page.notes.map((note) => note.id));
+		noteResults.push(...page.notes);
 		noteCursor = page.nextCursor;
 	} while (noteCursor);
 	assert.equal(
 		new Set(noteIds).size,
 		52,
 		"Opaque references paginate beyond the legacy 50-note cap",
+	);
+	const redactedNote = noteResults.find((note) => note.id === "saved-note-51");
+	assert.ok(redactedNote);
+	assert.equal(redactedNote.text.includes("john@example.com"), true);
+	assert.equal(redactedNote.text.includes(relayTestToken), false);
+	assert.equal((redactedNote.title ?? "").includes("john@example.com"), true);
+	assert.equal((redactedNote.title ?? "").includes(relayTestToken), false);
+	const legacyPageNotes = (
+		await request("get_page_notes", {
+			url: "https://example.test/private/path",
+		})
+	)?.result as {
+		title: string | null;
+		notes: { text: string; title: string | null }[];
+	};
+	assert.equal(
+		(legacyPageNotes.title ?? "").includes("john@example.com"),
+		true,
+	);
+	assert.equal((legacyPageNotes.title ?? "").includes(relayTestToken), false);
+	assert.equal(
+		(legacyPageNotes.notes[0]?.text ?? "").includes("john@example.com"),
+		true,
+	);
+	assert.equal(
+		(legacyPageNotes.notes[0]?.text ?? "").includes(relayTestToken),
+		false,
 	);
 	const orphan = listed.pages.find((page) => page.noteCount === 1);
 	assert.ok(orphan);
@@ -347,12 +350,6 @@ try {
 		requestCount,
 		"Invalid requests never reach storage",
 	);
-	const handoff = await request("get_pending_workflow_handoff", {});
-	assert.ok(handoff);
-	assert.equal((handoff.result as { ready: boolean }).ready, true);
-	const handoffJson = JSON.stringify(handoff.result);
-	assert.match(handoffJson, /linkedin\.com.*google\.com.*linkedin\.com/);
-	assert.doesNotMatch(handoffJson, /sourceIds|private|secret|page text/);
 	const nextPage = await request("search_activity", {
 		query: "OAuth",
 		limit: 1,
@@ -434,35 +431,6 @@ try {
 	};
 	assert.equal(secondRelated.count, 1);
 	assert.equal(secondRelated.nextCursor, null);
-	const workflowScript = {
-		version: 1,
-		name: "Open a site",
-		description: "Open the selected site.",
-		trigger: "manual",
-		origins: ["https://www.linkedin.com"],
-		inputs: [],
-		steps: [{ type: "navigate", url: "https://www.linkedin.com/" }],
-	};
-	const saveScript = await request("save_workflow_script", {
-		candidateId: "handwired-v1-1234abcd",
-		grantToken: "12345678-1234-1234-1234-123456789012",
-		handoffDigest: "a".repeat(64),
-		script: workflowScript,
-	});
-	assert.equal((saveScript.result as { status: string }).status, "draft");
-	assert.equal(savedWorkflowScripts.length, 1);
-	const invalidScript = await request("save_workflow_script", {
-		candidateId: "handwired-v1-1234abcd",
-		grantToken: "12345678-1234-1234-1234-123456789012",
-		handoffDigest: "a".repeat(64),
-		script: { ...workflowScript, code: "alert(1)" },
-	});
-	assert.match(invalidScript.error?.message ?? "", /Invalid workflow script/);
-	assert.equal(
-		savedWorkflowScripts.length,
-		1,
-		"invalid script never reaches local owner",
-	);
 	const invalidRelatedCursor = await request("find_activity_matches", {
 		anchors: [{ kind: "event", id: "event-1" }],
 		cursor: `${Date.now() + 100_000}:1`,

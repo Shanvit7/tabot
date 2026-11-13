@@ -1,5 +1,5 @@
 import type { StoredTabEvent } from "../events/db";
-import { piiRedactor } from "./pii-redactor";
+import { sensitiveDataRedactor } from "./sensitive-data";
 
 const MAX_SEARCH_QUERY_LENGTH = 512;
 const searchQueryParameter = (url: URL) => {
@@ -48,7 +48,7 @@ export const sanitizeUrlForIngestion = async (
 		return undefined;
 	}
 	if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
-	const host = await piiRedactor.redact(url.hostname);
+	const host = await sensitiveDataRedactor.redact(url.hostname);
 	if (host.findings.length) return undefined;
 	url.username = "";
 	url.password = "";
@@ -60,7 +60,7 @@ export const sanitizeUrlForIngestion = async (
 		: undefined;
 	url.search = "";
 	if (searchQuery) {
-		const { redacted } = await piiRedactor.redact(searchQuery);
+		const { redacted } = await sensitiveDataRedactor.redact(searchQuery);
 		if (redacted.trim() && queryParameter)
 			url.searchParams.set(queryParameter, redacted.trim());
 	}
@@ -71,12 +71,13 @@ export const sanitizeUrlForIngestion = async (
 	} catch {
 		return undefined;
 	}
-	const { redacted: pathname } = await piiRedactor.redact(decodedPath);
+	const { redacted: pathname } =
+		await sensitiveDataRedactor.redact(decodedPath);
 	url.pathname = pathname;
 	return url.toString();
 };
 
-/** Persist favicon URLs without credentials, query, fragment, or supported PII. */
+/** Persist favicon URLs without credentials, query, fragment, or detected secrets. */
 export const sanitizeEventForIngestion = async (
 	event: StoredTabEvent,
 ): Promise<StoredTabEvent> => {

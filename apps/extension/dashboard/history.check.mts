@@ -2,15 +2,12 @@ import assert from "node:assert/strict";
 import {
 	normalizeEvent,
 	type StoredPageObservation,
-	type StoredTabEvent,
 	searchHistory,
 	type TabotDatabase,
-	trainBehaviorCheckpoint,
 } from "@tabot/shared";
 import {
 	isDashboardPagePreview,
 	isDashboardSearchResults,
-	isDashboardWorkflowCandidates,
 } from "@tabot/shared/dashboard";
 import {
 	browseLibrary,
@@ -50,7 +47,7 @@ const getDb = async (): Promise<
 		| "getSearchStatus"
 		| "getPageObservation"
 		| "readEvents"
-		| "getWorkflowCheckpoint"
+		| "warmSearchModel"
 	>
 > => {
 	opens++;
@@ -58,7 +55,6 @@ const getDb = async (): Promise<
 	return {
 		searchNotes: async () => [],
 		readEvents: async () => [],
-		getWorkflowCheckpoint: async () => null,
 		searchHistory: async (query, options) => {
 			assert.equal(query, "guide");
 			lastOptions = options;
@@ -69,6 +65,7 @@ const getDb = async (): Promise<
 			indexing: true,
 			model: "loading",
 		}),
+		warmSearchModel: async () => {},
 		getPageObservation: async (requestedId) => {
 			assert.equal(requestedId, id);
 			return current;
@@ -88,7 +85,23 @@ for (const untrusted of [
 	);
 	assert.deepEqual(
 		await readDashboardHistory(
+			{ type: "GET_PAGE_REFERENCE", url },
+			untrusted,
+			getDb,
+		),
+		{ ok: false, code: "unauthorized-sender" },
+	);
+	assert.deepEqual(
+		await readDashboardHistory(
 			{ type: "BROWSE_LIBRARY", level: "sites" },
+			untrusted,
+			getDb,
+		),
+		{ ok: false, code: "unauthorized-sender" },
+	);
+	assert.deepEqual(
+		await readDashboardHistory(
+			{ type: "PRELOAD_SEARCH_MODEL" },
 			untrusted,
 			getDb,
 		),
@@ -122,6 +135,8 @@ for (const request of [
 	{ ...previewRequest, id: "../events" },
 	{ ...previewRequest, url: "javascript:alert(1)" },
 	{ ...previewRequest, url: `${url}?secret=yes` },
+	{ type: "GET_PAGE_REFERENCE", url: "javascript:alert(1)" },
+	{ type: "GET_PAGE_REFERENCE", url: `${url}?secret=yes` },
 	{ type: "GET_EVENTS" },
 	{ type: "BROWSE_LIBRARY", level: "pages" },
 	{ type: "BROWSE_LIBRARY", level: "notes" },
@@ -136,6 +151,36 @@ for (const request of [
 		code: "invalid-request",
 	});
 assert.equal(opens, 0, "Malformed requests must not open storage");
+Object.defineProperty(globalThis, "chrome", {
+	configurable: true,
+	value: {
+		storage: {
+			local: {
+				get: async () => ({
+					tabot_capture_identity_key_v1: Array.from(
+						{ length: 32 },
+						(_, i) => i,
+					),
+				}),
+				set: async () => {},
+			},
+		},
+	},
+});
+const pageReference = await readDashboardHistory(
+	{ type: "GET_PAGE_REFERENCE", url },
+	sender,
+	getDb,
+);
+assert.ok("pageRef" in pageReference);
+assert.ok(pageReference.pageRef.startsWith("example.com:"));
+assert.equal(pageReference.pageRef.length, "example.com:".length + 64);
+assert.equal(JSON.stringify(pageReference).includes("/guide"), false);
+assert.equal(opens, 0, "Page references must not open history storage");
+assert.deepEqual(
+	await readDashboardHistory({ type: "PRELOAD_SEARCH_MODEL" }, sender, getDb),
+	{ preloadStarted: true },
+);
 assert.deepEqual(
 	await readDashboardHistory(
 		{
@@ -211,6 +256,10 @@ assert.deepEqual(
 	),
 	{ ok: false, code: "search-unavailable" },
 );
+assert.deepEqual(
+	await readDashboardHistory({ type: "PRELOAD_SEARCH_MODEL" }, sender, getDb),
+	{ ok: false, code: "search-preload-unavailable" },
+);
 assert.equal(isDashboardSearchResults([]), true);
 assert.equal(isDashboardSearchResults({ ok: false }), false);
 const result = {
@@ -250,7 +299,6 @@ const wiredResponse = JSON.parse(
 			async () => ({
 				searchNotes: async () => [],
 				readEvents: async () => [],
-				getWorkflowCheckpoint: async () => null,
 				searchHistory: (query, options) =>
 					searchHistory([navigation], [capturedPage], query, options),
 				getSearchStatus: async () => ({
@@ -315,137 +363,6 @@ for (const broken of [
 ])
 	assert.equal(isDashboardSearchResults([broken]), false);
 fail = false;
-const untrained = await readDashboardHistory(
-	{ type: "GET_WORKFLOW_CANDIDATES" },
-	sender,
-	getDb,
-	async () => true,
-);
-assert.ok(isDashboardWorkflowCandidates(untrained));
-assert.equal(untrained.modelReady, false);
-const repeatedSites = [
-	"https://alpha.test",
-	"https://beta.test",
-	"https://gamma.test",
-];
-const workflowEvents: StoredTabEvent[] = Array.from(
-	{ length: 12 },
-	(_, repeat) =>
-		repeatedSites.map((site, index) => ({
-			id: `route-${repeat}-${index}`,
-			tabId: index + 1,
-			windowId: 1,
-			timestamp: repeat * 600_000 + index * 1_000,
-			url: site,
-			type: "TAB_ACTIVATED" as const,
-		})),
-).flat();
-const training = await trainBehaviorCheckpoint(workflowEvents);
-assert.ok(training.checkpoint);
-let activationEventsRequested = false;
-const workflowResponse = await readDashboardHistory(
-	{ type: "GET_WORKFLOW_CANDIDATES" },
-	sender,
-	async () => ({
-		searchHistory: async () => [],
-		searchNotes: async () => [],
-		getSearchStatus: async () => ({
-			mode: "keyword",
-			indexing: false,
-			model: "ready",
-		}),
-		getPageObservation: async () => undefined,
-		readEvents: async (range) => {
-			activationEventsRequested =
-				range?.types?.includes("TAB_ACTIVATED") ?? false;
-			return workflowEvents;
-		},
-		getWorkflowCheckpoint: async () => training.checkpoint,
-	}),
-	async () => true,
-);
-assert.ok(isDashboardWorkflowCandidates(workflowResponse));
-assert.equal(workflowResponse.modelReady, true);
-assert.equal(activationEventsRequested, true);
-assert.ok(workflowResponse.candidates.length > 0);
-assert.ok(
-	workflowResponse.candidates.every((candidate) => candidate.modelMatches >= 2),
-	"dashboard projection contains only repeated Handwired predictions",
-);
-const selectedCandidate = workflowResponse.candidates[0];
-assert.ok(selectedCandidate);
-let handoffRequest:
-	| {
-			payload: {
-				candidateId: string;
-				sites: string[];
-				occurrences: number;
-				modelMatches: number;
-				firstAt: number;
-				lastAt: number;
-				evidenceType: "site-navigation-only";
-			};
-			sourceIds: string[];
-	  }
-	| undefined;
-const prepareHandoffResponse = await readDashboardHistory(
-	{
-		type: "CREATE_WORKFLOW_HANDOFF",
-		candidateId: selectedCandidate.id,
-	},
-	sender,
-	async () => ({
-		searchHistory: async () => [],
-		searchNotes: async () => [],
-		getSearchStatus: async () => ({
-			mode: "keyword",
-			indexing: false,
-			model: "ready",
-		}),
-		getPageObservation: async () => undefined,
-		readEvents: async () => workflowEvents,
-		getWorkflowCheckpoint: async () => training.checkpoint,
-		createWorkflowHandoff: async (request) => {
-			handoffRequest = request;
-		},
-	}),
-	async () => true,
-);
-assert.deepEqual(prepareHandoffResponse, { prepared: true });
-assert.ok(handoffRequest);
-assert.equal(handoffRequest.payload.candidateId, selectedCandidate.id);
-assert.deepEqual(
-	handoffRequest.payload.sites,
-	selectedCandidate.steps.map((step) => step.origin),
-);
-assert.equal(handoffRequest.payload.evidenceType, "site-navigation-only");
-assert.equal(
-	JSON.stringify(handoffRequest.payload).includes("sourceIds"),
-	false,
-);
-assert.deepEqual(handoffRequest.sourceIds, [
-	...new Set(selectedCandidate.occurrences.flatMap((item) => item.sourceIds)),
-]);
-const pausedHandoff = await readDashboardHistory(
-	{
-		type: "CREATE_WORKFLOW_HANDOFF",
-		candidateId: selectedCandidate.id,
-	},
-	sender,
-	getDb,
-	async () => false,
-);
-assert.deepEqual(pausedHandoff, { ok: false, code: "tracking-disabled" });
-const scriptsWhilePaused = await readDashboardHistory(
-	{ type: "GET_WORKFLOW_SCRIPT_DRAFTS" },
-	sender,
-	async () => ({
-		...(await getDb()),
-		listWorkflowScriptDrafts: async () => [],
-	}),
-	async () => false,
-);
-assert.deepEqual(scriptsWhilePaused, { drafts: [] });
 const editedNote = await readDashboardHistory(
 	{ type: "UPDATE_NOTE", id: "note-1", text: "Updated note" },
 	sender,
@@ -515,5 +432,5 @@ assert.deepEqual(
 	{ ok: false, code: "library-unavailable" },
 );
 console.log(
-	"dashboard history: authorization, validation, local Handwired discovery, bounded projection, missing captures and explicit read failures passed",
+	"dashboard history: authorization, validation, bounded projection, missing captures and explicit read failures passed",
 );

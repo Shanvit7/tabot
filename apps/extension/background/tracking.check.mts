@@ -42,7 +42,7 @@ mock.module("../storage/client", {
 	namedExports: {
 		getStorageDb: async () => ({
 			findEvent: async () => undefined,
-			advanceWorkflowTrainingGeneration: async () => 0,
+			readEvents: async () => [],
 			searchNotes: async (query: string, options?: { domain?: string }) =>
 				shared.searchNoteRows(savedNotes, query, options),
 		}),
@@ -195,6 +195,18 @@ try {
 		id: chrome.runtime.id,
 		url: `chrome-extension://${chrome.runtime.id}/popup.html`,
 	};
+	assert.deepEqual(
+		await send({ type: "GET_ACTIVE_TRACKING_DURATION" }, false, popup),
+		{ durationMs: 0, active: false },
+	);
+	assert.equal(
+		internal(
+			{ type: "GET_ACTIVE_TRACKING_DURATION" },
+			{ id: "untrusted", url: "https://example.com/" },
+			() => {},
+		),
+		false,
+	);
 	assert.equal(
 		internal(
 			{ type: "SEARCH_NOTES", query: "Project" },

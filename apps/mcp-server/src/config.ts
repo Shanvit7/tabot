@@ -1,4 +1,6 @@
-export const VERSION = "0.2.2";
+import { TABOT_VERSION } from "@tabot/shared/version";
+
+export const VERSION = TABOT_VERSION;
 
 export const NAME = "tabot-mcp";
 

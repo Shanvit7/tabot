@@ -1,20 +1,15 @@
 import {
 	type AssistantConnections,
 	parseAssistantConnections,
-	type WorkflowScriptDraft,
 } from "@tabot/shared";
 import {
 	type DashboardNoteResult,
 	type DashboardPagePreview,
-	type DashboardWorkflowCandidates,
 	type HistorySearchResult,
 	isDashboardNotes,
 	isDashboardPagePreview,
 	isDashboardSearchAvailability,
 	isDashboardSearchResults,
-	isDashboardWorkflowCandidates,
-	isDashboardWorkflowHandoffPrepared,
-	isDashboardWorkflowScriptDrafts,
 	isRecord,
 	type SearchAvailability,
 } from "@tabot/shared/dashboard";
@@ -50,14 +45,10 @@ const failureMessage = (code: unknown): string => {
 	if (code === "tracking-update-failed")
 		return "Could not update tracking. Try again.";
 	if (code === "tracking-disabled") return "Resume browser tracking first.";
-	if (code === "workflow-candidate-not-found")
-		return "This pattern changed or is no longer available. Refresh and try again.";
-	if (code === "workflow-model-not-ready")
-		return "Wait for Handwired to finish learning, then try again.";
-	if (code === "workflow-evidence-unavailable")
-		return "Some selected history was deleted. Refresh before sharing this pattern.";
-	if (code === "workflow-unavailable")
-		return "Could not prepare this handoff. Refresh the pattern and try again.";
+	if (code === "storage-estimate-unavailable")
+		return "Chrome could not estimate Tabot storage right now.";
+	if (code === "page-reference-unavailable")
+		return "Couldn’t prepare this page for ChatGPT. Try again.";
 	return "Tabot could not read local storage. Reload the extension, then try again. This does not mean your history is empty.";
 };
 
@@ -103,7 +94,7 @@ const request = createClientOnlyFn(
 					} else if (!isRecord(response)) {
 						reject(
 							new Error(
-								"Reload the latest Tabot extension to use the reading desk.",
+								"Your saved pages aren’t available right now. Make sure Tabot is enabled in Chrome, then try again.",
 							),
 						);
 					} else if (response.ok === false) {
@@ -139,6 +130,12 @@ export const updateDashboardNote = async (
 			"Note could not be updated. Reload the dashboard and retry.",
 		);
 	return response.note as { id: string; text: string; updatedAt: number };
+};
+
+export const preloadSearchModel = async (): Promise<void> => {
+	const response = await request({ type: "PRELOAD_SEARCH_MODEL" });
+	if (response.preloadStarted !== true)
+		throw new Error("Search model preload could not be started.");
 };
 
 export const searchRetainedPages = async (
@@ -245,6 +242,42 @@ export const readHistoryCounts = async (): Promise<{
 	};
 };
 
+export const purgeStoredData = async (): Promise<void> => {
+	const response = await request({ type: "PURGE_DATA" });
+	if (response.ok !== true)
+		throw new Error("Stored Tabot data could not be deleted. Try again.");
+};
+
+export const readStorageEstimate = async (): Promise<{
+	usageBytes: number;
+	quotaBytes: number;
+}> => {
+	let response: Record<string, unknown>;
+	try {
+		response = await request({ type: "GET_STORAGE_ESTIMATE" });
+	} catch (error) {
+		if (!(error instanceof ExtensionUnavailableError)) throw error;
+		try {
+			await readHistoryCounts();
+		} catch {
+			throw error;
+		}
+		throw new Error(
+			"Tabot is connected, but this extension version cannot report storage. Reload or update Tabot in chrome://extensions, then retry.",
+		);
+	}
+	if (
+		typeof response.usageBytes !== "number" ||
+		!Number.isFinite(response.usageBytes) ||
+		response.usageBytes < 0 ||
+		typeof response.quotaBytes !== "number" ||
+		!Number.isFinite(response.quotaBytes) ||
+		response.quotaBytes <= 0
+	)
+		throw new Error("Tabot storage usage could not be read. Try again later.");
+	return { usageBytes: response.usageBytes, quotaBytes: response.quotaBytes };
+};
+
 export const readAssistantConnections =
 	async (): Promise<AssistantConnections> => {
 		const response = await request({ type: "GET_ASSISTANT_CONNECTIONS" });
@@ -256,45 +289,20 @@ export const readAssistantConnections =
 		return connections;
 	};
 
-export const readWorkflowCandidates =
-	async (): Promise<DashboardWorkflowCandidates> => {
-		const response = await request({ type: "GET_WORKFLOW_CANDIDATES" });
-		if (!isDashboardWorkflowCandidates(response))
-			throw new Error(
-				"Workflow response is incompatible. Reload Tabot extension.",
-			);
-		return response;
-	};
+const LIBRARY_PAGE_REFERENCE = /^[a-z0-9.%A-F-]{1,765}:[a-f0-9]{64}$/;
 
-export const createWorkflowHandoff = async (
-	candidateId: string,
-): Promise<void> => {
-	const response = await request({
-		type: "CREATE_WORKFLOW_HANDOFF",
-		candidateId,
-	});
-	if (!isDashboardWorkflowHandoffPrepared(response))
-		throw new Error(failureMessage(response.code));
-};
-
-export const readWorkflowScriptDrafts = async (): Promise<
-	WorkflowScriptDraft[]
-> => {
-	const response = await request({ type: "GET_WORKFLOW_SCRIPT_DRAFTS" });
-	if (!isDashboardWorkflowScriptDrafts(response))
+export const readLibraryPageReference = async (
+	url: string,
+): Promise<string> => {
+	const response = await request({ type: "GET_PAGE_REFERENCE", url });
+	if (
+		typeof response.pageRef !== "string" ||
+		!LIBRARY_PAGE_REFERENCE.test(response.pageRef)
+	)
 		throw new Error(
-			"Saved automation drafts are incompatible. Reload the extension.",
+			"Page reference is incompatible. Reload the latest Tabot extension.",
 		);
-	return response.drafts;
-};
-
-export const deleteWorkflowScriptDraft = async (
-	id: string,
-): Promise<boolean> => {
-	const response = await request({ type: "DELETE_WORKFLOW_SCRIPT_DRAFT", id });
-	if (typeof response.deleted !== "boolean")
-		throw new Error(failureMessage(response.code));
-	return response.deleted;
+	return response.pageRef;
 };
 
 export const readPagePreview = async (

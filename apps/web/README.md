@@ -1,6 +1,6 @@
 # Tabot dashboard
 
-TanStack Start + React + Tailwind v4. `/home` is the local Reading desk; `/` remains the landing page. The shared workspace dock links Home, AI, and Assistant.
+The dashboard is the current beta review surface for Tabot's broader browser activity data layer for AI-assisted work. TanStack Start + React + Tailwind v4. `/home` is the local Home surface; `/` remains the landing page. The shared workspace dock links Home, AI, and Assistant.
 
 ## Local setup
 
@@ -11,7 +11,7 @@ TanStack Start + React + Tailwind v4. `/home` is the local Reading desk; `/` rem
 
 The extension accepts dashboard reads from localhost ports 3000/3001 and `https://shanvit7.github.io/tabot/`. Other addresses, relay pages, and other extensions are not authorized to read page previews. No new extension permissions are needed.
 
-## Reading desk
+## Home
 
 - Search retained local evidence with the existing ranked `SEARCH_HISTORY` API (up to 20 URL groups).
 - Select a result to read its cited, sanitized capture. Choose other retained page citations under the source disclosure.

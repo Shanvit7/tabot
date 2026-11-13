@@ -62,7 +62,7 @@
 			"value": "credentialless"
 		},
 		"content_security_policy": {
-			"extension_pages": "script-src 'self' 'wasm-unsafe-eval' http://localhost; object-src 'self'; worker-src 'self'"
+			"extension_pages": "script-src 'self' 'wasm-unsafe-eval' http://localhost; object-src 'self'; worker-src 'self'; connect-src 'self' https://*.i.posthog.com"
 		},
 		"permissions": [
 			"offscreen",

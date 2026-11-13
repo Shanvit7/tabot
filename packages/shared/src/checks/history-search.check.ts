@@ -166,6 +166,27 @@ const activityFallback = await searchHistory(events.slice(0, 1), [], "", {
 	candidateOrder: ["https://example.com/docs/pkce"],
 });
 assert.equal(activityFallback[0]?.url, "https://example.com/docs/pkce");
+const timedPages = await searchHistory(
+	[
+		{
+			...event("visible-a", "https://a.example/work", 1_000),
+			type: "PAGE_VISIBLE",
+		},
+		{
+			...event("visible-b", "https://b.example/work", 61_000),
+			type: "PAGE_VISIBLE",
+		},
+		{
+			...event("visible-c", "https://b.example/work", 91_000),
+			type: "PAGE_VISIBLE",
+		},
+	],
+	[],
+	"",
+	{ candidateOrder: ["https://a.example/work", "https://b.example/work"] },
+);
+assert.equal(timedPages[0]?.estimatedActiveMs, 60_000);
+assert.equal(timedPages[1]?.estimatedActiveMs, 30_000);
 const paginationEvents = [
 	event("page-a", "https://a.example/pkce", 500),
 	event("page-b", "https://b.example/pkce", 501),

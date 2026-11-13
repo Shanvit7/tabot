@@ -1,73 +1,87 @@
-# Product
+Tabot
 
-<!-- impeccable:product-schema 1 -->
+Product purpose
 
-## Platform
+Tabot turns activity in Chrome into a usable data layer for AI-assisted work. The aim is to help people use what they have been doing in their browser as context for their AI assistant, so they can get things done without repeatedly gathering links, copying information, and explaining their work from scratch.
 
-web
+Tabot is in early beta. The current product provides part of this foundation; the broader context and automation experience is the direction we are building toward, not a claim that everything already works.
 
-## Users
+Positioning
 
-Non-technical office workers who spend their workday across Chrome tabs, alongside founders, operators, researchers, marketers, designers, support staff, and developers. The user is human; the term "digital worker" is wrong (it implies an AI agent) and must not be used in product copy.
+Tabot is the browser activity layer for your AI assistant.
 
-## Product Purpose
+Chrome history already helps people find pages. Tabot's intended value is not another search bar. It is making browser activity usable beyond the browser: collecting relevant evidence, organizing it into useful context, and making that context available to an assistant for work the user wants to do.
 
-Tabot is a Chrome extension and web dashboard that record browser activity locally and help people find their way back to websites they visited. Home leads with recent activity and website-name search; connection maps are optional exploration. People can also ask ChatGPT about their activity through an optional connection. Success: users recover a useful browsing trail without rebuilding it from memory or learning a graph.
+Search, notes, and excerpts are useful entry points and building blocks. They are not the whole product identity. The longer-term value is the connection between what someone does in Chrome and what their assistant can help them accomplish.
 
-## Positioning
+Privacy and local storage support this experience; they are not the primary product pitch. Tabot is not a privacy utility, employee-monitoring tool, or productivity scorecard.
 
-Tabot collects browser activity on the user's device, makes recent activity searchable and recognizable, and offers an optional connection map and authorized ChatGPT questions. Tabot reports observed sites, visits, and patterns; it does not claim to know intent or productivity. Downloads are secondary: a user-controlled copy for review or audit, not the main product experience. No cloud history sync or Tabot account is needed for local recording and review.
+Users and their problem
 
-## Operating Context
+People whose work spans Chrome and an AI assistant, including office workers, finance and admin teams, operators, researchers, and founders.
 
-- **Capture:** Chrome extension (Manifest V3, Plasmo). Chrome tab/window/navigation APIs + content scripts: tab lifecycle, navigation (URL sidecar), page visibility, scroll, clicks, key-occurrence, and separately consented visible-text excerpts.
-- **Transport:** bounded Pacer batching and serial writes in the extension service worker; no SharedArrayBuffer or transport worker.
-- **Persistence:** TalaDB 0.12.1 in one OPFS-backed database, fully local; IndexedDB is used only to import legacy profiles.
-- **Derivation:** pure, lazy, at read time — events → sessions → anchors → temporal graph → episodes → contexts → memories → retrieval → live browser-context snapshot (graphology).
-- **Surfaces:** extension popup (pipeline stats) and local web dashboard (stats, charts, sessions, activity summaries, export).
-- **Export:** canonical format is JSONL with a manifest — human inspectable, scriptable, reproducible, agent-usable. It is a secondary user-controlled copy for review or audit, not the primary product experience. Schema is documented as evolving while the project is experimental.
-- **Development:** pnpm monorepo. `pnpm dev`, `pnpm dev:web`, `pnpm dev:extension`, `pnpm lint`, `pnpm format`, `pnpm knip`.
+Their work is scattered across pages, sites, documents, and browsing sessions. An assistant usually sees only what they manually bring into a conversation. The user has to rebuild context before the assistant can help. Tabot aims to reduce that repeated handoff and make browser activity a reusable input to their work.
 
-## Capabilities and Constraints
+The user is a person doing work, not a digital worker or AI agent. Write for non-technical people and explain value through tasks they recognize.
 
-- **Local browser record.** Raw browser activity and its visual derivations stay on-device. No cloud history sync or Tabot account is required. If the user connects ChatGPT’s Tabot plugin and asks a question, ChatGPT requests a selected, sanitized result (such as an activity summary, pattern details, or activity metrics) from the extension. The online MCP connection service routes requests and results and stores connection/OAuth state, not browser history or tool results.
-- **Never recorded:** typed text, key values, form values, passwords, whole-page snapshots, screenshots.
-- **Visible excerpts:** captured automatically while global tracking is active. At most four visible fragments are saved after a one-second foreground dwell or trusted interaction. Capture excludes incognito, authentication routes, editable/form surfaces, and content not confirmed visible. Excerpts stay local and are not included in assistant requests. No time-based expiry; the oldest records are removed only when the 25 MiB storage budget is exceeded. PII detection covers selected patterns, not every name or secret.
-- **Evidence boundaries:** raw events stay immutable; page excerpts use a separate local store. Excerpts never inflate visit, duration, session, readiness, or recurring-pattern metrics. Evidence-backed outcome claims must link to observations that support them.
-- **Deterministic and bounded:** same input produces same output; all derived/retrieval reads have practical caps.
-- **Evidence first:** derived values retain IDs, domains, timestamps, counts, similarity, staleness, and recurrence data that support them. Evidence signals, not confidence claims.
-- **Event taxonomy:** `behavioral` / `contextual` / `diagnostic`. Diagnostic events never influence derivation. SW telemetry reduced in Phase 2 to a single contextual signal, `SW_WINDOW_FOCUS` — it is never a session boundary and only strengthens existing graph edges.
-- **Overflow:** a full bounded ingest queue rejects the event and increments internal `droppedEvents` counter.
-- **Status:** experimental, MIT; v0.2.1 release prepared, not deployed. Roadmap is deliberately narrow: stabilize telemetry/export format, improve activity summaries, evaluate AI inference against real examples.
+Product direction
 
-## Brand Commitments
+Collect browser activity and relevant evidence. Organize it into contexts that people can inspect and use. Let users bring those contexts into their assistant to ask questions, continue work, and produce useful outputs. Build toward user-directed workflows and automations that reuse this data layer.
 
-- **Name:** Tabot.
-- **Binding copy:** "Private, local browser activity timeline. Thinking across tabs." (extension description; user-confirmed).
-- **Audience rule:** the user is a human worker who works in Chrome. Never "digital worker" — that term belongs to AI agents.
-- **Binding UI terminology:** say **activity** or **activity summary**, plural **activities** or **activity summaries**. Never label anything **context** or **contexts** in user-facing copy, including headings, buttons, links, accessibility labels, empty states, notifications, onboarding and help. `context` may remain in internal types, variable names, API names and URL parameters; do not expose it as a product label.
-- **Plain-language rule:** write for non-technical office workers. Remove technical recording/derivation footnotes that do not help them act; use accurate, short labels such as "First seen" and "Last seen" instead. Do not add boilerplate explaining foreground time, event counts, observation boundaries or how sessions span internal contexts. Keep necessary privacy, security and data-loss warnings.
-- **Logo:** `assets/logo.png`; extension icon `apps/extension/assets/icon.png`; web logo `apps/web/public/logo.png`.
-- Design tokens (typography, colors, neubrutalist style) live in `PRODUCTS.md`.
+A context should connect relevant browsing evidence into something useful for a task, rather than expose a pile of raw events. An automation should use authorized context to help carry out a user-chosen workflow. These describe the intended experience, not a promise that the beta currently understands tasks or executes workflows.
 
-## Evidence on Hand
+Illustrative future uses include bringing research from several browsing sessions into a brief, preparing a handoff from reviewed material and notes, or reusing a recurring set of browser evidence in a repeatable workflow. Treat these as use cases to build and validate, not shipped features or proven outcomes.
 
-- `README.md` — product narrative, pipeline overview, export summary, can/cannot-know boundary.
-- `docs/system.md` — walkthrough of current behavior (source of truth alongside tech.md).
-- `docs/tech.md` — technical specification, single source of truth for architecture and derivation.
-- Extension manifest permissions: `storage`, `tabs`, `webNavigation`, `windows` (+ `host_permissions: <all_urls>` for URL sidecar).
-- Real data exists only as the user's own local browser activity. There are **no** public demo datasets, testimonials, customers, case studies, press, or benchmarks. Do not fabricate any.
+Current beta
 
-## Product Principles
+Built: the Chrome extension, searchable web dashboard, saved page notes and excerpts, and eight read-only ChatGPT tools. Users can find retained pages, review notes and excerpts locally, and connect ChatGPT to ask about supported browser activity or request saved notes.
 
-1. **The user owns their data.** Collection is Tabot's job; judgment is the user's.
-2. **Local-first is a boundary, not a feature.** Nothing leaves the device unless the user exports it.
-3. **Evidence over interpretation.** Report what happened — where, when, how it connected. Never assert what it meant.
-4. **Raw events are the only truth.** Everything derived is disposable, rebuildable, deterministic.
-5. **Make past browsing useful.** Recent activity and search deliver value before visualization. Connection maps and ChatGPT are optional ways to explore further. Downloads exist for review and audit.
+The current dashboard supports search and review. The popup supports current-page notes and recording controls. These surfaces provide access to the underlying data; they do not define the ceiling of the product.
 
-## Product Decisions
+The beta does not provide a complete task-context workspace, assistant-driven browser actions, or an automation engine. Existing internal context derivation does not establish that the intended user-facing context experience is complete. ChatGPT is the current integration; broader assistant support is a direction, not an availability claim. Local search and review remain usable without connecting an assistant.
 
-### 2026-10-09 — Never show raw activity/event counts
+Priorities and success
 
-Raw event counts (for example, “3,799 activities”) are implementation-dependent and do not help people understand their browsing. Never show or relay raw activity/event counts in user-facing surfaces, including the popup, dashboard, notifications, or ChatGPT context/memory results. Do not relabel event counts as “actions” or “visits.” Use human-interpretable evidence such as time, places, or recurring patterns only when it answers a clear user question; otherwise omit the metric. Event counts may remain internal for derivation and readiness checks.
+Deepen the path from collected activity to useful context to assistant-assisted outcomes. Improve evidence quality and retrieval, make contexts understandable and reusable, and validate real workflows before expanding automation.
+
+Judge features by whether they reduce manual context gathering or help someone complete meaningful work with their assistant. Finding a page is an enabling step, not the final measure of the product's value. More captured events, more dashboards, or a larger list of tools are not outcomes by themselves.
+
+Messaging and terminology
+
+Vision description: Tabot turns your browser activity into context your AI assistant can use to help you get work done.
+
+Beta description: Tabot collects browser activity, lets you review saved pages and notes, and connects ChatGPT to supported activity and note results. We are building toward reusable contexts and user-directed automations.
+
+Lead with the connection between browser activity and getting work done with an assistant. Explain the available beta honestly, then distinguish what is coming next. Do not reduce the product to browser recall or lead with privacy warnings and storage mechanics.
+
+Contexts and automations are valid product concepts when their meaning is clear. Do not label raw events as contexts or imply that planned automations already run. Keep implementation terms such as embeddings and derivation out of everyday UI copy. Never present raw event counts as activities, actions, or visits. Do not claim complete capture, reliable task understanding, autonomous execution, or guaranteed answers without implemented and verified support.
+
+This positioning supersedes the earlier privacy-led and browser-recall-only descriptions. It does not remove security, consent, or data-loss safeguards.
+
+Technical foundation
+
+React, TypeScript, TanStack Start, Tailwind CSS, and Plasmo. The Chrome extension and web dashboard share types and logic in a pnpm monorepo.
+
+The dashboard reads the extension's local TalaDB database through validated messaging. An OAuth-secured Cloudflare MCP relay connects ChatGPT to the running extension over WebSocket and returns requested, filtered results. The relay stores connection and authorization state, not browser history or tool results.
+
+Search uses local full-text and vector indexes, with a small, quantized embedding model running on-device in a separate worker. Keyword search remains available when embeddings are unavailable. Long result lists are virtualized. Chrome events are collected in batches of up to 128 and saved one batch at a time, with up to three attempts per automatic retry cycle for temporary write failures. These are implementation choices, not measured production-scale claims.
+
+Current data and action boundaries
+
+Browser history, notes, excerpts, indexes, and embeddings stay on-device. Authorized assistant requests return selected results, not the history database. Users can also explicitly export data.
+
+Current activity and site results omit raw event rows, page titles, paths, and excerpt bodies. Requested note text and titles can leave the device after selected sensitive-pattern filtering. Automatic excerpts remain local. Filtering does not guarantee removal of every sensitive detail. Notes remain as written in local storage.
+
+Tabot does not record typed input, form values, screenshots, or full-page snapshots. Browsing evidence is not proof of intent or productivity. Future automation must have explicit authorization and clear action boundaries; captured page content must never grant permission to act.
+
+Status and evidence
+
+Early beta, still in progress, with no production user or traffic numbers. Release is planned within a week of this positioning update; verify timing before using it in public copy. Do not invent customers, testimonials, benchmarks, completed workflows, or measured productivity gains.
+
+Source of truth
+
+This file guides product direction and content across the codebase: landing pages, onboarding, extension copy, dashboard, assistant setup, documentation, and future features. Lead with browser activity as a data layer for AI-assisted work. Keep the distinction between current beta capabilities and the longer-term vision explicit.
+
+Use docs/system.md, docs/tech.md, docs/data-flow.md, and current code to establish implementation facts. Older recall-first messaging should not constrain the product direction; the new direction must not be used as proof that planned capabilities already exist.
+
+GitHub: https://github.com/Shanvit7/tabot

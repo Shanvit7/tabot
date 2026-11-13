@@ -28,6 +28,7 @@ import {
 	type TabEventType,
 	validateNoteText,
 } from "@tabot/shared";
+import { telemetry } from "./analytics/telemetry";
 import {
 	isForegroundTab,
 	startForegroundTracking,
@@ -53,18 +54,9 @@ import { getStorageDb } from "./storage/client";
 // One service worker, one bounded serial writer. Queued is not persisted.
 const RECOVERY_ALARM = "tabot-ingest-recovery";
 const PAGE_BUDGET_ALARM = "tabot-page-budget";
-const WORKFLOW_TRAINING_ALARM = "tabot-workflow-training";
-// Coalesce foreground site visits into a single background training pass.
-const scheduleWorkflowTraining = () =>
-	void chrome.alarms
-		.create(WORKFLOW_TRAINING_ALARM, { delayInMinutes: 0.5 })
-		.catch(() => {});
 void chrome.alarms.clear("tabot-page-retention").catch(() => {});
 void chrome.storage.local
-	.remove([
-		"tabot_page_capture_origins_v1",
-		"tabot_workflow_learning_enabled_v1",
-	])
+	.remove("tabot_page_capture_origins_v1")
 	.catch(() => {});
 const getDb = getStorageDb;
 const getStorageCounts = async (includeFirstEventTimestamp = false) => {
@@ -80,17 +72,22 @@ const getStorageCounts = async (includeFirstEventTimestamp = false) => {
 	]);
 	return { eventCount, pageCount, firstEventTimestamp, lastEventTimestamp };
 };
+const getStorageEstimate = async () => {
+	const { usage, quota } = await navigator.storage.estimate();
+	if (
+		typeof usage !== "number" ||
+		!Number.isFinite(usage) ||
+		usage < 0 ||
+		typeof quota !== "number" ||
+		!Number.isFinite(quota) ||
+		quota <= 0
+	)
+		throw new Error("storage-estimate-unavailable");
+	return { usageBytes: usage, quotaBytes: quota };
+};
 const pipeline = createEventPipeline<StoredIngestRecord>({
 	commit: async (rows) => {
 		const result = await bulkInsertIngestRecords(await getDb(), rows);
-		if (
-			rows.some(
-				(row) =>
-					"type" in row &&
-					(row.type === "NAVIGATION" || row.type === "TAB_ACTIVATED"),
-			)
-		)
-			scheduleWorkflowTraining();
 		return result;
 	},
 	onBlocked: (recoverable) => {
@@ -123,6 +120,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 	if (alarm.name === PAGE_BUDGET_ALARM) void enforcePageBudget();
 });
 void enforcePageBudget();
+globalThis.addEventListener?.("error", (event) => {
+	void telemetry.captureError(event.error, "unhandled_error");
+});
+globalThis.addEventListener?.("unhandledrejection", (event) => {
+	void telemetry.captureError(event.reason, "unhandled_rejection");
+});
+
 const nativeInstance = crypto.randomUUID();
 let nativeSequence = 0;
 
@@ -156,20 +160,6 @@ const readTracking = async () => {
 			: 0;
 	return trackingEnabled;
 };
-const trainWorkflowAutomatically = async () => {
-	if (!(await readTracking())) return;
-	const db = await getDb();
-	const generation = await db.getWorkflowTrainingGeneration();
-	if (!(await readTracking())) return;
-	await db.trainWorkflowModel(generation);
-};
-chrome.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name === WORKFLOW_TRAINING_ALARM)
-		void trainWorkflowAutomatically().catch(() => {});
-});
-void trackingReady.then(() => {
-	if (trackingEnabled) scheduleWorkflowTraining();
-});
 const setTracking = (enabled: boolean) => {
 	const update = trackingUpdates.then(async () => {
 		await trackingReady;
@@ -181,7 +171,6 @@ const setTracking = (enabled: boolean) => {
 		}
 		try {
 			const resumedAt = enabled ? Date.now() : trackingResumedAt;
-			await (await getDb()).advanceWorkflowTrainingGeneration();
 			await chrome.storage.local.set({
 				[TRACKING_KEY]: enabled,
 				[TRACKING_RESUMED_KEY]: resumedAt,
@@ -192,7 +181,6 @@ const setTracking = (enabled: boolean) => {
 				trackingEnabled = true;
 			}
 			await sampleForeground(enabled);
-			if (enabled) scheduleWorkflowTraining();
 		} catch (error) {
 			trackingEnabled = previous;
 			trackingGeneration++;
@@ -410,6 +398,36 @@ const respondAssistantConnections = (
 	})();
 };
 
+const readActiveTrackingDuration = async () => {
+	const enabled = await readTracking();
+	const db = await getDb();
+	const events = await db.readEvents({
+		types: [
+			"PAGE_VISIBLE",
+			"PAGE_HIDDEN",
+			"SW_WINDOW_FOCUS",
+			"TAB_ACTIVATED",
+			"NAVIGATION",
+			"TAB_UPDATED",
+		],
+	});
+	const now = Date.now();
+	const spans = activeSpans(events);
+	const lastSpan = spans.at(-1);
+	const latest = foregroundEvents(events).at(-1);
+	const active =
+		enabled &&
+		lastSpan !== undefined &&
+		latest?.timestamp === lastSpan.end &&
+		now - lastSpan.end < ACTIVITY_GAP_MS;
+	return {
+		durationMs:
+			activeDuration(spans, 0, now) +
+			(active ? now - (lastSpan?.end ?? now) : 0),
+		active,
+	};
+};
+
 // Listeners register synchronously; literal true retains asynchronous response channel.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.type === "SET_TRACKING") {
@@ -425,6 +443,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			.catch(() =>
 				sendResponse({ ok: false, code: "tracking-status-unavailable" }),
 			);
+		return true;
+	}
+
+	if (message?.type === "GET_ACTIVE_TRACKING_DURATION") {
+		if (!isExtensionPageSender(sender)) return false;
+		void readActiveTrackingDuration()
+			.then(sendResponse)
+			.catch(() => sendResponse(readFailure()));
 		return true;
 	}
 
@@ -762,24 +788,15 @@ if (chrome.runtime.onMessageExternal) {
 			}
 
 			if (
+				message?.type === "PRELOAD_SEARCH_MODEL" ||
 				message?.type === "BROWSE_LIBRARY" ||
 				message?.type === "SEARCH_HISTORY" ||
 				message?.type === "UPDATE_NOTE" ||
 				message?.type === "GET_PAGE_PREVIEW" ||
-				message?.type === "GET_WORKFLOW_CANDIDATES" ||
-				message?.type === "CREATE_WORKFLOW_HANDOFF" ||
-				message?.type === "GET_WORKFLOW_SCRIPT_DRAFTS" ||
-				message?.type === "DELETE_WORKFLOW_SCRIPT_DRAFT"
+				message?.type === "GET_PAGE_REFERENCE"
 			) {
 				void (async () => {
-					sendResponse(
-						await readDashboardHistory(
-							message,
-							sender.url,
-							getDb,
-							readTracking,
-						),
-					);
+					sendResponse(await readDashboardHistory(message, sender.url, getDb));
 				})();
 				return true;
 			}
@@ -789,35 +806,9 @@ if (chrome.runtime.onMessageExternal) {
 			}
 
 			if (message?.type === "GET_ACTIVE_TRACKING_DURATION") {
-				void (async () => {
-					const enabled = await readTracking();
-					const db = await getDb();
-					const events = await db.readEvents({
-						types: [
-							"PAGE_VISIBLE",
-							"PAGE_HIDDEN",
-							"SW_WINDOW_FOCUS",
-							"TAB_ACTIVATED",
-							"NAVIGATION",
-							"TAB_UPDATED",
-						],
-					});
-					const now = Date.now();
-					const spans = activeSpans(events);
-					const lastSpan = spans.at(-1);
-					const latest = foregroundEvents(events).at(-1);
-					const active =
-						enabled &&
-						lastSpan !== undefined &&
-						latest?.timestamp === lastSpan.end &&
-						now - lastSpan.end < ACTIVITY_GAP_MS;
-					sendResponse({
-						durationMs:
-							activeDuration(spans, 0, now) +
-							(active ? now - (lastSpan?.end ?? now) : 0),
-						active,
-					});
-				})().catch(() => sendResponse(readFailure()));
+				void readActiveTrackingDuration()
+					.then(sendResponse)
+					.catch(() => sendResponse(readFailure()));
 				return true;
 			}
 			if (message?.type === "GET_TRACKING") {
@@ -863,6 +854,21 @@ if (chrome.runtime.onMessageExternal) {
 							sendResponse(readFailure());
 						} catch {}
 					});
+				return true;
+			}
+			if (message?.type === "GET_STORAGE_ESTIMATE") {
+				void getStorageEstimate()
+					.then(sendResponse)
+					.catch(() =>
+						sendResponse({ ok: false, code: "storage-estimate-unavailable" }),
+					);
+				return true;
+			}
+			if (message?.type === "PURGE_DATA") {
+				void getDb()
+					.then((db) => db.purgeData())
+					.then(() => sendResponse({ ok: true }))
+					.catch(() => sendResponse({ ok: false, code: "purge-failed" }));
 				return true;
 			}
 			if (message?.type === "GET_EVENTS") {

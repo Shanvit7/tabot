@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Copy, RotateCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { DingToaster, toast } from "~/components/alerts/ding-toaster";
+import { ExtensionBridgeArt } from "~/components/features/extension-not-connected/system-art";
 import { readHistoryCounts } from "~/lib/history";
 
 const ExtensionNotConnected = () => {
@@ -8,10 +10,22 @@ const ExtensionNotConnected = () => {
 	const isDevelopment = import.meta.env.DEV;
 	const extensionId = import.meta.env.VITE_TABOT_EXTENSION_ID;
 	const [checking, setChecking] = useState(false);
-	const [checkFailed, setCheckFailed] = useState(false);
 	const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
 		"idle",
 	);
+
+	useEffect(() => {
+		let active = true;
+		void readHistoryCounts().then(
+			() => {
+				if (active) void navigate({ to: "/home", replace: true });
+			},
+			() => {},
+		);
+		return () => {
+			active = false;
+		};
+	}, [navigate]);
 
 	const copyExtensionsUrl = async () => {
 		try {
@@ -25,12 +39,16 @@ const ExtensionNotConnected = () => {
 	const checkAgain = async () => {
 		if (checking) return;
 		setChecking(true);
-		setCheckFailed(false);
 		try {
 			await readHistoryCounts();
 			await navigate({ to: "/home", replace: true });
-		} catch {
-			setCheckFailed(true);
+		} catch (error) {
+			toast.error("Tabot isn’t connected", {
+				description:
+					error instanceof Error
+						? error.message
+						: "Enable the Tabot extension in this Chrome profile, then try again.",
+			});
 		} finally {
 			setChecking(false);
 		}
@@ -51,72 +69,107 @@ const ExtensionNotConnected = () => {
 				</span>
 			</header>
 
-			<section className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center py-16">
-				<div className="grid gap-8 border-b border-work-line pb-10 sm:grid-cols-[1fr_auto] sm:items-end sm:gap-12 sm:pb-12">
-					<div>
-						<h1 className="max-w-3xl font-display text-5xl font-semibold leading-[0.98] tracking-[-0.045em] text-balance sm:text-7xl">
-							Extension not detected.
-						</h1>
-						<p className="mt-5 max-w-md text-base leading-7 text-work-muted">
-							Enable Tabot in Chrome, then try again.
-						</p>
-					</div>
+			<section className="mx-auto grid w-full max-w-5xl flex-1 content-center items-center gap-12 py-12 sm:py-20 lg:grid-cols-[1.1fr_1fr] lg:gap-20">
+				<div>
+					<h1 className="max-w-lg text-balance font-display text-4xl font-semibold leading-[1.1] tracking-[-0.025em] sm:text-5xl">
+						Tabot isn’t connected.
+					</h1>
+					<p className="mt-5 max-w-md text-pretty text-base leading-7 text-work-muted">
+						Enable the Tabot extension in this Chrome profile, then check again.
+					</p>
+
+					<ol className="mt-8 space-y-5 text-base leading-6">
+						<li className="flex gap-3">
+							<span
+								aria-hidden="true"
+								className="pt-0.5 text-sm tabular-nums text-work-muted"
+							>
+								1.
+							</span>
+							<div className="min-w-0 flex-1">
+								<p>Open Chrome’s extensions page.</p>
+								<div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-work-line px-3">
+									<code className="min-w-0 break-all font-mono text-sm">
+										chrome://extensions
+									</code>
+									<button
+										type="button"
+										onClick={() => void copyExtensionsUrl()}
+										aria-label="Copy chrome://extensions"
+										className="-mr-2 inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm font-medium text-work-muted transition-colors hover:text-work-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-work-ink"
+									>
+										{copyState === "copied" ? (
+											<Check aria-hidden="true" className="size-4" />
+										) : (
+											<Copy aria-hidden="true" className="size-4" />
+										)}
+										<span aria-live="polite">
+											{copyState === "copied" ? "Copied" : "Copy"}
+										</span>
+									</button>
+								</div>
+								{copyState === "failed" && (
+									<p role="alert" className="mt-2 text-sm text-destructive">
+										Couldn’t copy. Select the address and copy it manually.
+									</p>
+								)}
+							</div>
+						</li>
+						<li className="flex gap-3">
+							<span
+								aria-hidden="true"
+								className="pt-0.5 text-sm tabular-nums text-work-muted"
+							>
+								2.
+							</span>
+							<p>
+								Find <strong className="font-semibold">Tabot</strong> and switch
+								it on.
+							</p>
+						</li>
+					</ol>
 
 					<button
 						type="button"
 						onClick={() => void checkAgain()}
 						disabled={checking}
-						className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md border border-work-ink bg-lime px-5 text-base font-semibold tracking-tight text-work-ink shadow-[3px_3px_0_0_#15251b] transition-[transform,box-shadow] duration-150 motion-reduce:transition-none hover:translate-x-px hover:translate-y-px hover:shadow-[2px_2px_0_0_#15251b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-work-ink active:translate-x-[3px] active:translate-y-[3px] active:shadow-none disabled:cursor-wait disabled:opacity-60 sm:w-auto sm:min-w-40"
+						aria-busy={checking}
+						className="mt-8 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-6 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-work-ink disabled:cursor-wait disabled:opacity-60 sm:w-auto"
 					>
 						<RotateCw
 							aria-hidden="true"
-							className={`size-[18px] ${checking ? "animate-spin motion-reduce:animate-none" : ""}`}
+							className={`size-4 ${checking ? "animate-spin motion-reduce:animate-none" : ""}`}
 						/>
-						{checking ? "Checking…" : "Try again"}
+						{checking ? "Checking…" : "Check connection"}
 					</button>
-				</div>
 
-				<div className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
-					<p className="flex flex-wrap items-center gap-x-2 text-sm text-work-muted">
-						Open{" "}
-						<code className="font-mono text-work-ink">chrome://extensions</code>
-						<button
-							type="button"
-							onClick={() => void copyExtensionsUrl()}
-							aria-label="Copy chrome://extensions"
-							className="inline-flex min-h-9 items-center gap-1.5 px-2 font-medium text-work-muted underline decoration-work-line underline-offset-4 hover:text-work-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-work-ink"
-						>
-							{copyState === "copied" ? (
-								<Check aria-hidden="true" className="size-3.5" />
-							) : (
-								<Copy aria-hidden="true" className="size-3.5" />
-							)}
-							<span aria-live="polite">
-								{copyState === "copied" ? "Copied" : "Copy"}
-							</span>
-						</button>
-						and switch Tabot on.
-					</p>
-					{(checkFailed || copyState === "failed") && (
-						<p role="alert" className="text-sm font-medium text-destructive">
-							{copyState === "failed"
-								? "Copy failed. Select the URL and copy it."
-								: "Still unavailable. Check Tabot is enabled in this profile."}
-						</p>
+					{isDevelopment && (
+						<details className="mt-8 border-t border-work-line pt-4 text-sm text-work-muted">
+							<summary className="w-fit cursor-pointer rounded-sm py-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-work-ink">
+								Developer details
+							</summary>
+							<p className="mt-3 leading-6">
+								Expected extension ID:{" "}
+								<code className="break-all font-mono text-xs">
+									{extensionId || "not configured"}
+								</code>
+							</p>
+						</details>
 					)}
 				</div>
-
-				{isDevelopment && (
-					<p className="border-t border-work-line py-4 font-mono text-xs leading-6 text-work-muted">
-						Dev build · expected extension ID: {extensionId || "not configured"}
-					</p>
-				)}
+				<ExtensionBridgeArt />
 			</section>
+			<DingToaster position="bottom-right" theme="light" />
 		</main>
 	);
 };
 
 export const Route = createFileRoute("/extension-not-connected")({
-	head: () => ({ meta: [{ title: "Connect Tabot · Tabot" }] }),
+	head: () => ({
+		meta: [
+			{ title: "Connect Tabot · Tabot" },
+			{ name: "robots", content: "noindex, nofollow" },
+		],
+	}),
 	component: ExtensionNotConnected,
 });

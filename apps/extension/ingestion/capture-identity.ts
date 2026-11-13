@@ -49,3 +49,9 @@ export const createCaptureIdentity = async (
 		byte.toString(16).padStart(2, "0"),
 	).join("");
 };
+
+export const createLibraryPageReference = async (
+	site: string,
+	url: string,
+): Promise<string> =>
+	`${encodeURIComponent(site)}:${await createCaptureIdentity(["library-page:v1", url])}`;

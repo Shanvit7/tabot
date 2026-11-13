@@ -1,15 +1,6 @@
 import type { LibraryResponse } from "./library";
 import type { StoredPageObservation } from "./pages/observations";
 import {
-	isWorkflowScriptDraft,
-	type WorkflowScriptDraft,
-} from "./workflows/automation-script";
-import { BEHAVIOR_MODEL_LIMITS } from "./workflows/behavior-model";
-import type { WorkflowCandidate } from "./workflows/discovery";
-
-export type { WorkflowCandidate } from "./workflows/discovery";
-
-import {
 	type HistorySearchResult,
 	type SearchAvailability,
 	safeRecallUrl,
@@ -40,95 +31,22 @@ export type DashboardNoteResult = {
 	session: { start: number; end: number; durationMs: number } | null;
 };
 export type DashboardReadFailure = { ok: false; code: string };
-export type DashboardWorkflowCandidates = {
-	candidates: WorkflowCandidate[];
-	modelReady: boolean;
-	trainedThrough: number | null;
-	sourceCount: number;
-	truncated: boolean;
-};
 export type DashboardHistoryResponse =
 	| LibraryResponse
-	| DashboardWorkflowCandidates
-	| { prepared: true }
 	| { note: { id: string; text: string; updatedAt: number } }
-	| { drafts: WorkflowScriptDraft[] }
-	| { deleted: boolean }
 	| {
 			results: HistorySearchResult[];
 			searchStatus: SearchAvailability;
 			notes?: DashboardNoteResult[];
 	  }
 	| { preview: DashboardPagePreview | null }
+	| { pageRef: string }
+	| { preloadStarted: true }
 	| DashboardReadFailure;
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null;
 
-export const isDashboardWorkflowScriptDrafts = (
-	value: unknown,
-): value is { drafts: WorkflowScriptDraft[] } =>
-	isRecord(value) &&
-	Array.isArray(value.drafts) &&
-	value.drafts.length <= 50 &&
-	value.drafts.every(isWorkflowScriptDraft);
-
-export const isDashboardWorkflowHandoffPrepared = (
-	value: unknown,
-): value is { prepared: true } => isRecord(value) && value.prepared === true;
-
-export const isDashboardWorkflowCandidates = (
-	value: unknown,
-): value is DashboardWorkflowCandidates =>
-	isRecord(value) &&
-	typeof value.truncated === "boolean" &&
-	typeof value.modelReady === "boolean" &&
-	(value.trainedThrough === null || timestamp(value.trainedThrough)) &&
-	count(value.sourceCount) &&
-	value.sourceCount <= BEHAVIOR_MODEL_LIMITS.events &&
-	(value.modelReady
-		? value.trainedThrough !== null && value.sourceCount > 0
-		: value.trainedThrough === null && value.sourceCount === 0) &&
-	Array.isArray(value.candidates) &&
-	value.candidates.length <= 50 &&
-	value.candidates.every(
-		(candidate) =>
-			isRecord(candidate) &&
-			typeof candidate.id === "string" &&
-			candidate.id.length <= 64 &&
-			Array.isArray(candidate.steps) &&
-			(candidate.steps as unknown[]).length >= 2 &&
-			(candidate.steps as unknown[]).length <= 3 &&
-			count(candidate.modelMatches) &&
-			(candidate.modelMatches as number) >= 2 &&
-			(candidate.modelMatches as number) <= 256 &&
-			(candidate.steps as unknown[]).every(
-				(step) =>
-					isRecord(step) &&
-					typeof step.host === "string" &&
-					step.host.length <= 253 &&
-					typeof step.origin === "string" &&
-					step.origin.length <= 512,
-			) &&
-			Array.isArray(candidate.occurrences) &&
-			candidate.occurrences.length >= 2 &&
-			candidate.occurrences.length <= 8 &&
-			candidate.occurrences.every(
-				(occurrence) =>
-					isRecord(occurrence) &&
-					timestamp(occurrence.startedAt) &&
-					Array.isArray(occurrence.sourceIds) &&
-					occurrence.sourceIds.length ===
-						(candidate.steps as unknown[]).length &&
-					occurrence.sourceIds.every(
-						(id) => typeof id === "string" && id.length <= 128,
-					),
-			) &&
-			timestamp(candidate.firstAt) &&
-			timestamp(candidate.lastAt) &&
-			candidate.firstAt <= candidate.lastAt &&
-			(value.modelReady || (value.candidates as unknown[]).length === 0),
-	);
 // Chrome navigation timestamps can contain fractional milliseconds.
 const timestamp = (value: unknown): value is number =>
 	typeof value === "number" &&
@@ -165,6 +83,7 @@ export const isDashboardSearchResults = (
 			item.firstSeen <= item.lastSeen &&
 			count(item.eventCount) &&
 			count(item.pageCount) &&
+			(item.estimatedActiveMs === undefined || count(item.estimatedActiveMs)) &&
 			count(item.sourceCount) &&
 			typeof item.score === "number" &&
 			Number.isFinite(item.score) &&

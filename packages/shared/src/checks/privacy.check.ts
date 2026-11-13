@@ -1,5 +1,5 @@
 // packages/shared/src/checks/privacy.check.ts
-// Privacy boundary validation: OpenRedaction redaction primitives + the
+// Sensitive-data boundary validation: OpenRedaction credential patterns + the
 // sanitized-export path (docs/tech.md §1 "raw events are immutable source data").
 // Run: node --import ./resolve-hook.mjs src/checks/privacy.check.ts
 
@@ -12,8 +12,8 @@ import {
 	sanitizeEventForIngestion,
 	sanitizeUrlForIngestion,
 } from "../privacy/ingest.ts";
-import { piiRedactor } from "../privacy/pii-redactor.ts";
 import { sanitizeDerived } from "../privacy/sanitize.ts";
+import { sensitiveDataRedactor } from "../privacy/sensitive-data.ts";
 import { buildExportJsonl, derive } from "../share/export.ts";
 
 const MIN = 60_000;
@@ -34,7 +34,7 @@ const ev = (
 });
 
 const redact = async (input: string): Promise<string> =>
-	(await piiRedactor.redact(input)).redacted;
+	(await sensitiveDataRedactor.redact(input)).redacted;
 
 // Ingest transport identity is local-only; source.documentUrl must not bypass URL redaction.
 {
@@ -43,14 +43,21 @@ const redact = async (input: string): Promise<string> =>
 		source: {
 			instanceId: "12345678-1234-1234-1234-123456789012",
 			sequence: 1,
-			documentUrl: "https://example.com/?q=john@example.com",
+			documentUrl:
+				"https://example.com/?q=ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
 		},
 	};
 	const clean = await sanitizeDerived(derive([event]));
 	assert.equal(clean.events[0].source, undefined);
-	assert.ok(!JSON.stringify(clean).includes("john@example.com"));
 	assert.ok(
-		event.source.documentUrl.includes("john@example.com"),
+		!JSON.stringify(clean).includes(
+			"ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+		),
+	);
+	assert.ok(
+		event.source.documentUrl.includes(
+			"ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+		),
 		"source mutated",
 	);
 }
@@ -62,13 +69,15 @@ const redact = async (input: string): Promise<string> =>
 			T0,
 			"NAVIGATION",
 			1,
-			"https://example.com/users/john%40example.com?token=secret#private",
+			"https://example.com/users/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB?token=secret#private",
 		),
-		favicon: "https://example.com/favicon.ico?user=john@example.com",
+		favicon:
+			"https://example.com/favicon.ico?user=ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
 		source: {
 			instanceId: "12345678-1234-1234-1234-123456789012",
 			sequence: 1,
-			documentUrl: "https://example.com/?q=john@example.com",
+			documentUrl:
+				"https://example.com/?q=ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
 		},
 	};
 	const clean = await sanitizeEventForIngestion(event);
@@ -102,13 +111,26 @@ const redact = async (input: string): Promise<string> =>
 			T0 + 1,
 			"NAVIGATION",
 			1,
-			"https://www.google.com/search?q=john%40example.com",
+			"https://www.google.com/search?q=ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
 		),
 	});
 	assert.ok(!redactedGoogle.url?.includes("john"));
 	assert.match(
 		new URL(redactedGoogle.url as string).searchParams.get("q") ?? "",
-		/EMAIL_/,
+		/GITHUB_TOKEN_/,
+	);
+	const retainedEmail = await sanitizeEventForIngestion({
+		...ev(
+			T0 + 2,
+			"NAVIGATION",
+			1,
+			"https://www.google.com/search?q=john%40example.com",
+		),
+	});
+	assert.equal(
+		new URL(retainedEmail.url as string).searchParams.get("q"),
+		"john@example.com",
+		"email search query must not be redacted",
 	);
 	const nonSearchGoogle = await sanitizeUrlForIngestion(
 		"https://www.google.com/?q=database",
@@ -132,67 +154,86 @@ const redact = async (input: string): Promise<string> =>
 	assert.equal(yahoo, "https://search.yahoo.com/search?p=database");
 }
 
-// --- 1. primitives ---
+// --- 1. sensitive-data detector ---
 
 {
-	const out = await redact("john@example.com");
-	assert.ok(!out.includes("john@example.com"), `email survived: ${out}`);
-	assert.match(out, /\[EMAIL_[^\]]+\]/, `expected typed placeholder: ${out}`);
-}
-
-{
-	// international-style (UK mobile) + national format
-	const intl = await redact("Call +44 7700 900123");
-	assert.ok(!intl.includes("900123"), `intl phone survived: ${intl}`);
-	assert.match(intl, /\[PHONE_[^\]]+\]/);
-
-	const local = await redact("Call 07700900123");
-	assert.ok(!local.includes("07700900123"), `local phone survived: ${local}`);
-}
-
-{
-	const out = await redact(
-		"Contact John at john@example.com about the project.",
+	const email = "john@example.com";
+	assert.equal(await redact(email), email, "email must not be redacted");
+	assert.equal(
+		await sanitizeUrlForIngestion(`https://example.com/users/${email}`),
+		`https://example.com/users/${email}`,
+		"email in URL path must not be redacted",
 	);
-	assert.ok(!out.includes("john@example.com"), `email survived: ${out}`);
-	assert.ok(out.includes("Contact John at"), `context lost: ${out}`);
-	assert.ok(out.includes("about the project."), `context lost: ${out}`);
 }
 
 {
-	// multiple distinct PII values in one string
-	const out = await redact(
-		"email jane.doe@acme-corp.io, card 4532 0151 1283 0366, phone 07700900123",
-	);
-	for (const secret of [
-		"jane.doe@acme-corp.io",
-		"4532 0151 1283 0366",
-		"07700900123",
+	const token = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB";
+	const out = await redact(`GitHub token: ${token}`);
+	assert.ok(!out.includes(token), `GitHub token survived: ${out}`);
+	assert.match(out, /\[GITHUB_TOKEN_[^\]]+\]/);
+}
+
+{
+	const input = "password=correcthorsebatterystaple";
+	const out = await redact(input);
+	assert.notEqual(out, input, "credential-like secret survived");
+	assert.match(out, /\[SECRET_[^\]]+\]/);
+}
+
+{
+	const input = "Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345";
+	const out = await redact(input);
+	assert.ok(!out.includes("abcdefghijklmnopqrstuvwxyz012345"));
+	assert.match(out, /\[BEARER_[^\]]+\]/);
+}
+
+{
+	const input =
+		"Debit PAN: 4532015112830366; credit card: 6011111111111117; CVV: 123; valid thru: 10/28; account: 12345678; SWIFT: DEUTDEFF500; VAT: GB123456789";
+	const result = await sensitiveDataRedactor.redact(input);
+	for (const value of [
+		"4532015112830366",
+		"6011111111111117",
+		"123",
+		"10/28",
+		"12345678",
+		"DEUTDEFF500",
+		"GB123456789",
 	]) {
-		assert.ok(!out.includes(secret), `${secret} survived: ${out}`);
+		assert.ok(
+			!result.redacted.includes(value),
+			`${value} survived: ${result.redacted}`,
+		);
+	}
+	for (const type of [
+		"CREDIT_CARD",
+		"CVV",
+		"CARD_EXPIRY",
+		"BANK_ACCOUNT_UK",
+		"SWIFT_BIC",
+		"VAT_NUMBER",
+	]) {
+		assert.ok(
+			result.findings.some((finding) => finding.type === type),
+			`missing ${type}`,
+		);
 	}
 }
 
 {
-	// non-PII browser content must survive byte-for-byte
-	const clean = [
-		"GitHub - microsoft/TypeScript",
-		"node_modules/react/index.js",
-		"localhost:5173/dashboard",
-	];
-	for (const input of clean) {
-		assert.equal(await redact(input), input, `non-PII mutated: ${input}`);
-	}
+	const input = "GitHub - microsoft/TypeScript; john@example.com";
+	assert.equal(await redact(input), input, "ordinary text/email changed");
 }
 
 {
-	// findings never carry the detected value
-	const res = await piiRedactor.redact("john@example.com");
+	const secret = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB";
+	const res = await sensitiveDataRedactor.redact(secret);
 	assert.ok(res.findings.length > 0, "expected a finding");
 	assert.ok(
-		!JSON.stringify(res.findings).includes("john@example.com"),
+		!JSON.stringify(res.findings).includes(secret),
 		"finding leaked the original value",
 	);
+	assert.equal("original" in res, false, "redactor returned raw input");
 	for (const f of res.findings) {
 		assert.equal(typeof f.type, "string");
 		assert.equal(typeof f.start, "number");
@@ -210,31 +251,41 @@ const urlOf = async (raw: string): Promise<string> => {
 };
 
 {
-	const out = await urlOf("https://example.com/search?q=john@example.com");
-	assert.ok(!out.includes("john@example.com"), `query PII survived: ${out}`);
+	const out = await urlOf(
+		"https://example.com/search?q=ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+	);
+	assert.ok(
+		!out.includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+		`query secret survived: ${out}`,
+	);
 	assert.ok(
 		out.startsWith("https://example.com/search?q="),
 		`structure lost: ${out}`,
 	);
-	assert.ok(out.includes("EMAIL_"), `no typed placeholder: ${out}`);
+	assert.ok(out.includes("GITHUB_TOKEN_"), `no typed placeholder: ${out}`);
 }
 
 {
-	// percent-encoded PII is decoded before matching
+	// percent-encoded secrets are decoded before matching
 	const out = await urlOf(
-		"https://example.com/search?q=john%40example.com&p=1",
+		"https://example.com/search?q=ghp%5F1234567890abcdefghijklmnopqrstuvwxyzAB&p=1",
 	);
 	assert.ok(
-		!out.includes("john%40example.com"),
-		`encoded PII survived: ${out}`,
+		!out.includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+		`encoded secret survived: ${out}`,
 	);
 	assert.ok(out.includes("&p=1"), `other params lost: ${out}`);
 }
 
 {
-	// PII inside a path segment
-	const out = await urlOf("https://app.example.com/u/john@example.com/profile");
-	assert.ok(!out.includes("john@example.com"), `path PII survived: ${out}`);
+	// secrets inside a path segment
+	const out = await urlOf(
+		"https://app.example.com/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB/profile",
+	);
+	assert.ok(
+		!out.includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+		`path secret survived: ${out}`,
+	);
 	assert.ok(
 		out.startsWith("https://app.example.com/u/"),
 		`structure lost: ${out}`,
@@ -243,21 +294,23 @@ const urlOf = async (raw: string): Promise<string> => {
 }
 
 {
-	// non-PII URL untouched, including protocol/host/query shape
+	// non-sensitive URL untouched, including protocol/host/query shape
 	const clean = [
 		"https://github.com/microsoft/TypeScript",
 		"https://example.com/a/b?x=1&y=2#top",
 		"https://example.com/docs/setup.md",
 	];
 	for (const url of clean) {
-		assert.equal(await urlOf(url), url, `non-PII URL mutated: ${url}`);
+		assert.equal(await urlOf(url), url, `non-sensitive URL mutated: ${url}`);
 	}
 }
 
 {
 	// hostname/origin are the analytic key and are NEVER redacted — see the
-	// sanitize.ts header. PII-pattern types cannot be a DNS label.
-	const out = await urlOf("https://app.example.com/u/john@example.com/profile");
+	// sanitize.ts header. secret-pattern types cannot be a DNS label.
+	const out = await urlOf(
+		"https://app.example.com/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB/profile",
+	);
 	assert.ok(
 		out.includes("app.example.com"),
 		`hostname was redacted (breaks domain aggregates): ${out}`,
@@ -276,12 +329,17 @@ const urlOf = async (raw: string): Promise<string> => {
 
 {
 	const events: StoredTabEvent[] = [
-		ev(T0, "TAB_CREATED", 1, "https://example.com/search?q=john@example.com"),
+		ev(
+			T0,
+			"TAB_CREATED",
+			1,
+			"https://example.com/search?q=ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+		),
 		ev(
 			T0 + 1000,
 			"TAB_ACTIVATED",
 			1,
-			"https://example.com/search?q=john@example.com",
+			"https://example.com/search?q=ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
 		),
 		ev(
 			T0 + 30 * MIN,
@@ -293,7 +351,7 @@ const urlOf = async (raw: string): Promise<string> => {
 			T0 + 31 * MIN,
 			"NAVIGATION",
 			1,
-			"https://app.example.com/u/john@example.com",
+			"https://app.example.com/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
 		),
 	];
 	const rawBefore = structuredClone(events);
@@ -301,11 +359,17 @@ const urlOf = async (raw: string): Promise<string> => {
 	const sanitized = await sanitizeDerived(derive(events));
 	const jsonl = buildExportJsonl(sanitized);
 
-	assert.ok(!jsonl.includes("john@example.com"), "export leaked PII");
-	assert.ok(!jsonl.includes("john%40example.com"), "export leaked encoded PII");
+	assert.ok(
+		!jsonl.includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+		"export leaked a secret",
+	);
+	assert.ok(
+		!jsonl.includes("ghp%5F1234567890abcdefghijklmnopqrstuvwxyzAB"),
+		"export leaked encoded secret",
+	);
 	assert.ok(
 		jsonl.includes("https://github.com/microsoft/TypeScript"),
-		"non-PII event url was dropped/rewritten",
+		"non-sensitive event url was dropped/rewritten",
 	);
 	assert.ok(jsonl.includes('"record":"event"'), "export record shape changed");
 
@@ -316,29 +380,31 @@ const urlOf = async (raw: string): Promise<string> => {
 	for (const s of sanitized.sessions) {
 		for (const e of s.eventSequence) {
 			assert.ok(
-				!(e.url ?? "").includes("john@example.com"),
-				"sessions[].eventSequence leaked PII",
+				!(e.url ?? "").includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+				"sessions[].eventSequence leaked a secret",
 			);
 		}
 	}
 
 	// provenance: manifest carries type + count, never a value
 	assert.equal(sanitized.privacy?.redacted, true, "provenance not flagged");
-	const piiTypes = (sanitized.privacy?.findings ?? []).map((f) => f.type);
-	assert.ok(piiTypes.length > 0, "provenance carried no findings");
+	const sensitiveTypes = (sanitized.privacy?.findings ?? []).map((f) => f.type);
+	assert.ok(sensitiveTypes.length > 0, "provenance carried no findings");
 	assert.ok(
-		piiTypes.every((t) => typeof t === "string" && !t.includes("@")),
-		`provenance findings look like values: ${piiTypes.join()}`,
+		sensitiveTypes.every((t) => typeof t === "string" && !t.includes("@")),
+		`provenance findings look like values: ${sensitiveTypes.join()}`,
 	);
 	assert.ok(
-		!JSON.stringify(sanitized.privacy).includes("john@example.com"),
+		!JSON.stringify(sanitized.privacy).includes(
+			"ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+		),
 		"provenance leaked the original value",
 	);
 	assert.ok(jsonl.includes('"privacy"'), "manifest omitted provenance");
 }
 
 {
-	// no PII → provenance present but not flagged
+	// no sensitive data → provenance present but not flagged
 	const clean = await sanitizeDerived(
 		derive([
 			ev(T0, "NAVIGATION", 1, "https://github.com/microsoft/TypeScript"),
@@ -356,15 +422,22 @@ const urlOf = async (raw: string): Promise<string> => {
 
 {
 	const fake = {
-		observation: "Recurring sequence: mail.google.com → john@example.com",
-		sequence: ["https://app.example.com/u/john@example.com"],
+		observation:
+			"Recurring sequence: mail.google.com → ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+		sequence: [
+			"https://app.example.com/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+		],
 		fingerprint: {
-			pageKeys: ["https://app.example.com/u/john@example.com"],
+			pageKeys: [
+				"https://app.example.com/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+			],
 		},
 		occurrences: [
 			{
 				contextId: "c1",
-				sequence: ["https://app.example.com/u/john@example.com"],
+				sequence: [
+					"https://app.example.com/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+				],
 			},
 		],
 	} as unknown as Memory;
@@ -378,22 +451,28 @@ const urlOf = async (raw: string): Promise<string> => {
 	});
 	const m = d.memories[0];
 	assert.ok(
-		!m.observation.includes("john@example.com"),
-		"observation leaked PII",
+		!m.observation.includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+		"observation leaked a secret",
 	);
 	assert.ok(
-		!(m.sequence ?? []).some((k) => k.includes("john@example.com")),
-		"memory.sequence leaked PII",
+		!(m.sequence ?? []).some((k) =>
+			k.includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+		),
+		"memory.sequence leaked a secret",
 	);
 	assert.ok(
-		!m.fingerprint.pageKeys.some((k) => k.includes("john@example.com")),
-		"fingerprint.pageKeys leaked PII",
+		!m.fingerprint.pageKeys.some((k) =>
+			k.includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+		),
+		"fingerprint.pageKeys leaked a secret",
 	);
 	assert.ok(
 		!m.occurrences.some((o) =>
-			o.sequence.some((k) => k.includes("john@example.com")),
+			o.sequence.some((k) =>
+				k.includes("ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+			),
 		),
-		"occurrence sequence leaked PII",
+		"occurrence sequence leaked a secret",
 	);
 }
 
@@ -421,11 +500,13 @@ const urlOf = async (raw: string): Promise<string> => {
 		totalTabSwitchCount: 0,
 		recurrenceCount: 1,
 		primaryDomain: "app.example.com",
-		sequence: ["https://app.example.com/u/john@example.com/p1"],
+		sequence: [
+			"https://app.example.com/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB/p1",
+		],
 		transitions: [
 			{
-				from: "https://app.example.com/u/john@example.com/p1",
-				to: "https://app.example.com/q/jane@acme.io",
+				from: "https://app.example.com/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB/p1",
+				to: "https://app.example.com/q/ghp_1122334455abcdefghijklmnopqrstuvwxyzAB",
 				gapMs: 10,
 			},
 		],
@@ -434,9 +515,9 @@ const urlOf = async (raw: string): Promise<string> => {
 				type: "excursion",
 				start: T0,
 				end: T0 + 1000,
-				fromActivity: ref("/u/john@example.com/p1"),
-				returnActivity: ref("/u/john@example.com/p2"),
-				activities: [ref("/q/jane@acme.io")],
+				fromActivity: ref("/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB/p1"),
+				returnActivity: ref("/u/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB/p2"),
+				activities: [ref("/q/ghp_1122334455abcdefghijklmnopqrstuvwxyzAB")],
 				evidence: ["return-transition"],
 			},
 		],
@@ -450,7 +531,10 @@ const urlOf = async (raw: string): Promise<string> => {
 		live: null,
 	});
 	const json = JSON.stringify(d.contexts);
-	for (const secret of ["john@example.com", "jane@acme.io"]) {
+	for (const secret of [
+		"ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+		"ghp_1122334455abcdefghijklmnopqrstuvwxyzAB",
+	]) {
 		assert.ok(!json.includes(secret), `context leaked ${secret}`);
 	}
 	const c = d.contexts[0];
@@ -460,21 +544,6 @@ const urlOf = async (raw: string): Promise<string> => {
 		"context sequence lost its origin",
 	);
 	assert.equal(c.excursions?.[0]?.evidence[0], "return-transition");
-}
-
-// --- 6. explicit disable ---
-
-{
-	const events = [
-		ev(T0, "NAVIGATION", 1, "https://example.com/?q=john@example.com"),
-	];
-	const off = await sanitizeDerived(derive(events), {
-		piiRedactionEnabled: false,
-	});
-	assert.ok(
-		(off.events[0]?.url ?? "").includes("john@example.com"),
-		"disable switch did not bypass redaction",
-	);
 }
 
 logger.info("privacy.check: all assertions passed ✔");

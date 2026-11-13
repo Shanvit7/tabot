@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `pnpm --filter mcp-server dev:local`.
+# Generate once and keep stable; never use the production secret.
+# Example: openssl rand -hex 32
+TABOT_AUTH_SECRET=replace-with-a-stable-local-secret
+
+# Chrome extension ID from chrome://extensions for the unpacked local build.
+TABOT_EXTENSION_ID=replace-with-local-extension-id

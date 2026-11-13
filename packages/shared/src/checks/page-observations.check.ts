@@ -23,20 +23,21 @@ const base = {
 	windowId: 5,
 	pageKey: identity,
 	captureIdentity: "b".repeat(64),
-	url: "https://example.com/tasks/john%40example.com?token=secret",
+	url: "https://example.com/tasks/ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
 	trigger: "viewport-dwell" as const,
-	segments: ["Contact john@example.com; API key: Abcdef1234567890"],
+	segments: [
+		"Contact john@example.com; GitHub token: ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+	],
 	coverage: { truncated: false, partial: false },
 };
 const clean = await sanitizePageObservationForIngestion(base);
 assert.ok(clean.url?.startsWith("https://example.com/"));
-assert.equal(clean.url?.includes("john@example.com"), false);
-assert.equal(clean.segments[0].includes("john@example.com"), false);
+assert.equal(clean.url?.includes("ghp_1234567890"), false);
+assert.equal(clean.segments[0].includes("john@example.com"), true);
+assert.equal(clean.segments[0].includes("ghp_1234567890"), false);
 assert.equal(clean.privacy.redacted, true);
-assert.ok(clean.privacy.findings.includes("SECRET"));
-assert.equal(clean.segments[0].includes("Abcdef1234567890"), false);
-assert.ok(!JSON.stringify(clean).includes("secret"));
-assert.ok(!JSON.stringify(clean).includes("john@example.com"));
+assert.ok(clean.privacy.findings.includes("GITHUB_TOKEN"));
+assert.ok(JSON.stringify(clean).includes("john@example.com"));
 assert.equal(
 	normalizePageObservation(clean).captureIdentity,
 	base.captureIdentity,

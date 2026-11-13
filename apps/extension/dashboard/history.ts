@@ -1,11 +1,7 @@
 import {
-	BEHAVIOR_MODEL_LIMITS,
-	buildWorkflowHandoff,
 	deriveSiteDomain,
-	discoverHandwiredWorkflows,
 	type StoredTabEvent,
 	safeRecallUrl,
-	sanitizeEventsForRead,
 	sessionForNote,
 	sessionize,
 	type TabotDatabase,
@@ -19,6 +15,7 @@ import {
 	isRecord,
 } from "@tabot/shared/dashboard";
 import { isLibraryRequest, isLibraryResponse } from "@tabot/shared/library";
+import { createLibraryPageReference } from "../ingestion/capture-identity";
 import { isDashboardSender } from "./sender";
 
 type HistoryReader = Pick<
@@ -28,28 +25,49 @@ type HistoryReader = Pick<
 	| "getSearchStatus"
 	| "getPageObservation"
 	| "readEvents"
-	| "getWorkflowCheckpoint"
 > &
 	Partial<
-		Pick<
-			TabotDatabase,
-			| "browseLibrary"
-			| "updateNoteText"
-			| "createWorkflowHandoff"
-			| "listWorkflowScriptDrafts"
-			| "deleteWorkflowScriptDraft"
-		>
+		Pick<TabotDatabase, "browseLibrary" | "updateNoteText" | "warmSearchModel">
 	>;
 
 export const readDashboardHistory = async (
 	message: unknown,
 	senderUrl: string | undefined,
 	getDb: () => Promise<HistoryReader>,
-	trackingEnabled: () => Promise<boolean> = async () => false,
 ): Promise<DashboardHistoryResponse> => {
 	if (!isDashboardSender(senderUrl))
 		return { ok: false, code: "unauthorized-sender" };
 	if (!isRecord(message)) return { ok: false, code: "invalid-request" };
+	if (message.type === "GET_PAGE_REFERENCE") {
+		if (
+			typeof message.url !== "string" ||
+			message.url.length > 8192 ||
+			safeRecallUrl(message.url)?.href !== message.url
+		)
+			return { ok: false, code: "invalid-request" };
+		try {
+			const url = new URL(message.url);
+			return {
+				pageRef: await createLibraryPageReference(
+					deriveSiteDomain(url.hostname),
+					message.url,
+				),
+			};
+		} catch {
+			return { ok: false, code: "page-reference-unavailable" };
+		}
+	}
+	if (message.type === "PRELOAD_SEARCH_MODEL") {
+		try {
+			const db = await getDb();
+			if (!db.warmSearchModel)
+				return { ok: false, code: "search-preload-unavailable" };
+			await db.warmSearchModel();
+			return { preloadStarted: true };
+		} catch {
+			return { ok: false, code: "search-preload-unavailable" };
+		}
+	}
 	if (message.type === "BROWSE_LIBRARY") {
 		if (!isLibraryRequest(message))
 			return { ok: false, code: "invalid-request" };
@@ -66,26 +84,7 @@ export const readDashboardHistory = async (
 	}
 	const search = message.type === "SEARCH_HISTORY";
 	const updateNote = message.type === "UPDATE_NOTE";
-	const workflows = message.type === "GET_WORKFLOW_CANDIDATES";
-	const createHandoff = message.type === "CREATE_WORKFLOW_HANDOFF";
-	const listScripts = message.type === "GET_WORKFLOW_SCRIPT_DRAFTS";
-	const deleteScript = message.type === "DELETE_WORKFLOW_SCRIPT_DRAFT";
-	if (workflows || listScripts) {
-		// Tracking is rechecked for grants; saved drafts remain readable while paused.
-	} else if (
-		createHandoff &&
-		(typeof message.candidateId !== "string" ||
-			!/^handwired-v1-[a-f0-9]{8}$/.test(message.candidateId))
-	) {
-		return { ok: false, code: "invalid-request" };
-	} else if (
-		deleteScript &&
-		(typeof message.id !== "string" || message.id.length > 128)
-	) {
-		return { ok: false, code: "invalid-request" };
-	} else if (createHandoff || deleteScript) {
-		// The validated request is handled by the owner below.
-	} else if (updateNote) {
+	if (updateNote) {
 		if (
 			typeof message.id !== "string" ||
 			message.id.length > 64 ||
@@ -146,66 +145,6 @@ export const readDashboardHistory = async (
 				message.text as string,
 			);
 			return note ? { note } : { ok: false, code: "note-not-found" };
-		}
-		if (listScripts) {
-			if (!db.listWorkflowScriptDrafts)
-				return { ok: false, code: "workflow-script-unavailable" };
-			return { drafts: await db.listWorkflowScriptDrafts() };
-		}
-		if (deleteScript) {
-			if (!db.deleteWorkflowScriptDraft)
-				return { ok: false, code: "workflow-script-unavailable" };
-			return db.deleteWorkflowScriptDraft(message.id as string);
-		}
-		if (workflows || createHandoff) {
-			if (!(await trackingEnabled()))
-				return { ok: false, code: "tracking-disabled" };
-			const checkpoint = await db.getWorkflowCheckpoint();
-			if (!checkpoint) {
-				if (createHandoff)
-					return { ok: false, code: "workflow-model-not-ready" };
-				return {
-					candidates: [],
-					modelReady: false,
-					trainedThrough: null,
-					sourceCount: 0,
-					truncated: false,
-				};
-			}
-			const events = await db.readEvents({
-				limit: BEHAVIOR_MODEL_LIMITS.events + 1,
-				types: ["NAVIGATION", "TAB_ACTIVATED"],
-			});
-			const retained = await sanitizeEventsForRead(events);
-			const candidates = discoverHandwiredWorkflows(
-				retained.slice(-BEHAVIOR_MODEL_LIMITS.events),
-				checkpoint,
-			);
-			if (createHandoff) {
-				const candidate = candidates.find(
-					(item) => item.id === message.candidateId,
-				);
-				if (!candidate)
-					return { ok: false, code: "workflow-candidate-not-found" };
-				if (!db.createWorkflowHandoff)
-					return { ok: false, code: "workflow-unavailable" };
-				await db.createWorkflowHandoff({
-					payload: buildWorkflowHandoff(candidate),
-					sourceIds: [
-						...new Set(candidate.occurrences.flatMap((item) => item.sourceIds)),
-					],
-				});
-				return { prepared: true };
-			}
-			return {
-				candidates,
-				modelReady: true,
-				trainedThrough: checkpoint.trainedThrough,
-				sourceCount: checkpoint.sourceIds.length,
-				truncated:
-					events.length > BEHAVIOR_MODEL_LIMITS.events ||
-					candidates.length === 50,
-			};
 		}
 		if (search) {
 			const options = {
@@ -282,13 +221,7 @@ export const readDashboardHistory = async (
 	} catch {
 		return {
 			ok: false,
-			code: search
-				? "search-unavailable"
-				: workflows || createHandoff
-					? "workflow-unavailable"
-					: listScripts || deleteScript
-						? "workflow-script-unavailable"
-						: "preview-unavailable",
+			code: search ? "search-unavailable" : "preview-unavailable",
 		};
 	}
 };

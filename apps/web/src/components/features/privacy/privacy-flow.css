@@ -1,0 +1,97 @@
+.privacy-wire-request,
+.privacy-wire-result,
+.privacy-wire-gate {
+	animation-duration: 6s;
+	animation-timing-function: ease-in-out;
+	animation-iteration-count: infinite;
+}
+
+.privacy-wire-request {
+	animation-name: privacy-wire-request;
+}
+
+.privacy-wire-result {
+	animation-name: privacy-wire-result;
+}
+
+.privacy-wire-gate {
+	animation-name: privacy-wire-check;
+}
+
+.privacy-flow[data-paused="true"]
+	:is(.privacy-wire-request, .privacy-wire-result, .privacy-wire-gate) {
+	animation-play-state: paused;
+}
+
+@keyframes privacy-wire-request {
+	0% {
+		stroke-dashoffset: -100;
+		opacity: 0;
+	}
+	5% {
+		opacity: 1;
+	}
+	40% {
+		stroke-dashoffset: 0;
+		opacity: 1;
+	}
+	46%,
+	100% {
+		stroke-dashoffset: 0;
+		opacity: 0;
+	}
+}
+
+@keyframes privacy-wire-result {
+	0%,
+	46% {
+		stroke-dashoffset: 100;
+		opacity: 0;
+	}
+	52% {
+		opacity: 1;
+	}
+	90% {
+		stroke-dashoffset: 0;
+		opacity: 1;
+	}
+	96%,
+	100% {
+		stroke-dashoffset: 0;
+		opacity: 0;
+	}
+}
+
+@keyframes privacy-wire-check {
+	0%,
+	12%,
+	34%,
+	54%,
+	84%,
+	100% {
+		background-color: var(--background);
+	}
+	22%,
+	70% {
+		background-color: color-mix(
+			in oklab,
+			var(--primary) 24%,
+			var(--background)
+		);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.privacy-wire-request,
+	.privacy-wire-result,
+	.privacy-wire-gate {
+		animation: none;
+	}
+
+	.privacy-wire-request {
+		stroke-dashoffset: -65;
+	}
+	.privacy-wire-result {
+		stroke-dashoffset: 25;
+	}
+}

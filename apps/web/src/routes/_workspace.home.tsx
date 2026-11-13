@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ReadingDesk } from "~/components/home/reading-desk";
-
-const Home = () => <ReadingDesk />;
+import { Home } from "~/components/features/home/home";
 
 export const Route = createFileRoute("/_workspace/home")({
 	ssr: false,
-	head: () => ({ meta: [{ title: "Find a page · Tabot" }] }),
+	head: () => ({ meta: [{ title: "Home · Tabot" }] }),
 	component: Home,
 });

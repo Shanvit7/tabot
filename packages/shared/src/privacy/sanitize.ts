@@ -1,5 +1,5 @@
 // packages/shared/src/privacy/sanitize.ts
-// The privacy boundary: local evidence in → externally-safe copy out. Deriving a
+// The sensitive-data boundary: local evidence in → externally-safe copy out. Deriving a
 // sanitized representation keeps the raw store intact (docs/tech.md §1: raw
 // events are immutable source data); the source object is never mutated and
 // nothing is persisted here.
@@ -8,14 +8,12 @@
 // origins and relationships pass through untouched, so the export stays
 // structurally valid and the dashboard's aggregates stay usable.
 //
-// Hostnames/origins are DELIBERATELY never redacted. They are the analytic key
-// (context sequence = origin+pathname, memories weight domains 0.4, sessions
-// aggregate domains) and they carry no PII-pattern shape: DNS labels are
-// [a-z0-9-], so an EMAIL/PHONE/card match cannot be a hostname. `origin` is a
-// separate field on ActivityRef that is also preserved, so redacting the host
-// inside `url` would shred domain joins for zero privacy gain.
-// ponytail: identifying enterprise subdomains (john.doe.corp.internal) are left
-// alone; add per-domain policy only when a user actually asks for it.
+// Hostnames/origins are deliberately preserved in this derived export because
+// they anchor context, memory and session joins. Ingestion rejects new URLs when
+// the hostname matches a selected sensitive-data pattern, but this sanitizer
+// does not inspect origins and existing history may predate that filter.
+// ponytail: identifying subdomains remain visible; add domain-level policy only
+// when a user actually asks for it.
 import type { ActivityRef } from "../activities/meaningful-events";
 import type { BrowserContext } from "../contexts/contexts";
 import type { StoredTabEvent } from "../events/db";
@@ -23,18 +21,16 @@ import { logger } from "../lib/logger";
 import type { Memory } from "../memories/memories";
 import type { LiveBrowserContext } from "../recall/live-context";
 import type { Derived, PrivacyProvenance } from "../share/export";
-import { piiRedactor } from "./pii-redactor";
-import type { PiiFinding, PiiRedactionOptions } from "./types";
-
-export const PII_REDACTION_DEFAULT_ENABLED = true;
+import type { SensitiveDataFinding } from "./sensitive-data";
+import { sensitiveDataRedactor } from "./sensitive-data";
 
 interface RedactionRun {
-	findings: PiiFinding[];
+	findings: SensitiveDataFinding[];
 }
 
-// Sequential on purpose: one shared detector instance, and duplicates in an
-// export then hit its cache instead of racing it. Redaction only runs at the
-// export boundary, so this never touches the capture path.
+// Sequential on purpose: one shared detector instance, and duplicate strings
+// reuse compiled patterns instead of racing construction. Export sanitization
+// also shares the detector used at capture and relay boundaries.
 const mapAsync = async <T, R>(
 	items: T[],
 	fn: (item: T) => Promise<R>,
@@ -47,7 +43,9 @@ const mapAsync = async <T, R>(
 // Redact one text unit; returns the input object-identical when nothing matched
 // so untouched content is byte-for-byte unchanged downstream.
 // Pattern type → occurrence count. Never carries the matched value.
-const summarize = (findings: PiiFinding[]): PrivacyProvenance["findings"] => {
+const summarize = (
+	findings: SensitiveDataFinding[],
+): PrivacyProvenance["findings"] => {
 	const counts = new Map<string, number>();
 	for (const f of findings) counts.set(f.type, (counts.get(f.type) ?? 0) + 1);
 	return [...counts].map(([type, count]) => ({ type, count }));
@@ -57,15 +55,15 @@ const redactText = async (
 	input: string,
 	run: RedactionRun,
 ): Promise<string> => {
-	const { redacted, findings } = await piiRedactor.redact(input);
+	const { redacted, findings } = await sensitiveDataRedactor.redact(input);
 	if (redacted === input) return input;
 	run.findings.push(...findings);
 	return redacted;
 };
 
-// Redact one URL path/query/fragment segment. Decoded first so percent-encoded
-// PII (q=john%40example.com) is caught; an untouched segment keeps its raw bytes
-// so non-PII URLs survive byte-identical.
+// Redact one URL path/query/fragment segment. Decode first so encoded secrets
+// are caught; an untouched segment keeps its raw bytes
+// so non-sensitive URLs survive byte-identical.
 const redactSegment = async (
 	raw: string,
 	run: RedactionRun,
@@ -259,14 +257,7 @@ const sanitizeLive = async (
  * export, chat prefill, future APIs). Never mutates `derived`. Throws if the
  * redactor fails — callers must abort rather than emit unsanitized data.
  */
-export const sanitizeDerived = async (
-	derived: Derived,
-	options: PiiRedactionOptions = {},
-): Promise<Derived> => {
-	if (!(options.piiRedactionEnabled ?? PII_REDACTION_DEFAULT_ENABLED)) {
-		return derived;
-	}
-
+export const sanitizeDerived = async (derived: Derived): Promise<Derived> => {
 	const run: RedactionRun = { findings: [] };
 	const events = await mapAsync(derived.events, (e) => sanitizeEvent(e, run));
 	const sessions = await mapAsync(derived.sessions, async (s) => ({
@@ -288,7 +279,7 @@ export const sanitizeDerived = async (
 		findings: summarize(run.findings),
 	};
 	if (privacy.redacted) {
-		logger.info("pii: sanitized export", {
+		logger.info("sensitive-data: sanitized export", {
 			redactions: run.findings.length,
 			types: privacy.findings.map((f) => f.type),
 		});

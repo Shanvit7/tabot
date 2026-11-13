@@ -31,6 +31,7 @@ export type LibrarySite = {
 	favicon?: string;
 	pageCount: number;
 	noteCount: number;
+	estimatedActiveMs?: number;
 	lastSeen: number;
 };
 export type LibraryPage = HistorySearchResult & {
@@ -141,6 +142,8 @@ export const isLibraryResponse = (value: unknown): value is LibraryResponse => {
 				count(item.pageCount) &&
 				item.pageCount > 0 &&
 				count(item.noteCount) &&
+				(item.estimatedActiveMs === undefined ||
+					count(item.estimatedActiveMs)) &&
 				timestamp(item.lastSeen),
 		) &&
 		value.pages.every(
@@ -347,6 +350,8 @@ export const browseLibrary = async (
 			};
 			site.pageCount++;
 			site.noteCount += page.noteCount;
+			site.estimatedActiveMs =
+				(site.estimatedActiveMs ?? 0) + (page.estimatedActiveMs ?? 0);
 			sites.set(page.site, site);
 		}
 		const rows = rankLibrarySites([...sites.values()], request.query ?? "");

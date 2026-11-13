@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="630" viewBox="0 0 1200 630">
+	<title>Tabot — Make your browser part of your AI workflow.</title>
+	<rect width="1200" height="630" fill="#f4f5ef" />
+	<rect x="30" y="28" width="1140" height="574" rx="24" fill="#fff" stroke="#111" stroke-width="2" />
+	<image href="logo.png" x="82" y="69" width="52" height="52" />
+	<text x="146" y="108" fill="#111" font-family="Arial, sans-serif" font-size="36" font-weight="700" letter-spacing="-1.5">Tabot</text>
+	<rect x="941" y="78" width="166" height="36" rx="18" fill="#bfff00" />
+	<text x="1024" y="101" fill="#111" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="1.5" text-anchor="middle">EARLY BETA</text>
+	<text x="84" y="229" fill="#111" font-family="Arial, sans-serif" font-size="64" font-weight="700" letter-spacing="-3.5">Make your browser</text>
+	<text x="84" y="306" fill="#111" font-family="Arial, sans-serif" font-size="64" font-weight="700" letter-spacing="-3.5">part of your AI workflow.</text>
+	<rect x="82" y="321" width="640" height="10" rx="5" fill="#bfff00" />
+	<text x="88" y="380" fill="#424840" font-family="Arial, sans-serif" font-size="22">Building the context layer between Chrome</text>
+	<text x="88" y="412" fill="#424840" font-family="Arial, sans-serif" font-size="22">and your AI assistant.</text>
+	<rect x="783" y="210" width="172" height="184" rx="14" fill="#f4f5ef" stroke="#111" stroke-width="2" />
+	<path d="M783 249h172" stroke="#111" stroke-width="2" />
+	<circle cx="803" cy="230" r="4" fill="#bfff00" />
+	<circle cx="819" cy="230" r="4" fill="#d5dbd0" />
+	<circle cx="835" cy="230" r="4" fill="#d5dbd0" />
+	<rect x="804" y="270" width="130" height="12" rx="6" fill="#dce1d7" />
+	<rect x="804" y="295" width="98" height="12" rx="6" fill="#dce1d7" />
+	<rect x="804" y="328" width="56" height="44" rx="8" fill="#bfff00" />
+	<rect x="870" y="328" width="64" height="8" rx="4" fill="#c8d0c5" />
+	<rect x="870" y="344" width="54" height="8" rx="4" fill="#c8d0c5" />
+	<path d="M955 302h44" stroke="#b8c2b3" stroke-width="3" />
+	<circle cx="1000" cy="302" r="9" fill="#bfff00" stroke="#111" stroke-width="2" />
+	<path d="M1009 302h22" stroke="#b8c2b3" stroke-width="3" />
+	<rect x="1031" y="242" width="85" height="120" rx="16" fill="#080808" />
+	<text x="1073" y="304" fill="#bfff00" font-family="Arial, sans-serif" font-size="27" font-weight="700" text-anchor="middle">AI</text>
+	<text x="1073" y="329" fill="#fff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="1.1" text-anchor="middle">ASSISTANT</text>
+	<path d="M86 520h1028" stroke="#dedfd8" stroke-width="1.5" />
+	<text x="88" y="560" fill="#343a32" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="1.1">REUSABLE CONTEXTS · AUTOMATIONS IN DEVELOPMENT</text>
+	<text x="1110" y="560" fill="#343a32" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="1.1" text-anchor="end">TABOT</text>
+</svg>

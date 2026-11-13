@@ -30,6 +30,7 @@ export {
 	type MetricTransition,
 	parseActivityMetricsInput,
 } from "./activities/metrics";
+export { ApiError, apiClient } from "./api/client";
 export {
 	type AssistantConnections,
 	type AssistantProvider,
@@ -68,7 +69,6 @@ export {
 	sanitizeEventsForRead,
 	storedTabEventSchema,
 	TabotDatabase,
-	type WorkflowTrainingResult,
 } from "./events/db";
 export {
 	EVENT_TYPES,
@@ -153,17 +153,13 @@ export {
 	sanitizeUrlForIngestion,
 	searchQueryFromUrl,
 } from "./privacy/ingest";
-export { piiRedactor } from "./privacy/pii-redactor";
-export {
-	PII_REDACTION_DEFAULT_ENABLED,
-	sanitizeDerived,
-} from "./privacy/sanitize";
+export { sanitizeDerived } from "./privacy/sanitize";
 export type {
-	PiiFinding,
-	PiiRedactionOptions,
-	PiiRedactor,
-	RedactionResult,
-} from "./privacy/types";
+	SensitiveDataFinding,
+	SensitiveDataRedactionResult,
+	SensitiveDataRedactor,
+} from "./privacy/sensitive-data";
+export { sensitiveDataRedactor } from "./privacy/sensitive-data";
 export {
 	type ActivitySearchResult,
 	type HistorySearchCitation,
@@ -257,43 +253,14 @@ export {
 	type WebTargetDef,
 } from "./share/targets";
 export {
+	createTelemetry,
+	type TelemetryContext,
+	type TelemetryErrorSource,
+	type TelemetryEvent,
+	type TelemetryTransport,
+} from "./telemetry";
+export {
 	createTrackingClient,
 	type TrackingMessage,
 	type TrackingTransport,
 } from "./tracking/tracking";
-export {
-	isWorkflowAutomationScript,
-	isWorkflowScriptDraft,
-	isWorkflowScriptSaveGrant,
-	WORKFLOW_SCRIPT_LIMITS,
-	type WorkflowAutomationScript,
-	type WorkflowScriptDraft,
-	type WorkflowScriptGrantRequest,
-	type WorkflowScriptSaveGrant,
-	type WorkflowScriptStep,
-} from "./workflows/automation-script";
-export {
-	BEHAVIOR_MODEL_LIMITS,
-	BEHAVIOR_MODEL_SCHEMA,
-	type BehaviorCheckpoint,
-	type BehaviorTraining,
-	buildNextSiteExamples,
-	createBehaviorPredictor,
-	isBehaviorCheckpoint,
-	type NextSiteExample,
-	trainBehaviorCheckpoint,
-} from "./workflows/behavior-model";
-export {
-	discoverHandwiredWorkflows,
-	HANDWIRED_WORKFLOW_LIMITS,
-	type WorkflowCandidate,
-} from "./workflows/discovery";
-export {
-	buildWorkflowHandoff,
-	isWorkflowHandoff,
-	isWorkflowHandoffPayload,
-	type WorkflowHandoff,
-	type WorkflowHandoffPayload,
-	type WorkflowHandoffRequest,
-	workflowHandoffDigest,
-} from "./workflows/workflow-handoff";

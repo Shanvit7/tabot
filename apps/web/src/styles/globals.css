@@ -127,9 +127,19 @@ body {
 	font-family: var(--font-sans);
 }
 
+html {
+	scroll-behavior: smooth;
+}
+
 * {
 	scrollbar-color: var(--border) transparent;
 	scrollbar-width: thin;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
 }
 
 *::-webkit-scrollbar {
@@ -188,26 +198,11 @@ body {
 		--typeset-leading: 1.75;
 		--typeset-flow: 1em;
 	}
-
-	@media (min-width: 48rem) {
-		.reading-desk-list {
-			scrollbar-gutter: stable;
-		}
-	}
 }
 
 #history-query::-webkit-search-cancel-button {
 	-webkit-appearance: none;
 	appearance: none;
-}
-
-@keyframes search-progress {
-	from {
-		transform: translateX(-100%);
-	}
-	to {
-		transform: translateX(400%);
-	}
 }
 
 /* Only the decorative glass stretches; text and hit targets never distort. */

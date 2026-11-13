@@ -163,6 +163,12 @@
 			"skillPath": "skills/plasmo/SKILL.md",
 			"computedHash": ""
 		},
+		"posthog-instrumentation": {
+			"source": "PostHog/posthog-for-claude",
+			"sourceType": "github",
+			"skillPath": "skills/posthog-instrumentation/SKILL.md",
+			"computedHash": "b5cd0a9913c6cb0ddfe0a954fa1b1061dd81dd7d44fedb53db46ba8b14437368"
+		},
 		"pr-to-video": {
 			"source": "heygen-com/hyperframes",
 			"sourceType": "github",
@@ -186,6 +192,12 @@
 			"sourceType": "github",
 			"skillPath": "skills/react-call/SKILL.md",
 			"computedHash": "08663ec0dd1cf49091f2c66508633a1f9b72b9f35fa052559cca5efa99792d31"
+		},
+		"react-render-optimization": {
+			"source": "PatternsDev/skills",
+			"sourceType": "github",
+			"skillPath": "react/react-render-optimization/SKILL.md",
+			"computedHash": "a2925cebb8a371b27db1521201fc25c543b54e215f6d7d67d8e8568aaf601cb0"
 		},
 		"remotion-best-practices": {
 			"source": "remotion-dev/skills",
@@ -216,6 +228,12 @@
 			"sourceType": "github",
 			"skillPath": "skills/shadcn/SKILL.md",
 			"computedHash": ""
+		},
+		"skills-store": {
+			"source": "PostHog/skills",
+			"sourceType": "github",
+			"skillPath": "skills/omnibus/skills-store/SKILL.md",
+			"computedHash": "a1924aa4f21eca76e57f37ed49d65590db5a0f2ff73a16f109639094a18a028b"
 		},
 		"slideshow": {
 			"source": "heygen-com/hyperframes",

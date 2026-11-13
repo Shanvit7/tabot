@@ -1,4 +1,4 @@
-export const prettySite = (domain: string): string => {
+const prettySite = (domain: string): string => {
 	const bare = domain.replace(/^https?:\/\//, "").replace(/^www\./, "");
 	if (bare.startsWith("chrome-extension://")) return "Extension page";
 	if (bare.startsWith("chrome://")) {

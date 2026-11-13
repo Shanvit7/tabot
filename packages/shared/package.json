@@ -8,19 +8,20 @@
 	"types": "./src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
+		"./version": "./src/version.ts",
+		"./api": "./src/api/client.ts",
 		"./assistant-connections": "./src/assistant-connections.ts",
 		"./dashboard": "./src/dashboard.ts",
 		"./library": "./src/library.ts",
 		"./share/targets": "./src/share/targets.ts",
 		"./tracking": "./src/tracking/tracking.ts",
-		"./automation-script": "./src/workflows/automation-script.ts",
-		"./workflow-handoff": "./src/workflows/workflow-handoff.ts"
+		"./telemetry": "./src/telemetry.ts",
+		"./telemetry/posthog": "./src/telemetry/posthog.ts"
 	},
 	"scripts": {
-		"check:workflowDiscovery": "node --import ./resolve-hook.mjs src/checks/workflow-discovery.check.ts",
-		"check:workflowHandoff": "node --import ./resolve-hook.mjs src/checks/workflow-handoff.check.ts",
-		"check:automationScripts": "node --import ./resolve-hook.mjs src/checks/automation-script.check.ts",
-		"check:behaviorModel": "node --import ./resolve-hook.mjs src/checks/behavior-model.check.ts",
+		"check:version": "node --import ./resolve-hook.mjs src/checks/version.check.ts",
+		"check:api": "node --import ./resolve-hook.mjs src/checks/api-client.check.ts",
+		"check:telemetry": "node --import ./resolve-hook.mjs src/checks/telemetry.check.ts",
 		"check:activityMetrics": "node --import ./resolve-hook.mjs src/checks/activity-metrics.check.ts",
 		"check:library": "node --import ./resolve-hook.mjs src/checks/library.check.ts",
 		"check:notes": "node --import ./resolve-hook.mjs src/checks/notes.check.ts",
@@ -40,7 +41,7 @@
 		"check:connectTargets": "node --import ./resolve-hook.mjs src/checks/connect-targets.check.ts",
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
 		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
-		"check": "pnpm check:workflowDiscovery && pnpm check:workflowHandoff && pnpm check:automationScripts && pnpm check:behaviorModel && pnpm check:notes && pnpm check:library && pnpm check:tracking && pnpm check:activityMetrics && pnpm check:foreground && pnpm check:sessions && pnpm check:contexts && pnpm check:memories && pnpm check:retrieval && pnpm check:historySearch && pnpm check:liveContext && pnpm check:meaningfulEvents && pnpm check:pipeline && pnpm check:privacy && pnpm check:pageObservations && pnpm check:exportFilename && pnpm check:connectTargets && pnpm check:activityGraph && pnpm check:stabilization && pnpm swSemantics && pnpm swDerivation && pnpm swGraph && pnpm swEpisodes",
+		"check": "pnpm check:api && pnpm check:version && pnpm check:telemetry && pnpm check:notes && pnpm check:library && pnpm check:tracking && pnpm check:activityMetrics && pnpm check:foreground && pnpm check:sessions && pnpm check:contexts && pnpm check:memories && pnpm check:retrieval && pnpm check:historySearch && pnpm check:liveContext && pnpm check:meaningfulEvents && pnpm check:pipeline && pnpm check:privacy && pnpm check:pageObservations && pnpm check:exportFilename && pnpm check:connectTargets && pnpm check:activityGraph && pnpm check:stabilization && pnpm swSemantics && pnpm swDerivation && pnpm swGraph && pnpm swEpisodes",
 		"swSemantics": "node --import ./resolve-hook.mjs src/checks/sw-semantics.check.ts",
 		"swDerivation": "node --import ./resolve-hook.mjs src/checks/sw-derivation.check.ts",
 		"swGraph": "node --import ./resolve-hook.mjs src/checks/sw-graph.check.ts",
@@ -51,7 +52,6 @@
 		"@openredaction/core": "^1.1.5",
 		"chrono-node": "^2.10.3",
 		"graphology": "^0.26.0",
-		"handwired": "github:chenglou/handwired#257856e3b221140acb4cc4460626b850c0bd4ff1",
 		"tldts": "^7.4.19"
 	},
 	"devDependencies": {

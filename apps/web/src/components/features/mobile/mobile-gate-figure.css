@@ -1,0 +1,88 @@
+.mobile-gate-figure {
+	--anatomy-card: var(--work-surface);
+	--anatomy-text: var(--work-ink);
+	--anatomy-strong: var(--work-ink);
+	--anatomy-muted: var(--work-muted);
+	--anatomy-paper: var(--work-surface);
+	margin: 0;
+	width: 100%;
+	padding: 10px;
+	border: 1px solid var(--work-line);
+	border-radius: 18px;
+	background: var(--anatomy-card);
+}
+
+.mobile-gate-art {
+	width: 100%;
+	max-height: 15rem;
+}
+
+.mobile-gate-art .mobile-screen-chart {
+	stroke: var(--primary);
+	stroke-width: 1px;
+}
+
+/* One-shot target cue: trace the computer, then mark phone as unavailable; imply no device-to-device transfer. */
+.mobile-gate-art .mobile-desktop-target {
+	fill: none;
+	stroke: var(--primary);
+	stroke-dasharray: 100;
+	stroke-dashoffset: 0;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.2px;
+	opacity: 0.3;
+	animation: desktop-target-draw 1.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.mobile-gate-art .mobile-phone-mark {
+	stroke: var(--destructive);
+	stroke-dasharray: 100;
+	stroke-dashoffset: 0;
+	stroke-linecap: round;
+	stroke-width: 1.3px;
+	opacity: 0.58;
+	animation: phone-mark-draw 450ms cubic-bezier(0.16, 1, 0.3, 1) 350ms both;
+}
+
+@keyframes desktop-target-draw {
+	0% {
+		stroke-dashoffset: 100;
+		opacity: 0;
+	}
+
+	72% {
+		stroke-dashoffset: 0;
+		opacity: 0.78;
+	}
+
+	100% {
+		stroke-dashoffset: 0;
+		opacity: 0.3;
+	}
+}
+
+@keyframes phone-mark-draw {
+	0% {
+		stroke-dashoffset: 100;
+		opacity: 0;
+	}
+
+	100% {
+		stroke-dashoffset: 0;
+		opacity: 0.58;
+	}
+}
+
+@media (max-width: 560px) {
+	.mobile-gate-figure {
+		padding: 8px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mobile-gate-art .mobile-desktop-target,
+	.mobile-gate-art .mobile-phone-mark {
+		animation: none;
+	}
+}

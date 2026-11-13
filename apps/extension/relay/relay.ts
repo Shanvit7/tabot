@@ -4,23 +4,30 @@ import {
 	type AssistantConnections,
 	canonicalPageUrl,
 	deriveSiteDomain,
-	isWorkflowAutomationScript,
-	isWorkflowHandoff,
 	logger,
 	type PageNote,
-	parseAssistantConnections,
-	piiRedactor,
 	projectActivitySearchResults,
 	type StoredIngestRecord,
 	type StoredTabEvent,
 	safeRecallUrl,
+	sensitiveDataRedactor,
 	sessionForNote,
 	sessionize,
 } from "@tabot/shared";
 import type { DashboardNoteResult } from "@tabot/shared/dashboard";
 import { isLibraryRequest, type LibraryPage } from "@tabot/shared/library";
-import { createCaptureIdentity } from "../ingestion/capture-identity";
+import {
+	createCaptureIdentity,
+	createLibraryPageReference,
+} from "../ingestion/capture-identity";
 import { getStorageDb } from "../storage/client";
+import {
+	approveAuthorizationTransaction as approveAuthorization,
+	getAssistantConnections as fetchAssistantConnections,
+	pingRelay,
+	type RelayCredentials,
+	registerInstallation,
+} from "./services";
 
 /**
  * Extension ↔ relay connection.
@@ -56,8 +63,6 @@ const GET_PAGE_NOTES_METHOD = "get_page_notes";
 const GET_SITE_NOTES_METHOD = "get_site_notes";
 const LIST_SITES_METHOD = "list_sites";
 const LIST_SITE_PAGES_METHOD = "list_site_pages";
-const GET_PENDING_WORKFLOW_HANDOFF_METHOD = "get_pending_workflow_handoff";
-const SAVE_WORKFLOW_SCRIPT_METHOD = "save_workflow_script";
 const ACTIVITY_RESULT_LIMIT = 8;
 const MAX_ACTIVITY_OFFSET = 999_999;
 const MAX_ACTIVITY_QUERY_CHARS = 200;
@@ -92,10 +97,7 @@ const nextPageCursor = (
 		? `${snapshot}:${offset + count}`
 		: null;
 
-interface Credentials {
-	installationId: string;
-	token: string;
-}
+type Credentials = RelayCredentials;
 
 interface ServerRequest {
 	type: "request";
@@ -129,15 +131,7 @@ export const getAssistantConnections =
 	async (): Promise<AssistantConnections> => {
 		const credentials = await loadCredentials();
 		if (!credentials) return { chatgpt: false, claude: false, order: [] };
-		const response = await fetch(`${HTTP_BASE}/connection`, {
-			headers: { Authorization: `Bearer ${credentials.token}` },
-			signal: AbortSignal.timeout(5_000),
-		});
-		if (!response.ok)
-			throw new Error(`connection status failed: ${response.status}`);
-		const connections = parseAssistantConnections(await response.json());
-		if (!connections) throw new Error("Invalid connection status response");
-		return connections;
+		return await fetchAssistantConnections(HTTP_BASE, credentials.token);
 	};
 
 /** Check current extension socket routing and OAuth grants without exposing credentials. */
@@ -146,13 +140,10 @@ export const runRelaySanityCheck = async () => {
 	try {
 		const credentials = await loadCredentials();
 		if (!credentials) throw new Error("credentials_missing");
-		const response = await fetch(
-			`${HTTP_BASE}/relay/${encodeURIComponent(credentials.installationId)}/ping`,
-			{
-				method: "POST",
-				headers: { Authorization: `Bearer ${credentials.token}` },
-				signal: AbortSignal.timeout(5_000),
-			},
+		const response = await pingRelay(
+			HTTP_BASE,
+			credentials.installationId,
+			credentials.token,
 		);
 		const body = (await response.json().catch(() => null)) as {
 			ok?: boolean;
@@ -200,15 +191,7 @@ export const approveAuthorizationTransaction = async (
 	transactionId: string,
 ): Promise<void> => {
 	const { token } = await ensureCredentials();
-	const response = await fetch(
-		`${HTTP_BASE}/authorize/transactions/${encodeURIComponent(transactionId)}/approve`,
-		{
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}` },
-		},
-	);
-	if (!response.ok)
-		throw new Error(`authorization approval failed: ${response.status}`);
+	await approveAuthorization(HTTP_BASE, transactionId, token);
 };
 
 /**
@@ -234,11 +217,7 @@ const loadCredentials = async (): Promise<Credentials | null> => {
 };
 
 const register = async (): Promise<Credentials> => {
-	const response = await fetch(`${HTTP_BASE}/installations`, {
-		method: "POST",
-	});
-	if (!response.ok) throw new Error(`registration failed: ${response.status}`);
-	const creds = (await response.json()) as Credentials;
+	const creds = await registerInstallation(HTTP_BASE);
 	await chrome.storage.local.set({ [STORAGE_KEY]: creds });
 	return creds;
 };
@@ -468,8 +447,8 @@ const noteResult = async (
 ) => {
 	const session = "origin" in note ? sessionForNote(note, sessions) : undefined;
 	const [{ redacted: text }, { redacted: title }] = await Promise.all([
-		piiRedactor.redact(note.text),
-		piiRedactor.redact(note.title ?? ""),
+		sensitiveDataRedactor.redact(note.text),
+		sensitiveDataRedactor.redact(note.title ?? ""),
 	]);
 	return {
 		id: note.id,
@@ -493,8 +472,8 @@ const noteResult = async (
 	};
 };
 
-const pageReference = async (page: LibraryPage) =>
-	`${encodeURIComponent(page.site)}:${await createCaptureIdentity(["library-page:v1", page.url])}`;
+const pageReference = (page: LibraryPage) =>
+	createLibraryPageReference(page.site, page.url);
 
 const listLibrary = async (params: unknown, level: "sites" | "pages") => {
 	if (!params || typeof params !== "object" || Array.isArray(params))
@@ -757,7 +736,7 @@ const getPageNotes = async (params: unknown) => {
 	const candidates = eligibleNotes.slice(offset, offset + limit + 1);
 	const page = candidates.slice(0, limit);
 	const [{ redacted: title }] = await Promise.all([
-		piiRedactor.redact(page[0]?.title ?? ""),
+		sensitiveDataRedactor.redact(page[0]?.title ?? ""),
 	]);
 	return {
 		found: page.length > 0,
@@ -807,51 +786,6 @@ const getSiteNotes = async (params: unknown) => {
 	};
 };
 
-const saveWorkflowScript = async (params: unknown) => {
-	if (
-		!params ||
-		typeof params !== "object" ||
-		Array.isArray(params) ||
-		Object.keys(params).some(
-			(key) =>
-				!["candidateId", "grantToken", "handoffDigest", "script"].includes(key),
-		)
-	)
-		throw new Error("Invalid workflow script save request.");
-	const input = params as Record<string, unknown>;
-	if (
-		typeof input.candidateId !== "string" ||
-		!/^handwired-v1-[a-f0-9]{8}$/.test(input.candidateId) ||
-		typeof input.grantToken !== "string" ||
-		!/^[0-9a-f-]{36}$/i.test(input.grantToken) ||
-		typeof input.handoffDigest !== "string" ||
-		!/^[a-f0-9]{64}$/.test(input.handoffDigest) ||
-		!isWorkflowAutomationScript(input.script)
-	)
-		throw new Error("Invalid workflow script save request.");
-	return (await getDb()).saveWorkflowScriptDraft(
-		input.grantToken,
-		input.candidateId,
-		input.handoffDigest,
-		input.script,
-	);
-};
-
-const getPendingWorkflowHandoff = async (params: unknown) => {
-	if (
-		params !== undefined &&
-		(!params ||
-			typeof params !== "object" ||
-			Array.isArray(params) ||
-			Object.keys(params).length > 0)
-	)
-		throw new Error("Invalid workflow handoff request.");
-	const handoff = await getDb().then((db) => db.getPendingWorkflowHandoff());
-	return handoff && isWorkflowHandoff(handoff)
-		? { ready: true, ...handoff }
-		: { ready: false };
-};
-
 const handlers: Record<string, (params: unknown) => Promise<unknown>> = {
 	[SEARCH_NOTES_METHOD]: searchNotes,
 	[GET_PAGE_NOTES_METHOD]: getPageNotes,
@@ -861,8 +795,6 @@ const handlers: Record<string, (params: unknown) => Promise<unknown>> = {
 	[SEARCH_ACTIVITY_METHOD]: searchActivity,
 	[FIND_ACTIVITY_MATCHES_METHOD]: findActivityMatches,
 	[GET_ACTIVITY_TIMELINE_METHOD]: getActivityTimeline,
-	[GET_PENDING_WORKFLOW_HANDOFF_METHOD]: getPendingWorkflowHandoff,
-	[SAVE_WORKFLOW_SCRIPT_METHOD]: saveWorkflowScript,
 };
 
 const handleRequest = async (message: ServerRequest) => {

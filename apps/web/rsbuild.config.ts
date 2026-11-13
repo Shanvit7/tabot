@@ -9,10 +9,6 @@ const base = process.env.VITE_BASE_PATH || "/";
 const NODE_MODULE_SHIM = fileURLToPath(
 	new URL("./src/shims/node-module.ts", import.meta.url),
 );
-const REACT_GRAB_PACKAGE_SHIM = fileURLToPath(
-	new URL("./src/shims/react-grab-package.ts", import.meta.url),
-);
-
 export default defineConfig({
 	plugins: [
 		pluginReact({ reactCompiler: true }),
@@ -27,7 +23,6 @@ export default defineConfig({
 	],
 	server: { base, port: 3000 },
 	output: { distPath: { root: ".output" } },
-	resolve: { alias: { "react-grab/package.json$": REACT_GRAB_PACKAGE_SHIM } },
 	environments: {
 		client: {
 			tools: {

@@ -39,11 +39,15 @@ jobs:
           VITE_SITE_URL: ${{ steps.pages.outputs.base_url }}
           VITE_TABOT_EXTENSION_ID: ${{ vars.TABOT_EXTENSION_ID }}
           VITE_CHROME_WEB_STORE_URL: ${{ vars.CHROME_WEB_STORE_URL }}
+          VITE_POSTHOG_ENABLED: 'true'
+          VITE_POSTHOG_KEY: ${{ vars.POSTHOG_PROJECT_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
+          VITE_POSTHOG_RELEASE: ${{ github.sha }}
 
       - name: Prepare Pages artifact
         run: |
-          # SPA fallback for unknown deep links only. Real routes (/, /privacy,
-          # /home) are prerendered to their own index.html by the build.
+          # SPA fallback for unknown deep links only. Registered routes are
+          # prerendered separately by the build.
           cp apps/web/.output/client/index.html apps/web/.output/client/404.html
           touch apps/web/.output/client/.nojekyll
 

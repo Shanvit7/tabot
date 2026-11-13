@@ -46,6 +46,11 @@ jobs:
         run: |
           pnpm --filter extension build
           pnpm --filter extension package
+        env:
+          PLASMO_PUBLIC_POSTHOG_ENABLED: 'true'
+          PLASMO_PUBLIC_POSTHOG_KEY: ${{ vars.POSTHOG_PROJECT_KEY }}
+          PLASMO_PUBLIC_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
+          PLASMO_PUBLIC_POSTHOG_RELEASE: ${{ github.sha }}
 
       - name: Browser Platform Publish
         uses: PlasmoHQ/bpp@v3

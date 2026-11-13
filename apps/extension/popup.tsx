@@ -1,7 +1,14 @@
 import logo from "data-base64:~assets/icon.png";
 import { createTrackingClient } from "@tabot/shared/tracking";
-import { Globe2, Pause, Play, Search, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+	Globe2,
+	LoaderCircle,
+	Pause,
+	Play,
+	Search,
+	Trash2,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./popup.tailwind.css";
 
 const MAX_NOTE_LENGTH = 4_000;
@@ -27,11 +34,21 @@ type Page = {
 	notes: Note[];
 };
 
+const relativeTimeFormatter = new Intl.DateTimeFormat(undefined, {
+	dateStyle: "medium",
+	timeStyle: "short",
+});
 const relativeTime = (timestamp: number) =>
-	new Intl.DateTimeFormat(undefined, {
-		dateStyle: "medium",
-		timeStyle: "short",
-	}).format(timestamp);
+	relativeTimeFormatter.format(timestamp);
+const formatTrackingTime = (durationMs: number) => {
+	const seconds = Math.floor(durationMs / 1_000);
+	const units = [
+		Math.floor(seconds / 3_600),
+		Math.floor((seconds % 3_600) / 60),
+		seconds % 60,
+	];
+	return units.map((unit) => String(unit).padStart(2, "0")).join(":");
+};
 
 export default function Popup() {
 	const [page, setPage] = useState<Page | null>(null);
@@ -43,6 +60,14 @@ export default function Popup() {
 	const [tracking, setTracking] = useState<boolean | null>(null);
 	const [trackingBusy, setTrackingBusy] = useState(false);
 	const [trackingError, setTrackingError] = useState("");
+	const [trackingDuration, setTrackingDuration] = useState<number | null>(null);
+	const [durationStatus, setDurationStatus] = useState<
+		"loading" | "ready" | "error"
+	>("loading");
+	const trackingRef = useRef(tracking);
+	trackingRef.current = tracking;
+	const activeRef = useRef(false);
+	const refreshDurationRef = useRef<() => void>(() => {});
 	const [query, setQuery] = useState("");
 	const [searchRevision, setSearchRevision] = useState(0);
 	const [searchResult, setSearchResult] = useState<{
@@ -92,6 +117,60 @@ export default function Popup() {
 	}, [loadPage, loadTracking]);
 
 	useEffect(() => {
+		let disposed = false;
+		let refreshing = false;
+		let refreshedAt = 0;
+		const refresh = async () => {
+			if (refreshing) return;
+			refreshing = true;
+			refreshedAt = Date.now();
+			try {
+				const result = await chrome.runtime.sendMessage({
+					type: "GET_ACTIVE_TRACKING_DURATION",
+				});
+				if (
+					typeof result?.durationMs !== "number" ||
+					!Number.isFinite(result.durationMs) ||
+					result.durationMs < 0 ||
+					typeof result.active !== "boolean"
+				)
+					throw new Error("tracking-duration-unavailable");
+				if (disposed) return;
+				setTrackingDuration(result.durationMs);
+				activeRef.current = result.active;
+				setDurationStatus("ready");
+			} catch {
+				if (disposed) return;
+				activeRef.current = false;
+				setDurationStatus((status) => (status === "ready" ? status : "error"));
+			} finally {
+				refreshing = false;
+			}
+		};
+		const refreshWhenVisible = () => {
+			if (document.visibilityState === "visible") void refresh();
+		};
+		refreshDurationRef.current = () => void refresh();
+		void refresh();
+		const timer = window.setInterval(() => {
+			if (trackingRef.current && activeRef.current)
+				setTrackingDuration((duration) =>
+					duration === null ? duration : duration + 1_000,
+				);
+			if (Date.now() - refreshedAt >= 30_000) void refresh();
+		}, 1_000);
+		window.addEventListener("focus", refreshWhenVisible);
+		document.addEventListener("visibilitychange", refreshWhenVisible);
+		return () => {
+			disposed = true;
+			refreshDurationRef.current = () => {};
+			window.clearInterval(timer);
+			window.removeEventListener("focus", refreshWhenVisible);
+			document.removeEventListener("visibilitychange", refreshWhenVisible);
+		};
+	}, []);
+
+	useEffect(() => {
 		if (!searchQuery || !searchOrigin) return;
 		let cancelled = false;
 		const timer = window.setTimeout(async () => {
@@ -131,6 +210,7 @@ export default function Popup() {
 		setTrackingBusy(true);
 		try {
 			setTracking(await trackingClient.set(!tracking));
+			refreshDurationRef.current();
 		} catch {
 			setTrackingError("Could not update tracking. Try again.");
 		} finally {
@@ -197,31 +277,45 @@ export default function Popup() {
 	return (
 		<div className="popup-shell w-full bg-canvas text-ink">
 			<header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3">
-				<div className="flex min-w-0 items-center gap-2.5">
+				<div className="flex min-w-0 items-start gap-2.5">
 					<img
 						src={logo}
 						alt="Tabot"
 						width={26}
 						height={26}
-						className="size-[26px] shrink-0 object-contain"
+						className="mt-0.5 size-6.5 shrink-0 object-contain"
 					/>
 					<div className="min-w-0">
 						<p className="text-sm font-semibold leading-5">Tabot</p>
-						<p
-							role="status"
-							aria-live="polite"
-							className="flex items-center gap-1.5 text-xs text-muted"
-						>
+						<div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
 							<span
-								aria-hidden="true"
-								className={`size-2 rounded-full ${tracking === true ? "bg-lime-brand" : "bg-muted"}`}
-							/>
-							{tracking === null
-								? "Checking tracking…"
-								: tracking
-									? "Tracking on"
-									: "Tracking paused"}
-						</p>
+								role="status"
+								aria-live="polite"
+								className="flex items-center gap-1.5"
+							>
+								<span
+									aria-hidden="true"
+									className={`size-2 rounded-full ${tracking === true ? "bg-lime-brand" : "bg-muted"}`}
+								/>
+								{tracking === null
+									? "Checking tracking…"
+									: tracking
+										? "Tracking"
+										: "Tracked"}
+							</span>
+							<span aria-hidden="true">·</span>
+							<span
+								role="timer"
+								aria-label="Tracked duration"
+								className="tabular-nums"
+							>
+								{durationStatus === "ready" && trackingDuration !== null
+									? formatTrackingTime(trackingDuration)
+									: durationStatus === "loading"
+										? "Loading…"
+										: "Unavailable"}
+							</span>
+						</div>
 					</div>
 				</div>
 				<button
@@ -235,20 +329,25 @@ export default function Popup() {
 								? "Pause tracking"
 								: "Resume tracking"
 					}
-					className="flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-line bg-white px-3 py-1 text-xs font-semibold text-ink hover:bg-raised disabled:opacity-50"
+					className="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-white text-ink hover:bg-raised disabled:opacity-50"
+					title={
+						tracking === null
+							? "Checking tracking status"
+							: tracking
+								? "Pause tracking"
+								: "Resume tracking"
+					}
 				>
-					{tracking === true ? (
+					{trackingBusy ? (
+						<LoaderCircle
+							aria-hidden="true"
+							className="size-4 motion-safe:animate-spin"
+						/>
+					) : tracking === true ? (
 						<Pause aria-hidden="true" className="size-4" />
 					) : (
 						<Play aria-hidden="true" className="size-4" />
 					)}
-					{trackingBusy
-						? "Updating…"
-						: tracking === null
-							? "Checking…"
-							: tracking
-								? "Pause"
-								: "Resume"}
 				</button>
 			</header>
 			{trackingError && (
@@ -265,7 +364,7 @@ export default function Popup() {
 					</button>
 				</div>
 			)}
-			<main className="max-h-[532px] overflow-y-auto">
+			<main className="max-h-133 overflow-y-auto">
 				<section className="px-4 pb-3 pt-4" aria-label="Current page">
 					{loading ? (
 						<p className="text-sm text-muted">Checking this page…</p>
@@ -372,7 +471,7 @@ export default function Popup() {
 													key={note.id}
 													className="border-b border-line py-3 last:border-b-0"
 												>
-													<p className="whitespace-pre-wrap break-words text-sm leading-5">
+													<p className="whitespace-pre-wrap wrap-break-word text-sm leading-5">
 														{note.text}
 													</p>
 													<div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted">
@@ -436,7 +535,7 @@ export default function Popup() {
 											className="min-h-20 w-full resize-y rounded-md border border-line bg-white p-2 text-sm outline-none focus:border-ink"
 										/>
 									) : (
-										<p className="whitespace-pre-wrap break-words text-sm leading-5">
+										<p className="whitespace-pre-wrap wrap-break-word text-sm leading-5">
 											{note.text}
 										</p>
 									)}

@@ -1,7 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /home
-Disallow: /activities
-Disallow: /memories
 
 Sitemap: https://shanvit7.github.io/tabot/sitemap.xml

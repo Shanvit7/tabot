@@ -8,8 +8,6 @@ export const TOOL_NAMES = {
 	LIST_SITES: "list_sites",
 	LIST_SITE_PAGES: "list_site_pages",
 	GET_SITE_NOTES: "get_site_notes",
-	GET_PENDING_WORKFLOW_HANDOFF: "get_pending_workflow_handoff",
-	SAVE_WORKFLOW_SCRIPT: "save_workflow_script",
 } as const;
 export const MAX_QUERY_CHARS = 200;
 
@@ -22,6 +20,4 @@ export const TOOL_DESCRIPTIONS = {
 	LIST_SITE_PAGES: `Browse distinct retained pages for one registrable site, including its subdomains. Returns up to 8 opaque pageRef values with host, timestamps, noteCount and capture availability; never page paths, titles or visible text. Includes pages retained only by notes or activity. Optional keyword/time filters apply before pagination. Use pageRef with get_page_notes to retrieve that page's saved notes without sending its URL. Pass nextCursor with the same site and filters to continue.`,
 	GET_PAGE_NOTES: `Get user-written notes for one page. Provide exactly one selector: pageRef returned by list_site_pages (preferred; no URL disclosure) or a known HTTP(S) URL. Returns up to 8 notes with redacted text, site host, timestamps and derived session, never page paths. Pass nextCursor with the same selector to continue; null means no more results. pageRef browses all retained notes for the displayed URL, independently of captures or search text. Legacy URL lookup canonicalizes the original URL locally and is capped at 50 notes. Content leaves the device only on this authorized request.`,
 	GET_SITE_NOTES: `Get up to 50 notes associated with a website domain, including its subdomains (for example, linkedin.com includes notes from all linkedin.com subdomains). Returns redacted text, site, host, title, timestamps, and derived sessions. Notes stay on the device; content leaves only on this authorized request.`,
-	GET_PENDING_WORKFLOW_HANDOFF: `Read the one workflow handoff the user just selected in Tabot. It contains only site origins in order, repeat counts, prediction counts, timestamps, and a one-time local save grant—never page titles, paths, text, clicks, or inferred intent. If ready is false, ask the user to return to Tabot and click “Ask ChatGPT.” Explain what the site pattern does and does not show, ask what the user is trying to accomplish, and assess if automation can help before proposing steps. Do not invent intent or actions. Keep the grant private; use it only with save_workflow_script after the user confirms the exact script.`,
-	SAVE_WORKFLOW_SCRIPT: `Save a user-confirmed, version-1 declarative automation script as an unreviewed local draft. Requires candidateId, one-time grantToken, and exact handoffDigest supplied in Tabot's reviewed handoff. Call only after the user confirms saving this exact draft. This tool never approves or runs automation. It accepts only bounded navigate/click/fill/verify steps on the granted HTTPS origins; no code or credential values. The extension validates the script and commits it locally before reporting success. If the tool is unavailable, evidence is insufficient, or user intent is unclear, ask questions; never claim it was saved.`,
 } as const;

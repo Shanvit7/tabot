@@ -52,12 +52,6 @@ const READ_ONLY_ANNOTATIONS = {
 	openWorldHint: false,
 	destructiveHint: false,
 };
-const DRAFT_SAVE_ANNOTATIONS = {
-	readOnlyHint: false,
-	openWorldHint: false,
-	destructiveHint: false,
-};
-
 const createMcpServer = (
 	dispatch: ToolDispatch,
 	requestId: string,
@@ -186,57 +180,6 @@ const createMcpServer = (
 		},
 		(params) => call(TOOL_NAMES.GET_ACTIVITY_TIMELINE, params),
 	);
-
-	// Coming soon after 0.3: local workflow automation handoff/draft tools and resource.
-	/*
-	server.registerTool(
-		TOOL_NAMES.GET_PENDING_WORKFLOW_HANDOFF,
-		{
-			title: "Get the selected workflow handoff",
-			description: TOOL_DESCRIPTIONS.GET_PENDING_WORKFLOW_HANDOFF,
-			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getPendingWorkflowHandoffInputSchema,
-		},
-		(params) => call(TOOL_NAMES.GET_PENDING_WORKFLOW_HANDOFF, params),
-	);
-
-	server.registerTool(
-		TOOL_NAMES.SAVE_WORKFLOW_SCRIPT,
-		{
-			title: "Save workflow draft",
-			description: TOOL_DESCRIPTIONS.SAVE_WORKFLOW_SCRIPT,
-			annotations: DRAFT_SAVE_ANNOTATIONS,
-			inputSchema: saveWorkflowScriptInputSchema,
-		},
-		(params) => call(TOOL_NAMES.SAVE_WORKFLOW_SCRIPT, params),
-	);
-
-	server.registerResource(
-		"pending-workflow-handoff",
-		"tabot://workflows/pending",
-		{
-			title: "Pending workflow handoff",
-			description:
-				"The single local site-route handoff explicitly selected in Tabot. No page content or inferred intent.",
-			mimeType: "application/json",
-		},
-		async (uri) => {
-			const result = await dispatch(
-				TOOL_NAMES.GET_PENDING_WORKFLOW_HANDOFF,
-				{},
-			);
-			return {
-				contents: [
-					{
-						uri: uri.href,
-						mimeType: "application/json",
-						text: JSON.stringify(result),
-					},
-				],
-			};
-		},
-	);
-	*/
 
 	return server;
 };

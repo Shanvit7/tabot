@@ -1,4 +1,5 @@
 // packages/shared/src/share/targets.ts
+import { apiClient } from "../api/client";
 // Share-context target definitions (name / prefill URL / prompt), icon-free so
 // the extension popup can list providers without pulling @lobehub/icons.
 // The web dashboard adds icons on top (apps/web/src/lib/share-targets.ts).
@@ -71,11 +72,10 @@ const isChatGptUrl = (value: unknown): value is string => {
 
 export const resolveChatGptConnectUrl = async (): Promise<string> => {
 	try {
-		const response = await fetch(CHATGPT_CONFIG_URL, {
-			signal: AbortSignal.timeout(3_000),
-		});
-		if (!response.ok) return chatGptConnectPromptUrl();
-		const config = (await response.json()) as { marketplaceUrl?: unknown };
+		const config = await apiClient.get<{ marketplaceUrl?: unknown }>(
+			CHATGPT_CONFIG_URL,
+			{ signal: AbortSignal.timeout(3_000) },
+		);
 		return isChatGptUrl(config.marketplaceUrl)
 			? config.marketplaceUrl
 			: chatGptConnectPromptUrl();

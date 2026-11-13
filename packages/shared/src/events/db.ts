@@ -13,15 +13,6 @@ import type {
 	HistorySearchResult,
 	SearchAvailability,
 } from "../recall/history-search";
-import type {
-	WorkflowAutomationScript,
-	WorkflowScriptDraft,
-} from "../workflows/automation-script";
-import type { BehaviorCheckpoint } from "../workflows/behavior-model";
-import type {
-	WorkflowHandoff,
-	WorkflowHandoffRequest,
-} from "../workflows/workflow-handoff";
 import type { TabEventMetadata, TabEventType } from "./events";
 import { normalizeEvent } from "./ingest";
 
@@ -68,11 +59,6 @@ export interface InsertEventsResult {
 	ignoredPages?: Record<string, string>;
 }
 export type StoredIngestRecord = StoredTabEvent | StoredPageObservation;
-export type WorkflowTrainingResult = {
-	status: "trained" | "unchanged" | "insufficient-data" | "stale" | "cancelled";
-	examples: number;
-	truncated: boolean;
-};
 export type EventRange = {
 	from?: number;
 	to?: number;
@@ -222,37 +208,7 @@ export class TabotDatabase {
 		this.request<PageNote[]>("listNotesBetween", [from, to]);
 	getSearchStatus = () =>
 		this.request<SearchAvailability>("getSearchStatus", []);
-	getWorkflowCheckpoint = () =>
-		this.request<BehaviorCheckpoint | null>("getWorkflowCheckpoint", []);
-	createWorkflowHandoff = (request: WorkflowHandoffRequest) =>
-		this.request<void>("createWorkflowHandoff", [request]);
-	getPendingWorkflowHandoff = () =>
-		this.request<WorkflowHandoff | null>("getPendingWorkflowHandoff", []);
-	saveWorkflowScriptDraft = (
-		grantToken: string,
-		candidateId: string,
-		handoffDigest: string,
-		script: WorkflowAutomationScript,
-	) =>
-		this.request<WorkflowScriptDraft>("saveWorkflowScriptDraft", [
-			grantToken,
-			candidateId,
-			handoffDigest,
-			script,
-		]);
-	listWorkflowScriptDrafts = () =>
-		this.request<WorkflowScriptDraft[]>("listWorkflowScriptDrafts", []);
-	deleteWorkflowScriptDraft = (id: string) =>
-		this.request<{ deleted: boolean }>("deleteWorkflowScriptDraft", [id]);
-	getWorkflowTrainingGeneration = () =>
-		this.request<number>("getWorkflowTrainingGeneration", []);
-	advanceWorkflowTrainingGeneration = () =>
-		this.request<number>("advanceWorkflowTrainingGeneration", []);
-	resetWorkflowModel = () => this.request<void>("resetWorkflowModel", []);
-	trainWorkflowModel = (expectedGeneration: number) =>
-		this.request<WorkflowTrainingResult>("trainWorkflowModel", [
-			expectedGeneration,
-		]);
+	warmSearchModel = () => this.request<void>("warmSearchModel", []);
 	getLegacyMigrationStatus = () =>
 		this.request<{
 			pendingRetirement: boolean;
@@ -261,6 +217,7 @@ export class TabotDatabase {
 		}>("getLegacyMigrationStatus");
 	confirmLegacyRetirement = () =>
 		this.request<{ retired: boolean }>("confirmLegacyRetirement");
+	purgeData = () => this.request<{ deleted: number }>("purgeData");
 	deletePageObservations = (
 		filter?: { origin?: string; from?: number; to?: number },
 		limit?: number,

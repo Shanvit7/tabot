@@ -1,4 +1,5 @@
 import * as chrono from "chrono-node";
+import { ACTIVITY_GAP_MS, foregroundEvents } from "../activities/foreground";
 import type { StoredTabEvent } from "../events/db";
 import type { StoredPageObservation } from "../pages/observations";
 import { searchQueryFromUrl } from "../privacy/ingest";
@@ -56,6 +57,7 @@ export type HistorySearchResult = {
 	lastSeen: number;
 	eventCount: number;
 	pageCount: number;
+	estimatedActiveMs?: number;
 	excerpt: string;
 	searchQueries?: string[];
 	pageExcerptAvailable: boolean;
@@ -211,6 +213,27 @@ const addSource = (
 		.slice(0, 5);
 };
 
+const estimatePageTime = (events: StoredTabEvent[]) => {
+	const durations = new Map<string, number>();
+	const visibleEvents = foregroundEvents(events);
+	for (let index = 1; index < visibleEvents.length; index++) {
+		const previous = visibleEvents[index - 1];
+		const current = visibleEvents[index];
+		if (
+			!previous ||
+			!current ||
+			previous.type === "PAGE_HIDDEN" ||
+			previous.type === "SW_WINDOW_FOCUS"
+		)
+			continue;
+		const elapsed = Math.round(current.timestamp - previous.timestamp);
+		if (elapsed <= 0 || elapsed >= ACTIVITY_GAP_MS) continue;
+		const url = safeRecallUrl(previous.url)?.href;
+		if (url) durations.set(url, (durations.get(url) ?? 0) + elapsed);
+	}
+	return durations;
+};
+
 /** Unpaginated keyword projection; empty query includes every retained URL. */
 export const collectHistoryResults = async (
 	events: StoredTabEvent[],
@@ -221,6 +244,13 @@ export const collectHistoryResults = async (
 	const terms = [...new Set(tokenizeRecallText(query.slice(0, 240)))].slice(
 		0,
 		48,
+	);
+	const pageDurations = estimatePageTime(
+		events.filter(
+			(event) =>
+				event.timestamp >= (options.from ?? 0) &&
+				event.timestamp <= (options.to ?? Number.MAX_SAFE_INTEGER),
+		),
 	);
 	if (
 		(options.nearestTo !== undefined && !Number.isFinite(options.nearestTo)) ||
@@ -390,6 +420,9 @@ export const collectHistoryResults = async (
 				lastSeen: document.lastSeen,
 				eventCount: document.eventCount,
 				pageCount: document.pageCount,
+				...(pageDurations.get(document.url)
+					? { estimatedActiveMs: pageDurations.get(document.url) }
+					: {}),
 				excerpt: document.excerpt || `${url.hostname}${url.pathname}`,
 				...(document.searchQueries.length
 					? { searchQueries: document.searchQueries.map((item) => item.query) }

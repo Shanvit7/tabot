@@ -300,6 +300,10 @@ const notes = {
 		return true;
 	},
 	deleteOne: async ({ _id }: { _id: string }) => noteRows.delete(_id),
+	deleteMany: async (query: RecordFilter) => {
+		for (const [id, row] of noteRows)
+			if (matches(row, query)) noteRows.delete(id);
+	},
 };
 const metaRows = new Map<string, Record<string, unknown>>();
 const meta = {
@@ -328,6 +332,8 @@ const meta = {
 	deleteOne: async ({ _id }: { _id: string }) => metaRows.delete(_id),
 };
 const embeddings = {
+	find: async (query: RecordFilter = {}) =>
+		[...storedEmbeddings.values()].filter((row) => matches(row, query)),
 	findOne: async ({ _id }: { _id: string }) =>
 		storedEmbeddings.get(_id) ?? null,
 	insert: async (row: Record<string, unknown>) => {
@@ -335,6 +341,10 @@ const embeddings = {
 		return row._id;
 	},
 	deleteOne: async ({ _id }: { _id: string }) => storedEmbeddings.delete(_id),
+	deleteMany: async (query: RecordFilter) => {
+		for (const [id, row] of storedEmbeddings)
+			if (matches(row, query)) storedEmbeddings.delete(id);
+	},
 };
 mock.module("../node_modules/taladb/dist/index.browser.mjs", {
 	namedExports: {
@@ -392,6 +402,7 @@ class TestWorker {
 globalThis.Worker = TestWorker as unknown as typeof Worker;
 const originalIndexedDB = globalThis.indexedDB;
 const originalIDBKeyRange = globalThis.IDBKeyRange;
+const originalDateNow = Date.now;
 const originalError = console.error;
 globalThis.chrome = {
 	runtime: {
@@ -571,6 +582,23 @@ try {
 	assert.equal(opens, 7);
 	await requestCount();
 	assert.equal(opens, 7, "successful startup must reuse handle");
+	const embeddingsBeforeWarmup = storedEmbeddings.size;
+	assert.equal((await request("warmSearchModel")).ok, true);
+	let searchStatus = await request("getSearchStatus");
+	for (let attempt = 0; attempt < 100; attempt++) {
+		if (
+			(searchStatus.value as { model?: string } | undefined)?.model === "ready"
+		)
+			break;
+		await new Promise((resolve) => setTimeout(resolve, 1));
+		searchStatus = await request("getSearchStatus");
+	}
+	assert.equal(
+		(searchStatus.value as { model?: string } | undefined)?.model,
+		"ready",
+		"warmup loads embedding model",
+	);
+	assert.equal(storedEmbeddings.size, embeddingsBeforeWarmup);
 	const note = {
 		id: "note-uuid",
 		text: "Applied for this job",
@@ -918,10 +946,13 @@ try {
 		[],
 		"query-time search must not retain deleted evidence",
 	);
+	const searchNow = Date.now();
+	Date.now = () => searchNow;
 	const recentGoogleSearch = {
 		...event,
 		id: `${event.source.instanceId}:104`,
-		timestamp: Date.now() - 5 * 60_000 + 15_000,
+		timestamp:
+			Math.floor((searchNow - 5 * 60_000) / 60_000) * 60_000 + 30_000,
 		url: "https://www.google.com/search?q=database&client=chrome",
 		source: { ...event.source, sequence: 104 },
 	};
@@ -940,178 +971,23 @@ try {
 	const timeGoogleSearch = await request("searchHistory", [
 		"what did i search 5 mins ago",
 	]);
-	assert.deepEqual(timeGoogleSearch.value[0]?.searchQueries, ["database"]);
-	failure = undefined;
-	const modelInstance = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-	const modelEvents = Array.from({ length: 12 }, (_, repeat) =>
-		["alpha", "beta", "gamma"].map((site, index) => {
-			const sequence = 1_000 + repeat * 3 + index;
-			return {
-				...event,
-				id: `${modelInstance}:${sequence}`,
-				type: "TAB_ACTIVATED",
-				tabId: index + 1,
-				timestamp:
-					Date.now() - 90 * 24 * 60 * 60_000 + repeat * 60_000 + index * 1_000,
-				url: `https://${site}.example/path`,
-				source: { instanceId: modelInstance, sequence },
-			};
-		}),
-	).flat();
-	await request("commitIngest", [modelEvents]);
-	const generation = await request("getWorkflowTrainingGeneration");
-	assert.equal(generation.value, 0);
-	const staleTraining = await request("trainWorkflowModel", [1]);
-	assert.equal(
-		(staleTraining.value as { status: string }).status,
-		"stale",
-		"training rejects stale tracking generation",
-	);
-	const [trained, overlappingTraining] = await Promise.all([
-		request("trainWorkflowModel", [generation.value]),
-		request("trainWorkflowModel", [generation.value]),
-	]);
-	assert.equal(
-		trained.value && (trained.value as { status: string }).status,
-		"trained",
-	);
-	assert.deepEqual(
-		overlappingTraining.value,
-		trained.value,
-		"overlapping auto-training triggers share one pass",
-	);
-	const checkpoint = await request("getWorkflowCheckpoint");
-	assert.equal(checkpoint.ok, true);
-	assert.equal((checkpoint.value as { schema?: number }).schema, 2);
 	assert.ok(
-		(checkpoint.value as { sourceIds: string[] }).sourceIds.includes(
-			`${modelInstance}:1000`,
+		(timeGoogleSearch.value as { searchQueries?: string[] }[]).some((result) =>
+			result.searchQueries?.includes("database"),
 		),
-		"training includes retained history older than 30 days",
+		"relative-time search includes the matching query",
 	);
-	await request("advanceWorkflowTrainingGeneration");
+	failure = undefined;
+	const purgeResult = await request("purgeData");
+	assert.equal(purgeResult.ok, true, JSON.stringify(purgeResult));
 	assert.equal(
-		(await request("getWorkflowCheckpoint")).value !== null,
-		true,
-		"pause generation preserves checkpoint",
-	);
-	const sourceId = (checkpoint.value as { sourceIds: string[] }).sourceIds[0];
-	const sourceRow = [...storedRecords.values()].find(
-		(row) => row.originalId === sourceId,
-	);
-	assert.ok(sourceRow);
-	storedRecords.delete(sourceRow._id as string);
-	assert.equal(
-		(await request("getWorkflowCheckpoint")).value,
-		null,
-		"deleted source invalidates checkpoint",
-	);
-	await request("resetWorkflowModel");
-	assert.equal(
-		(await request("getWorkflowCheckpoint")).value,
-		null,
-		"reset removes checkpoint",
-	);
-	const automationCandidateId = "handwired-v1-1234abcd";
-	const automationOrigin = "https://example.com";
-	const automationHandoff = {
-		payload: {
-			candidateId: automationCandidateId,
-			sites: [automationOrigin],
-			occurrences: 2,
-			modelMatches: 2,
-			firstAt: 1,
-			lastAt: 2,
-			evidenceType: "site-navigation-only",
-		},
-		sourceIds: [event.id],
-	};
-	const preparedHandoff = await request("createWorkflowHandoff", [
-		automationHandoff,
-	]);
-	assert.equal(preparedHandoff.ok, true, JSON.stringify(preparedHandoff));
-	const pendingHandoff = (await request("getPendingWorkflowHandoff")).value as {
-		payload: { candidateId: string };
-		grant: { token: string; handoffDigest: string };
-	};
-	assert.equal(pendingHandoff.payload.candidateId, automationCandidateId);
-	const grantToken = pendingHandoff.grant.token;
-	const handoffDigest = pendingHandoff.grant.handoffDigest;
-	const automationScript = {
-		version: 1,
-		name: "Open example",
-		description: "Open the selected site.",
-		trigger: "manual",
-		origins: [automationOrigin],
-		inputs: [],
-		steps: [{ type: "navigate", url: `${automationOrigin}/` }],
-	} as const;
-	const savedAutomation = await request("saveWorkflowScriptDraft", [
-		grantToken,
-		automationCandidateId,
-		handoffDigest,
-		automationScript,
-	]);
-	assert.equal(savedAutomation.ok, true);
-	assert.equal(
-		(savedAutomation.value as { status: string }).status,
-		"draft",
-		"MCP save stores draft, never runnable state",
-	);
-	assert.equal(
-		(await request("getPendingWorkflowHandoff")).value,
-		null,
-		"saving consumes and clears pending handoff",
-	);
-	assert.equal(
-		(
-			await request("saveWorkflowScriptDraft", [
-				grantToken,
-				automationCandidateId,
-				"b".repeat(64),
-				automationScript,
-			])
-		).code,
-		"storage-unavailable",
-		"save grant is bound to reviewed handoff digest",
-	);
-	assert.deepEqual(
-		(
-			await request("saveWorkflowScriptDraft", [
-				grantToken,
-				automationCandidateId,
-				handoffDigest,
-				automationScript,
-			])
-		).value,
-		savedAutomation.value,
-		"retry after an unknown ACK reconciles stable local draft",
-	);
-	assert.equal(
-		(
-			await request("saveWorkflowScriptDraft", [
-				grantToken,
-				automationCandidateId,
-				handoffDigest,
-				{ ...automationScript, name: "Changed" },
-			])
-		).code,
-		"storage-unavailable",
-		"a consumed grant cannot save a different script",
-	);
-	assert.equal(
-		((await request("listWorkflowScriptDrafts")).value as unknown[]).length,
-		1,
-	);
-	const savedId = (savedAutomation.value as { id: string }).id;
-	assert.deepEqual(
-		(await request("deleteWorkflowScriptDraft", [savedId])).value,
-		{ deleted: true },
-	);
-	assert.equal(
-		((await request("listWorkflowScriptDrafts")).value as unknown[]).length,
+		storedRecords.size,
 		0,
+		"purge removes events, pages, and search jobs",
 	);
+	assert.equal(storedPassages.size, 0, "purge removes indexed search passages");
+	assert.equal(storedEmbeddings.size, 0, "purge removes embedding cache");
+	assert.equal(noteRows.size, 0, "purge removes saved notes");
 	failure = "write-quota";
 	assert.equal(
 		(
@@ -1129,6 +1005,7 @@ try {
 	globalThis.Worker = originalWorker;
 	globalThis.indexedDB = originalIndexedDB;
 	globalThis.IDBKeyRange = originalIDBKeyRange;
+	Date.now = originalDateNow;
 	console.error = originalError;
 	mock.restoreAll();
 }

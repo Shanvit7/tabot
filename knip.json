@@ -2,6 +2,11 @@
 	"$schema": "https://unpkg.com/knip@6/schema.json",
 	"tags": ["-lintignore"],
 	"ignoreExportsUsedInFile": true,
-	"ignore": ["apps/extension/**"],
-	"ignoreDependencies": ["destr", "cloudflare"]
+	"ignore": [
+		".agents/**",
+		"apps/extension/**",
+		"scripts/check-taladb-retrieval.mjs"
+	],
+	"ignoreDependencies": ["destr", "cloudflare", "path-browserify", "url"],
+	"ignoreBinaries": ["agent-browser"]
 }

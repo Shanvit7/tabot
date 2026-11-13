@@ -7,7 +7,7 @@ import {
 	getTutorialChapter,
 	getTypedText,
 	getVerificationStage,
-} from "../components/assistant/chatgpt-tutorial/timeline.ts";
+} from "../components/features/assistant/chatgpt-tutorial/timeline.ts";
 
 assert.equal(CHATGPT_TUTORIAL_CHAPTERS.length, 5);
 assert.equal(CHATGPT_TUTORIAL_DURATION, 78 * CHATGPT_TUTORIAL_FPS);
@@ -68,7 +68,7 @@ assert.equal(getTypedText("Tabot", 45, 30, 30), "Ta");
 
 const verificationSource = readFileSync(
 	new URL(
-		"../components/assistant/chatgpt-tutorial/verify-scene.tsx",
+		"../components/features/assistant/chatgpt-tutorial/verify-scene.tsx",
 		import.meta.url,
 	),
 	"utf8",
@@ -78,12 +78,12 @@ assert.match(verificationSource, /summarize my research/);
 assert.match(verificationSource, /getTypedText\(summary/);
 
 const directory = new URL(
-	"../components/assistant/chatgpt-tutorial/",
+	"../components/features/assistant/chatgpt-tutorial/",
 	import.meta.url,
 );
 const sources = [
 	new URL(
-		"../components/assistant/chatgpt-connection-tutorial.tsx",
+		"../components/features/assistant/chatgpt-connection-tutorial.tsx",
 		import.meta.url,
 	),
 	new URL("../routes/_workspace.assistant.tsx", import.meta.url),

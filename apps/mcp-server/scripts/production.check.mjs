@@ -502,14 +502,6 @@ try {
 	assert.equal(discovery.status, 200);
 	const discoveryText = await discovery.text();
 	assert.match(discoveryText, /search_activity/);
-	assert.doesNotMatch(discoveryText, /get_pending_workflow_handoff/);
-	assert.doesNotMatch(discoveryText, /save_workflow_script/);
-	const resources = await mcp(tokens.access_token, {
-		method: "resources/list",
-		params: {},
-	});
-	assert.doesNotMatch(await resources.text(), /tabot:\/\/workflows\/pending/);
-	assert.equal(dispatches, 0, "disabled workflow resource never dispatches");
 	for (const [resource, scopes, expected] of [
 		["https://other.invalid/mcp", ["tabot.context"], 401],
 		["https://test.invalid/mcp", [], 403],

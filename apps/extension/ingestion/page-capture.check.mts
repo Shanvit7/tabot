@@ -48,8 +48,11 @@ const message = {
 	timestamp: Date.now(),
 	documentUrl: url,
 	trigger: "auto-dwell",
-	title: "Pull request 42 — contact john@example.com",
-	segments: ["Pull request 42, contact john@example.com"],
+	title:
+		"Pull request 42 — contact john@example.com; token ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+	segments: [
+		"Pull request 42, contact john@example.com; token ghp_1234567890abcdefghijklmnopqrstuvwxyzAB",
+	],
 	truncated: false,
 	partial: false,
 };
@@ -60,10 +63,12 @@ assert.deepEqual(ack, { status: "persisted", id: message.id });
 const stored = records.get(message.id);
 assert.ok(stored);
 assert.equal(stored.url, "https://github.com/acme/project/pull/42");
-assert.equal(stored.segments.join(" ").includes("john@example.com"), false);
+assert.equal(stored.segments.join(" ").includes("john@example.com"), true);
+assert.equal(stored.segments.join(" ").includes("ghp_1234567890"), false);
 assert.equal(JSON.stringify(stored).includes("private=remove"), false);
 assert.equal(stored.trigger, "auto-dwell");
-assert.equal(stored.title?.includes("john@example.com"), false);
+assert.equal(stored.title?.includes("john@example.com"), true);
+assert.equal(stored.title?.includes("ghp_1234567890"), false);
 assert.equal(stored.privacy.redacted, true);
 assert.match(stored.pageKey, /^[0-9a-f]{64}$/);
 assert.deepEqual(await ingestPageObservationMessage(message, sender, deps), {
