@@ -16,6 +16,8 @@ error.stack = [
 telemetry.captureError(error, "window_error");
 telemetry.pageView("/settings");
 telemetry.pageView("/user@example.com");
+telemetry.captureAction({ name: "landing_add_to_chrome_clicked" });
+telemetry.captureAction({ name: "landing_page_end_reached" });
 assert.equal(events[0].type, "exception");
 assert.equal(events[1].type, "page_view");
 assert.equal(events[2].type, "page_view");
@@ -30,6 +32,12 @@ assert.equal(events[0].exception.name, "Error");
 assert.equal(events[0].exception.frames[0]?.filename, "chunk.js");
 assert.equal(events[1].route, "/settings");
 assert.equal(events[2].route, "/other");
+assert.deepEqual(events[3]?.type === "action" ? events[3].action : null, {
+	name: "landing_add_to_chrome_clicked",
+});
+assert.deepEqual(events[4]?.type === "action" ? events[4].action : null, {
+	name: "landing_page_end_reached",
+});
 assert.doesNotMatch(
 	JSON.stringify(events),
 	/private\.example|secret|account-reset|Alice|user@example\.com/,
@@ -81,6 +89,34 @@ assert.equal(properties?.error_source, "search_warmup_failed");
 assert.equal(properties?.error_code, "model-load-failed");
 assert.doesNotMatch(
 	JSON.stringify(captured),
+	/private\.example|secret|account-reset|Alice|user@example\.com/,
+);
+const landingCta = events[3];
+if (landingCta?.type !== "action")
+	throw new Error("landing CTA telemetry missing");
+let actionPayload: Record<string, unknown> | undefined;
+globalThis.fetch = async (_input, init) => {
+	actionPayload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+	return new Response(null, { status: 200 });
+};
+try {
+	await createPostHogTransport({
+		projectKey: "test-key",
+		distinctId: "tabot_web",
+	}).capture(landingCta);
+} finally {
+	globalThis.fetch = originalFetch;
+}
+assert.equal(actionPayload?.event, "landing_add_to_chrome_clicked");
+assert.deepEqual(actionPayload?.properties, {
+	platform: "web_dashboard",
+	$release_id: "test-sha",
+	environment: "test",
+	$process_person_profile: false,
+	$lib: "@tabot/shared-telemetry",
+});
+assert.doesNotMatch(
+	JSON.stringify(actionPayload),
 	/private\.example|secret|account-reset|Alice|user@example\.com/,
 );
 console.log(

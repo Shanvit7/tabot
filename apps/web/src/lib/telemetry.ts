@@ -1,12 +1,19 @@
 import {
 	createTelemetry,
+	type TelemetryAction,
 	type TelemetryErrorSource,
 } from "@tabot/shared/telemetry";
 import { createPostHogTransport } from "@tabot/shared/telemetry/posthog";
+import {
+	APP_ENVIRONMENT,
+	POSTHOG_HOST,
+	POSTHOG_PROJECT_KEY,
+	POSTHOG_RELEASE,
+} from "~/lib/constants";
 
 const routes = new Set([
 	"/",
-	"/ai",
+	"/automations",
 	"/assistant",
 	"/extension-not-connected",
 	"/home",
@@ -16,22 +23,22 @@ const routes = new Set([
 
 const telemetry = createTelemetry(
 	createPostHogTransport({
-		projectKey:
-			import.meta.env.VITE_POSTHOG_ENABLED === "true"
-				? import.meta.env.VITE_POSTHOG_KEY
-				: undefined,
-		apiHost: import.meta.env.VITE_POSTHOG_HOST,
+		projectKey: POSTHOG_PROJECT_KEY,
+		apiHost: POSTHOG_HOST,
 		distinctId: "tabot_web",
 	}),
 	{
 		platform: "web_dashboard",
-		release: import.meta.env.VITE_POSTHOG_RELEASE || "development",
-		environment: import.meta.env.MODE,
+		release: POSTHOG_RELEASE,
+		environment: APP_ENVIRONMENT,
 	},
 );
 
 export const trackDashboardPage = (pathname: string) =>
 	telemetry.pageView(routes.has(pathname) ? pathname : "/other");
+
+export const trackLandingAction = (action: TelemetryAction) =>
+	telemetry.captureAction(action);
 
 export const trackDashboardError = (
 	value: unknown,

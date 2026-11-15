@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { initialSearchState, searchReducer } from "./state.ts";
+import {
+	initialSearchState,
+	searchReducer,
+} from "../components/features/home/search/state.ts";
 
 const results = [{ url: "https://example.com" }];
 const notes = [{ id: "note-1" }];

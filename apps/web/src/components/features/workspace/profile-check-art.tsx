@@ -3,6 +3,7 @@ import {
 	PROFILE_CHECK_GEOMETRY as ART,
 	type ProfileCheckPart,
 } from "~/components/features/workspace/profile-check-geometry";
+import { CHROME_LOGO_URL } from "~/lib/constants";
 import "~/components/illustrations/anatomy/iso.css";
 import "~/components/features/workspace/profile-check.css";
 
@@ -94,7 +95,7 @@ export const ProfileCheckArt = () => {
 						<Part part={part} />
 						{part.name === "profile.chrome" && (
 							<image
-								href={`${import.meta.env.BASE_URL}chrome.svg`}
+								href={CHROME_LOGO_URL}
 								width="22"
 								height="22"
 								transform={ART.chromeLogoTransform}

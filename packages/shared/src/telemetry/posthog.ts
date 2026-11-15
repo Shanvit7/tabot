@@ -39,6 +39,8 @@ const toPostHogEvent = (event: TelemetryEvent) => {
 			event: "$pageview",
 			properties: { ...context, route: event.route },
 		};
+	if (event.type === "action")
+		return { event: event.action.name, properties: context };
 
 	const { exception } = event;
 	const fingerprint = [

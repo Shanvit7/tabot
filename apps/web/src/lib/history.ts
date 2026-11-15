@@ -20,6 +20,7 @@ import {
 } from "@tabot/shared/library";
 import { createTrackingClient } from "@tabot/shared/tracking";
 import { createClientOnlyFn } from "@tanstack/react-start";
+import { TABOT_EXTENSION_ID } from "~/lib/constants";
 
 // Browser-only transport: never send history or search terms through Start server functions.
 export class ExtensionUnavailableError extends Error {
@@ -52,15 +53,8 @@ const failureMessage = (code: unknown): string => {
 	return "Tabot could not read local storage. Reload the extension, then try again. This does not mean your history is empty.";
 };
 
-const request = createClientOnlyFn(
-	(message: unknown): Promise<Record<string, unknown>> => {
-		const extensionId = import.meta.env.VITE_TABOT_EXTENSION_ID;
-		if (!extensionId || !/^[a-p]{32}$/.test(extensionId))
-			return Promise.reject(
-				new ExtensionUnavailableError(
-					"Connect Tabot first: set VITE_TABOT_EXTENSION_ID to the ID shown in chrome://extensions, then restart the dashboard.",
-				),
-			);
+const requestExtension = createClientOnlyFn(
+	(extensionId: string, message: unknown): Promise<Record<string, unknown>> => {
 		const runtime = (
 			globalThis as typeof globalThis & {
 				chrome?: { runtime?: ExtensionRuntime };
@@ -112,6 +106,75 @@ const request = createClientOnlyFn(
 		});
 	},
 );
+
+const discoverExtensionId = createClientOnlyFn(
+	(): Promise<string | undefined> =>
+		new Promise((resolve) => {
+			const finish = (id?: string) => {
+				clearTimeout(timer);
+				window.removeEventListener("message", onMessage);
+				resolve(id);
+			};
+			const onMessage = (event: MessageEvent) => {
+				if (
+					event.source === window &&
+					event.origin === window.location.origin &&
+					isRecord(event.data) &&
+					event.data.type === "TABOT_EXTENSION_READY" &&
+					typeof event.data.extensionId === "string" &&
+					/^[a-p]{32}$/.test(event.data.extensionId)
+				)
+					finish(event.data.extensionId);
+			};
+			const timer = setTimeout(() => finish(), 1_000);
+			window.addEventListener("message", onMessage);
+			window.postMessage(
+				{ type: "TABOT_DISCOVER_EXTENSION" },
+				window.location.origin,
+			);
+		}),
+);
+
+const findExtension = async (): Promise<string> => {
+	const discoveredId = await discoverExtensionId();
+	for (const id of new Set([TABOT_EXTENSION_ID, discoveredId])) {
+		if (!id || !/^[a-p]{32}$/.test(id)) continue;
+		try {
+			if ((await requestExtension(id, { type: "TABOT_PING" })).ok === true)
+				return id;
+		} catch {
+			// A missing build must not hide another installed Tabot build.
+		}
+	}
+	throw new ExtensionUnavailableError(
+		"Tabot is not reachable. Enable or reload the extension in chrome://extensions, then retry.",
+	);
+};
+
+let extensionIdPromise: Promise<string> | undefined;
+const request = createClientOnlyFn(
+	async (message: unknown): Promise<Record<string, unknown>> => {
+		extensionIdPromise ??= findExtension();
+		try {
+			return await requestExtension(await extensionIdPromise, message);
+		} catch (error) {
+			if (error instanceof ExtensionUnavailableError)
+				extensionIdPromise = undefined;
+			throw error;
+		}
+	},
+);
+
+export const isTabotConnected = async (): Promise<boolean> => {
+	extensionIdPromise = findExtension();
+	try {
+		await extensionIdPromise;
+		return true;
+	} catch {
+		extensionIdPromise = undefined;
+		return false;
+	}
+};
 
 export const updateDashboardNote = async (
 	id: string,

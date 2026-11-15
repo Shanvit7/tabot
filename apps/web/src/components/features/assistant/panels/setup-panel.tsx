@@ -1,5 +1,6 @@
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import { Check, ChevronDown, Copy, Download } from "lucide-react";
+import { LOGO_URL } from "~/lib/constants";
 
 export const AssistantSetupPanel = ({
 	connectUrl,
@@ -155,14 +156,14 @@ export const AssistantSetupPanel = ({
 											<h4 className="font-medium text-work-ink">Logo</h4>
 											<div className="mt-2 flex flex-wrap items-center gap-3">
 												<img
-													src={`${import.meta.env.BASE_URL}logo.png`}
+													src={LOGO_URL}
 													alt="Tabot logo preview"
 													width="64"
 													height="64"
 													className="size-16 shrink-0 rounded-lg border border-work-line object-contain"
 												/>
 												<a
-													href={`${import.meta.env.BASE_URL}logo.png`}
+													href={LOGO_URL}
 													download="tabot-logo.png"
 													className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-work-line px-3 text-xs font-medium text-work-ink transition-colors hover:bg-work-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 												>

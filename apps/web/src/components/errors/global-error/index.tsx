@@ -2,6 +2,7 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { GlobalErrorArt } from "~/components/errors/global-error/art";
 import { Button } from "~/components/ui/button";
+import { BASE_URL, LOGO_URL } from "~/lib/constants";
 import { trackDashboardError } from "~/lib/telemetry";
 
 export const GlobalError = ({ error, reset }: ErrorComponentProps) => {
@@ -10,7 +11,7 @@ export const GlobalError = ({ error, reset }: ErrorComponentProps) => {
 		<main className="flex min-h-svh flex-col bg-work-canvas px-6 text-work-ink sm:px-10">
 			<header className="mx-auto flex w-full max-w-6xl items-center gap-2 py-6">
 				<img
-					src={`${import.meta.env.BASE_URL}logo.png`}
+					src={LOGO_URL}
 					alt=""
 					width={26}
 					height={26}
@@ -43,7 +44,7 @@ export const GlobalError = ({ error, reset }: ErrorComponentProps) => {
 							variant="outline"
 							className="min-h-12 rounded-lg px-6 text-base font-semibold"
 						>
-							<a href={import.meta.env.BASE_URL}>Back to Tabot</a>
+							<a href={BASE_URL}>Back to Tabot</a>
 						</Button>
 					</div>
 				</div>

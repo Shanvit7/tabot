@@ -1,3 +1,5 @@
+import { LOGO_URL } from "~/lib/constants";
+
 export const ExtensionBridgeArt = () => (
 	<div
 		role="img"
@@ -19,7 +21,7 @@ export const ExtensionBridgeArt = () => (
 			<div className="overflow-hidden rounded-xl border border-work-line bg-work-canvas">
 				<div className="flex items-center gap-4 p-5 sm:p-6">
 					<img
-						src={`${import.meta.env.BASE_URL}logo.png`}
+						src={LOGO_URL}
 						alt=""
 						width={48}
 						height={48}

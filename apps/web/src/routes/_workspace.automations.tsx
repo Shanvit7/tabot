@@ -40,7 +40,7 @@ const sources: {
 	},
 ];
 
-const Ai = () => {
+const Automations = () => {
 	const reduceMotion = useReducedMotion();
 	const [active, setActive] = useState(0);
 	const source = sources[active];
@@ -150,7 +150,7 @@ const Ai = () => {
 					</div>
 
 					<h1 className="mt-9 font-display text-4xl leading-tight tracking-tight sm:text-5xl">
-						AI is{" "}
+						Automations{" are "}
 						<span className="bg-work-accent px-2 font-sans text-[0.82em] font-semibold italic text-work-ink">
 							coming soon
 						</span>
@@ -164,8 +164,8 @@ const Ai = () => {
 	);
 };
 
-export const Route = createFileRoute("/_workspace/ai")({
+export const Route = createFileRoute("/_workspace/automations")({
 	ssr: false,
-	head: () => ({ meta: [{ title: "AI · Tabot" }] }),
-	component: Ai,
+	head: () => ({ meta: [{ title: "Automations · Tabot" }] }),
+	component: Automations,
 });

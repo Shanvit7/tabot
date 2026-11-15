@@ -6,8 +6,8 @@ The dashboard is the current beta review surface for Tabot's broader browser act
 
 1. Install workspace dependencies: `pnpm install`.
 2. Build the extension with `pnpm --filter extension build` and load `apps/extension/build/chrome-mv3-prod` unpacked in Chrome. Reload an existing installation after rebuilding.
-3. Copy `apps/web/.env.example` to `apps/web/.env.local`. Set `VITE_TABOT_EXTENSION_ID` to the 32-character ID in `chrome://extensions`.
-4. Run `pnpm --filter web dev` and open `http://localhost:3000/home` in that same Chrome profile. Restart the dev server after changing the ID.
+3. Copy `apps/web/.env.example` to `apps/web/.env.local`. Current extension builds report their runtime ID automatically; `VITE_TABOT_EXTENSION_ID` remains an optional preferred ID and fallback for older builds.
+4. Run `pnpm --filter web dev` and open `http://localhost:3000/home` in that same Chrome profile. Refresh the dashboard after installing or reloading the extension.
 
 The extension accepts dashboard reads from localhost ports 3000/3001 and `https://shanvit7.github.io/tabot/`. Other addresses, relay pages, and other extensions are not authorized to read page previews. No new extension permissions are needed.
 
@@ -26,6 +26,7 @@ Server rendering/prerendering produces a stable search shell. Chrome messaging r
 
 ```sh
 pnpm --filter web build
+pnpm --filter web check:extensionConnection
 pnpm --filter extension check:dashboardSender
 pnpm --filter extension check:dashboardHistory
 pnpm --filter extension build

@@ -26,6 +26,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { LOGO_URL } from "~/lib/constants";
 import {
 	preloadSearchModel,
 	searchRetainedPages,
@@ -105,13 +106,13 @@ export const Home = () => {
 				<header className="flex flex-wrap items-center justify-between gap-3">
 					<div className="flex items-center gap-2">
 						<img
-							src={`${import.meta.env.BASE_URL}logo.png`}
+							src={LOGO_URL}
 							alt=""
 							width={28}
 							height={28}
 							className="size-7 object-contain"
 						/>
-						<span className="text-base font-semibold">tabot</span>
+						<span className="text-base font-semibold">Tabot</span>
 					</div>
 					<div className="flex items-center gap-2">
 						<TooltipProvider delayDuration={350}>

@@ -94,15 +94,17 @@ export const DemoCursor = ({
 export const ChatGptShell = ({
 	children,
 	plugins,
+	headerless = false,
 }: {
 	children: ReactNode;
 	plugins: boolean;
+	headerless?: boolean;
 }) => {
 	const scale = useCurrentScale();
 	// Player controls keep their screen size while the composition scales.
 	return (
 		<div
-			className="absolute inset-0 top-24 flex bg-tutorial-browser text-tutorial-ink"
+			className={`absolute inset-0 ${headerless ? "top-0" : "top-24"} flex bg-tutorial-browser text-tutorial-ink`}
 			style={{ bottom: `${Math.max(7, 4 / scale)}rem` }}
 		>
 			<aside className="flex w-72 shrink-0 flex-col border-r border-white/10 p-4">

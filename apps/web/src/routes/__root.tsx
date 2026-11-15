@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { GlobalError } from "~/components/errors/global-error";
 import { NotFound } from "~/components/errors/not-found";
 import { useIsMobile } from "~/hooks/use-is-mobile";
+import { LOGO_URL } from "~/lib/constants";
 import { trackDashboardError, trackDashboardPage } from "~/lib/telemetry";
 import "~/styles/app.css";
 
@@ -63,7 +64,7 @@ export const Route = createRootRoute({
 		links: [
 			{
 				rel: "icon",
-				href: `${import.meta.env.BASE_URL}logo.png`,
+				href: LOGO_URL,
 				type: "image/png",
 			},
 		],

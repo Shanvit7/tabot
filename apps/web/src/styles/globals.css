@@ -213,11 +213,12 @@ html {
 	z-index: -1;
 	pointer-events: none;
 	border-radius: 999px;
+	border: 1px solid rgb(255 255 255 / 72%);
 	background: linear-gradient(
 		175deg,
-		rgb(255 255 255 / 96%) 0%,
-		rgb(247 249 247 / 78%) 45%,
-		rgb(233 239 233 / 65%) 100%
+		rgb(255 255 255 / 58%) 0%,
+		rgb(247 249 247 / 36%) 45%,
+		rgb(233 239 233 / 26%) 100%
 	);
 	box-shadow:
 		inset 0 2px 2px rgb(255 255 255 / 100%),
@@ -226,63 +227,57 @@ html {
 		inset -1px 0 1px rgb(255 255 255 / 90%),
 		0 6px 16px -8px rgb(23 37 23 / 20%),
 		0 18px 36px -22px rgb(23 37 23 / 24%);
-	-webkit-backdrop-filter: blur(12px) saturate(1.15);
-	backdrop-filter: blur(12px) saturate(1.15);
-	animation: liquid-arrive 1250ms both;
-}
-
-.liquid-header-content {
-	animation: liquid-reveal 1250ms both;
-}
-
-.liquid-header-link:focus-visible {
-	outline: 2px solid var(--black);
-	outline-offset: 5px;
+	-webkit-backdrop-filter: blur(24px) saturate(1.5);
+	backdrop-filter: blur(24px) saturate(1.5);
+	animation: liquid-arrive 1400ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 /* Keyboard access never waits for the decorative entrance. */
 .liquid-header:focus-within::before,
-.liquid-header:focus-within .liquid-header-content {
+.liquid-header:focus-within .liquid-header-content > a:first-child,
+.liquid-header:focus-within .liquid-header-content > :not(a:first-child) {
 	animation: none;
 }
 
 @keyframes liquid-arrive {
-	0% {
-		transform: translateY(-48px) scale(0.065, 1.12);
-		animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.45);
-	}
-	24% {
-		transform: translateY(5px) scale(0.075, 0.84);
-		animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-	}
-	67% {
-		transform: translateY(-2px) scale(1.025, 0.96);
-		animation-timing-function: ease-in-out;
-	}
-	84% {
-		transform: translateY(1px) scale(0.992, 1.015);
-		animation-timing-function: ease-out;
-	}
-	100% {
-		transform: none;
-	}
-}
-
-@keyframes liquid-reveal {
-	0%,
-	48% {
+	from {
 		opacity: 0;
-		transform: translateY(3px);
+		transform: translateY(-8px) scale(0.97);
 	}
-	100% {
+	to {
 		opacity: 1;
 		transform: none;
 	}
 }
 
+@keyframes liquid-brand-arrive {
+	from {
+		transform: translate(calc(50cqw - var(--brand-inset) - 50%), -50%);
+	}
+	to {
+		transform: translateY(-50%);
+	}
+}
+
+@keyframes liquid-reveal {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes zigzag-pulse {
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
-	.liquid-header::before,
-	.liquid-header-content {
+	.liquid-header::before {
 		animation: none;
 	}
 }

@@ -178,7 +178,7 @@ export const Dock = () => {
 	const navigation = [
 		{ to: "/home", label: "Home", Icon: Home03 },
 		{ to: "/assistant", label: "Assistant", Icon: Bot },
-		{ to: "/ai", label: "AI", Icon: CircuitBoard },
+		{ to: "/automations", label: "Automations", Icon: CircuitBoard },
 	] as const;
 
 	return (
@@ -195,7 +195,11 @@ export const Dock = () => {
 					{navigation.map(({ to, label, Icon }) => {
 						const isActive = matchRoute({ to, fuzzy: false });
 						return (
-							<AppleDockIcon key={to} className="rounded-xl" padding={0}>
+							<AppleDockIcon
+								key={to}
+								className="min-w-20 rounded-xl sm:min-w-24"
+								padding={0}
+							>
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<Link

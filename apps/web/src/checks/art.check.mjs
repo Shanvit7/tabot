@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { NOT_FOUND_GEOMETRY as art } from "../shared/wayfinder-geometry.ts";
+import { NOT_FOUND_GEOMETRY as art } from "../components/errors/shared/wayfinder-geometry.ts";
 
 assert.ok(art.parts.length > 15 && art.parts.length < 30);
 assert.ok(

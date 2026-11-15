@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { homeAmbient } from "./ambient.ts";
+import { homeAmbient } from "../components/features/home/ambient.ts";
 
-// Run: node apps/web/src/components/features/home/ambient.check.mjs
+// Run: node src/checks/ambient.check.mjs
 const frame = homeAmbient.default();
 const first = frame(0, { paper: true });
 assert.match(first, /[·•●]/u);

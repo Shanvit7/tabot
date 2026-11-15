@@ -39,7 +39,7 @@ assert.ok(
 );
 for (const route of [
 	"home",
-	"ai",
+	"automations",
 	"assistant",
 	"settings",
 	"mobile",

@@ -1,6 +1,7 @@
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
 import { Pause, Play, ShieldCheck } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { CHROME_LOGO_URL } from "~/lib/constants";
 import "~/components/features/privacy/privacy-flow.css";
 
 const requestWire = "M0 72C64 72 64 52 120 52H312C368 52 368 72 432 72";
@@ -28,7 +29,7 @@ export const PrivacyFlowFigure = () => {
 			aria-label="Illustration of an authorized request between Chrome and ChatGPT"
 		>
 			<img
-				src={`${import.meta.env.BASE_URL}chrome.svg`}
+				src={CHROME_LOGO_URL}
 				alt="Chrome on your device"
 				width={72}
 				height={72}

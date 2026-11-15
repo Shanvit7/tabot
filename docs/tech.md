@@ -85,7 +85,7 @@ The relay stores OAuth/installation routing state and ephemeral request state, n
 - Keep excerpts separate from event reads and assistant activity projections.
 - Project allowlisted fields; never log raw URLs, titles, excerpts, note text, credentials or full MCP results.
 - Requested note text/title is a distinct user-directed sharing path; selected-pattern redaction is not complete secret detection.
-- Optional PostHog uses the shared allowlisted transport for dashboard route views and sanitized errors, plus extension runtime errors and search-indexing failures. It does not capture browsing payloads. Local builds require `VITE_POSTHOG_ENABLED=true` or `PLASMO_PUBLIC_POSTHOG_ENABLED=true` plus a project key; local flags default off. Production workflows set flags on.
+- Optional PostHog uses the shared allowlisted transport for dashboard route views, landing-page Add to Chrome clicks and end-of-page completion, sanitized errors, plus extension runtime errors and search-indexing failures. The landing page also has a separately named PostHog JS instance scoped to `$web_vitals` events only: LCP, CLS, INP and FCP values/ratings with the canonical landing URL. It disables persistent IDs, autocapture, pageviews, session replay, and metric attribution; a `before_send` allowlist rejects all other events and strips query strings, referrers, and extra SDK properties. Local builds require `VITE_POSTHOG_ENABLED=true` or `PLASMO_PUBLIC_POSTHOG_ENABLED=true` plus a project key; local flags default off. Production workflows set flags on.
 
 ## 8. Checks
 

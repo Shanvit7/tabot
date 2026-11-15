@@ -4,21 +4,25 @@ import { domMax, LazyMotion, m, useReducedMotion } from "motion/react";
 import {
 	Children,
 	type ComponentProps,
-	createContext,
 	type FocusEvent,
 	isValidElement,
 	type KeyboardEvent,
 	type ReactNode,
-	use,
 	useId,
 	useMemo,
 } from "react";
+import { FluidTabsContext } from "~/hooks/fluid-tabs-context";
+import {
+	FluidTabSlot,
+	useFluidTabSlot,
+	useFluidTabs,
+} from "~/hooks/use-fluid-tabs";
+import { useTabSelection } from "~/hooks/use-tab-selection";
 import { cn } from "~/lib/utils";
 import {
 	handleTabListFocusCapture,
 	handleTabListKeyDown,
 	tabFocusClass,
-	useTabSelection,
 } from "./shared";
 
 const INDICATOR_SPRING = {
@@ -32,57 +36,6 @@ const LABEL_TRANSITION = {
 	duration: 0.28,
 	ease: [0.32, 0.72, 0, 1] as const,
 };
-
-type FluidTabsContextValue = {
-	activeIndex: number;
-	setActiveIndex: (index: number) => void;
-	focusedIndex: number;
-	setFocusedIndex: (index: number) => void;
-	indicatorLayoutId: string;
-};
-
-const FluidTabsContext = createContext<FluidTabsContextValue | null>(null);
-
-type FluidTabSlotContextValue = {
-	index: number;
-};
-
-const FluidTabSlotContext = createContext<FluidTabSlotContextValue | null>(
-	null,
-);
-
-function useFluidTabs() {
-	const context = use(FluidTabsContext);
-	if (!context) {
-		throw new Error("FluidTabs primitives must be used within <FluidTabs>.");
-	}
-	return context;
-}
-
-function FluidTabSlot({
-	index,
-	children,
-}: {
-	index: number;
-	children: ReactNode;
-}) {
-	const value = useMemo(() => ({ index }), [index]);
-	return (
-		<FluidTabSlotContext.Provider value={value}>
-			{children}
-		</FluidTabSlotContext.Provider>
-	);
-}
-
-function useFluidTabSlot() {
-	const context = use(FluidTabSlotContext);
-	if (!context) {
-		throw new Error(
-			"FluidTabs.Tab must be a direct child of <FluidTabs.List>.",
-		);
-	}
-	return context;
-}
 
 type FluidTabsRootProps = {
 	children: ReactNode;

@@ -1,4 +1,4 @@
-// Run: node apps/web/src/components/features/home/search/result-section.check.mjs
+// Run: node src/checks/result-section.check.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -6,7 +6,7 @@ import { runInNewContext } from "node:vm";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
-import { initialSearchState } from "./state.ts";
+import { initialSearchState } from "../components/features/home/search/state.ts";
 
 // Isolate section's loading gate from child UI and browser-only effects.
 const childrenOnly = ({ children }) => children ?? null;
@@ -64,9 +64,9 @@ const load = (file) => {
 			id.startsWith("~/")
 				? childModules
 				: id === "./view"
-					? load("./result-section/view.tsx")
+					? load("../components/features/home/search/result-section/view.tsx")
 					: id === "./types"
-						? load("./result-section/types.ts")
+						? load("../components/features/home/search/result-section/types.ts")
 						: id === "lucide-react"
 							? {
 									ArrowLeft: childrenOnly,
@@ -80,7 +80,9 @@ const load = (file) => {
 	});
 	return exports;
 };
-const { SearchResultSection } = load("./result-section/index.tsx");
+const { SearchResultSection } = load(
+	"../components/features/home/search/result-section/index.tsx",
+);
 const noop = () => {};
 for (const [searching, searchError, hasSearched] of [
 	[true, null, false],
@@ -136,7 +138,7 @@ assert.equal(
 	"initial /home keeps search-only layout until query exists",
 );
 
-const { withinRange } = load("./utils.ts");
+const { withinRange } = load("../components/features/home/search/utils.ts");
 const oldEvent = Date.now() - 10 * 365 * 86_400_000;
 assert.equal(withinRange(oldEvent, Infinity, Date.now()), true);
 assert.equal(withinRange(Date.now() + 1, Infinity, Date.now()), false);

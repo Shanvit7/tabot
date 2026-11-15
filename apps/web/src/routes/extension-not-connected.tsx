@@ -3,12 +3,11 @@ import { Check, Copy, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DingToaster, toast } from "~/components/alerts/ding-toaster";
 import { ExtensionBridgeArt } from "~/components/features/extension-not-connected/system-art";
+import { IS_DEVELOPMENT, LOGO_URL, TABOT_EXTENSION_ID } from "~/lib/constants";
 import { readHistoryCounts } from "~/lib/history";
 
 const ExtensionNotConnected = () => {
 	const navigate = useNavigate();
-	const isDevelopment = import.meta.env.DEV;
-	const extensionId = import.meta.env.VITE_TABOT_EXTENSION_ID;
 	const [checking, setChecking] = useState(false);
 	const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
 		"idle",
@@ -58,7 +57,7 @@ const ExtensionNotConnected = () => {
 		<main className="flex min-h-svh flex-col bg-work-canvas px-6 text-work-ink sm:px-10">
 			<header className="mx-auto flex w-full max-w-5xl items-center gap-2 py-6">
 				<img
-					src={`${import.meta.env.BASE_URL}logo.png`}
+					src={LOGO_URL}
 					alt=""
 					width={26}
 					height={26}
@@ -143,7 +142,7 @@ const ExtensionNotConnected = () => {
 						{checking ? "Checking…" : "Check connection"}
 					</button>
 
-					{isDevelopment && (
+					{IS_DEVELOPMENT && (
 						<details className="mt-8 border-t border-work-line pt-4 text-sm text-work-muted">
 							<summary className="w-fit cursor-pointer rounded-sm py-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-work-ink">
 								Developer details
@@ -151,7 +150,7 @@ const ExtensionNotConnected = () => {
 							<p className="mt-3 leading-6">
 								Expected extension ID:{" "}
 								<code className="break-all font-mono text-xs">
-									{extensionId || "not configured"}
+									{TABOT_EXTENSION_ID || "not configured"}
 								</code>
 							</p>
 						</details>

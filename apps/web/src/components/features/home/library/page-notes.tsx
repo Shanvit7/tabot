@@ -2,9 +2,9 @@ import type { DashboardNoteResult } from "@tabot/shared/dashboard";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRef, useState } from "react";
 import { HomeListSkeleton } from "~/components/features/home/components/list-skeleton";
-import { useLibrary } from "~/components/features/home/library/use-library";
 import { dateLabel } from "~/components/features/home/search/utils";
 import { Button } from "~/components/ui/button";
+import { useLibrary } from "~/hooks/use-library";
 
 type UpdateNote = (
 	id: string,

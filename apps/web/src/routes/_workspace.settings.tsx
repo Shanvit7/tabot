@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DingToaster, toast } from "~/components/alerts/ding-toaster";
 import { PurgeDataConfirm } from "~/components/dialogs/purge-data-confirm";
 import GaugeChart from "~/components/ui/charts/gauge-chart";
-import { EMAIL, SHARE_URL } from "~/lib/constants";
+import { EMAIL, LOGO_URL, SHARE_URL } from "~/lib/constants";
 import { purgeStoredData, readStorageEstimate } from "~/lib/history";
 
 const integerFormatter = new Intl.NumberFormat(undefined, {
@@ -126,7 +126,7 @@ const Settings = () => {
 				>
 					<div className="flex flex-col items-center">
 						<img
-							src={`${import.meta.env.BASE_URL}logo.png`}
+							src={LOGO_URL}
 							alt="Tabot"
 							width={64}
 							height={64}
@@ -273,6 +273,20 @@ const Settings = () => {
 						>
 							Read full privacy policy
 						</Link>
+					</section>
+					<section
+						aria-labelledby="note-title"
+						className="mt-6 border-t border-border pt-6"
+					>
+						<h2 id="note-title" className="text-base font-semibold">
+							A note from us
+						</h2>
+						<p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+							Thanks for using Tabot and being part of its early days. Tabot is
+							still in beta, so you may run into bugs or rough edges. We have
+							more planned, and we’re committed to listening, fixing what’s not
+							working, and making Tabot better over time.
+						</p>
 					</section>
 					<div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
 						<div>

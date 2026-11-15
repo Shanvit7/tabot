@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { LandingPage } from "~/components/features/landing/landing-page";
 import { OG_IMAGE_URL, SHARE_URL } from "~/lib/constants";
 
-const title = "Tabot — Search browser activity and notes";
+const title = "Tabot — Your browsing context for ChatGPT";
 const description =
-	"Search pages, excerpts, and saved notes on your device. Optionally connect ChatGPT to request supported site activity or saved notes.";
+	"Tabot helps you find things you've looked at in Chrome and save your own takeaways, so you can bring your browsing context to ChatGPT.";
 
 export const Route = createFileRoute("/")({
 	head: () => ({

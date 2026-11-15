@@ -10,13 +10,13 @@ import { HomeEmptyState } from "~/components/features/home/components/empty-stat
 import { HomeListSkeleton } from "~/components/features/home/components/list-skeleton";
 import { ChatGptResultAction } from "~/components/features/home/library/chatgpt-result-action";
 import { PageFavicon } from "~/components/features/home/library/page-favicon";
-import { useLibrary } from "~/components/features/home/library/use-library";
 import { SearchEverythingBoard } from "~/components/features/home/search/everything-board";
 import {
 	approxTimeSpentLabel,
 	dateLabel,
 } from "~/components/features/home/search/utils";
 import { Button } from "~/components/ui/button";
+import { useLibrary } from "~/hooks/use-library";
 
 type Props = {
 	onSitesStateChange: (state: {

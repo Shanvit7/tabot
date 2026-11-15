@@ -804,6 +804,10 @@ if (chrome.runtime.onMessageExternal) {
 				sendResponse({ ok: false, code: "unauthorized-sender" });
 				return false;
 			}
+			if (message?.type === "TABOT_PING") {
+				sendResponse({ ok: true });
+				return false;
+			}
 
 			if (message?.type === "GET_ACTIVE_TRACKING_DURATION") {
 				void readActiveTrackingDuration()

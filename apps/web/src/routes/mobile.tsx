@@ -3,6 +3,7 @@ import { Copy } from "lucide-react";
 import { DingToaster, toast } from "~/components/alerts/ding-toaster";
 import { MobileGateFigure } from "~/components/features/mobile/mobile-gate-figure";
 import { Button } from "~/components/ui/button";
+import { LOGO_URL } from "~/lib/constants";
 
 const MobilePage = () => {
 	const copyPageLink = async () => {
@@ -22,7 +23,7 @@ const MobilePage = () => {
 		<main className="min-h-svh bg-work-canvas px-5 text-work-ink sm:px-8">
 			<header className="mx-auto flex w-full max-w-5xl items-center gap-2 py-5 sm:py-6">
 				<img
-					src={`${import.meta.env.BASE_URL}logo.png`}
+					src={LOGO_URL}
 					alt=""
 					width={26}
 					height={26}

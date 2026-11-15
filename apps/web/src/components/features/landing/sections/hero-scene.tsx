@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef } from "react";
-import { VoidArt } from "~/components/features/landing/void-art";
+import { VoidArt } from "~/components/features/landing/artwork/void-art";
 
 export const HeroScene = ({
 	children,
@@ -20,10 +20,13 @@ export const HeroScene = ({
 					? "running"
 					: "paused";
 		};
-		const observer = new IntersectionObserver((entries) => {
-			visible.current = entries[entries.length - 1].isIntersecting;
-			sync();
-		});
+		const observer = new IntersectionObserver(
+			(entries) => {
+				visible.current = entries[entries.length - 1].isIntersecting;
+				sync();
+			},
+			{ threshold: 0.1 },
+		);
 		observer.observe(node);
 		document.addEventListener("visibilitychange", sync);
 		reduced.addEventListener("change", sync);

@@ -951,8 +951,7 @@ try {
 	const recentGoogleSearch = {
 		...event,
 		id: `${event.source.instanceId}:104`,
-		timestamp:
-			Math.floor((searchNow - 5 * 60_000) / 60_000) * 60_000 + 30_000,
+		timestamp: Math.floor((searchNow - 5 * 60_000) / 60_000) * 60_000 + 30_000,
 		url: "https://www.google.com/search?q=database&client=chrome",
 		source: { ...event.source, sequence: 104 },
 	};

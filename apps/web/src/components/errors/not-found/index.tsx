@@ -1,11 +1,12 @@
 import { NotFoundArt } from "~/components/errors/not-found/art";
 import { Button } from "~/components/ui/button";
+import { BASE_URL, LOGO_URL } from "~/lib/constants";
 
 export const NotFound = () => (
 	<main className="flex min-h-svh flex-col bg-work-canvas px-6 text-work-ink sm:px-10">
 		<header className="mx-auto flex w-full max-w-6xl items-center gap-2 py-6">
 			<img
-				src={`${import.meta.env.BASE_URL}logo.png`}
+				src={LOGO_URL}
 				alt=""
 				width={26}
 				height={26}
@@ -28,7 +29,7 @@ export const NotFound = () => (
 					asChild
 					className="mt-8 min-h-12 rounded-lg bg-lime px-6 text-base font-semibold text-work-ink transition-colors hover:bg-lime/80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-work-ink"
 				>
-					<a href={import.meta.env.BASE_URL}>Back to Tabot</a>
+					<a href={BASE_URL}>Back to Tabot</a>
 				</Button>
 			</div>
 

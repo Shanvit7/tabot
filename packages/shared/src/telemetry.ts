@@ -29,8 +29,13 @@ export type TelemetryFailureCode =
 	| "embedding-worker-failed"
 	| "embedding-busy";
 
+export type TelemetryAction =
+	| { name: "landing_add_to_chrome_clicked" }
+	| { name: "landing_page_end_reached" };
+
 export type TelemetryEvent =
 	| { type: "page_view"; route: string; context: TelemetryContext }
+	| { type: "action"; action: TelemetryAction; context: TelemetryContext }
 	| {
 			type: "exception";
 			source: TelemetryErrorSource;
@@ -147,6 +152,18 @@ export const createTelemetry = (
 	};
 
 	return {
+		captureAction: (action: TelemetryAction) => {
+			if (
+				action.name !== "landing_add_to_chrome_clicked" &&
+				action.name !== "landing_page_end_reached"
+			)
+				return;
+			send({
+				type: "action",
+				action: { name: action.name },
+				context,
+			});
+		},
 		pageView: (route: string) =>
 			send({
 				type: "page_view",

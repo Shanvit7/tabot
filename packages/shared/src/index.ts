@@ -254,6 +254,7 @@ export {
 } from "./share/targets";
 export {
 	createTelemetry,
+	type TelemetryAction,
 	type TelemetryContext,
 	type TelemetryErrorSource,
 	type TelemetryEvent,

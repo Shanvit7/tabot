@@ -104,6 +104,7 @@ Import shared public APIs from `@tabot/shared` or its declared subpaths; do not 
 | Assistant connection parsing | `parseAssistantConnections` from `@tabot/shared/assistant-connections` | Keep unknown separate from disconnected; OAuth grant state does not prove live socket/tool readiness. |
 | MCP schemas/dispatch | `apps/mcp-server/src/mcp/schema/`, `apps/mcp-server/src/mcp/tools.ts` | Extend existing schema/dispatch/projection path; never return database rows directly. |
 | Logging/read failures | `logger`, `readFailure` from `@tabot/shared` | Use structured allowlisted codes; never swallow storage errors into empty results. |
+| Web env vars and constants | `src/lib/constants.ts` in `apps/web` | No `import.meta.env` in web routes/components/lib modules; read env once in `src/lib/constants.ts` and import the exported constant. |
 
 Check `packages/shared/package.json` `exports` before importing. Within an app, use its `~/` alias where configured; shared package imports use declared `@tabot/shared` exports.
 

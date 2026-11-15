@@ -21,6 +21,7 @@ Load only skills relevant to the task. Keep shared skills at repository root.
 - Keep browsing projections, search, note validation and URL privacy behavior aligned with `@tabot/shared`; see the common utilities table in `../../AGENTS.md` before adding code.
 - Use existing route files and `createFileRoute`; `src/routeTree.gen.ts` is generated and must not be edited manually.
 - `VITE_SITE_URL` is the canonical deployment URL. Read it through `src/lib/constants.ts` (`SITE_URL`, `SHARE_URL`, `OG_IMAGE_URL`); do not duplicate the GitHub Pages URL. Keep `VITE_BASE_PATH` handling intact for project-page assets and links.
+- No `import.meta.env` in routes, components or lib modules: `import.meta.env` is read only inside `src/lib/constants.ts`. Import `BASE_URL`, `LOGO_URL`, `CHROME_LOGO_URL`, `CHROME_WEB_STORE_URL`, `TABOT_EXTENSION_ID`, `IS_DEVELOPMENT`, `MCP_SERVER_URL` (and the existing site/PostHog constants) from `~/lib/constants`; add a new constant there instead of reading env inline.
 - Keep user-facing language aligned with repository [`PRODUCT.md`](../../PRODUCT.md): position Tabot as browser activity for AI-assisted work. Describe the current dashboard as Home; contexts and user-directed automations remain future direction until implemented. Never label raw events as contexts or claim intent/productivity inference.
 
 ## Checks

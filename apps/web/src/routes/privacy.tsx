@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PrivacyFlowFigure } from "~/components/features/privacy/privacy-flow-figure";
-import { EMAIL, OG_IMAGE_URL, SITE_URL } from "~/lib/constants";
+import { EMAIL, LOGO_URL, OG_IMAGE_URL, SITE_URL } from "~/lib/constants";
 
 const Privacy = () => (
 	<main className="min-h-svh bg-background px-6 py-12 font-sans text-foreground sm:px-10 sm:py-16 lg:px-14">
@@ -11,7 +11,7 @@ const Privacy = () => (
 				aria-label="Tabot home"
 			>
 				<img
-					src={`${import.meta.env.BASE_URL}logo.png`}
+					src={LOGO_URL}
 					alt=""
 					width={48}
 					height={48}
@@ -22,7 +22,7 @@ const Privacy = () => (
 				Privacy policy
 			</h1>
 			<p className="mt-4 text-sm text-muted-foreground">
-				Last updated: October 11, 2026
+				Last updated: November 15, 2026
 			</p>
 			<p className="mt-6 max-w-2xl leading-7 text-muted-foreground">
 				Here’s what Tabot records, what stays on your device, and what happens
@@ -193,14 +193,21 @@ const Privacy = () => (
 					</h2>
 					<p className="mt-3">
 						When configured for a build, Tabot sends allowlisted website route
-						views and sanitized error reports to PostHog. Error reports may
-						include error type and diagnostic source, source-file basenames and
-						line numbers, app release, and platform. Error messages and function
+						views, Add to Chrome clicks, landing-page completion events, and
+						sanitized error reports to PostHog. Landing-page Web Vitals
+						reporting also sends numeric LCP, CLS, INP, and FCP measurements
+						with only the canonical landing-page URL, never query strings or
+						fragments. Click and completion events contain no page URL, search
+						query, browser record, or note content. Error reports may include
+						error type and diagnostic source, source-file basenames and line
+						numbers, app release, and platform. Error messages and function
 						names are redacted. Events use fixed app-level identifiers, not
 						account or installation IDs. Reports do not include browser history,
-						page URLs, tab titles, page excerpts, or notes. Automatic
-						interaction capture and session recording are disabled. PostHog
-						processes these events under its own policies; analytics are
+						browsing-page URLs, tab titles, page excerpts, or notes. Web Vitals
+						reporting uses no persistent cookies or local-storage IDs and
+						excludes DOM attribution, referrers, and session identifiers.
+						Automatic interaction capture and session recording are disabled.
+						PostHog processes these events under its own policies; analytics are
 						disabled when a build has no project key.
 					</p>
 				</section>

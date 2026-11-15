@@ -5,6 +5,43 @@
 .landing summary::-webkit-details-marker {
 	display: none;
 }
+.landing-flow-section {
+	position: relative;
+	isolation: isolate;
+	background: linear-gradient(180deg, #f3f6ef 0%, #fbfcf9 150px, #fff 100%);
+}
+.landing-flow-section::before {
+	position: absolute;
+	z-index: 0;
+	top: 0;
+	left: 50%;
+	width: 1px;
+	height: 58px;
+	background: linear-gradient(180deg, #b8e84b, #b8e84b00);
+	content: "";
+}
+.landing-flow-section::after {
+	position: absolute;
+	z-index: 0;
+	top: 52px;
+	left: calc(50% - 3px);
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #b8e84b;
+	box-shadow: 0 0 0 5px rgb(184 232 75 / 16%);
+	content: "";
+}
+.landing-flow-section > div {
+	position: relative;
+	z-index: 1;
+}
+.landing-flow-section:target::before {
+	animation: landing-thread-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.landing-flow-section:target::after {
+	animation: landing-thread-arrive 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 .void-hero {
 	position: relative;
 	isolation: isolate;
@@ -193,21 +230,8 @@
 		opacity: 0;
 	}
 }
-.landing-demo-enter {
-	animation: landing-demo-enter 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
 .landing-disclosure[open] > :is(div, p) {
 	animation: landing-disclose 220ms ease-out;
-}
-@keyframes landing-demo-enter {
-	from {
-		opacity: 0.7;
-		transform: translateY(7px) scale(1.015);
-	}
-	to {
-		opacity: 1;
-		transform: none;
-	}
 }
 @keyframes landing-disclose {
 	from {
@@ -217,6 +241,30 @@
 	to {
 		opacity: 1;
 		transform: none;
+	}
+}
+@keyframes landing-thread-in {
+	from {
+		transform: scaleY(0);
+		transform-origin: top;
+	}
+	to {
+		transform: scaleY(1);
+		transform-origin: top;
+	}
+}
+@keyframes landing-thread-arrive {
+	0% {
+		opacity: 0.35;
+		transform: scale(0.6);
+	}
+	55% {
+		opacity: 1;
+		transform: scale(1.5);
+	}
+	100% {
+		opacity: 1;
+		transform: scale(1);
 	}
 }
 @media (min-width: 1800px) {
@@ -231,6 +279,9 @@
 	}
 	.void-world {
 		transform: translateX(88px);
+	}
+	.void-terrain-light {
+		display: none;
 	}
 	.void-copy {
 		width: calc(100% - 40px);
@@ -251,7 +302,7 @@
 }
 @media (max-width: 374px) {
 	.void-hero {
-		min-height: 830px;
+		min-height: 720px;
 	}
 	.void-copy {
 		padding-top: 135px;
@@ -270,6 +321,11 @@
 		font-size: 14px;
 	}
 }
+@media (max-width: 374px) and (max-height: 648px) {
+	.void-hero {
+		min-height: max(640px, calc(100svh + 72px));
+	}
+}
 @media (prefers-reduced-motion: reduce) {
 	.void-hero
 		:is(
@@ -280,8 +336,9 @@
 			.void-orb-shine,
 			.void-terrain-light
 		),
-	.landing .landing-demo-enter,
-	.landing .landing-disclosure[open] > :is(div, p) {
+	.landing .landing-disclosure[open] > :is(div, p),
+	.landing-flow-section:target::before,
+	.landing-flow-section:target::after {
 		animation: none;
 	}
 	.void-orb-shine,
@@ -295,5 +352,165 @@
 @media (forced-colors: active) {
 	.landing .landing-install {
 		border: 1px solid ButtonText;
+	}
+}
+.automation-section {
+	background: #f6f8f3;
+}
+.automation-art {
+	width: 100%;
+	max-width: 640px;
+	margin-inline: auto;
+}
+.automation-browser-type {
+	font-family: var(--font-sans);
+}
+.automation-head {
+	transform-origin: 532px 128px;
+	animation: automation-look 4.8s ease-in-out both;
+}
+.automation-gaze {
+	animation: automation-gaze 4.8s ease-in-out both;
+}
+.automation-eyes {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: automation-blink 4.8s linear both;
+}
+.automation-forearm {
+	transform-origin: 625px 177px;
+	transform: rotate(10deg);
+	animation: automation-tap 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.automation-play {
+	transform-origin: 581px 274px;
+	animation: automation-press 4.8s ease-in-out both;
+}
+.automation-click-ring {
+	transform-origin: 581px 274px;
+	opacity: 0;
+	animation: automation-click 4.8s ease-out both;
+}
+.automation-step-0 .automation-step-done {
+	animation: automation-first 4.8s ease-in-out both;
+}
+.automation-step-1 .automation-step-done {
+	animation: automation-second 4.8s ease-in-out both;
+}
+.automation-step-2 .automation-step-done {
+	animation: automation-third 4.8s ease-in-out both;
+}
+.automation-scene[data-motion="paused"] * {
+	animation-play-state: paused;
+}
+@keyframes automation-look {
+	0%,
+	8%,
+	85%,
+	100% {
+		transform: rotate(0deg);
+	}
+	17%,
+	68% {
+		transform: rotate(-7deg);
+	}
+}
+@keyframes automation-gaze {
+	0%,
+	8%,
+	85%,
+	100% {
+		transform: translate(0, 0);
+	}
+	17%,
+	68% {
+		transform: translate(-3px, 3px);
+	}
+}
+@keyframes automation-tap {
+	0%,
+	10%,
+	34%,
+	100% {
+		transform: rotate(10deg);
+	}
+	18%,
+	23% {
+		transform: rotate(-4deg);
+	}
+}
+@keyframes automation-press {
+	0%,
+	17%,
+	29%,
+	100% {
+		transform: scale(1);
+	}
+	20%,
+	23% {
+		transform: scale(0.92);
+	}
+}
+@keyframes automation-click {
+	0%,
+	19%,
+	35%,
+	100% {
+		opacity: 0;
+		transform: scale(1);
+	}
+	21% {
+		opacity: 0.8;
+		transform: scale(1);
+	}
+	33% {
+		opacity: 0;
+		transform: scale(1.35);
+	}
+}
+@keyframes automation-first {
+	0%,
+	32% {
+		opacity: 0;
+	}
+	37%,
+	100% {
+		opacity: 1;
+	}
+}
+@keyframes automation-second {
+	0%,
+	44% {
+		opacity: 0;
+	}
+	49%,
+	100% {
+		opacity: 1;
+	}
+}
+@keyframes automation-third {
+	0%,
+	56% {
+		opacity: 0;
+	}
+	61%,
+	100% {
+		opacity: 1;
+	}
+}
+@keyframes automation-blink {
+	0%,
+	76%,
+	79%,
+	100% {
+		transform: scaleY(1);
+	}
+	77.5% {
+		transform: scaleY(0.12);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.automation-scene[data-motion] * {
+		animation: none;
 	}
 }

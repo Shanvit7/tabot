@@ -20,9 +20,9 @@ import { AssistantConnectionPanel } from "~/components/features/assistant/panels
 import { AssistantDemoPanel } from "~/components/features/assistant/panels/demo-panel";
 import { AssistantSetupPanel } from "~/components/features/assistant/panels/setup-panel";
 import FluidTabs from "~/components/ui/motion/tabs/fluid-tabs";
+import { MCP_SERVER_URL } from "~/lib/constants";
 import { readAssistantConnections } from "~/lib/history";
 
-const MCP_SERVER_URL = `https://tabot-mcp${import.meta.env.DEV ? "-dev" : ""}.shanvit7.workers.dev/mcp`;
 const PLUGIN_DESCRIPTION =
 	"Bring selected Chrome context into ChatGPT. Your history stays on your device; only requested results are shared.";
 const CHATGPT_DIAGNOSE_URL = chatGptPromptUrl(

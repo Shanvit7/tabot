@@ -1,9 +1,4 @@
-import {
-	type FocusEvent,
-	type KeyboardEvent,
-	useCallback,
-	useState,
-} from "react";
+import type { FocusEvent, KeyboardEvent } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -14,42 +9,6 @@ export const tabFocusClass = (radiusClass: string) =>
 		"outline-none focus-visible:z-10",
 		"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
 	);
-
-export const useTabSelection = ({
-	defaultActiveIndex = 0,
-	activeIndex: activeIndexProp,
-	onActiveIndexChange,
-}: {
-	defaultActiveIndex?: number;
-	activeIndex?: number;
-	onActiveIndexChange?: (index: number) => void;
-}) => {
-	const [uncontrolledIndex, setUncontrolledIndex] =
-		useState(defaultActiveIndex);
-	const [keyboardFocusIndex, setKeyboardFocusIndex] = useState<number | null>(
-		null,
-	);
-	const activeIndex = activeIndexProp ?? uncontrolledIndex;
-	const focusedIndex =
-		keyboardFocusIndex ?? (activeIndex >= 0 ? activeIndex : 0);
-
-	const setActiveIndex = useCallback(
-		(index: number) => {
-			onActiveIndexChange?.(index);
-			if (activeIndexProp === undefined) {
-				setUncontrolledIndex(index);
-			}
-			setKeyboardFocusIndex(null);
-		},
-		[activeIndexProp, onActiveIndexChange],
-	);
-
-	const setFocusedIndex = useCallback((index: number) => {
-		setKeyboardFocusIndex(index);
-	}, []);
-
-	return { activeIndex, setActiveIndex, focusedIndex, setFocusedIndex };
-};
 
 export const focusTabInList = (tablist: HTMLElement, index: number) => {
 	queueMicrotask(() => {

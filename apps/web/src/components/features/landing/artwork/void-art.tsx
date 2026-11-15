@@ -1,5 +1,5 @@
 import { memo, useId } from "react";
-import geometry from "~/components/features/landing/void-geometry.json";
+import geometry from "~/components/features/landing/artwork/void-geometry.json";
 
 // The four terrain layers and cleft are the approved carved-void checkpoint.
 // Preserve painter's order: each segment's outer face, inner face, then top.

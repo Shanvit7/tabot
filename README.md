@@ -1,26 +1,22 @@
-# <img src="assets/logo.png" alt="" width="36" /> Tabot
+# ![](assets/logo.png) Tabot
 
-**Your Chrome activity, ready for your AI assistant.**
+**Bring your browser work to ChatGPT.**
 
-![Tabot demo: browsing activity, connected sites, and optional AI assistant sharing](videos/tabot-promo/renders/tabot-30s.gif)
+Tabot is the browser activity layer for AI-assisted work. It helps you use work already done in Chrome with ChatGPT.
 
-[Watch with music](videos/tabot-promo/renders/tabot-30s.mp4)
+Tabot is in early beta. Search and review your browsing context locally—including pages, activity, excerpts, and notes—and ask ChatGPT for selected activity or note results. Reusable contexts and user-directed automations are in development, not available yet.
 
-Tabot is building a browser activity data layer for AI-assisted work: collect what happens in Chrome, organize useful evidence into context, and let people use it with their assistant to get things done.
-
-Tabot is in early beta. Today, it records browser activity, offers local search and review of pages, excerpts and notes, and exposes eight read-only tools to connected assistants. Reusable contexts and user-directed automations are the direction, not shipped features.
-
-- Review retained browser activity and saved notes locally.
-- Ask a connected assistant about supported activity and note results.
-- Keep browser records on-device; only selected results leave through authorized requests.
+- Search pages and notes by meaning; review activity by site.
+- Ask ChatGPT about selected browsing activity and saved notes.
+- Keep browser records on-device; selected results leave only when you request them.
 
 ## Data and privacy
 
-Visible page excerpts are captured automatically while tracking is active and remain local; assistants do not receive excerpt bodies. Tabot never records passwords, form values, or what you type. Excerpts are bounded visible text, not page snapshots; they have no time-based expiry and use a 25 MiB storage budget.
+Browser history, excerpts, notes, and search indexes stay in Chrome on your device. When you ask ChatGPT about activity or request saved notes, selected results go to ChatGPT; the relay routes requests but does not store browser history or tool results. Excerpts stay local. Tabot does not record what you type or enter in forms, take screenshots, or save full-page copies. Selected sensitive patterns are filtered from captured text and URLs and from requested note text and titles; filtering can miss sensitive details.
 
 ## Run locally
 
-Requires Node.js 22+ and pnpm. Tabot is a POC prototype in beta.
+Requires Node.js 22+ and pnpm.
 
 ```bash
 pnpm install
@@ -37,7 +33,7 @@ VITE_TABOT_EXTENSION_ID=YOUR_EXTENSION_ID pnpm dev:web
 
 Open [localhost:3000](http://localhost:3000) in the same Chrome profile.
 
-For optional ChatGPT and Claude connections, see [setup instructions](apps/mcp-server/README.md).
+For the optional ChatGPT connection, see [setup instructions](apps/mcp-server/README.md).
 
 ## Local capture reliability
 

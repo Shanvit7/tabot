@@ -14,8 +14,8 @@ import { Route as WorkspaceRouteImport } from './routes/_workspace'
 import { Route as ExtensionNotConnectedRouteImport } from './routes/extension-not-connected'
 import { Route as MobileRouteImport } from './routes/mobile'
 import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as WorkspaceAiRouteImport } from './routes/_workspace.ai'
 import { Route as WorkspaceAssistantRouteImport } from './routes/_workspace.assistant'
+import { Route as WorkspaceAutomationsRouteImport } from './routes/_workspace.automations'
 import { Route as WorkspaceHomeRouteImport } from './routes/_workspace.home'
 import { Route as WorkspaceSettingsRouteImport } from './routes/_workspace.settings'
 
@@ -43,14 +43,14 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WorkspaceAiRoute = WorkspaceAiRouteImport.update({
-  id: '/ai',
-  path: '/ai',
-  getParentRoute: () => WorkspaceRoute,
-} as any)
 const WorkspaceAssistantRoute = WorkspaceAssistantRouteImport.update({
   id: '/assistant',
   path: '/assistant',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceAutomationsRoute = WorkspaceAutomationsRouteImport.update({
+  id: '/automations',
+  path: '/automations',
   getParentRoute: () => WorkspaceRoute,
 } as any)
 const WorkspaceHomeRoute = WorkspaceHomeRouteImport.update({
@@ -69,8 +69,8 @@ export interface FileRoutesByFullPath {
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/mobile': typeof MobileRoute
   '/privacy': typeof PrivacyRoute
-  '/ai': typeof WorkspaceAiRoute
   '/assistant': typeof WorkspaceAssistantRoute
+  '/automations': typeof WorkspaceAutomationsRoute
   '/home': typeof WorkspaceHomeRoute
   '/settings': typeof WorkspaceSettingsRoute
 }
@@ -79,8 +79,8 @@ export interface FileRoutesByTo {
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/mobile': typeof MobileRoute
   '/privacy': typeof PrivacyRoute
-  '/ai': typeof WorkspaceAiRoute
   '/assistant': typeof WorkspaceAssistantRoute
+  '/automations': typeof WorkspaceAutomationsRoute
   '/home': typeof WorkspaceHomeRoute
   '/settings': typeof WorkspaceSettingsRoute
 }
@@ -91,8 +91,8 @@ export interface FileRoutesById {
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/mobile': typeof MobileRoute
   '/privacy': typeof PrivacyRoute
-  '/_workspace/ai': typeof WorkspaceAiRoute
   '/_workspace/assistant': typeof WorkspaceAssistantRoute
+  '/_workspace/automations': typeof WorkspaceAutomationsRoute
   '/_workspace/home': typeof WorkspaceHomeRoute
   '/_workspace/settings': typeof WorkspaceSettingsRoute
 }
@@ -103,8 +103,8 @@ export interface FileRouteTypes {
     | '/extension-not-connected'
     | '/mobile'
     | '/privacy'
-    | '/ai'
     | '/assistant'
+    | '/automations'
     | '/home'
     | '/settings'
   fileRoutesByTo: FileRoutesByTo
@@ -113,8 +113,8 @@ export interface FileRouteTypes {
     | '/extension-not-connected'
     | '/mobile'
     | '/privacy'
-    | '/ai'
     | '/assistant'
+    | '/automations'
     | '/home'
     | '/settings'
   id:
@@ -124,8 +124,8 @@ export interface FileRouteTypes {
     | '/extension-not-connected'
     | '/mobile'
     | '/privacy'
-    | '/_workspace/ai'
     | '/_workspace/assistant'
+    | '/_workspace/automations'
     | '/_workspace/home'
     | '/_workspace/settings'
   fileRoutesById: FileRoutesById
@@ -175,18 +175,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_workspace/ai': {
-      id: '/_workspace/ai'
-      path: '/ai'
-      fullPath: '/ai'
-      preLoaderRoute: typeof WorkspaceAiRouteImport
-      parentRoute: typeof WorkspaceRoute
-    }
     '/_workspace/assistant': {
       id: '/_workspace/assistant'
       path: '/assistant'
       fullPath: '/assistant'
       preLoaderRoute: typeof WorkspaceAssistantRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/automations': {
+      id: '/_workspace/automations'
+      path: '/automations'
+      fullPath: '/automations'
+      preLoaderRoute: typeof WorkspaceAutomationsRouteImport
       parentRoute: typeof WorkspaceRoute
     }
     '/_workspace/home': {
@@ -207,15 +207,15 @@ declare module '@tanstack/react-router' {
 }
 
 interface WorkspaceRouteChildren {
-  WorkspaceAiRoute: typeof WorkspaceAiRoute
   WorkspaceAssistantRoute: typeof WorkspaceAssistantRoute
+  WorkspaceAutomationsRoute: typeof WorkspaceAutomationsRoute
   WorkspaceHomeRoute: typeof WorkspaceHomeRoute
   WorkspaceSettingsRoute: typeof WorkspaceSettingsRoute
 }
 
 const WorkspaceRouteChildren: WorkspaceRouteChildren = {
-  WorkspaceAiRoute: WorkspaceAiRoute,
   WorkspaceAssistantRoute: WorkspaceAssistantRoute,
+  WorkspaceAutomationsRoute: WorkspaceAutomationsRoute,
   WorkspaceHomeRoute: WorkspaceHomeRoute,
   WorkspaceSettingsRoute: WorkspaceSettingsRoute,
 }
