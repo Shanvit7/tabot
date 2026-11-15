@@ -1,14 +1,12 @@
 import { z } from "zod";
 import { MAX_QUERY_CHARS } from "../tools";
 
-/** Input shape for `search_activity`. */
-export const searchActivityInputSchema = {
+/** Input shape for `search_all`. */
+export const searchAllInputSchema = {
 	query: z.string().trim().min(1).max(MAX_QUERY_CHARS),
+	from: z.number().finite().min(0).optional(),
+	to: z.number().finite().min(0).optional(),
 	limit: z.number().int().min(1).max(8).optional(),
-	cursor: z
-		.string()
-		.regex(/^\d{1,16}:[1-9]\d{0,5}$/)
-		.optional(),
 };
 
 export const searchNotesInputSchema = {
@@ -78,7 +76,7 @@ export const getPageNotesInputSchema = z
 		},
 	);
 
-/** Input shape for `find_activity_matches`. */
+/** Input shape for `find_related_activity`. */
 export const findActivityMatchesInputSchema = {
 	anchors: z
 		.array(

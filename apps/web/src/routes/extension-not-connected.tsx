@@ -159,7 +159,7 @@ const ExtensionNotConnected = () => {
 				</div>
 				<ExtensionBridgeArt />
 			</section>
-			<DingToaster position="bottom-right" theme="light" />
+			<DingToaster position="top-center" />
 		</main>
 	);
 };

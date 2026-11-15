@@ -1,5 +1,6 @@
 import { Debouncer } from "@tanstack/pacer";
 import { Link } from "@tanstack/react-router";
+import { Ascii } from "ascii.rest/react";
 import { Search, Settings, X } from "lucide-react";
 import {
 	domAnimation,
@@ -9,6 +10,7 @@ import {
 	useReducedMotion,
 } from "motion/react";
 import { useEffect, useReducer, useRef, useState } from "react";
+import { homeAmbient } from "~/components/features/home/ambient";
 import { SearchResultSection } from "~/components/features/home/search/result-section";
 import {
 	initialSearchState,
@@ -98,8 +100,8 @@ export const Home = () => {
 		};
 	}, [query, composing, searchState.retryCount]);
 	return (
-		<main className="min-h-svh bg-background px-6 pb-[calc(env(safe-area-inset-bottom)+10rem)] pt-8 text-foreground sm:px-10">
-			<div className="mx-auto max-w-5xl">
+		<main className="relative isolate min-h-svh overflow-hidden bg-background px-6 pb-[calc(env(safe-area-inset-bottom)+10rem)] pt-8 text-foreground sm:px-10">
+			<div className="relative z-10 mx-auto max-w-5xl">
 				<header className="flex flex-wrap items-center justify-between gap-3">
 					<div className="flex items-center gap-2">
 						<img
@@ -283,6 +285,20 @@ export const Home = () => {
 							.finally(() => loadingLists.current.delete(requestKey));
 					}}
 				/>
+			</div>
+			<div
+				aria-hidden="true"
+				className={cn(
+					"pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-50 transition-opacity duration-500 motion-reduce:transition-none dark:opacity-40",
+					query && "opacity-25 dark:opacity-15",
+				)}
+			>
+				<div className="absolute -left-[3vw] top-0 h-svh w-[26vw] [mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)] max-sm:-left-[5vw] max-sm:w-[23vw]">
+					<Ascii piece={homeAmbient} className="h-full w-full" />
+				</div>
+				<div className="absolute -right-[3vw] top-0 h-svh w-[26vw] -scale-x-100 [mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)] max-sm:-right-[5vw] max-sm:w-[23vw]">
+					<Ascii piece={homeAmbient} className="h-full w-full" />
+				</div>
 			</div>
 		</main>
 	);

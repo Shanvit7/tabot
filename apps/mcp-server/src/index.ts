@@ -24,7 +24,7 @@ import {
 	getSiteNotesInputSchema,
 	listSitePagesInputSchema,
 	listSitesInputSchema,
-	searchActivityInputSchema,
+	searchAllInputSchema,
 	searchNotesInputSchema,
 } from "./mcp/schema";
 import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./mcp/tools";
@@ -95,25 +95,25 @@ const createMcpServer = (
 	};
 
 	server.registerTool(
-		TOOL_NAMES.SEARCH_ACTIVITY,
+		TOOL_NAMES.SEARCH_ALL,
 		{
-			title: "Search browser activity",
-			description: TOOL_DESCRIPTIONS.SEARCH_ACTIVITY,
+			title: "Search all retained data",
+			description: TOOL_DESCRIPTIONS.SEARCH_ALL,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: searchActivityInputSchema,
+			inputSchema: searchAllInputSchema,
 		},
-		(params) => call(TOOL_NAMES.SEARCH_ACTIVITY, params),
+		(params) => call(TOOL_NAMES.SEARCH_ALL, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.FIND_ACTIVITY_MATCHES,
+		TOOL_NAMES.FIND_RELATED_ACTIVITY,
 		{
-			title: "Find activity matches",
-			description: TOOL_DESCRIPTIONS.FIND_ACTIVITY_MATCHES,
+			title: "Find related activity",
+			description: TOOL_DESCRIPTIONS.FIND_RELATED_ACTIVITY,
 			annotations: READ_ONLY_ANNOTATIONS,
 			inputSchema: findActivityMatchesInputSchema,
 		},
-		(params) => call(TOOL_NAMES.FIND_ACTIVITY_MATCHES, params),
+		(params) => call(TOOL_NAMES.FIND_RELATED_ACTIVITY, params),
 	);
 
 	server.registerTool(
@@ -138,14 +138,14 @@ const createMcpServer = (
 		(params) => call(TOOL_NAMES.LIST_SITES, params),
 	);
 	server.registerTool(
-		TOOL_NAMES.LIST_SITE_PAGES,
+		TOOL_NAMES.LIST_PAGES,
 		{
-			title: "Browse pages on a site",
-			description: TOOL_DESCRIPTIONS.LIST_SITE_PAGES,
+			title: "List pages on a site",
+			description: TOOL_DESCRIPTIONS.LIST_PAGES,
 			annotations: READ_ONLY_ANNOTATIONS,
 			inputSchema: listSitePagesInputSchema,
 		},
-		(params) => call(TOOL_NAMES.LIST_SITE_PAGES, params),
+		(params) => call(TOOL_NAMES.LIST_PAGES, params),
 	);
 
 	server.registerTool(
@@ -171,14 +171,14 @@ const createMcpServer = (
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_ACTIVITY_TIMELINE,
+		TOOL_NAMES.GET_BROWSING_TIMELINE,
 		{
-			title: "View activity timeline",
-			description: TOOL_DESCRIPTIONS.GET_ACTIVITY_TIMELINE,
+			title: "View browsing timeline",
+			description: TOOL_DESCRIPTIONS.GET_BROWSING_TIMELINE,
 			annotations: READ_ONLY_ANNOTATIONS,
 			inputSchema: findActivityMatchesInputSchema,
 		},
-		(params) => call(TOOL_NAMES.GET_ACTIVITY_TIMELINE, params),
+		(params) => call(TOOL_NAMES.GET_BROWSING_TIMELINE, params),
 	);
 
 	return server;

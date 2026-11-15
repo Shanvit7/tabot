@@ -22,7 +22,12 @@ const RootLayout = () => {
 	useEffect(() => trackDashboardPage(pathname), [pathname]);
 	useEffect(() => {
 		if (isLoading) return;
-		if (isMobile && pathname !== "/mobile" && pathname !== "/privacy") {
+		if (
+			isMobile &&
+			pathname !== "/" &&
+			pathname !== "/mobile" &&
+			pathname !== "/privacy"
+		) {
 			void navigate({ to: "/mobile", replace: true });
 		} else if (!isMobile && pathname === "/mobile") {
 			void navigate({ to: "/home", replace: true });

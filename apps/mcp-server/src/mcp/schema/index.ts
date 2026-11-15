@@ -4,6 +4,6 @@ export {
 	getSiteNotesInputSchema,
 	listSitePagesInputSchema,
 	listSitesInputSchema,
-	searchActivityInputSchema,
+	searchAllInputSchema,
 	searchNotesInputSchema,
 } from "./tools.schema";

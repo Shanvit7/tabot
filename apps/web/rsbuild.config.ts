@@ -5,6 +5,21 @@ import tailwindcss from "@tailwindcss/postcss";
 import { tanstackStart } from "@tanstack/react-start/plugin/rsbuild";
 
 const { publicVars } = loadEnv({ prefixes: ["VITE_"] });
+if (process.env.NODE_ENV === "production") {
+	try {
+		const storeUrl = new URL(process.env.VITE_CHROME_WEB_STORE_URL ?? "");
+		if (
+			storeUrl.origin !== "https://chromewebstore.google.com" ||
+			!/^\/detail\/tabot\/[a-p]{32}$/.test(storeUrl.pathname)
+		) {
+			throw new Error();
+		}
+	} catch {
+		throw new Error(
+			"VITE_CHROME_WEB_STORE_URL must point to Tabot's Chrome Web Store listing.",
+		);
+	}
+}
 const base = process.env.VITE_BASE_PATH || "/";
 const NODE_MODULE_SHIM = fileURLToPath(
 	new URL("./src/shims/node-module.ts", import.meta.url),

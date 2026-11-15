@@ -49,4 +49,4 @@ Checks: `pnpm --filter extension check:ingest`. Architecture and failure guarant
 
 Issues and pull requests welcome. Run `pnpm lint` before submitting code.
 
-[MIT license](LICENSE).
+Tabot-authored code is Copyright © 2026 Shanvit Shetty and licensed under [GPL-3.0-only](LICENSE); see [COPYRIGHT](COPYRIGHT) for scope. Third-party code and assets retain their own licenses and notices.

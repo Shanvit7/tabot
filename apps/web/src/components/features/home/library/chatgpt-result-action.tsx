@@ -9,10 +9,10 @@ const questionPlaceholder = (subject: "site" | "page") =>
 	`[Write your question about this ${subject} here]`;
 
 const sitePrompt = (site: string) =>
-	`Use my connected Tabot MCP tools to answer my question about my saved activity for ${JSON.stringify(site)}. Use list_site_pages and get_site_notes with this site as needed; for page-specific notes, use get_page_notes only with opaque pageRefs returned by Tabot. For visit questions, use search_activity with my question, and discuss only returned results for this site. Use only evidence returned by Tabot; it does not provide raw page paths or page content. If the relevant data or tools are unavailable, say so.\n\nQuestion: ${questionPlaceholder("site")}`;
+	`Use my connected Tabot MCP tools to answer my question about my saved activity for ${JSON.stringify(site)}. Use list_pages and get_site_notes with this site as needed; for page-specific notes, use get_page_notes only with opaque pageRefs returned by Tabot. For questions spanning pages, notes, and sites, use search_all with my question; discuss only returned results for this site. Use only evidence returned by Tabot; it does not provide raw page paths or page content. If the relevant data or tools are unavailable, say so.\n\nQuestion: ${questionPlaceholder("site")}`;
 
 const pagePrompt = (pageRef: string) =>
-	`Use my connected Tabot MCP tools to answer my question about this saved page. First use get_page_notes with this exact opaque pageRef: ${JSON.stringify(pageRef)}. If my question concerns visits, use search_activity with my question, inspect relevant returned anchors with find_activity_matches or get_activity_timeline, and limit visit findings to this page’s site. Do not request or infer the page URL, path, title, or content; use only information returned by Tabot. If the relevant data or tools are unavailable, say so.\n\nQuestion: ${questionPlaceholder("page")}`;
+	`Use my connected Tabot MCP tools to answer my question about this saved page. First use get_page_notes with this exact opaque pageRef: ${JSON.stringify(pageRef)}. If my question concerns visits, use search_all with my question, inspect relevant returned anchors with find_related_activity or get_browsing_timeline, and limit visit findings to this page’s site. Do not request or infer the page URL, path, title, or content; use only information returned by Tabot. If the relevant data or tools are unavailable, say so.\n\nQuestion: ${questionPlaceholder("page")}`;
 
 const openChatGptTab = () => {
 	const tab = window.open("about:blank", "_blank");

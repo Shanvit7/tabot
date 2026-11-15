@@ -55,14 +55,14 @@ const BACKOFF_MIN_MS = 1_000;
 const BACKOFF_MAX_MS = 60_000;
 
 /** Relay method names — must match mcp-server src/mcp/tools.ts. */
-const SEARCH_ACTIVITY_METHOD = "search_activity";
-const FIND_ACTIVITY_MATCHES_METHOD = "find_activity_matches";
-const GET_ACTIVITY_TIMELINE_METHOD = "get_activity_timeline";
+const SEARCH_ALL_METHOD = "search_all";
+const FIND_RELATED_ACTIVITY_METHOD = "find_related_activity";
+const GET_BROWSING_TIMELINE_METHOD = "get_browsing_timeline";
 const SEARCH_NOTES_METHOD = "search_notes";
 const GET_PAGE_NOTES_METHOD = "get_page_notes";
 const GET_SITE_NOTES_METHOD = "get_site_notes";
 const LIST_SITES_METHOD = "list_sites";
-const LIST_SITE_PAGES_METHOD = "list_site_pages";
+const LIST_PAGES_METHOD = "list_pages";
 const ACTIVITY_RESULT_LIMIT = 8;
 const MAX_ACTIVITY_OFFSET = 999_999;
 const MAX_ACTIVITY_QUERY_CHARS = 200;
@@ -234,15 +234,28 @@ const send = (message: unknown) => {
 // Shared helper resets failed opens; do not cache a rejected promise here.
 const getDb = getStorageDb;
 
-const searchActivity = async (params: unknown) => {
+const searchAll = async (params: unknown) => {
 	const input = params as {
 		query?: unknown;
+		from?: unknown;
+		to?: unknown;
 		limit?: unknown;
-		cursor?: unknown;
 	} | null;
 	const query = typeof input?.query === "string" ? input.query.trim() : "";
 	if (!query || query.length > MAX_ACTIVITY_QUERY_CHARS)
 		throw new Error("query must contain 1 to 200 characters.");
+	for (const key of ["from", "to"] as const) {
+		const value = input?.[key];
+		if (
+			value !== undefined &&
+			(typeof value !== "number" || !Number.isFinite(value) || value < 0)
+		)
+			throw new Error(`${key} must be a timestamp.`);
+	}
+	const now = Date.now();
+	const to = Math.min((input?.to as number | undefined) ?? now, now);
+	if (typeof input?.from === "number" && input.from > to)
+		throw new Error("from must be at or before to.");
 	const requestedLimit = input?.limit;
 	if (
 		requestedLimit !== undefined &&
@@ -252,20 +265,28 @@ const searchActivity = async (params: unknown) => {
 	)
 		throw new Error("limit must be an integer from 1 to 8.");
 	const limit = (requestedLimit as number | undefined) ?? ACTIVITY_RESULT_LIMIT;
-	const { snapshot, offset } = decodePageCursor(input?.cursor);
-	const page = await getDb().then((db) =>
-		db.searchHistory(query, { limit: limit + 1, offset, to: snapshot }),
+	const from = input?.from as number | undefined;
+	const db = await getDb();
+	const [pages, notes, siteData] = await Promise.all([
+		db.searchHistory(query, { from, to, limit }),
+		db.searchNotes(query, { from, to, limit }),
+		db.browseLibrary({ level: "sites", query, from, to, limit, offset: 0 }),
+	]);
+	const sessions = sessionize(
+		(notes.length ? await db.readEvents() : []) as StoredTabEvent[],
 	);
-	const results = page.slice(0, limit);
+	const sites = siteData.sites.map(
+		({ site, pageCount, noteCount, lastSeen }) => ({
+			site,
+			pageCount,
+			noteCount,
+			lastSeen,
+		}),
+	);
 	return {
-		count: results.length,
-		nextCursor: nextPageCursor(
-			page.length > limit,
-			snapshot,
-			offset,
-			results.length,
-		),
-		results: projectActivitySearchResults(results),
+		pages: projectActivitySearchResults(pages),
+		notes: await Promise.all(notes.map((note) => noteResult(note, sessions))),
+		sites,
 	};
 };
 
@@ -549,9 +570,7 @@ const getReferencedPageNotes = async (input: Record<string, unknown>) => {
 		typeof input.pageRef !== "string" ||
 		!/^[a-z0-9.%A-F-]{1,765}:[a-f0-9]{64}$/.test(input.pageRef)
 	)
-		throw new Error(
-			"pageRef must be a page reference returned by list_site_pages.",
-		);
+		throw new Error("pageRef must be a page reference returned by list_pages.");
 	let site: string;
 	try {
 		site = decodeURIComponent(
@@ -791,10 +810,10 @@ const handlers: Record<string, (params: unknown) => Promise<unknown>> = {
 	[GET_PAGE_NOTES_METHOD]: getPageNotes,
 	[GET_SITE_NOTES_METHOD]: getSiteNotes,
 	[LIST_SITES_METHOD]: (params) => listLibrary(params, "sites"),
-	[LIST_SITE_PAGES_METHOD]: (params) => listLibrary(params, "pages"),
-	[SEARCH_ACTIVITY_METHOD]: searchActivity,
-	[FIND_ACTIVITY_MATCHES_METHOD]: findActivityMatches,
-	[GET_ACTIVITY_TIMELINE_METHOD]: getActivityTimeline,
+	[LIST_PAGES_METHOD]: (params) => listLibrary(params, "pages"),
+	[SEARCH_ALL_METHOD]: searchAll,
+	[FIND_RELATED_ACTIVITY_METHOD]: findActivityMatches,
+	[GET_BROWSING_TIMELINE_METHOD]: getActivityTimeline,
 };
 
 const handleRequest = async (message: ServerRequest) => {

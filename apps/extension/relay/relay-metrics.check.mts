@@ -71,7 +71,12 @@ const seedPage = {
 	url: "https://example.test/private/path?token=secret",
 	segments: ["OAuth callback nonce"],
 };
-const searchOptions: { limit?: number; offset?: number; to?: number }[] = [];
+const searchOptions: {
+	from?: number;
+	limit?: number;
+	offset?: number;
+	to?: number;
+}[] = [];
 const libraryRequests: LibraryRequest[] = [];
 const relayTestToken = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB";
 const libraryNotes = Array.from({ length: 53 }, (_, index) => ({
@@ -119,13 +124,18 @@ const db = {
 	},
 	searchHistory: async (
 		_query: string,
-		options?: { limit?: number; offset?: number; to?: number },
+		options?: { from?: number; limit?: number; offset?: number; to?: number },
 	) => {
 		searchOptions.push(options ?? {});
-		return options?.offset
-			? []
-			: [searchResult, { ...searchResult, url: "https://other.test/path" }];
+		return [
+			searchResult,
+			{ ...searchResult, url: "https://other.test/path" },
+		].slice(0, options?.limit);
 	},
+	searchNotes: async (
+		_query: string,
+		_options?: { from?: number; limit?: number; to?: number },
+	) => [libraryNotes[51]],
 	findEvent: async (id: string) =>
 		id === seedEvent.id ? seedEvent : undefined,
 	getPageObservation: async (id: string) =>
@@ -211,30 +221,27 @@ try {
 		"chatgpt" in diagnostics.assistants && diagnostics.assistants.chatgpt,
 		true,
 	);
-	const response = await request("search_activity", {
+	const response = await request("search_all", {
 		query: "OAuth",
 		limit: 1,
 	});
 	assert.ok(response);
 	const firstPage = response.result as {
-		count: number;
-		nextCursor: string;
-		results: unknown[];
+		pages: unknown[];
+		notes: { text: string }[];
+		sites: unknown[];
 	};
-	assert.equal(firstPage.count, 1);
-	assert.match(firstPage.nextCursor, /^\d+:1$/);
-	const json = JSON.stringify(firstPage.results);
+	assert.equal(firstPage.pages.length, 1);
+	assert.equal(firstPage.notes.length, 1);
+	const json = JSON.stringify(firstPage.pages);
 	assert.match(json, /example\.test/);
 	assert.doesNotMatch(json, /private|secret|OAuth callback|relatedEvidence/);
 	assert.equal(
-		Object.hasOwn(
-			(firstPage.results[0] as object | undefined) ?? {},
-			"preview",
-		),
+		Object.hasOwn((firstPage.pages[0] as object | undefined) ?? {}, "preview"),
 		false,
 	);
 	assert.equal(
-		Object.hasOwn((firstPage.results[0] as object | undefined) ?? {}, "title"),
+		Object.hasOwn((firstPage.pages[0] as object | undefined) ?? {}, "title"),
 		false,
 	);
 	const sites = (await request("list_sites", {}))?.result as {
@@ -250,7 +257,7 @@ try {
 		})),
 		[{ site: "example.test", pageCount: 25, noteCount: 53 }],
 	);
-	const listedResponse = await request("list_site_pages", {
+	const listedResponse = await request("list_pages", {
 		site: "example.test",
 		limit: 2,
 	});
@@ -334,7 +341,7 @@ try {
 	assert.equal(orphanNotes.count, 1, "Note-only pages need no capture");
 	const requestCount = libraryRequests.length;
 	for (const [method, input] of [
-		["list_site_pages", { site: "https://example.test/path" }],
+		["list_pages", { site: "https://example.test/path" }],
 		["list_sites", { limit: 9 }],
 		["list_sites", { from: 20, to: 10 }],
 		["get_page_notes", { pageRef: "invalid" }],
@@ -350,21 +357,14 @@ try {
 		requestCount,
 		"Invalid requests never reach storage",
 	);
-	const nextPage = await request("search_activity", {
-		query: "OAuth",
-		limit: 1,
-		cursor: firstPage.nextCursor,
-	});
-	assert.ok(nextPage);
-	assert.equal(
-		(nextPage.result as { count: number; nextCursor: null }).nextCursor,
-		null,
+	assert.doesNotMatch(
+		JSON.stringify(firstPage.notes),
+		new RegExp(relayTestToken),
 	);
-	assert.equal(searchOptions.length, 2);
-	assert.equal(searchOptions[0]?.limit, 2);
-	assert.equal(searchOptions[1]?.offset, 1);
-	assert.equal(searchOptions[0]?.to, searchOptions[1]?.to);
-	const relatedPage1 = await request("find_activity_matches", {
+	assert.equal(searchOptions.length, 1);
+	assert.equal(searchOptions[0]?.limit, 1);
+	assert.ok(searchOptions[0]?.to);
+	const relatedPage1 = await request("find_related_activity", {
 		anchors: [
 			{ kind: "event", id: "event-1" },
 			{ kind: "page", id: "page-1" },
@@ -393,7 +393,7 @@ try {
 		/private|secret|OAuth callback/,
 	);
 	assert.equal(related.matches[0]?.kind, "event");
-	const trailResponse = await request("get_activity_timeline", {
+	const trailResponse = await request("get_browsing_timeline", {
 		anchors: [{ kind: "event", id: "event-1" }],
 		limit: 1,
 	});
@@ -416,7 +416,7 @@ try {
 	assert.equal(Object.hasOwn(trail.items[0] ?? {}, "preview"), false);
 	assert.equal(Object.hasOwn(trail.items[0] ?? {}, "title"), false);
 	assert.doesNotMatch(JSON.stringify(trail), /private|secret|OAuth callback/);
-	const relatedPage2 = await request("find_activity_matches", {
+	const relatedPage2 = await request("find_related_activity", {
 		anchors: [
 			{ kind: "event", id: "event-1" },
 			{ kind: "page", id: "page-1" },
@@ -431,7 +431,7 @@ try {
 	};
 	assert.equal(secondRelated.count, 1);
 	assert.equal(secondRelated.nextCursor, null);
-	const invalidRelatedCursor = await request("find_activity_matches", {
+	const invalidRelatedCursor = await request("find_related_activity", {
 		anchors: [{ kind: "event", id: "event-1" }],
 		cursor: `${Date.now() + 100_000}:1`,
 	});
@@ -439,15 +439,16 @@ try {
 		invalidRelatedCursor?.error?.message,
 		"cursor must be a valid next-page cursor.",
 	);
-	const invalidCursor = await request("search_activity", {
+	const invalidSearchRange = await request("search_all", {
 		query: "OAuth",
-		cursor: `${Date.now() + 100_000}:1`,
+		from: 20,
+		to: 10,
 	});
 	assert.equal(
-		invalidCursor?.error?.message,
-		"cursor must be a valid next-page cursor.",
+		invalidSearchRange?.error?.message,
+		"from must be at or before to.",
 	);
-	assert.equal(searchOptions.length, 2);
+	assert.equal(searchOptions.length, 1);
 	const removed = await request("get_current_context", {});
 	assert.equal(
 		removed?.error?.message,

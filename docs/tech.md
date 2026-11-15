@@ -75,7 +75,7 @@ ChatGPT → Cloudflare MCP/OAuth Worker → installation-bound request
   → local sanitization/projection → correlated response → ChatGPT
 ```
 
-The eight current tools are `search_activity`, `find_activity_matches`, `get_activity_timeline`, `search_notes`, `get_page_notes`, `list_sites`, `list_site_pages`, and `get_site_notes`. The extension performs local search and returns bounded projections. Activity/site results omit raw event rows, page paths/titles and excerpt bodies. Explicitly requested note content can leave the device after selected-pattern redaction. The redactor does not cover email, phone or Indian tax PAN and cannot guarantee detection of every sensitive value.
+The eight current tools are `search_all`, `find_related_activity`, `get_browsing_timeline`, `search_notes`, `get_page_notes`, `list_sites`, `list_pages`, and `get_site_notes`. `search_all` searches local page/activity content, notes, and site metadata in one request; page results use hybrid semantic search while notes/sites use keyword matching. The extension performs local search and returns bounded projections. Activity/site results omit raw event rows, page paths/titles and excerpt bodies. Explicitly requested note content can leave the device after selected-pattern redaction. The redactor does not cover email, phone or Indian tax PAN and cannot guarantee detection of every sensitive value.
 
 The relay stores OAuth/installation routing state and ephemeral request state, not browser history or results. Tool calls require Chrome and the extension to be connected. OAuth grant, Worker health, and source configuration do not prove live extension connectivity, tool discovery, production parity, or successful end-user use. See [MCP server operations](../apps/mcp-server/README.md).
 

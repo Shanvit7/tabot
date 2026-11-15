@@ -36,16 +36,6 @@ const relatedActivity = {
 		},
 	],
 };
-const activity = {
-	count: 1,
-	nextCursor: "1700000000000:3",
-	results: [
-		{
-			site: "https://example.test",
-			anchors: [{ kind: "event", id: "opaque-id", timestamp: 1 }],
-		},
-	],
-};
 const env = {
 	TABOT_PUBLIC_RATE_LIMITER: { limit: async () => ({ success: true }) },
 	TABOT_API_RATE_LIMITER: { limit: async () => ({ success: true }) },
@@ -69,7 +59,7 @@ const env = {
 				const { method, params } = await request.json();
 				if (
 					method === "list_sites" ||
-					method === "list_site_pages" ||
+					method === "list_pages" ||
 					(method === "get_page_notes" && params.pageRef)
 				) {
 					libraryDispatches++;
@@ -77,7 +67,7 @@ const env = {
 						params,
 						method === "list_sites"
 							? {}
-							: method === "list_site_pages"
+							: method === "list_pages"
 								? { site: "example.test", limit: 2 }
 								: { pageRef },
 					);
@@ -92,7 +82,7 @@ const env = {
 											{ site: "example.test", pageCount: 22, noteCount: 52 },
 										],
 									}
-								: method === "list_site_pages"
+								: method === "list_pages"
 									? { pages: [{ pageRef, noteCount: 52 }] }
 									: { notes: [{ id: "note-id" }] }),
 						},
@@ -128,22 +118,20 @@ const env = {
 						},
 					});
 				}
-				if (method === "search_activity") {
+				if (method === "search_all") {
 					dispatches++;
 					assert.deepEqual(params, {
 						query: "auth callback",
 						limit: 3,
-						...(dispatches === 2 ? { cursor: "1700000000000:3" } : {}),
 					});
 					return Response.json({
 						ok: true,
-						result:
-							dispatches === 1 ? activity : { ...activity, nextCursor: null },
+						result: { pages: [], notes: [], sites: [] },
 					});
 				}
 				relatedDispatches++;
 				assert.ok(
-					["find_activity_matches", "get_activity_timeline"].includes(method),
+					["find_related_activity", "get_browsing_timeline"].includes(method),
 				);
 				assert.deepEqual(params, {
 					anchors: [{ kind: "page", id: "source-id" }],
@@ -152,7 +140,7 @@ const env = {
 				return Response.json({
 					ok: true,
 					result:
-						method === "get_activity_timeline"
+						method === "get_browsing_timeline"
 							? { ...relatedActivity, items: relatedActivity.matches }
 							: relatedActivity,
 				});
@@ -191,22 +179,23 @@ assert.equal(list.status, 200);
 assert.deepEqual(
 	list.body.result.tools.map((tool) => tool.name),
 	[
-		"search_activity",
-		"find_activity_matches",
+		"search_all",
+		"find_related_activity",
 		"search_notes",
 		"list_sites",
-		"list_site_pages",
+		"list_pages",
 		"get_site_notes",
 		"get_page_notes",
-		"get_activity_timeline",
+		"get_browsing_timeline",
 	],
 );
 const searchTool = list.body.result.tools.find(
-	(tool) => tool.name === "search_activity",
+	(tool) => tool.name === "search_all",
 );
 assert.deepEqual(searchTool.inputSchema.required, ["query"]);
 assert.equal(searchTool.inputSchema.properties.limit.maximum, 8);
-assert.match(searchTool.inputSchema.properties.cursor.pattern, /\\d/);
+assert.ok(searchTool.inputSchema.properties.from);
+assert.ok(searchTool.inputSchema.properties.to);
 assert.deepEqual(list.body.result.tools[2].inputSchema.required, ["query"]);
 assert.ok(list.body.result.tools[2].inputSchema.properties.cursor);
 const tool = (name) =>
@@ -214,22 +203,22 @@ const tool = (name) =>
 assert.deepEqual(tool("get_site_notes").inputSchema.required, ["site"]);
 assert.ok(tool("get_page_notes").inputSchema.properties.pageRef);
 assert.ok(tool("get_page_notes").inputSchema.properties.cursor);
-assert.deepEqual(tool("list_site_pages").inputSchema.required, ["site"]);
+assert.deepEqual(tool("list_pages").inputSchema.required, ["site"]);
 assert.equal(tool("list_sites").inputSchema.properties.limit.maximum, 8);
-assert.deepEqual(tool("get_activity_timeline").inputSchema.required, [
+assert.deepEqual(tool("get_browsing_timeline").inputSchema.required, [
 	"anchors",
 ]);
 assert.equal(
-	tool("get_activity_timeline").inputSchema.properties.anchors.maxItems,
+	tool("get_browsing_timeline").inputSchema.properties.anchors.maxItems,
 	8,
 );
 assert.equal(
-	tool("get_activity_timeline").inputSchema.properties.maxGapHours.maximum,
+	tool("get_browsing_timeline").inputSchema.properties.maxGapHours.maximum,
 	720,
 );
 for (const [name, args] of [
 	["list_sites", {}],
-	["list_site_pages", { site: "example.test", limit: 2 }],
+	["list_pages", { site: "example.test", limit: 2 }],
 	["get_page_notes", { pageRef }],
 ]) {
 	const result = await rpc("tools/call", { name, arguments: args });
@@ -242,7 +231,7 @@ for (const [name, args] of [
 	["get_page_notes", { url: "https://example.test", pageRef }],
 	["get_page_notes", { pageRef: "invalid" }],
 	["list_sites", { limit: 9 }],
-	["list_site_pages", {}],
+	["list_pages", {}],
 ]) {
 	const result = await rpc("tools/call", { name, arguments: args });
 	assert.ok(result.body.error || result.body.result?.isError);
@@ -253,18 +242,12 @@ assert.equal(
 	"Invalid selectors and pagination never dispatch",
 );
 const result = await rpc("tools/call", {
-	name: "search_activity",
+	name: "search_all",
 	arguments: { query: "auth callback", limit: 3 },
 });
-const firstPage = JSON.parse(result.body.result.content[0].text);
-assert.equal(firstPage.count, 1);
-assert.equal(firstPage.nextCursor, "1700000000000:3");
-const nextPage = await rpc("tools/call", {
-	name: "search_activity",
-	arguments: { query: "auth callback", limit: 3, cursor: firstPage.nextCursor },
-});
-assert.equal(JSON.parse(nextPage.body.result.content[0].text).nextCursor, null);
-assert.equal(dispatches, 2);
+const allResults = JSON.parse(result.body.result.content[0].text);
+assert.deepEqual(allResults, { pages: [], notes: [], sites: [] });
+assert.equal(dispatches, 1);
 const notesResult = await rpc("tools/call", {
 	name: "search_notes",
 	arguments: { query: "OAuth setup", limit: 4 },
@@ -302,7 +285,7 @@ assert.equal(
 );
 assert.equal(noteDispatches, 4);
 const relatedResult = await rpc("tools/call", {
-	name: "find_activity_matches",
+	name: "find_related_activity",
 	arguments: {
 		anchors: [{ kind: "page", id: "source-id" }],
 		limit: 2,
@@ -314,7 +297,7 @@ assert.deepEqual(
 );
 assert.equal(relatedDispatches, 1);
 const trailResult = await rpc("tools/call", {
-	name: "get_activity_timeline",
+	name: "get_browsing_timeline",
 	arguments: {
 		anchors: [{ kind: "page", id: "source-id" }],
 		limit: 2,
@@ -323,7 +306,7 @@ const trailResult = await rpc("tools/call", {
 assert.ok(JSON.parse(trailResult.body.result.content[0].text).items);
 assert.equal(relatedDispatches, 2);
 const invalidRelated = await rpc("tools/call", {
-	name: "find_activity_matches",
+	name: "find_related_activity",
 	arguments: {
 		anchors: [{ kind: "page", id: "source-id" }],
 		maxGapHours: 721,
@@ -332,22 +315,22 @@ const invalidRelated = await rpc("tools/call", {
 assert.ok(invalidRelated.body.error || invalidRelated.body.result?.isError);
 assert.equal(relatedDispatches, 2, "invalid activity inputs never dispatch");
 const invalid = await rpc("tools/call", {
-	name: "search_activity",
+	name: "search_all",
 	arguments: { query: "x".repeat(201) },
 });
 assert.ok(invalid.body.error || invalid.body.result?.isError);
-assert.equal(dispatches, 2, "invalid queries never dispatch");
+assert.equal(dispatches, 1, "invalid queries never dispatch");
 assert.equal(
 	(
 		await rpc(
 			"tools/call",
-			{ name: "search_activity", arguments: { query: "ok" } },
+			{ name: "search_all", arguments: { query: "ok" } },
 			"bad",
 		)
 	).status,
 	401,
 );
-assert.equal(dispatches, 2, "unauthorized calls never dispatch");
+assert.equal(dispatches, 1, "unauthorized calls never dispatch");
 for (const obsolete of [
 	"search_context",
 	"get_recent_context",
@@ -360,5 +343,5 @@ for (const obsolete of [
 ])
 	assert.ok(!list.body.result.tools.some((tool) => tool.name === obsolete));
 console.log(
-	"MCP surface check passed: paginated search + local activity, bounded inputs, OAuth, and no legacy tools.",
+	"MCP surface check passed: unified search + local activity, bounded inputs, OAuth, and no legacy tools.",
 );

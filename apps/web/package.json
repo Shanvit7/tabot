@@ -29,6 +29,7 @@
 		"@tanstack/react-start": "^1.169.3",
 		"@tanstack/react-virtual": "^3.14.26",
 		"@yusufceng1z/ding-react": "^0.0.4",
+		"ascii.rest": "^0.4.0",
 		"boneyard-js": "^1.10.0",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",

@@ -163,6 +163,9 @@ importers:
       '@yusufceng1z/ding-react':
         specifier: ^0.0.4
         version: 0.0.4(react@19.3.1)
+      ascii.rest:
+        specifier: ^0.4.0
+        version: 0.4.0(react@19.3.1)
       boneyard-js:
         specifier: ^1.10.0
         version: 1.10.0(preact@10.29.8)(react@19.3.1)(vite@8.3.4(@types/node@22.20.5)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.0(supports-color@10.2.2))(sass@1.103.0)(terser@5.51.2)(yaml@2.9.1))(vue@3.3.4)
@@ -5621,6 +5624,15 @@ packages:
   array-union@2.1.0:
     resolution: {integrity: sha512-HGyxoOTYUyCM6stUe6EJgnd4EoewAI7zMdfqO+kGjnlZmBDz/cR5pf8r/cR4Wq60sL/p0IkcjUEEPwS3GFrIyw==}
     engines: {node: '>=8'}
+
+  ascii.rest@0.4.0:
+    resolution: {integrity: sha512-lqKcesbm3Ij5ENvgs/CTRWF3HrjAogOoMJdqOh8rlRmdzG3uRSyqS/3chfnjJfcIeqj69MWI8+NstMZ/Br9Ivw==}
+    hasBin: true
+    peerDependencies:
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
+        optional: true
 
   assign-symbols@1.0.0:
     resolution: {integrity: sha512-Q+JC7Whu8HhmTdBph/Tq59IoRtoy6KAm5zzPv00WdujX82lbAL8K7WVjne7vdCsAmbF4AYaDOPyO3k0kl8qIrw==}
@@ -16444,6 +16456,10 @@ snapshots:
   aria-query@5.3.2: {}
 
   array-union@2.1.0: {}
+
+  ascii.rest@0.4.0(react@19.3.1):
+    optionalDependencies:
+      react: 19.3.1
 
   assign-symbols@1.0.0: {}
 

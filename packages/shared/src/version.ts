@@ -1,1 +1,1 @@
-export const TABOT_VERSION = "0.2.2";
+export const TABOT_VERSION = "0.2.5";

@@ -63,7 +63,7 @@ export const VerifyScene = () => {
 									<Check className="size-5" />
 								)}
 								<span className="font-medium">Tabot</span>
-								<code className="text-tutorial-muted">search_activity</code>
+								<code className="text-tutorial-muted">search_all</code>
 								<span className="ml-auto text-tutorial-muted">
 									{calling ? "Searching…" : "Search complete"}
 								</span>

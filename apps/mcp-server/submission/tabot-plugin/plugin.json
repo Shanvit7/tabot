@@ -1,14 +1,14 @@
 {
 	"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
 	"name": "tabot",
-	"version": "0.2.2",
-	"description": "Search locally captured browser activity and view timelines with ChatGPT using your Tabot extension.",
+	"version": "0.2.5",
+	"description": "Search pages, notes, and sites retained locally by your Tabot extension.",
 	"extensions": {
 		"com.openai": {
 			"interface": {
 				"displayName": "Tabot",
 				"shortDescription": "Local browser activity",
-				"longDescription": "Tabot lets ChatGPT search browser activity retained locally by the Tabot extension and view timelines around selected activity. Results contain bounded sites, timestamps, activity IDs, captured titles, and redacted previews. Matches use exact same-page, same-site, or time-window conditions; they do not claim user intent. Full URL paths, raw events, query strings, credentials, and favicons stay on your device. Titles and matching previews leave your device only on authorized requests. Requires the Tabot extension to be installed and connected.",
+				"longDescription": "Tabot lets ChatGPT search pages, notes, and sites retained locally by the Tabot extension, then inspect related browsing activity. Page results contain bounded site, timestamp, and opaque activity references, never page titles, paths, or excerpt text. Note text is returned only when requested and after selected-pattern redaction; email, phone, and some identifiers are not covered, and detection is not exhaustive. Raw events, query strings, and favicons stay on your device. Requires the Tabot extension to be installed and connected.",
 				"developerName": "Tabot",
 				"category": "Productivity",
 				"capabilities": ["Read"],
@@ -27,13 +27,13 @@
 						{
 							"description": "Search local browser activity",
 							"prompt": "Search my browser activity for the OAuth callback work.",
-							"tools_triggered": "search_activity",
-							"expected_behavior": "Return bounded matching sites, timestamps, activity IDs, titles, and redacted previews; distinguish recorded activity from inferred explanations."
+							"tools_triggered": "search_all",
+							"expected_behavior": "Return bounded page, note, and site matches. Page results include opaque activity references, not titles, paths, or excerpt text; requested note text uses selected-pattern redaction. Distinguish recorded activity from inferred explanations."
 						},
 						{
 							"description": "View a timeline around selected browser activity",
 							"prompt": "Show activity around the OAuth callback page I found.",
-							"tools_triggered": "get_activity_timeline",
+							"tools_triggered": "get_browsing_timeline",
 							"expected_behavior": "Return selected anchors and bounded matches in chronological order; explain exact match conditions and avoid claiming intent."
 						}
 					],
@@ -54,7 +54,7 @@
 				"commerce_description": "Tabot does not sell products or process payments."
 			},
 			"publication": {
-				"release_notes": "Tabot searches locally captured browser activity and builds bounded, privacy-filtered timelines."
+				"release_notes": "Tabot searches locally retained pages, notes, and sites and builds bounded browsing timelines."
 			}
 		}
 	}
