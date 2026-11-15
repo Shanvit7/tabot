@@ -9,9 +9,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  checks:
+  quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -24,7 +29,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
@@ -33,14 +38,17 @@ jobs:
       - name: Lint and format check
         run: pnpm lint
 
-      - name: Run behavioral checks
-        run: pnpm test
+      - name: Typecheck
+        run: |
+          pnpm --filter web exec tsc --noEmit
+          pnpm --filter extension exec tsc --noEmit
+          pnpm --filter mcp-server typecheck
 
-      - name: Dry-run MCP deployment
-        run: pnpm --filter mcp-server exec wrangler deploy --config wrangler.toml --dry-run
-
-      - name: Build dashboard
+      - name: Build web
         run: pnpm --filter web build
 
       - name: Build extension
         run: pnpm --filter extension build
+
+      - name: Run MCP checks and Worker dry-run
+        run: pnpm --filter mcp-server deploy:check
