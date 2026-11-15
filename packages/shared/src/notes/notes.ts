@@ -45,7 +45,7 @@ export const validateNoteText = (value: unknown): value is string =>
 	typeof value === "string" && value.trim().length > 0 && value.length <= 4_000;
 
 export const noteMatchesDomain = (host: string, domain: string): boolean => {
-	const normalized = domain.toLowerCase().replace(/^\.+|\.+$/g, "");
+	const normalized = domain.toLowerCase().split(".").filter(Boolean).join(".");
 	const value = host.toLowerCase();
 	return (
 		Boolean(normalized) &&
