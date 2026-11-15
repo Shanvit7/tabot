@@ -52,9 +52,29 @@ jobs:
           PLASMO_PUBLIC_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
           PLASMO_PUBLIC_POSTHOG_RELEASE: ${{ github.sha }}
 
-      - name: Browser Platform Publish
+      - name: Save extension ZIP for manual review
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabot-extension-${{ needs.check.outputs.version }}
+          path: apps/extension/build/chrome-mv3-prod.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce Chrome draft-only upload
+        id: draft
+        env:
+          SUBMIT_KEYS: ${{ secrets.SUBMIT_KEYS }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { chromeDraftKeys } from './scripts/chrome-draft-keys.mjs';
+          const keys = chromeDraftKeys(process.env.SUBMIT_KEYS);
+          console.log(`::add-mask::${keys}`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `keys=${keys}\n`);
+          NODE
+
+      - name: Upload Chrome Web Store draft — do not publish
         uses: PlasmoHQ/bpp@v3
         with:
-          keys: ${{ secrets.SUBMIT_KEYS }}
+          keys: ${{ steps.draft.outputs.keys }}
           artifact: apps/extension/build/chrome-mv3-prod.zip
-          verbose: true

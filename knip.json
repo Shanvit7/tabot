@@ -5,7 +5,8 @@
 	"ignore": [
 		".agents/**",
 		"apps/extension/**",
-		"scripts/check-taladb-retrieval.mjs"
+		"scripts/check-taladb-retrieval.mjs",
+		"scripts/release-version.check.mjs"
 	],
 	"ignoreDependencies": ["destr", "cloudflare", "path-browserify", "url"],
 	"ignoreBinaries": ["agent-browser"]

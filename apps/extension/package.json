@@ -1,7 +1,7 @@
 {
 	"name": "extension",
 	"displayName": "Tabot",
-	"description": "Private, local browser activity timeline. Thinking across tabs.",
+	"description": "Bring your browser activity to ChatGPT. Search pages, sites and notes locally, and choose what to share.",
 	"version": "0.2.5",
 	"private": true,
 	"scripts": {
@@ -54,7 +54,6 @@
 		"typescript": "^5.7.0"
 	},
 	"manifest": {
-		"version": "0.2.5",
 		"cross_origin_opener_policy": {
 			"value": "same-origin"
 		},

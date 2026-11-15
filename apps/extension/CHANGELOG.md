@@ -1,5 +1,17 @@
 # extension
 
+## 0.2.5
+
+### UX revamp, local storage change and product pivot
+
+Tabot now leads with browser activity as a data layer for AI-assisted work. The landing page, Home, assistant connection guidance and popup are rebuilt around that: find retained pages, sites and notes locally, review what you have been doing, and connect ChatGPT when you want help with it.
+
+- Search retained pages with local keyword and semantic matching, and notes and sites with keyword matching. Long result lists stay responsive.
+- Connect ChatGPT to eight read-only tools, including unified search, related activity and a chronological browsing timeline. Requested note text and titles are filtered for selected sensitive patterns first; email, phone and Indian tax PAN are not covered, and detection is not exhaustive.
+- Move local storage from IndexedDB to TalaDB on OPFS. Existing IndexedDB history is imported and verified before retirement, writes are replay-safe with persisted acknowledgement, and local search indexes are rebuildable.
+- Browser events, automatic excerpts, notes and search indexes stay on your device. Only the bounded results of tool calls you request leave it.
+- Reusable contexts and user-directed automations remain product direction, not shipped beta features.
+
 ## 0.2.2
 
 ### Patch Changes

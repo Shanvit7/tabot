@@ -22,8 +22,8 @@ assert.equal(
 );
 assert.equal(
 	extensionManifest.version,
-	TABOT_VERSION,
-	"extension manifest version is out of sync",
+	undefined,
+	"extension manifest must inherit its package version from Plasmo",
 );
 assert.equal(
 	mcpServer.version,

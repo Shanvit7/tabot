@@ -10,7 +10,8 @@
 	},
 	"scripts": {
 		"prepare": "husky",
-		"test": "pnpm -r --if-present run check",
+		"test": "pnpm check:release && pnpm -r --if-present run check",
+		"check:release": "node --test scripts/chrome-draft-keys.check.mjs scripts/release-version.check.mjs",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
