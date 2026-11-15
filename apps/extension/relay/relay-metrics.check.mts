@@ -1,5 +1,6 @@
 // Exercises the public evidence-search dispatch against an in-memory store.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mock } from "node:test";
 import {
 	setTimeout as delay,
@@ -7,6 +8,30 @@ import {
 } from "node:timers/promises";
 import * as shared from "@tabot/shared";
 import { browseLibrary, type LibraryRequest } from "@tabot/shared/library";
+
+// Fetch mocks cannot catch Chrome blocking relay approval or WebSocket traffic.
+const { manifest } = JSON.parse(
+	readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+);
+const connectSources = manifest.content_security_policy.extension_pages
+	.split(";")
+	.map((directive: string) => directive.trim().split(/\s+/))
+	.find(([name]: string[]) => name === "connect-src")
+	?.slice(1);
+assert.deepEqual(
+	new Set(connectSources),
+	new Set([
+		"'self'",
+		"https://*.i.posthog.com",
+		"https://tabot-mcp.shanvit7.workers.dev",
+		"wss://tabot-mcp.shanvit7.workers.dev",
+		"https://tabot-mcp-dev.shanvit7.workers.dev",
+		"wss://tabot-mcp-dev.shanvit7.workers.dev",
+		"http://localhost:*",
+		"ws://localhost:*",
+	]),
+	"Extension CSP must allow relay HTTP approval and WebSocket connections without opening arbitrary hosts",
+);
 
 const searchResult = {
 	url: "https://example.test/private/path?token=secret",
