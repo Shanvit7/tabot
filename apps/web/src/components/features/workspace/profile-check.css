@@ -1,0 +1,104 @@
+.profile-check.iso[data-theme="light"] {
+	--anatomy-paper: #fafbf8;
+	--anatomy-top: #ffffff;
+	--anatomy-shade-0: #c9cec5;
+	--anatomy-shade-1: #d6dbd2;
+	--anatomy-shade-2: #e3e7df;
+	--anatomy-shade-3: #f0f2ec;
+	--anatomy-hi: #27352b;
+	--anatomy-mid: #73816f;
+	--anatomy-lo: #a7b2a0;
+	--anatomy-faint: #d3dacf;
+	--anatomy-lit: #233529;
+	--anatomy-halo: #8b9584;
+	--anatomy-halo-opacity: 0.18;
+	--anatomy-weight: 0.6px;
+}
+
+.profile-check [data-material="metal"] {
+	--anatomy-paper: #a7b2a0;
+	--anatomy-top: #e0e5dc;
+	--anatomy-shade-0: #65745f;
+	--anatomy-shade-1: #82917c;
+	--anatomy-shade-2: #a7b2a0;
+	--anatomy-shade-3: #c3ccbd;
+	--anatomy-hi: #27352b;
+	--anatomy-mid: #73816f;
+	--anatomy-lo: #a7b2a0;
+	--anatomy-faint: #d3dacf;
+}
+
+.profile-check [data-material="paper"] {
+	--anatomy-paper: #f6f8ec;
+	--anatomy-top: #ffffff;
+	--anatomy-shade-0: #d8dfc8;
+	--anatomy-shade-1: #e3e9d6;
+	--anatomy-shade-2: #edf1e4;
+	--anatomy-shade-3: #f8f9f1;
+}
+
+.profile-check [data-material="signal"] {
+	--anatomy-paper: #829f24;
+	--anatomy-top: var(--primary);
+	--anatomy-shade-0: #637b20;
+	--anatomy-shade-1: #829f24;
+	--anatomy-shade-2: #a6ca2b;
+	--anatomy-shade-3: var(--primary);
+	--anatomy-hi: #4f6520;
+	--anatomy-mid: #6d8625;
+	--anatomy-lo: #91ad31;
+	--anatomy-faint: #a5c54c;
+}
+
+.profile-check-carriage {
+	transform-box: view-box;
+	animation: profile-check-scan 2.8s ease-in-out infinite alternate;
+}
+
+.profile-check-pulse {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: profile-check-pulse 1.6s ease-in-out infinite;
+}
+
+.profile-check-beam-flow {
+	animation: profile-check-light 1.4s linear infinite;
+}
+
+@keyframes profile-check-scan {
+	from {
+		transform: translate(50px, -26px);
+	}
+	to {
+		transform: translate(-50px, 26px);
+	}
+}
+
+@keyframes profile-check-light {
+	0% {
+		opacity: 0;
+		transform: translateY(0);
+	}
+	20%,
+	70% {
+		opacity: 0.65;
+	}
+	100% {
+		opacity: 0;
+		transform: translateY(var(--profile-check-light-drop));
+	}
+}
+
+@keyframes profile-check-pulse {
+	50% {
+		opacity: 0.45;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.profile-check-carriage,
+	.profile-check-pulse,
+	.profile-check-beam-flow {
+		animation: none;
+	}
+}

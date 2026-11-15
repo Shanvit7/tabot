@@ -2,45 +2,60 @@
 	"name": "@tabot/shared",
 	"version": "0.1.0",
 	"private": true,
+	"sideEffects": false,
 	"type": "module",
 	"main": "./src/index.ts",
 	"types": "./src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
-		"./share/targets": "./src/share/targets.ts"
+		"./version": "./src/version.ts",
+		"./api": "./src/api/client.ts",
+		"./assistant-connections": "./src/assistant-connections.ts",
+		"./dashboard": "./src/dashboard.ts",
+		"./library": "./src/library.ts",
+		"./share/targets": "./src/share/targets.ts",
+		"./tracking": "./src/tracking/tracking.ts",
+		"./telemetry": "./src/telemetry.ts",
+		"./telemetry/posthog": "./src/telemetry/posthog.ts"
 	},
 	"scripts": {
+		"check:version": "node --import ./resolve-hook.mjs src/checks/version.check.ts",
+		"check:api": "node --import ./resolve-hook.mjs src/checks/api-client.check.ts",
+		"check:telemetry": "node --import ./resolve-hook.mjs src/checks/telemetry.check.ts",
 		"check:activityMetrics": "node --import ./resolve-hook.mjs src/checks/activity-metrics.check.ts",
+		"check:library": "node --import ./resolve-hook.mjs src/checks/library.check.ts",
+		"check:notes": "node --import ./resolve-hook.mjs src/checks/notes.check.ts",
+		"check:tracking": "node --import ./resolve-hook.mjs src/checks/tracking.check.ts",
 		"check:foreground": "node --import ./resolve-hook.mjs src/checks/foreground.check.ts",
 		"check:sessions": "node --import ./resolve-hook.mjs src/checks/sessions.check.ts",
 		"check:contexts": "node --import ./resolve-hook.mjs src/checks/contexts.check.ts",
 		"check:memories": "node --import ./resolve-hook.mjs src/checks/memories.check.ts",
 		"check:retrieval": "node --import ./resolve-hook.mjs src/checks/retrieval.check.ts",
+		"check:historySearch": "node --import ./resolve-hook.mjs src/checks/history-search.check.ts",
 		"check:liveContext": "node --import ./resolve-hook.mjs src/checks/live-context.check.ts",
 		"check:meaningfulEvents": "node --import ./resolve-hook.mjs src/checks/meaningful-events.check.ts",
 		"check:pipeline": "node --import ./resolve-hook.mjs src/checks/pipeline.check.ts",
 		"check:privacy": "node --import ./resolve-hook.mjs src/checks/privacy.check.ts",
+		"check:pageObservations": "node --import ./resolve-hook.mjs src/checks/page-observations.check.ts",
 		"check:exportFilename": "node --import ./resolve-hook.mjs src/checks/export-filename.check.ts",
 		"check:connectTargets": "node --import ./resolve-hook.mjs src/checks/connect-targets.check.ts",
 		"check:activityGraph": "node --import ./resolve-hook.mjs src/checks/activity-graph.check.ts",
 		"check:stabilization": "node --import ./resolve-hook.mjs src/checks/stabilization.check.ts",
-		"check:v5regression": "node --import ./resolve-hook.mjs src/checks/v5regression.check.ts",
-		"check:bufferRoundtrip": "node --import ./resolve-hook.mjs src/checks/buffer-roundtrip.check.ts",
-		"swValidation": "node --import ./resolve-hook.mjs src/checks/sw-validation.check.ts",
-		"swCost": "node --import ./resolve-hook.mjs src/checks/sw-cost.check.ts",
+		"check": "pnpm check:api && pnpm check:version && pnpm check:telemetry && pnpm check:notes && pnpm check:library && pnpm check:tracking && pnpm check:activityMetrics && pnpm check:foreground && pnpm check:sessions && pnpm check:contexts && pnpm check:memories && pnpm check:retrieval && pnpm check:historySearch && pnpm check:liveContext && pnpm check:meaningfulEvents && pnpm check:pipeline && pnpm check:privacy && pnpm check:pageObservations && pnpm check:exportFilename && pnpm check:connectTargets && pnpm check:activityGraph && pnpm check:stabilization && pnpm swSemantics && pnpm swDerivation && pnpm swGraph && pnpm swEpisodes",
 		"swSemantics": "node --import ./resolve-hook.mjs src/checks/sw-semantics.check.ts",
 		"swDerivation": "node --import ./resolve-hook.mjs src/checks/sw-derivation.check.ts",
-		"swFirstSignal": "node --import ./resolve-hook.mjs src/checks/sw-first-signal.check.ts",
 		"swGraph": "node --import ./resolve-hook.mjs src/checks/sw-graph.check.ts",
 		"swEpisodes": "node --import ./resolve-hook.mjs src/checks/sw-episodes.check.ts",
 		"swRealReport": "node --import ./resolve-hook.mjs src/checks/sw-real.report.ts"
 	},
 	"dependencies": {
 		"@openredaction/core": "^1.1.5",
-		"dexie": "^4.4.5",
-		"graphology": "^0.26.0"
+		"chrono-node": "^2.10.3",
+		"graphology": "^0.26.0",
+		"tldts": "^7.4.19"
 	},
 	"devDependencies": {
-		"@types/node": "^22.20.1"
+		"@types/node": "^22.20.1",
+		"typescript": "^5.9.3"
 	}
 }

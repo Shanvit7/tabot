@@ -14,7 +14,6 @@ import {
 	findSimilarMemoriesCore,
 	isAiReadyContext,
 	jaccardIndex,
-	nextNotifiableContext,
 	readyContextsInRange,
 	searchContextsCore,
 	summarizeContextCore,
@@ -95,21 +94,8 @@ const ctx = (
 	);
 }
 
-// Notifications: only fresh, finished, unseen AI-ready contexts; latest wins.
 {
-	const ready = ctx(["docs.com", "github.com"], 0.05); // ended 12m ago
-	const completed = ctx(["docs.com", "github.com"], 0.1); // ended 84m ago
-	const thin = { ...ctx(["docs.com"], 0.08), totalEventCount: 9 };
-	const old = ctx(["docs.com", "github.com"], 2);
-	assert.equal(
-		nextNotifiableContext([ready, completed, thin, old], 0, NOW)?.id,
-		completed.id,
-	);
-	assert.equal(
-		nextNotifiableContext([completed], completed.endTimestamp, NOW),
-		undefined,
-	);
-	assert.equal(nextNotifiableContext([old], 0, NOW), undefined);
+	const completed = ctx(["docs.com", "github.com"], 0.1);
 	const prompt = new URL(chatGptContextUrl(completed.id)).searchParams.get("q");
 	assert.ok(prompt?.includes(`get_context with id "${completed.id}"`));
 }

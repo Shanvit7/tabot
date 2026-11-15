@@ -1,71 +1,38 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Footer } from "~/components/landing/footer";
-import { GetStarted } from "~/components/landing/get-started";
-import { Header } from "~/components/landing/header";
-import { Hero } from "~/components/landing/hero";
-import { HowItWorks } from "~/components/landing/how-it-works";
-import { PrivacyFirst } from "~/components/landing/privacy-first";
-import { ChatGPTIntegration } from "~/components/landing/use-cases";
-import { useIsMobile } from "~/hooks/use-is-mobile";
-import { fetchStats } from "~/lib/home-data";
-import { SITE_DESCRIPTION, siteUrl } from "~/lib/site";
+import { LandingPage } from "~/components/features/landing/landing-page";
+import { OG_IMAGE_URL, SHARE_URL } from "~/lib/constants";
 
-const Landing = () => {
-	const [extensionInstalled, setExtensionInstalled] = useState<boolean | null>(
-		null,
-	);
-	const { isMobileDevice, isLoading: isMobileLoading } = useIsMobile();
-	const showDesktopPrompt = !isMobileLoading && isMobileDevice;
-
-	useEffect(() => {
-		let active = true;
-		void fetchStats(1200).then((stats) => {
-			if (active) setExtensionInstalled(stats !== null);
-		});
-		return () => {
-			active = false;
-		};
-	}, []);
-
-	return (
-		<div className="landing-page min-h-screen bg-landing-paper text-black">
-			<a
-				href="#main-content"
-				className="sr-only z-50 border-2 border-black bg-lime p-4 font-semibold focus:not-sr-only focus:absolute focus:left-5 focus:top-5"
-			>
-				Skip to content
-			</a>
-			<Header
-				extensionInstalled={extensionInstalled}
-				isMobileDevice={showDesktopPrompt}
-			/>
-			<main id="main-content">
-				<Hero
-					extensionInstalled={extensionInstalled}
-					isMobileDevice={showDesktopPrompt}
-				/>
-				<HowItWorks />
-				<ChatGPTIntegration
-					extensionInstalled={extensionInstalled}
-					isMobileDevice={showDesktopPrompt}
-				/>
-				<PrivacyFirst />
-				{extensionInstalled === false && !showDesktopPrompt && <GetStarted />}
-			</main>
-			<Footer extensionInstalled={extensionInstalled === true} />
-		</div>
-	);
-};
+const title = "Tabot — Your browsing context for ChatGPT";
+const description =
+	"Tabot helps you find things you've looked at in Chrome and save your own takeaways, so you can bring your browsing context to ChatGPT.";
 
 export const Route = createFileRoute("/")({
 	head: () => ({
+		links: [{ rel: "canonical", href: SHARE_URL }],
 		meta: [
-			{ title: "Tabot — Your browsing, in one place" },
-			{ name: "description", content: SITE_DESCRIPTION },
-			{ property: "og:url", content: siteUrl() },
+			{ title },
+			{ name: "description", content: description },
+			{ property: "og:type", content: "website" },
+			{ property: "og:site_name", content: "Tabot" },
+			{ property: "og:title", content: title },
+			{ property: "og:description", content: description },
+			{ property: "og:url", content: SHARE_URL },
+			{ property: "og:image", content: OG_IMAGE_URL },
+			{ property: "og:image:width", content: "1200" },
+			{ property: "og:image:height", content: "630" },
+			{
+				property: "og:image:alt",
+				content: "Tabot local search and a requested note in ChatGPT.",
+			},
+			{ name: "twitter:card", content: "summary_large_image" },
+			{ name: "twitter:title", content: title },
+			{ name: "twitter:description", content: description },
+			{ name: "twitter:image", content: OG_IMAGE_URL },
+			{
+				name: "twitter:image:alt",
+				content: "Tabot local search and a requested note in ChatGPT.",
+			},
 		],
-		links: [{ rel: "canonical", href: siteUrl() }],
 	}),
-	component: Landing,
+	component: LandingPage,
 });

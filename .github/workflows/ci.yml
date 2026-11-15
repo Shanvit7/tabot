@@ -46,6 +46,12 @@ jobs:
 
       - name: Build web
         run: pnpm --filter web build
+        env:
+          VITE_BASE_PATH: ${{ vars.TABOT_BASE_PATH }}
+          VITE_TABOT_EXTENSION_ID: ${{ vars.TABOT_EXTENSION_ID }}
+          VITE_CHROME_WEB_STORE_URL: ${{ vars.CHROME_WEB_STORE_URL }}
+          VITE_POSTHOG_KEY: ${{ vars.POSTHOG_PROJECT_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
 
       - name: Build extension
         run: pnpm --filter extension build

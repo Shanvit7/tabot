@@ -220,6 +220,6 @@ line(
 	"  => no false transitions. It cannot split/merge a context as noise can.",
 );
 
-console.log(lines.join("\n"));
+logger.info(lines.join("\n"));
 
 logger.info("sw-derivation.check: all assertions passed ✔");

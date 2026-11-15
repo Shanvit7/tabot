@@ -354,6 +354,6 @@ line(
 );
 line("  strengthens    : yes — Step 11 evaluates it in boundary scoring");
 
-console.log(lines.join("\n"));
+logger.info(lines.join("\n"));
 
 logger.info("sw-graph.check: all assertions passed ✔");

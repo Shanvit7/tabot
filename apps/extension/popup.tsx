@@ -1,679 +1,638 @@
 import logo from "data-base64:~assets/icon.png";
-import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import { createTrackingClient } from "@tabot/shared/tracking";
 import {
-	chatGptConnectPromptUrl,
-	chatGptContextUrl,
-	derive,
-	resolveChatGptConnectUrl,
-	type StatsSnapshot,
-	type StoredTabEvent,
-} from "@tabot/shared";
-import {
-	ChevronDown,
-	ChevronRight,
-	Globe,
-	History,
+	Globe2,
+	LoaderCircle,
 	Pause,
 	Play,
+	Search,
+	Trash2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import {
-	contextDuration,
-	contextHomeUrl,
-	type PopupSummary,
-	parseAssistantConnection,
-	popupSummary,
-	siteFavicon,
-	siteLabel,
-} from "~/popup-model";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./popup.tailwind.css";
 
-const HOME_URL =
-	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
-const LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
-const NOTIFICATION_PREVIEWS = [
-	{
-		title: "Activity summary ready",
-		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
-		button: "Connect ChatGPT",
-	},
-	{
-		title: "Activity summary ready",
-		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
-		button: "Ask ChatGPT",
-	},
-	{
-		title: "Activity worth a look",
-		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
-		button: "Connect ChatGPT",
-	},
-	{
-		title: "Activity worth a look",
-		message: "3 sites · 24 min. Ask ChatGPT to explore this thread.",
-		button: "Ask ChatGPT",
-	},
-	{
-		title: "A browsing pattern is repeating",
-		message:
-			"Similar activity appeared 4 times across separate periods. Ask ChatGPT what repeats.",
-		button: "Connect ChatGPT",
-	},
-	{
-		title: "A browsing pattern is repeating",
-		message:
-			"Similar activity appeared 4 times across separate periods. Ask ChatGPT what repeats.",
-		button: "Ask ChatGPT",
-	},
-] as const;
-
-const Arrow = () => (
-	<ChevronRight
-		aria-hidden="true"
-		strokeWidth={1.5}
-		className="size-4 shrink-0"
-	/>
+const MAX_NOTE_LENGTH = 4_000;
+const trackingClient = createTrackingClient((message) =>
+	chrome.runtime.sendMessage(message),
 );
-
-const SiteIcon = ({
-	domain,
-	favicons,
-}: {
-	domain: string;
-	favicons: PopupSummary["favicons"];
-}) => {
-	const src = siteFavicon(domain, favicons);
-	const [failedSrc, setFailedSrc] = useState<string | null>(null);
-	return (
-		<span
-			aria-hidden="true"
-			className="flex size-6 shrink-0 items-center justify-center rounded-md bg-canvas text-muted"
-		>
-			{src && failedSrc !== src ? (
-				<img
-					src={src}
-					alt=""
-					width={16}
-					height={16}
-					referrerPolicy="no-referrer"
-					onError={() => setFailedSrc(src)}
-					className="size-4 object-contain"
-				/>
-			) : (
-				<Globe aria-hidden="true" strokeWidth={1.5} className="size-4" />
-			)}
-		</span>
-	);
+type Note = { id: string; text: string; createdAt: number; updatedAt: number };
+type SearchNote = Pick<Note, "id" | "text" | "createdAt"> & {
+	title: string | null;
+	host: string;
+	url: string | null;
+};
+type Page = {
+	eligible: boolean;
+	reason?: string;
+	tabId: number;
+	pageKey: string;
+	title: string | null;
+	favicon?: string | null;
+	url: string;
+	origin: string;
+	host: string;
+	notes: Note[];
 };
 
-const ActivitySites = ({
-	context,
-	favicons,
-}: {
-	context: NonNullable<PopupSummary["featured"]>;
-	favicons: PopupSummary["favicons"];
-}) => {
-	const allSites = context.domains.toSorted(
-		(a, b) => b.eventCount - a.eventCount,
-	);
-	const sites = allSites.slice(0, 3);
-	return (
-		<div>
-			<div className="relative mt-4 grid grid-cols-[minmax(0,1fr)_56px] items-center gap-6">
-				<svg
-					aria-hidden="true"
-					viewBox="0 0 100 100"
-					preserveAspectRatio="none"
-					className="pointer-events-none absolute inset-0 h-full w-full text-trace-line"
-				>
-					{sites.map((site, index) => {
-						const y = ((index + 0.5) / sites.length) * 100;
-						return (
-							<path
-								key={site.domain}
-								d={`M60 ${y} C76 ${y} 70 50 90 50`}
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="0.5"
-							/>
-						);
-					})}
-				</svg>
-				<ul
-					aria-label="Sites in this activity"
-					className="relative min-w-0 space-y-2"
-				>
-					{sites.map((site) => (
-						<li
-							key={site.domain}
-							className="flex h-10 min-w-0 items-center gap-2 rounded-md bg-trace-raised px-2 text-xs text-trace-text"
-						>
-							<SiteIcon domain={site.domain} favicons={favicons} />
-							<span className="min-w-0 truncate">{siteLabel(site.domain)}</span>
-						</li>
-					))}
-				</ul>
-				<div className="relative flex size-14 flex-col items-center justify-center gap-1 rounded-xl border border-trace-line bg-trace-raised text-trace-text">
-					<History
-						aria-hidden="true"
-						strokeWidth={1.5}
-						className="size-5 shrink-0 text-lime-brand"
-					/>
-					<span className="text-xs font-medium">Activity</span>
-				</div>
-			</div>
-			<details className="popup-sites mt-2">
-				<summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-md px-1 text-xs text-trace-text">
-					<span>View all sites</span>
-					<ChevronDown
-						aria-hidden="true"
-						strokeWidth={1.5}
-						className="size-4 shrink-0"
-					/>
-				</summary>
-				<ul
-					aria-label="All sites in this activity"
-					className="space-y-2 rounded-md bg-trace-raised p-2"
-				>
-					{allSites.map((site) => (
-						<li
-							key={site.domain}
-							className="flex min-w-0 items-center gap-2 text-xs leading-5 text-trace-text"
-						>
-							<SiteIcon domain={site.domain} favicons={favicons} />
-							<span className="min-w-0 wrap-anywhere">
-								{siteLabel(site.domain)}
-							</span>
-						</li>
-					))}
-				</ul>
-			</details>
-		</div>
-	);
+const relativeTimeFormatter = new Intl.DateTimeFormat(undefined, {
+	dateStyle: "medium",
+	timeStyle: "short",
+});
+const relativeTime = (timestamp: number) =>
+	relativeTimeFormatter.format(timestamp);
+const formatTrackingTime = (durationMs: number) => {
+	const seconds = Math.floor(durationMs / 1_000);
+	const units = [
+		Math.floor(seconds / 3_600),
+		Math.floor((seconds % 3_600) / 60),
+		seconds % 60,
+	];
+	return units.map((unit) => String(unit).padStart(2, "0")).join(":");
 };
 
-const IndexPopup = () => {
-	const [summary, setSummary] = useState<PopupSummary | null>(null);
+export default function Popup() {
+	const [page, setPage] = useState<Page | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState("");
+	const [draft, setDraft] = useState("");
+	const [editingId, setEditingId] = useState<string | null>(null);
+	const [saving, setSaving] = useState(false);
 	const [tracking, setTracking] = useState<boolean | null>(null);
-	const [assistantConnected, setAssistantConnected] = useState<boolean | null>(
-		null,
-	);
-	const [chatGptUrl, setChatGptUrl] = useState(chatGptConnectPromptUrl);
-	const [toggling, setToggling] = useState(false);
-	const [dropped, setDropped] = useState(0);
-	const [error, setError] = useState<string | null>(null);
-	const [attempt, setAttempt] = useState(0);
-	const [notificationPreview, setNotificationPreview] = useState<number | null>(
-		null,
-	);
-	const previousVisit = useRef<Promise<number | null> | null>(null);
+	const [trackingBusy, setTrackingBusy] = useState(false);
+	const [trackingError, setTrackingError] = useState("");
+	const [trackingDuration, setTrackingDuration] = useState<number | null>(null);
+	const [durationStatus, setDurationStatus] = useState<
+		"loading" | "ready" | "error"
+	>("loading");
+	const trackingRef = useRef(tracking);
+	trackingRef.current = tracking;
+	const activeRef = useRef(false);
+	const refreshDurationRef = useRef<() => void>(() => {});
+	const [query, setQuery] = useState("");
+	const [searchRevision, setSearchRevision] = useState(0);
+	const [searchResult, setSearchResult] = useState<{
+		query: string;
+		revision: number;
+		notes: SearchNote[];
+		error: boolean;
+	} | null>(null);
+	const searchQuery = query.trim();
+	const searchOrigin = page?.eligible ? page.origin : "";
+	const searching =
+		Boolean(searchQuery && searchOrigin) &&
+		(searchResult?.query !== searchQuery ||
+			searchResult.revision !== searchRevision);
 
-	useEffect(() => {
-		let active = true;
-		void resolveChatGptConnectUrl().then((url) => {
-			if (active) setChatGptUrl(() => url);
-		});
-		return () => {
-			active = false;
-		};
-	}, []);
-
-	useEffect(() => {
-		if (
-			process.env.NODE_ENV !== "development" ||
-			process.env.PLASMO_PUBLIC_NOTIFICATION_PREVIEW !== "1"
-		)
-			return;
-		let active = true;
-		void chrome.storage.local
-			.get("tabot_notification_preview_index")
-			.then((stored) => {
-				if (!active) return;
-				const index = stored.tabot_notification_preview_index;
-				setNotificationPreview(Number.isInteger(index) ? index : 0);
+	const loadPage = useCallback(async () => {
+		setLoading(true);
+		setError("");
+		try {
+			const result = await chrome.runtime.sendMessage({
+				type: "GET_ACTIVE_PAGE",
 			});
+			if (result?.ok === false)
+				throw new Error(result.code ?? "Could not load notes.");
+			setPage({ ...result, notes: result.notes ?? [] } as Page);
+		} catch {
+			setError("Could not load notes. Retry.");
+		} finally {
+			setLoading(false);
+		}
+	}, []);
+
+	const loadTracking = useCallback(async () => {
+		setTrackingError("");
+		try {
+			setTracking(await trackingClient.read());
+		} catch {
+			setTracking(null);
+			setTrackingError("Tracking status unavailable.");
+		}
+	}, []);
+
+	useEffect(() => {
+		document.documentElement.lang = "en";
+		void loadPage();
+		void loadTracking();
+	}, [loadPage, loadTracking]);
+
+	useEffect(() => {
+		let disposed = false;
+		let refreshing = false;
+		let refreshedAt = 0;
+		const refresh = async () => {
+			if (refreshing) return;
+			refreshing = true;
+			refreshedAt = Date.now();
+			try {
+				const result = await chrome.runtime.sendMessage({
+					type: "GET_ACTIVE_TRACKING_DURATION",
+				});
+				if (
+					typeof result?.durationMs !== "number" ||
+					!Number.isFinite(result.durationMs) ||
+					result.durationMs < 0 ||
+					typeof result.active !== "boolean"
+				)
+					throw new Error("tracking-duration-unavailable");
+				if (disposed) return;
+				setTrackingDuration(result.durationMs);
+				activeRef.current = result.active;
+				setDurationStatus("ready");
+			} catch {
+				if (disposed) return;
+				activeRef.current = false;
+				setDurationStatus((status) => (status === "ready" ? status : "error"));
+			} finally {
+				refreshing = false;
+			}
+		};
+		const refreshWhenVisible = () => {
+			if (document.visibilityState === "visible") void refresh();
+		};
+		refreshDurationRef.current = () => void refresh();
+		void refresh();
+		const timer = window.setInterval(() => {
+			if (trackingRef.current && activeRef.current)
+				setTrackingDuration((duration) =>
+					duration === null ? duration : duration + 1_000,
+				);
+			if (Date.now() - refreshedAt >= 30_000) void refresh();
+		}, 1_000);
+		window.addEventListener("focus", refreshWhenVisible);
+		document.addEventListener("visibilitychange", refreshWhenVisible);
 		return () => {
-			active = false;
+			disposed = true;
+			refreshDurationRef.current = () => {};
+			window.clearInterval(timer);
+			window.removeEventListener("focus", refreshWhenVisible);
+			document.removeEventListener("visibilitychange", refreshWhenVisible);
 		};
 	}, []);
 
 	useEffect(() => {
-		let active = true;
-		let timer: ReturnType<typeof setTimeout>;
-		if (attempt > 0) setError(null);
-		const refreshAssistantConnection = async () => {
-			let connected: boolean | null = null;
+		if (!searchQuery || !searchOrigin) return;
+		let cancelled = false;
+		const timer = window.setTimeout(async () => {
 			try {
-				connected = parseAssistantConnection(
-					await chrome.runtime.sendMessage({
-						type: "GET_ASSISTANT_CONNECTION",
-					}),
-				);
+				const result = await chrome.runtime.sendMessage({
+					type: "SEARCH_NOTES",
+					query: searchQuery,
+					origin: searchOrigin,
+				});
+				if (!Array.isArray(result?.notes)) throw new Error("search-failed");
+				if (!cancelled)
+					setSearchResult({
+						query: searchQuery,
+						revision: searchRevision,
+						notes: result.notes,
+						error: false,
+					});
 			} catch {
-				// An unavailable relay is unknown, not disconnected.
+				if (!cancelled)
+					setSearchResult({
+						query: searchQuery,
+						revision: searchRevision,
+						notes: [],
+						error: true,
+					});
 			}
-			if (active) setAssistantConnected(connected);
-		};
-		const start = async () => {
-			previousVisit.current ??= (async () => {
-				try {
-					const stored = await chrome.storage.local.get(LAST_VIEWED_KEY);
-					const value = stored[LAST_VIEWED_KEY];
-					return typeof value === "number" &&
-						Number.isFinite(value) &&
-						value > 0 &&
-						value <= Date.now()
-						? value
-						: null;
-				} catch {
-					// Context still works without a saved visit; do not invent an unread count.
-					return null;
-				}
-			})();
-			const lastViewed = await previousVisit.current;
-			const refresh = async () => {
-				// Optional network check must not delay loading local activity.
-				void refreshAssistantConnection();
-				try {
-					const [events, status, stats] = await Promise.all([
-						chrome.runtime.sendMessage({ type: "GET_EVENTS" }) as Promise<
-							StoredTabEvent[]
-						>,
-						chrome.runtime.sendMessage({ type: "GET_TRACKING" }) as Promise<{
-							enabled: boolean;
-						}>,
-						chrome.runtime.sendMessage({
-							type: "GET_STATS",
-						}) as Promise<StatsSnapshot>,
-					]);
-					if (!active) return;
-					if (
-						!Array.isArray(events) ||
-						typeof status?.enabled !== "boolean" ||
-						!stats
-					)
-						throw new Error("Unavailable");
-					const now = Date.now();
-					// Keep full derivation so context IDs match dashboard; never derive a sliced export.
-					setSummary(popupSummary(derive(events), lastViewed, now));
-					setTracking(status.enabled);
-					setDropped(stats.droppedEvents);
-					setError(null);
-					try {
-						await chrome.storage.local.set({ [LAST_VIEWED_KEY]: now });
-					} catch {
-						// Visit tracking is optional; capture and context remain unaffected.
-					}
-				} catch {
-					if (active) setError("Could not load your activity. Try again.");
-				} finally {
-					if (active) timer = setTimeout(refresh, 10_000);
-				}
-			};
-			if (active) await refresh();
-		};
-		void start();
+		}, 250);
 		return () => {
-			active = false;
-			clearTimeout(timer);
+			cancelled = true;
+			window.clearTimeout(timer);
 		};
-	}, [attempt]);
+	}, [searchOrigin, searchQuery, searchRevision]);
 
 	const toggleTracking = async () => {
-		if (tracking === null || toggling) return;
-		setToggling(true);
+		if (tracking === null || trackingBusy) return;
+		setTrackingError("");
+		setTrackingBusy(true);
 		try {
-			const response = await chrome.runtime.sendMessage({
-				type: "SET_TRACKING",
-				enabled: !tracking,
-			});
-			if (
-				typeof response?.enabled !== "boolean" ||
-				response.enabled === tracking
-			)
-				throw new Error("Not saved");
-			setTracking(response.enabled);
+			setTracking(await trackingClient.set(!tracking));
+			refreshDurationRef.current();
 		} catch {
-			setError("Could not save your preference. Try again.");
+			setTrackingError("Could not update tracking. Try again.");
 		} finally {
-			setToggling(false);
+			setTrackingBusy(false);
 		}
 	};
 
-	const openTabot = async (contextId?: string) => {
+	const saveNote = async () => {
+		if (!page?.eligible || !draft.trim() || saving) return;
+		setSaving(true);
+		setError("");
 		try {
-			await chrome.tabs.create({ url: contextHomeUrl(HOME_URL, contextId) });
-			window.close();
-		} catch {
-			setError("Could not open Tabot. Try again.");
+			const result = await chrome.runtime.sendMessage({
+				type: "SAVE_NOTE",
+				tabId: page.tabId,
+				pageKey: page.pageKey,
+				...(editingId ? { id: editingId } : {}),
+				text: draft,
+			});
+			if (!result?.note) throw new Error(result?.code ?? "save-failed");
+			setPage({
+				...page,
+				notes: [
+					result.note,
+					...page.notes.filter((note) => note.id !== result.note.id),
+				].sort((a, b) => b.createdAt - a.createdAt),
+			});
+			setDraft("");
+			setEditingId(null);
+			setSearchRevision((revision) => revision + 1);
+		} catch (reason) {
+			const code = reason instanceof Error ? reason.message : "";
+			setError(
+				code === "page-changed"
+					? "Page changed. Reload notes before saving."
+					: code
+						? `Could not save note (${code}). Your draft is still here.`
+						: "Could not save note. Your draft is still here.",
+			);
+		} finally {
+			setSaving(false);
 		}
 	};
 
-	const featured = summary?.featured;
-	const paused = tracking === false;
-	const TrackingIcon = paused ? Play : Pause;
+	const deleteNote = async (id: string) => {
+		if (!page || !window.confirm("Delete this note?")) return;
+		try {
+			const result = await chrome.runtime.sendMessage({
+				type: "DELETE_NOTE",
+				id,
+			});
+			if (result?.deleted) {
+				setPage({
+					...page,
+					notes: page.notes.filter((note) => note.id !== id),
+				});
+				setSearchRevision((revision) => revision + 1);
+			} else setError("Could not delete note.");
+		} catch {
+			setError("Could not delete note.");
+		}
+	};
+
 	return (
-		<div className="popup-shell flex max-h-150 w-100 max-w-full flex-col overflow-hidden bg-canvas font-sans text-ink">
-			<header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-				<div className="flex items-center gap-2.5">
+		<div className="popup-shell w-full bg-canvas text-ink">
+			<header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3">
+				<div className="flex min-w-0 items-start gap-2.5">
 					<img
 						src={logo}
-						alt=""
-						width={32}
-						height={32}
-						className="size-8 rounded-lg"
+						alt="Tabot"
+						width={26}
+						height={26}
+						className="mt-0.5 size-6.5 shrink-0 object-contain"
 					/>
-					<span className="text-lg font-semibold tracking-tight">Tabot</span>
-				</div>
-				<div className="flex items-center gap-2">
-					<span
-						className={`flex h-11 w-26 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-xs font-medium ${paused || tracking === null ? "bg-surface text-muted" : "bg-trace text-trace-text"}`}
-					>
-						<span
-							aria-hidden="true"
-							className={`size-2 shrink-0 rounded-full ${paused || tracking === null ? "bg-muted" : "popup-observing bg-lime-brand"}`}
-						/>
-						{tracking === null ? "Loading" : paused ? "Paused" : "Observing"}
-					</span>
-					<button
-						type="button"
-						onClick={toggleTracking}
-						disabled={tracking === null || toggling}
-						aria-pressed={paused}
-						aria-label={paused ? "Resume observing" : "Pause observing"}
-						className="popup-quiet flex h-11 w-26 shrink-0 items-center justify-center gap-1.5 border border-line px-2 text-xs"
-					>
-						<TrackingIcon
-							aria-hidden="true"
-							strokeWidth={1.5}
-							className="size-3.5 shrink-0"
-						/>
-						{toggling ? "Updating…" : paused ? "Resume" : "Pause"}
-					</button>
-				</div>
-			</header>
-
-			<main
-				className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-4"
-				// biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users need to focus the popup's only scroll region.
-				tabIndex={0}
-				aria-label="Browser activity"
-				aria-busy={!summary && !error}
-			>
-				{notificationPreview !== null && (
-					<aside
-						aria-label={`Notification preview ${notificationPreview + 1} of ${NOTIFICATION_PREVIEWS.length}`}
-						className="mb-4 rounded-xl border border-line bg-surface p-4 shadow-lg"
-					>
-						<div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+					<div className="min-w-0">
+						<p className="text-sm font-semibold leading-5">Tabot</p>
+						<div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
 							<span
-								aria-hidden="true"
-								className="size-1.5 animate-pulse rounded-full bg-lime-brand"
-							/>
-							Auto preview · every 15 seconds
-						</div>
-						<div className="flex items-start gap-3">
-							<img
-								src={logo}
-								alt=""
-								width={32}
-								height={32}
-								className="size-8 rounded-lg"
-							/>
-							<div className="min-w-0 flex-1">
-								<p className="text-sm font-semibold">
-									{NOTIFICATION_PREVIEWS[notificationPreview].title}
-								</p>
-								<p className="mt-1 text-xs leading-5 text-muted">
-									{NOTIFICATION_PREVIEWS[notificationPreview].message}
-								</p>
-							</div>
-							<button
-								type="button"
-								onClick={() => setNotificationPreview(null)}
-								aria-label="Dismiss preview"
-								className="popup-row px-2 text-xs"
+								role="status"
+								aria-live="polite"
+								className="flex items-center gap-1.5"
 							>
-								×
-							</button>
-						</div>
-						<div className="mt-3 flex justify-end">
-							<span className="flex items-center gap-1.5 rounded-md border border-line bg-canvas px-3 py-2 text-xs">
-								<OpenAIMono aria-hidden="true" className="size-3.5" />
-								{NOTIFICATION_PREVIEWS[notificationPreview].button}
+								<span
+									aria-hidden="true"
+									className={`size-2 rounded-full ${tracking === true ? "bg-lime-brand" : "bg-muted"}`}
+								/>
+								{tracking === null
+									? "Checking tracking…"
+									: tracking
+										? "Tracking"
+										: "Tracked"}
+							</span>
+							<span aria-hidden="true">·</span>
+							<span
+								role="timer"
+								aria-label="Tracked duration"
+								className="tabular-nums"
+							>
+								{durationStatus === "ready" && trackingDuration !== null
+									? formatTrackingTime(trackingDuration)
+									: durationStatus === "loading"
+										? "Loading…"
+										: "Unavailable"}
 							</span>
 						</div>
-					</aside>
-				)}
-				{assistantConnected === false && (
-					<aside
-						aria-label="ChatGPT connection"
-						className="mb-4 flex items-center gap-3 rounded-lg border border-line bg-surface p-3"
-					>
-						<OpenAIMono
-							aria-hidden="true"
-							className="size-5 shrink-0 text-ink"
-						/>
-						<div className="min-w-0 flex-1">
-							<p className="text-sm font-medium">Connect ChatGPT</p>
-							<p className="mt-0.5 text-xs leading-4 text-muted">
-								Ask about your browsing.
-							</p>
-						</div>
-						<a
-							href={chatGptUrl}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="popup-quiet flex min-h-11 shrink-0 items-center justify-center border border-line bg-canvas px-3 text-xs no-underline"
-						>
-							Connect
-							<span className="sr-only"> ChatGPT (opens in a new tab)</span>
-						</a>
-					</aside>
-				)}
-				{error && (
-					<div
-						role="alert"
-						className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-surface p-3 text-sm"
-					>
-						<p>{error}</p>
-						<button
-							type="button"
-							onClick={() => setAttempt((value) => value + 1)}
-							className="popup-quiet shrink-0 px-3"
-						>
-							Retry
-						</button>
 					</div>
-				)}
-				{!summary ? (
-					<section className="min-h-64">
-						<h1 className="text-2xl font-semibold tracking-tight">
-							Loading your activity.
-						</h1>
-						<p role="status" className="mt-2 text-sm leading-6 text-muted">
-							{error
-								? "Your recorded activity is still on this device."
-								: "Reading your browser activity from this device…"}
-						</p>
-					</section>
-				) : (
-					<>
-						<h1 className="text-2xl font-semibold leading-tight tracking-tight text-balance">
-							{paused ? "Tabot is paused." : "Your activity across tabs."}
-						</h1>
-						<p className="mt-2 text-sm leading-6 text-muted">
-							{paused
-								? "New browser activity is not being recorded. You can still review and share earlier activity."
-								: "Tabot records the sites you visit and how you move between them."}
-						</p>
-
-						{!summary.ready && !paused && summary.sessions > 0 && (
-							<section
-								aria-label="Today's browsing progress"
-								role="status"
-								className="mt-4 rounded-lg border border-line bg-surface p-3"
-							>
-								<p className="text-xs text-muted">Today so far</p>
-								<p className="mt-0.5 text-sm font-medium">
-									{summary.sessions} browsing{" "}
-									{summary.sessions === 1 ? "session" : "sessions"}
-								</p>
-								<p className="mt-1 text-xs leading-5 text-muted">
-									Keep browsing normally. A summary appears once Tabot has
-									enough browsing to summarize.
-								</p>
-							</section>
-						)}
-
-						{summary.updated > 0 && featured && (
-							<section
-								aria-label="New activity since your last visit"
-								role="status"
-								className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3"
-							>
-								<div>
-									<p className="text-xs text-muted">Since your last visit</p>
-									<p className="mt-0.5 text-sm font-medium">
-										{summary.updated === 1
-											? "1 new activity summary"
-											: `${summary.updated} new activity summaries`}
-									</p>
-								</div>
-								<button
-									type="button"
-									onClick={() => openTabot(featured.id)}
-									className="popup-quiet flex min-h-11 shrink-0 items-center gap-2 border border-line bg-canvas px-3 text-xs font-medium"
-								>
-									Review
-									<Arrow />
-								</button>
-							</section>
-						)}
-
-						{featured ? (
-							<section
-								aria-label="Featured browser activity"
-								className="mt-5 rounded-xl bg-trace p-4 text-trace-text"
-							>
-								<h2 className="min-w-0 truncate text-base font-medium">
-									{siteLabel(featured.primaryDomain)}
-								</h2>
-								<ActivitySites context={featured} favicons={summary.favicons} />
-								{summary.ready && (
-									<div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-trace-line pt-3">
-										<div>
-											<p className="text-sm font-medium">
-												Activity summary ready
-											</p>
-											<p className="mt-0.5 text-xs leading-4 text-muted">
-												{featured.domains.length} sites ·{" "}
-												{contextDuration(featured.duration)}
-											</p>
-										</div>
-										{assistantConnected === true ? (
-											<a
-												href={chatGptContextUrl(featured.id)}
-												target="_blank"
-												rel="noopener noreferrer"
-												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
-											>
-												Ask ChatGPT
-											</a>
-										) : assistantConnected === false ? (
-											<a
-												href={chatGptUrl}
-												target="_blank"
-												rel="noopener noreferrer"
-												className="popup-quiet flex min-h-11 shrink-0 items-center border border-line bg-canvas px-3 text-xs font-medium no-underline"
-											>
-												Connect ChatGPT
-											</a>
-										) : (
-											<span role="status" className="text-xs text-muted">
-												Checking ChatGPT…
-											</span>
-										)}
-									</div>
-								)}
-							</section>
-						) : (
-							<section
-								aria-label="Getting started"
-								className="mt-5 rounded-xl bg-surface p-5"
-							>
-								<h2 className="text-base font-medium">
-									No recent activity to show.
-								</h2>
-								<p className="mt-2 text-sm leading-6 text-muted">
-									{paused
-										? "Choose Resume whenever you’re ready."
-										: "Browse as usual. The connections between your visits will appear here."}
-								</p>
-							</section>
-						)}
-
-						{summary.recent.length > 0 && (
-							<section aria-labelledby="recent-heading" className="mt-5">
-								<h2 id="recent-heading" className="text-sm font-medium">
-									Earlier activity
-								</h2>
-								<ul className="mt-2 divide-y divide-line">
-									{summary.recent.map((context) => (
-										<li key={context.id}>
-											<button
-												type="button"
-												onClick={() => openTabot(context.id)}
-												className="popup-row flex min-h-14 w-full items-center justify-between gap-3 py-2 text-left"
-											>
-												<SiteIcon
-													domain={context.primaryDomain}
-													favicons={summary.favicons}
-												/>
-												<span className="min-w-0 flex-1">
-													<span className="line-clamp-2 text-sm font-medium wrap-anywhere">
-														{siteLabel(context.primaryDomain)}
-													</span>
-												</span>
-												<Arrow />
-											</button>
-										</li>
-									))}
-								</ul>
-							</section>
-						)}
-					</>
-				)}
-				{dropped > 0 && (
-					<p role="status" className="mt-4 text-xs leading-5 text-muted">
-						Some browser activity could not be recorded. Your earlier activity
-						is still available.
-					</p>
-				)}
-			</main>
-			<footer className="shrink-0 border-t border-line px-5 py-3">
+				</div>
 				<button
 					type="button"
-					onClick={() => openTabot(featured?.id)}
-					className="popup-primary flex min-h-11 w-full items-center justify-between rounded-lg px-4 text-sm font-semibold"
+					onClick={() => void toggleTracking()}
+					disabled={tracking === null || trackingBusy}
+					aria-label={
+						tracking === null
+							? "Checking tracking status"
+							: tracking
+								? "Pause tracking"
+								: "Resume tracking"
+					}
+					className="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-white text-ink hover:bg-raised disabled:opacity-50"
+					title={
+						tracking === null
+							? "Checking tracking status"
+							: tracking
+								? "Pause tracking"
+								: "Resume tracking"
+					}
 				>
-					{featured ? "Review activity" : "Open Tabot"}
-					<Arrow />
+					{trackingBusy ? (
+						<LoaderCircle
+							aria-hidden="true"
+							className="size-4 motion-safe:animate-spin"
+						/>
+					) : tracking === true ? (
+						<Pause aria-hidden="true" className="size-4" />
+					) : (
+						<Play aria-hidden="true" className="size-4" />
+					)}
 				</button>
-				<div className="mt-2 flex min-h-11 items-center justify-between gap-3 text-xs text-muted">
-					<span>Stays on this device. Choose what to share.</span>
-					{featured && (
+			</header>
+			{trackingError && (
+				<div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
+					<p role="alert" className="text-xs text-red-700">
+						{trackingError}
+					</p>
+					<button
+						type="button"
+						onClick={() => void loadTracking()}
+						className="min-h-9 px-2 text-xs font-semibold text-ink underline underline-offset-2"
+					>
+						Retry
+					</button>
+				</div>
+			)}
+			<main className="max-h-133 overflow-y-auto">
+				<section className="px-4 pb-3 pt-4" aria-label="Current page">
+					{loading ? (
+						<p className="text-sm text-muted">Checking this page…</p>
+					) : page?.eligible ? (
+						<div className="flex min-w-0 items-center gap-3">
+							{page.favicon ? (
+								<img
+									src={page.favicon}
+									alt=""
+									aria-hidden="true"
+									className="size-8 shrink-0 rounded-md border border-line bg-surface p-1.5 object-contain"
+								/>
+							) : (
+								<Globe2
+									aria-hidden="true"
+									className="size-8 shrink-0 rounded-md border border-line bg-surface p-1.5 text-muted"
+								/>
+							)}
+							<div className="min-w-0">
+								<h1 className="line-clamp-2 text-sm font-semibold leading-5">
+									{page.title || page.host}
+								</h1>
+								<p className="mt-0.5 truncate text-xs text-muted">
+									{page.host}
+								</p>
+							</div>
+						</div>
+					) : (
+						<p className="text-sm text-muted">
+							{page?.reason ?? "Could not load this page."}
+						</p>
+					)}
+					{error && !page && (
 						<button
 							type="button"
-							onClick={() => openTabot()}
-							className="popup-row min-h-11 shrink-0 px-1 font-medium"
+							onClick={() => void loadPage()}
+							className="mt-2 min-h-9 text-sm font-medium text-ink underline underline-offset-2"
 						>
-							Open Tabot
+							{error} Retry
 						</button>
 					)}
-				</div>
-			</footer>
+				</section>
+				{page?.eligible && (
+					<section className="px-4 pt-4" aria-label="Site notes">
+						<div className="mb-2 flex items-center justify-between">
+							<h2 className="text-sm font-semibold">Notes</h2>
+							<span className="rounded-md bg-surface px-2 py-0.5 text-xs font-medium tabular-nums text-muted">
+								{searchQuery
+									? (searchResult?.notes.length ?? 0)
+									: page.notes.length}
+							</span>
+						</div>
+						<label htmlFor="search-notes" className="sr-only">
+							Search notes on this site
+						</label>
+						<div className="flex items-center gap-2 rounded-md border border-line bg-surface px-3 focus-within:border-ink focus-within:bg-white">
+							<Search
+								aria-hidden="true"
+								className="size-4 shrink-0 text-muted"
+							/>
+							<input
+								id="search-notes"
+								type="search"
+								placeholder="Search this site's notes"
+								value={query}
+								maxLength={200}
+								onChange={(event) => {
+									const value = event.target.value;
+									if (value.trim() !== searchQuery) setSearchResult(null);
+									setQuery(value);
+								}}
+								className="min-h-9 min-w-0 flex-1 text-sm outline-none placeholder:text-muted"
+							/>
+						</div>
+						{searchQuery && (
+							<div className="mt-3" aria-live="polite" aria-busy={searching}>
+								{searching ? (
+									<p className="py-2 text-sm text-muted">Searching notes…</p>
+								) : searchResult?.error ? (
+									<div className="flex items-center justify-between gap-3">
+										<p role="alert" className="text-sm text-red-700">
+											Could not search notes.
+										</p>
+										<button
+											type="button"
+											onClick={() =>
+												setSearchRevision((revision) => revision + 1)
+											}
+											className="min-h-8 rounded-md px-2 text-xs font-semibold hover:bg-raised"
+										>
+											Retry
+										</button>
+									</div>
+								) : searchResult?.notes.length ? (
+									<>
+										<p className="text-xs text-muted">
+											{searchResult.notes.length === 20
+												? "Showing up to 20 matches"
+												: `${searchResult.notes.length} ${searchResult.notes.length === 1 ? "match" : "matches"}`}
+										</p>
+										<ul>
+											{searchResult.notes.map((note) => (
+												<li
+													key={note.id}
+													className="border-b border-line py-3 last:border-b-0"
+												>
+													<p className="whitespace-pre-wrap wrap-break-word text-sm leading-5">
+														{note.text}
+													</p>
+													<div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted">
+														{note.url ? (
+															<a
+																href={note.url}
+																target="_blank"
+																rel="noreferrer"
+																className="min-w-0 break-all font-semibold text-ink underline underline-offset-2"
+															>
+																{note.title || note.host}
+															</a>
+														) : (
+															<span className="break-all">
+																{note.title || note.host}
+															</span>
+														)}
+														<span>{relativeTime(note.createdAt)}</span>
+													</div>
+												</li>
+											))}
+										</ul>
+									</>
+								) : (
+									<p className="py-2 text-sm text-muted">
+										No notes match your search.
+									</p>
+								)}
+							</div>
+						)}
+					</section>
+				)}
+				<section className="px-4 pb-4 pt-2" aria-label="Current page notes">
+					{loading ? (
+						<p className="py-3 text-sm text-muted">Loading notes…</p>
+					) : !searchQuery && page?.eligible && page.notes.length === 0 ? (
+						<p className="pt-2 text-sm text-muted">
+							No notes on this page yet.
+						</p>
+					) : null}
+					<div>
+						{!searchQuery &&
+							page?.notes.map((note) => (
+								<article
+									key={note.id}
+									className="border-b border-line py-3 last:border-b-0"
+								>
+									{editingId === note.id ? (
+										<textarea
+											aria-label="Edit note"
+											value={draft}
+											maxLength={MAX_NOTE_LENGTH}
+											onChange={(event) => setDraft(event.target.value)}
+											onKeyDown={(event) => {
+												if (
+													(event.metaKey || event.ctrlKey) &&
+													event.key === "Enter"
+												)
+													void saveNote();
+											}}
+											className="min-h-20 w-full resize-y rounded-md border border-line bg-white p-2 text-sm outline-none focus:border-ink"
+										/>
+									) : (
+										<p className="whitespace-pre-wrap wrap-break-word text-sm leading-5">
+											{note.text}
+										</p>
+									)}
+									<div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 text-xs text-muted">
+										<span>
+											{relativeTime(note.createdAt)}
+											{note.updatedAt > note.createdAt ? " · edited" : ""}
+										</span>
+										<div className="flex items-center gap-1">
+											{editingId === note.id ? (
+												<>
+													<button
+														type="button"
+														onClick={() => void saveNote()}
+														disabled={saving || !draft.trim()}
+														className="min-h-8 rounded-md px-2 font-semibold text-ink hover:bg-raised"
+													>
+														Save
+													</button>
+													<button
+														type="button"
+														onClick={() => {
+															setEditingId(null);
+															setDraft("");
+														}}
+														className="min-h-8 rounded-md px-2 font-semibold text-ink hover:bg-raised"
+													>
+														Cancel
+													</button>
+												</>
+											) : (
+												<button
+													type="button"
+													onClick={() => {
+														setEditingId(note.id);
+														setDraft(note.text);
+													}}
+													className="min-h-8 rounded-md px-2 font-semibold text-ink hover:bg-raised"
+												>
+													Edit
+												</button>
+											)}
+											<button
+												type="button"
+												onClick={() => void deleteNote(note.id)}
+												aria-label="Delete note"
+												className="grid size-8 place-items-center rounded-md text-muted hover:bg-raised hover:text-ink"
+											>
+												<Trash2 aria-hidden="true" className="size-4" />
+											</button>
+										</div>
+									</div>
+								</article>
+							))}
+					</div>
+					{error && page && (
+						<p role="alert" className="py-2 text-xs text-red-700">
+							{error}
+						</p>
+					)}
+				</section>
+				{page?.eligible && !editingId && (
+					<section className="px-4 pb-4 pt-4">
+						<label
+							htmlFor="page-note-draft"
+							className="mb-2 block text-sm font-semibold"
+						>
+							Add a note
+						</label>
+						<textarea
+							id="page-note-draft"
+							placeholder="What do you want to remember?"
+							value={draft}
+							maxLength={MAX_NOTE_LENGTH}
+							onChange={(event) => setDraft(event.target.value)}
+							onKeyDown={(event) => {
+								if ((event.metaKey || event.ctrlKey) && event.key === "Enter")
+									void saveNote();
+							}}
+							className="block min-h-20 w-full resize-y rounded-md border border-line bg-white px-3 py-2.5 text-sm leading-5 outline-none placeholder:text-muted focus:border-ink"
+						/>
+						<div className="mt-2 flex items-center justify-between gap-3">
+							<span className="text-xs text-muted">
+								{draft.length}/{MAX_NOTE_LENGTH}
+							</span>
+							<button
+								type="button"
+								onClick={() => void saveNote()}
+								disabled={saving || !draft.trim()}
+								className="min-h-8 shrink-0 rounded-md bg-ink px-3 py-1 text-xs font-semibold text-white hover:bg-muted disabled:opacity-40"
+							>
+								{saving ? "Saving…" : "Save note"}
+							</button>
+						</div>
+					</section>
+				)}
+			</main>
 		</div>
 	);
-};
-
-export default IndexPopup;
+}

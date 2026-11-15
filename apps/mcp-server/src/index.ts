@@ -5,37 +5,32 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { routePath } from "hono/route";
 import { rateLimiter } from "hono-rate-limiter";
-import { DEFAULT_SCOPES, type TabotAuth } from "./auth-store";
-import { consentPage } from "./consent-page";
-import { signInstallationToken, verifyInstallationToken } from "./lib/auth";
-import {
-	AUTH_CODE_TTL_MS,
-	MAX_HTTP_BODY_BYTES,
-	NAME,
-	VERSION,
-} from "./lib/constants";
-import { logEvent } from "./lib/log";
+import { consentPage } from "./auth/consent-page";
 import {
 	authorizationServerMetadata,
 	protectedResourceMetadata,
 	protectedResourceMetadataUrl,
 	randomToken,
 	sha256Base64Url,
-} from "./lib/oauth";
-import { ERROR_CODES, RelayError } from "./lib/protocol";
-import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./lib/tools";
+} from "./auth/oauth";
+import { DEFAULT_SCOPES, type TabotAuth } from "./auth/store";
+import { signInstallationToken, verifyInstallationToken } from "./auth/tokens";
+import { AUTH_CODE_TTL_MS, MAX_HTTP_BODY_BYTES, NAME, VERSION } from "./config";
+import { logEvent } from "./log";
+import { ERROR_CODES, RelayError } from "./mcp/protocol";
 import {
-	getActivityMetricsInputSchema,
-	getContextInputSchema,
-	getCurrentContextInputSchema,
-	getMemoryInputSchema,
-	getRecentContextInputSchema,
-	listRecurringPatternsInputSchema,
-	searchContextInputSchema,
-} from "./schema";
+	findActivityMatchesInputSchema,
+	getPageNotesInputSchema,
+	getSiteNotesInputSchema,
+	listSitePagesInputSchema,
+	listSitesInputSchema,
+	searchAllInputSchema,
+	searchNotesInputSchema,
+} from "./mcp/schema";
+import { TOOL_DESCRIPTIONS, TOOL_NAMES } from "./mcp/tools";
 
-export { TabotAuth } from "./auth-store";
-export { TabotInstallation } from "./installation";
+export { TabotInstallation } from "./auth/installation";
+export { TabotAuth } from "./auth/store";
 
 export interface Env {
 	MCP_PUBLIC_URL: string;
@@ -57,7 +52,6 @@ const READ_ONLY_ANNOTATIONS = {
 	openWorldHint: false,
 	destructiveHint: false,
 };
-
 const createMcpServer = (
 	dispatch: ToolDispatch,
 	requestId: string,
@@ -101,80 +95,90 @@ const createMcpServer = (
 	};
 
 	server.registerTool(
-		TOOL_NAMES.SEARCH_CONTEXT,
+		TOOL_NAMES.SEARCH_ALL,
 		{
-			title: "Search Tabot activity",
-			description: TOOL_DESCRIPTIONS.SEARCH_CONTEXT,
+			title: "Search all retained data",
+			description: TOOL_DESCRIPTIONS.SEARCH_ALL,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: searchContextInputSchema,
+			inputSchema: searchAllInputSchema,
 		},
-		({ query, hours }) => call(TOOL_NAMES.SEARCH_CONTEXT, { query, hours }),
+		(params) => call(TOOL_NAMES.SEARCH_ALL, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_RECENT_CONTEXT,
+		TOOL_NAMES.FIND_RELATED_ACTIVITY,
 		{
-			title: "Recent Tabot activity summaries",
-			description: TOOL_DESCRIPTIONS.GET_RECENT_CONTEXT,
+			title: "Find related activity",
+			description: TOOL_DESCRIPTIONS.FIND_RELATED_ACTIVITY,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getRecentContextInputSchema,
+			inputSchema: findActivityMatchesInputSchema,
 		},
-		({ hours }) => call(TOOL_NAMES.GET_RECENT_CONTEXT, { hours }),
+		(params) => call(TOOL_NAMES.FIND_RELATED_ACTIVITY, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_CURRENT_CONTEXT,
+		TOOL_NAMES.SEARCH_NOTES,
 		{
-			title: "Current Tabot activity summary",
-			description: TOOL_DESCRIPTIONS.GET_CURRENT_CONTEXT,
+			title: "Search notes",
+			description: TOOL_DESCRIPTIONS.SEARCH_NOTES,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getCurrentContextInputSchema,
+			inputSchema: searchNotesInputSchema,
 		},
-		() => call(TOOL_NAMES.GET_CURRENT_CONTEXT, {}),
+		(params) => call(TOOL_NAMES.SEARCH_NOTES, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_CONTEXT,
+		TOOL_NAMES.LIST_SITES,
 		{
-			title: "Specific Tabot activity summary",
-			description: TOOL_DESCRIPTIONS.GET_CONTEXT,
+			title: "Browse retained sites",
+			description: TOOL_DESCRIPTIONS.LIST_SITES,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getContextInputSchema,
+			inputSchema: listSitesInputSchema,
 		},
-		({ id }) => call(TOOL_NAMES.GET_CONTEXT, { id }),
+		(params) => call(TOOL_NAMES.LIST_SITES, params),
+	);
+	server.registerTool(
+		TOOL_NAMES.LIST_PAGES,
+		{
+			title: "List pages on a site",
+			description: TOOL_DESCRIPTIONS.LIST_PAGES,
+			annotations: READ_ONLY_ANNOTATIONS,
+			inputSchema: listSitePagesInputSchema,
+		},
+		(params) => call(TOOL_NAMES.LIST_PAGES, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.LIST_RECURRING_PATTERNS,
+		TOOL_NAMES.GET_SITE_NOTES,
 		{
-			title: "Tabot recurring patterns",
-			description: TOOL_DESCRIPTIONS.LIST_RECURRING_PATTERNS,
+			title: "Get site notes",
+			description: TOOL_DESCRIPTIONS.GET_SITE_NOTES,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: listRecurringPatternsInputSchema,
+			inputSchema: getSiteNotesInputSchema,
 		},
-		(params) => call(TOOL_NAMES.LIST_RECURRING_PATTERNS, params),
+		(params) => call(TOOL_NAMES.GET_SITE_NOTES, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_MEMORY,
+		TOOL_NAMES.GET_PAGE_NOTES,
 		{
-			title: "Tabot memory",
-			description: TOOL_DESCRIPTIONS.GET_MEMORY,
+			title: "Get page notes",
+			description: TOOL_DESCRIPTIONS.GET_PAGE_NOTES,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getMemoryInputSchema,
+			inputSchema: getPageNotesInputSchema,
 		},
-		({ id }) => call(TOOL_NAMES.GET_MEMORY, { id }),
+		(params) => call(TOOL_NAMES.GET_PAGE_NOTES, params),
 	);
 
 	server.registerTool(
-		TOOL_NAMES.GET_ACTIVITY_METRICS,
+		TOOL_NAMES.GET_BROWSING_TIMELINE,
 		{
-			title: "Tabot activity metrics",
-			description: TOOL_DESCRIPTIONS.GET_ACTIVITY_METRICS,
+			title: "View browsing timeline",
+			description: TOOL_DESCRIPTIONS.GET_BROWSING_TIMELINE,
 			annotations: READ_ONLY_ANNOTATIONS,
-			inputSchema: getActivityMetricsInputSchema,
+			inputSchema: findActivityMatchesInputSchema,
 		},
-		(params) => call(TOOL_NAMES.GET_ACTIVITY_METRICS, params),
+		(params) => call(TOOL_NAMES.GET_BROWSING_TIMELINE, params),
 	);
 
 	return server;
@@ -326,6 +330,12 @@ const dispatchToInstallation = async (
 		const code =
 			Object.values(ERROR_CODES).find((known) => known === body.error.code) ??
 			ERROR_CODES.INTERNAL;
+		if (env.MCP_PUBLIC_URL.includes("-dev."))
+			logEvent("installation_dispatch_failed", {
+				tool: method,
+				code,
+				installationTag: installationId.slice(-8),
+			});
 		throw new RelayError(code, body.error.message);
 	}
 	return body.result;
@@ -386,9 +396,7 @@ app.get("/connection", async (c) => {
 	const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 	const installationId = await verifyInstallationToken(secret, token);
 	if (!installationId) return c.text("Unauthorized", 401);
-	return c.json({
-		connected: await authStub(c.env).hasAssistantConnection(installationId),
-	});
+	return c.json(await authStub(c.env).getAssistantConnections(installationId));
 });
 
 // --- OAuth discovery (RFC 9728 + RFC 8414) ----------------------------------
@@ -710,6 +718,10 @@ app.get("/relay", async (c) => {
 	const token = c.req.header("Sec-WebSocket-Protocol")?.trim() ?? "";
 	const installationId = await verifyInstallationToken(secret, token);
 	if (!installationId) return c.text("Unauthorized", 401);
+	if (c.env.MCP_PUBLIC_URL.includes("-dev."))
+		logEvent("relay_upgrade_authenticated", {
+			installationTag: installationId.slice(-8),
+		});
 	return installationStub(c.env, installationId).fetch(c.req.raw);
 });
 

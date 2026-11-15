@@ -1,6 +1,6 @@
 // Root release script: on the Version Packages PR merge (changesets `publish`
-// hook), idempotently tag + push v<version>, then dispatch the Chrome Web Store
-// submit workflow. Single release path: only this script can fire a store release.
+// hook), idempotently tag + push v<version>, then dispatch a Chrome Web Store
+// draft upload from that exact tag. Store review/publication remains manual.
 
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -26,5 +26,5 @@ execSync(`git tag ${tag}`);
 execSync(`git push origin ${tag}`);
 console.log(`Tagged and pushed ${tag}`);
 
-execSync(`gh workflow run "${SUBMIT_WORKFLOW}" --ref main`);
+execSync(`gh workflow run "${SUBMIT_WORKFLOW}" --ref ${tag}`);
 console.log(`Dispatched ${SUBMIT_WORKFLOW}.`);

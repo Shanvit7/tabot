@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { logger } from "../lib/logger";
 import {
 	chatGptConnectPromptUrl,
 	resolveChatGptConnectUrl,
@@ -40,4 +41,4 @@ try {
 	globalThis.fetch = originalFetch;
 }
 
-console.log("ChatGPT connect targets: ok");
+logger.info("ChatGPT connect targets: ok");

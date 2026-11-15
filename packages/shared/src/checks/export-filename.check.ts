@@ -71,7 +71,7 @@ const ev = (timestamp: number): StoredTabEvent => ({
 	assert.ok(out.startsWith("tabot-export-"), `prefix lost: ${out}`);
 	assert.ok(out.endsWith(".jsonl"), `extension lost: ${out}`);
 	// must stay selectable by the consumers that glob for the newest export:
-	// share/targets.ts `tabot-export-*.jsonl` and v5regression's ^tabot-export-.*\.jsonl$
+	// share/targets.ts `tabot-export-*.jsonl`
 	assert.match(out, /^tabot-export-.*\.jsonl$/);
 }
 

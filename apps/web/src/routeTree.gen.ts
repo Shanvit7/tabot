@@ -10,21 +10,22 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ActivitiesRouteImport } from './routes/activities'
+import { Route as WorkspaceRouteImport } from './routes/_workspace'
 import { Route as ExtensionNotConnectedRouteImport } from './routes/extension-not-connected'
-import { Route as HomeRouteImport } from './routes/home'
+import { Route as MobileRouteImport } from './routes/mobile'
 import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as RecurringPatternsRouteImport } from './routes/recurring-patterns'
-import { Route as TermsRouteImport } from './routes/terms'
+import { Route as WorkspaceAssistantRouteImport } from './routes/_workspace.assistant'
+import { Route as WorkspaceAutomationsRouteImport } from './routes/_workspace.automations'
+import { Route as WorkspaceHomeRouteImport } from './routes/_workspace.home'
+import { Route as WorkspaceSettingsRouteImport } from './routes/_workspace.settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ActivitiesRoute = ActivitiesRouteImport.update({
-  id: '/activities',
-  path: '/activities',
+const WorkspaceRoute = WorkspaceRouteImport.update({
+  id: '/_workspace',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExtensionNotConnectedRoute = ExtensionNotConnectedRouteImport.update({
@@ -32,9 +33,9 @@ const ExtensionNotConnectedRoute = ExtensionNotConnectedRouteImport.update({
   path: '/extension-not-connected',
   getParentRoute: () => rootRouteImport,
 } as any)
-const HomeRoute = HomeRouteImport.update({
-  id: '/home',
-  path: '/home',
+const MobileRoute = MobileRouteImport.update({
+  id: '/mobile',
+  path: '/mobile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -42,83 +43,99 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RecurringPatternsRoute = RecurringPatternsRouteImport.update({
-  id: '/recurring-patterns',
-  path: '/recurring-patterns',
-  getParentRoute: () => rootRouteImport,
+const WorkspaceAssistantRoute = WorkspaceAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
+  getParentRoute: () => WorkspaceRoute,
 } as any)
-const TermsRoute = TermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
-  getParentRoute: () => rootRouteImport,
+const WorkspaceAutomationsRoute = WorkspaceAutomationsRouteImport.update({
+  id: '/automations',
+  path: '/automations',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceHomeRoute = WorkspaceHomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceSettingsRoute = WorkspaceSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => WorkspaceRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/activities': typeof ActivitiesRoute
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
-  '/home': typeof HomeRoute
+  '/mobile': typeof MobileRoute
   '/privacy': typeof PrivacyRoute
-  '/recurring-patterns': typeof RecurringPatternsRoute
-  '/terms': typeof TermsRoute
+  '/assistant': typeof WorkspaceAssistantRoute
+  '/automations': typeof WorkspaceAutomationsRoute
+  '/home': typeof WorkspaceHomeRoute
+  '/settings': typeof WorkspaceSettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/activities': typeof ActivitiesRoute
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
-  '/home': typeof HomeRoute
+  '/mobile': typeof MobileRoute
   '/privacy': typeof PrivacyRoute
-  '/recurring-patterns': typeof RecurringPatternsRoute
-  '/terms': typeof TermsRoute
+  '/assistant': typeof WorkspaceAssistantRoute
+  '/automations': typeof WorkspaceAutomationsRoute
+  '/home': typeof WorkspaceHomeRoute
+  '/settings': typeof WorkspaceSettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/activities': typeof ActivitiesRoute
+  '/_workspace': typeof WorkspaceRouteWithChildren
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
-  '/home': typeof HomeRoute
+  '/mobile': typeof MobileRoute
   '/privacy': typeof PrivacyRoute
-  '/recurring-patterns': typeof RecurringPatternsRoute
-  '/terms': typeof TermsRoute
+  '/_workspace/assistant': typeof WorkspaceAssistantRoute
+  '/_workspace/automations': typeof WorkspaceAutomationsRoute
+  '/_workspace/home': typeof WorkspaceHomeRoute
+  '/_workspace/settings': typeof WorkspaceSettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/activities'
     | '/extension-not-connected'
-    | '/home'
+    | '/mobile'
     | '/privacy'
-    | '/recurring-patterns'
-    | '/terms'
+    | '/assistant'
+    | '/automations'
+    | '/home'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/activities'
     | '/extension-not-connected'
-    | '/home'
+    | '/mobile'
     | '/privacy'
-    | '/recurring-patterns'
-    | '/terms'
+    | '/assistant'
+    | '/automations'
+    | '/home'
+    | '/settings'
   id:
     | '__root__'
     | '/'
-    | '/activities'
+    | '/_workspace'
     | '/extension-not-connected'
-    | '/home'
+    | '/mobile'
     | '/privacy'
-    | '/recurring-patterns'
-    | '/terms'
+    | '/_workspace/assistant'
+    | '/_workspace/automations'
+    | '/_workspace/home'
+    | '/_workspace/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ActivitiesRoute: typeof ActivitiesRoute
+  WorkspaceRoute: typeof WorkspaceRouteWithChildren
   ExtensionNotConnectedRoute: typeof ExtensionNotConnectedRoute
-  HomeRoute: typeof HomeRoute
+  MobileRoute: typeof MobileRoute
   PrivacyRoute: typeof PrivacyRoute
-  RecurringPatternsRoute: typeof RecurringPatternsRoute
-  TermsRoute: typeof TermsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -130,11 +147,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/activities': {
-      id: '/activities'
-      path: '/activities'
-      fullPath: '/activities'
-      preLoaderRoute: typeof ActivitiesRouteImport
+    '/_workspace': {
+      id: '/_workspace'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof WorkspaceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/extension-not-connected': {
@@ -144,11 +161,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExtensionNotConnectedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/home': {
-      id: '/home'
-      path: '/home'
-      fullPath: '/home'
-      preLoaderRoute: typeof HomeRouteImport
+    '/mobile': {
+      id: '/mobile'
+      path: '/mobile'
+      fullPath: '/mobile'
+      preLoaderRoute: typeof MobileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -158,31 +175,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/recurring-patterns': {
-      id: '/recurring-patterns'
-      path: '/recurring-patterns'
-      fullPath: '/recurring-patterns'
-      preLoaderRoute: typeof RecurringPatternsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_workspace/assistant': {
+      id: '/_workspace/assistant'
+      path: '/assistant'
+      fullPath: '/assistant'
+      preLoaderRoute: typeof WorkspaceAssistantRouteImport
+      parentRoute: typeof WorkspaceRoute
     }
-    '/terms': {
-      id: '/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof TermsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_workspace/automations': {
+      id: '/_workspace/automations'
+      path: '/automations'
+      fullPath: '/automations'
+      preLoaderRoute: typeof WorkspaceAutomationsRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/home': {
+      id: '/_workspace/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof WorkspaceHomeRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/settings': {
+      id: '/_workspace/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof WorkspaceSettingsRouteImport
+      parentRoute: typeof WorkspaceRoute
     }
   }
 }
 
+interface WorkspaceRouteChildren {
+  WorkspaceAssistantRoute: typeof WorkspaceAssistantRoute
+  WorkspaceAutomationsRoute: typeof WorkspaceAutomationsRoute
+  WorkspaceHomeRoute: typeof WorkspaceHomeRoute
+  WorkspaceSettingsRoute: typeof WorkspaceSettingsRoute
+}
+
+const WorkspaceRouteChildren: WorkspaceRouteChildren = {
+  WorkspaceAssistantRoute: WorkspaceAssistantRoute,
+  WorkspaceAutomationsRoute: WorkspaceAutomationsRoute,
+  WorkspaceHomeRoute: WorkspaceHomeRoute,
+  WorkspaceSettingsRoute: WorkspaceSettingsRoute,
+}
+
+const WorkspaceRouteWithChildren = WorkspaceRoute._addFileChildren(
+  WorkspaceRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ActivitiesRoute: ActivitiesRoute,
+  WorkspaceRoute: WorkspaceRouteWithChildren,
   ExtensionNotConnectedRoute: ExtensionNotConnectedRoute,
-  HomeRoute: HomeRoute,
+  MobileRoute: MobileRoute,
   PrivacyRoute: PrivacyRoute,
-  RecurringPatternsRoute: RecurringPatternsRoute,
-  TermsRoute: TermsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

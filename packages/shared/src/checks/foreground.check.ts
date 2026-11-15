@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import type { StoredTabEvent } from "../events/db";
+import { logger } from "../lib/logger";
 import { buildExportJsonl, derive } from "../share/export";
 
 const MIN = 60_000;
@@ -133,4 +134,4 @@ assert.equal(total(background), 2 * MIN); // focus marker stops unobserved dwell
 const manifest = JSON.parse(buildExportJsonl(derived).split("\n")[0]).manifest;
 assert.equal(manifest.derivationSchemaVersion, 9);
 assert.ok(manifest.durationSemantics.wallDuration.includes("not active time"));
-console.log("foreground.check: all assertions passed");
+logger.info("foreground.check: all assertions passed");

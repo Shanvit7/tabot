@@ -1,131 +1,164 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Puzzle, RefreshCw } from "lucide-react";
-import { useEffect } from "react";
-import { MobileView } from "~/components/extension-mobile-setup";
-import { Button } from "~/components/ui/button";
-import { Loading } from "~/components/ui/work-panels";
-import { useHomeData } from "~/hooks/use-home-data";
-import { useIsMobile } from "~/hooks/use-is-mobile";
-
-const chromeWebStoreUrl =
-	import.meta.env.VITE_CHROME_WEB_STORE_URL?.trim() ||
-	"https://chromewebstore.google.com/";
-
-const steps = [
-	{
-		title: "Add Tabot to Chrome",
-		body: "Press the blue “Add to Chrome” button on the Chrome Web Store page, then confirm.",
-	},
-	{
-		title: "Make sure it’s on",
-		body: "Click the puzzle piece in the top-right of Chrome, then switch Tabot on. Tap the pin to keep it handy.",
-	},
-	{
-		title: "Come back here",
-		body: "Press “Check again” and your activity will appear.",
-	},
-];
+import { Check, Copy, RotateCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { DingToaster, toast } from "~/components/alerts/ding-toaster";
+import { ExtensionBridgeArt } from "~/components/features/extension-not-connected/system-art";
+import { IS_DEVELOPMENT, LOGO_URL, TABOT_EXTENSION_ID } from "~/lib/constants";
+import { readHistoryCounts } from "~/lib/history";
 
 const ExtensionNotConnected = () => {
 	const navigate = useNavigate();
-	const { hasExtension } = useHomeData();
-	const { isMobile, isLoading } = useIsMobile();
+	const [checking, setChecking] = useState(false);
+	const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+		"idle",
+	);
 
-	// Only supported desktop browsers should return to the dashboard.
 	useEffect(() => {
-		if (!isLoading && !isMobile && hasExtension) {
-			void navigate({ to: "/home", replace: true });
-		}
-	}, [hasExtension, isLoading, isMobile, navigate]);
+		let active = true;
+		void readHistoryCounts().then(
+			() => {
+				if (active) void navigate({ to: "/home", replace: true });
+			},
+			() => {},
+		);
+		return () => {
+			active = false;
+		};
+	}, [navigate]);
 
-	if (isLoading) return <Loading />;
-	if (!isMobile && hasExtension) return null;
+	const copyExtensionsUrl = async () => {
+		try {
+			await navigator.clipboard.writeText("chrome://extensions");
+			setCopyState("copied");
+		} catch {
+			setCopyState("failed");
+		}
+	};
+
+	const checkAgain = async () => {
+		if (checking) return;
+		setChecking(true);
+		try {
+			await readHistoryCounts();
+			await navigate({ to: "/home", replace: true });
+		} catch (error) {
+			toast.error("Tabot isn’t connected", {
+				description:
+					error instanceof Error
+						? error.message
+						: "Enable the Tabot extension in this Chrome profile, then try again.",
+			});
+		} finally {
+			setChecking(false);
+		}
+	};
 
 	return (
-		<main className="grid min-h-dvh place-items-center bg-landing-paper px-4 py-6 text-[#12221d] sm:px-8">
-			<div className="w-full min-w-0 max-w-4xl border-2 border-black bg-lime p-5 shadow-hard-xl sm:p-8">
-				{isMobile ? (
-					<MobileView chromeWebStoreUrl={chromeWebStoreUrl} />
-				) : (
-					<div className="grid gap-6 md:grid-cols-2 md:gap-10">
-						<section className="flex flex-col">
-							<p className="font-mono text-[11px] font-bold uppercase tracking-[0.2em]">
-								One quick step
-							</p>
-							<h1 className="mt-2 text-xl font-semibold leading-snug tracking-tight text-balance sm:text-2xl">
-								Add the Tabot extension to Chrome.
-							</h1>
-							<p className="mt-2 text-sm leading-6 text-[#244d39]">
-								Tabot needs its Chrome extension to show your activity. It’s
-								free, and everything stays on this computer.
-							</p>
-							<Button
-								asChild
-								className="mt-4 w-full sm:w-auto sm:self-start"
-								variant="secondary"
-							>
-								<a
-									href={chromeWebStoreUrl}
-									rel="noopener noreferrer"
-									target="_blank"
-								>
-									Open Chrome Web Store
-								</a>
-							</Button>
-							<div
+		<main className="flex min-h-svh flex-col bg-work-canvas px-6 text-work-ink sm:px-10">
+			<header className="mx-auto flex w-full max-w-5xl items-center gap-2 py-6">
+				<img
+					src={LOGO_URL}
+					alt=""
+					width={26}
+					height={26}
+					className="size-[26px] object-contain"
+				/>
+				<span className="font-display text-lg font-semibold tracking-tight">
+					tabot
+				</span>
+			</header>
+
+			<section className="mx-auto grid w-full max-w-5xl flex-1 content-center items-center gap-12 py-12 sm:py-20 lg:grid-cols-[1.1fr_1fr] lg:gap-20">
+				<div>
+					<h1 className="max-w-lg text-balance font-display text-4xl font-semibold leading-[1.1] tracking-[-0.025em] sm:text-5xl">
+						Tabot isn’t connected.
+					</h1>
+					<p className="mt-5 max-w-md text-pretty text-base leading-7 text-work-muted">
+						Enable the Tabot extension in this Chrome profile, then check again.
+					</p>
+
+					<ol className="mt-8 space-y-5 text-base leading-6">
+						<li className="flex gap-3">
+							<span
 								aria-hidden="true"
-								className="mt-5 flex items-center gap-3 border-2 border-black bg-white px-3 py-2 shadow-hard-sm"
+								className="pt-0.5 text-sm tabular-nums text-work-muted"
 							>
-								<div className="h-6 flex-1 rounded-full bg-[#eef0ea] px-3 text-[11px] leading-6 text-[#5b6b62]">
-									Chrome’s address bar
-								</div>
-								<div className="flex size-8 items-center justify-center rounded-full border-2 border-black bg-lime">
-									<Puzzle className="size-4" strokeWidth={2.5} />
-								</div>
-							</div>
-							<p className="mt-2 text-xs leading-5 text-[#244d39]">
-								Look for the puzzle piece at the top-right of Chrome — that’s
-								where your extensions live.
-							</p>
-						</section>
-						<section className="flex flex-col border-t-2 border-black pt-5 md:border-t-0 md:border-l-2 md:pt-0 md:pl-10">
-							<ol className="space-y-3">
-								{steps.map((step, index) => (
-									<li
-										key={step.title}
-										className="grid grid-cols-[auto_1fr] gap-3"
+								1.
+							</span>
+							<div className="min-w-0 flex-1">
+								<p>Open Chrome’s extensions page.</p>
+								<div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-work-line px-3">
+									<code className="min-w-0 break-all font-mono text-sm">
+										chrome://extensions
+									</code>
+									<button
+										type="button"
+										onClick={() => void copyExtensionsUrl()}
+										aria-label="Copy chrome://extensions"
+										className="-mr-2 inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm font-medium text-work-muted transition-colors hover:text-work-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-work-ink"
 									>
-										<span className="flex size-6 items-center justify-center rounded-full bg-black font-mono text-xs font-bold text-lime">
-											{index + 1}
+										{copyState === "copied" ? (
+											<Check aria-hidden="true" className="size-4" />
+										) : (
+											<Copy aria-hidden="true" className="size-4" />
+										)}
+										<span aria-live="polite">
+											{copyState === "copied" ? "Copied" : "Copy"}
 										</span>
-										<div>
-											<h2 className="text-sm font-semibold leading-6">
-												{step.title}
-											</h2>
-											<p className="text-xs leading-5 text-[#244d39]">
-												{step.body}
-											</p>
-										</div>
-									</li>
-								))}
-							</ol>
-							<Button
-								className="mt-5 w-full sm:w-auto sm:self-start"
-								type="button"
-								variant="default"
-								onClick={() => globalThis.location.reload()}
+									</button>
+								</div>
+								{copyState === "failed" && (
+									<p role="alert" className="mt-2 text-sm text-destructive">
+										Couldn’t copy. Select the address and copy it manually.
+									</p>
+								)}
+							</div>
+						</li>
+						<li className="flex gap-3">
+							<span
+								aria-hidden="true"
+								className="pt-0.5 text-sm tabular-nums text-work-muted"
 							>
-								<RefreshCw
-									aria-hidden="true"
-									className="size-4"
-									strokeWidth={2.5}
-								/>
-								Check again
-							</Button>
-						</section>
-					</div>
-				)}
-			</div>
+								2.
+							</span>
+							<p>
+								Find <strong className="font-semibold">Tabot</strong> and switch
+								it on.
+							</p>
+						</li>
+					</ol>
+
+					<button
+						type="button"
+						onClick={() => void checkAgain()}
+						disabled={checking}
+						aria-busy={checking}
+						className="mt-8 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-6 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-work-ink disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+					>
+						<RotateCw
+							aria-hidden="true"
+							className={`size-4 ${checking ? "animate-spin motion-reduce:animate-none" : ""}`}
+						/>
+						{checking ? "Checking…" : "Check connection"}
+					</button>
+
+					{IS_DEVELOPMENT && (
+						<details className="mt-8 border-t border-work-line pt-4 text-sm text-work-muted">
+							<summary className="w-fit cursor-pointer rounded-sm py-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-work-ink">
+								Developer details
+							</summary>
+							<p className="mt-3 leading-6">
+								Expected extension ID:{" "}
+								<code className="break-all font-mono text-xs">
+									{TABOT_EXTENSION_ID || "not configured"}
+								</code>
+							</p>
+						</details>
+					)}
+				</div>
+				<ExtensionBridgeArt />
+			</section>
+			<DingToaster position="top-center" />
 		</main>
 	);
 };
@@ -133,7 +166,7 @@ const ExtensionNotConnected = () => {
 export const Route = createFileRoute("/extension-not-connected")({
 	head: () => ({
 		meta: [
-			{ title: "Add Tabot to Chrome | Tabot" },
+			{ title: "Connect Tabot · Tabot" },
 			{ name: "robots", content: "noindex, nofollow" },
 		],
 	}),

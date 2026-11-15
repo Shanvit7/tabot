@@ -31,8 +31,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # Opens / updates the "Version Packages" PR. When it's merged, changesets
-      # runs the publish script: we tag v<version> and dispatch the store submit
-      # workflow. Single release path — only this hook can trigger submit.yml.
+      # runs the release script: tag v<version> and dispatch a draft-only store
+      # upload from that tag. A human reviews and publishes in Chrome Web Store.
       - name: Create / update versioning PR
         uses: changesets/action@v1
         with:

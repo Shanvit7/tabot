@@ -8,6 +8,13 @@ export {
 	type WeekDay,
 } from "./activities/activity-stats";
 export {
+	ACTIVITY_GAP_MS,
+	type ActiveSpan,
+	activeDuration,
+	activeSpans,
+	foregroundEvents,
+} from "./activities/foreground";
+export {
 	type ActivityRef,
 	type ActivityTransition,
 	activityRef,
@@ -23,6 +30,13 @@ export {
 	type MetricTransition,
 	parseActivityMetricsInput,
 } from "./activities/metrics";
+export { ApiError, apiClient } from "./api/client";
+export {
+	type AssistantConnections,
+	type AssistantProvider,
+	assistantProviderFromClientName,
+	parseAssistantConnections,
+} from "./assistant-connections";
 export {
 	type BrowserContext,
 	buildContexts,
@@ -34,34 +48,27 @@ export {
 	getRecentContexts,
 } from "./contexts/contexts";
 export {
-	advanceReadIndex,
-	attachBuffer,
-	availableCount,
-	BUFFER_BYTE_SIZE,
-	bufferOccupancy,
-	CAPACITY,
-	CONTROL_SLOTS,
-	claimSlots,
-	createBuffer,
-	DEFAULT_CAPACITY,
-	decodeEvent,
-	EVENT_SLOT_SIZE,
-	type EventBuffer,
-	encodeEvent,
-	PUBLISHED_INDEX,
-	pushEvent,
-	READ_INDEX,
-	reserveSlot,
-	WRITE_INDEX,
-} from "./events/buffer";
-export {
 	bulkInsertEvents,
+	bulkInsertIngestRecords,
 	countEvents,
 	createEventsDb,
+	deletePageObservations,
+	type EventRange,
 	getAllEvents,
 	getEventsBetween,
+	getPageCaptureSiteSummaries,
+	getPageObservationById,
+	getPageObservations,
+	type InsertEventsResult,
+	type PageCaptureSiteSummary,
+	type PageObservationSummary,
+	prunePageObservations,
+	type StorageTransport,
+	type StoredIngestRecord,
 	type StoredTabEvent,
+	sanitizeEventsForRead,
 	storedTabEventSchema,
+	TabotDatabase,
 } from "./events/db";
 export {
 	EVENT_TYPES,
@@ -74,6 +81,22 @@ export {
 	ValueToEventType,
 } from "./events/events";
 export {
+	EventConflictError,
+	EventValidationError,
+	eventBytes,
+	eventIdentity,
+	type IngestAck,
+	isTransientStorageError,
+	MAX_EVENT_BYTES,
+	normalizeEvent,
+	orderEvents,
+	PAGE_EVENT_TYPES,
+	PAGE_PROTOCOL_VERSION,
+	type PageEventType,
+	storageErrorCode,
+	UUID_PATTERN,
+} from "./events/ingest";
+export {
 	getMeta,
 	removeMeta,
 	type TabMeta,
@@ -82,13 +105,11 @@ export {
 } from "./events/metadata";
 export { logger } from "./lib/logger";
 export {
-	type BufferReadyMessage,
 	createEmptyStats,
-	type GetEventsMessage,
-	MSG,
 	type PipelineStats,
+	type ReadFailure,
+	readFailure,
 	type StatsSnapshot,
-	type StatsUpdateMessage,
 } from "./lib/protocol";
 export {
 	buildMemories,
@@ -100,15 +121,56 @@ export {
 	type MemoryDomain,
 } from "./memories/memories";
 export {
-	PII_REDACTION_DEFAULT_ENABLED,
-	sanitizeDerived,
-} from "./privacy/sanitize";
+	deriveSiteDomain,
+	type NewPageNote,
+	noteMatchesDomain,
+	type PageNote,
+	searchNoteRows,
+	sessionForNote,
+	validateNoteText,
+} from "./notes/notes";
+export {
+	PAGE_MIN_INTERVAL_MS,
+	PAGE_RESOURCE_DAILY_BYTES,
+	PAGE_SITE_HOURLY_BYTES,
+	pageObservationBudgetFailure,
+	pageObservationSizeBytes,
+} from "./pages/budget";
+export {
+	MAX_PAGE_OBSERVATION_BYTES,
+	MAX_PAGE_SEGMENT_CHARS,
+	MAX_PAGE_SEGMENTS,
+	normalizePageObservation,
+	PAGE_OBSERVATION_PROTOCOL_VERSION,
+	PAGE_PRIVACY_POLICY_VERSION,
+	type PageObservationTrigger,
+	type StoredPageObservation,
+	sanitizePageObservationForIngestion,
+} from "./pages/observations";
+export { canonicalPageUrl } from "./privacy/canonical-url";
+export {
+	sanitizeEventForIngestion,
+	sanitizeUrlForIngestion,
+	searchQueryFromUrl,
+} from "./privacy/ingest";
+export { sanitizeDerived } from "./privacy/sanitize";
 export type {
-	PiiFinding,
-	PiiRedactionOptions,
-	PiiRedactor,
-	RedactionResult,
-} from "./privacy/types";
+	SensitiveDataFinding,
+	SensitiveDataRedactionResult,
+	SensitiveDataRedactor,
+} from "./privacy/sensitive-data";
+export { sensitiveDataRedactor } from "./privacy/sensitive-data";
+export {
+	type ActivitySearchResult,
+	type HistorySearchCitation,
+	type HistorySearchOptions,
+	type HistorySearchResult,
+	parseTemporalRecallQuery,
+	projectActivitySearchResults,
+	type SearchAvailability,
+	safeRecallUrl,
+	searchHistory,
+} from "./recall/history-search";
 export {
 	buildLiveContext,
 	getCurrentBrowserContext,
@@ -142,7 +204,6 @@ export {
 	isDomainNovel,
 	isSignatureRecurrent,
 	jaccardIndex,
-	nextNotifiableContext,
 	type RecurrenceReport,
 	readyContextsInRange,
 	reportRecurrence,
@@ -175,11 +236,14 @@ export {
 export {
 	type AiTargetDef,
 	activityMetricsPrompt,
+	CLAUDE_CONNECTORS_URL,
+	CLAUDE_MCP_SERVER_URL,
 	CLI_TARGET_DEFS,
 	type CliTargetDef,
 	chatGptConnectPromptUrl,
 	chatGptContextUrl,
 	chatGptPromptUrl,
+	claudePromptUrl,
 	contextPrompt,
 	memoryPrompt,
 	recurringPatternsPrompt,
@@ -188,3 +252,16 @@ export {
 	WEB_TARGET_DEFS,
 	type WebTargetDef,
 } from "./share/targets";
+export {
+	createTelemetry,
+	type TelemetryAction,
+	type TelemetryContext,
+	type TelemetryErrorSource,
+	type TelemetryEvent,
+	type TelemetryTransport,
+} from "./telemetry";
+export {
+	createTrackingClient,
+	type TrackingMessage,
+	type TrackingTransport,
+} from "./tracking/tracking";

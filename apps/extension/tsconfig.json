@@ -7,6 +7,6 @@
 		"baseUrl": ".",
 		"moduleResolution": "bundler"
 	},
-	"include": [".plasmo/index.d.ts", "./**/*.ts", "./**/*.tsx"],
+	"include": [".plasmo/index.d.ts", "./**/*.ts", "./**/*.tsx", "./**/*.mts"],
 	"exclude": ["node_modules"]
 }

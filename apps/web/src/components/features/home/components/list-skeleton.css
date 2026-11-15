@@ -1,0 +1,30 @@
+.home-list-skeleton [data-slot="skeleton"],
+.home-list-skeleton .home-list-skeleton-bone {
+	background-color: color-mix(
+		in srgb,
+		var(--foreground) 16%,
+		var(--background)
+	);
+	background-image: linear-gradient(
+		100deg,
+		transparent 38%,
+		color-mix(in srgb, var(--primary) 48%, var(--background)) 50%,
+		transparent 62%
+	);
+	background-size: 220% 100%;
+	animation: home-list-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes home-list-shimmer {
+	to {
+		background-position: -220% 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.home-list-skeleton [data-slot="skeleton"],
+	.home-list-skeleton .home-list-skeleton-bone {
+		background-image: none;
+		animation: none;
+	}
+}

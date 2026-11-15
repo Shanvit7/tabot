@@ -1,6 +1,20 @@
-import Dexie, { type Table } from "dexie";
 import { logger } from "../lib/logger";
+import {
+	isLibraryRequest,
+	isLibraryResponse,
+	type LibraryRequest,
+	type LibraryResponse,
+} from "../library";
+import type { PageNote } from "../notes/notes";
+import type { StoredPageObservation } from "../pages/observations";
+import { sanitizeEventForIngestion } from "../privacy/ingest";
+import type {
+	HistorySearchOptions,
+	HistorySearchResult,
+	SearchAvailability,
+} from "../recall/history-search";
 import type { TabEventMetadata, TabEventType } from "./events";
+import { normalizeEvent } from "./ingest";
 
 export interface StoredTabEvent {
 	id: string;
@@ -11,9 +25,15 @@ export interface StoredTabEvent {
 	url?: string;
 	favicon?: string;
 	metadata?: TabEventMetadata;
+	source?: {
+		instanceId: string;
+		sequence: number;
+		documentId?: string;
+		documentUrl?: string;
+		captureIdentity?: string;
+	};
 }
 
-// ponytail: kept for backwards compat — Dexie uses stores() string, not JSON schema
 export const storedTabEventSchema = {
 	version: 0,
 	primaryKey: "id",
@@ -26,96 +46,302 @@ export const storedTabEventSchema = {
 		timestamp: { type: "number", minimum: 0 },
 		url: { type: "string", maxLength: 2048 },
 		favicon: { type: "string", maxLength: 2048 },
-		metadata: {
-			type: "object",
-			properties: {
-				x: { type: "number" },
-				y: { type: "number" },
-				scrollY: { type: "number" },
-				previousWindowId: { type: "number" },
-				enabled: { type: "boolean" },
-				state: { type: "number" },
-			},
-		},
 	},
 	required: ["id", "type", "tabId", "windowId", "timestamp"],
 	indexes: ["timestamp", "type", "tabId"],
 } as const;
 
-export class TabotDatabase extends Dexie {
-	events!: Table<StoredTabEvent, string>;
-	constructor(name = "tabot_events") {
-		super(name);
-		// only indexed props — id is PK (inbound), rest are queryable via where()
-		this.version(1).stores({
-			events: "id, timestamp, type, tabId",
-		});
-	}
+export interface InsertEventsResult {
+	inserted: number;
+	duplicates: number;
+	insertedPages?: number;
+	duplicatePages?: number;
+	ignoredPages?: Record<string, string>;
+}
+export type StoredIngestRecord = StoredTabEvent | StoredPageObservation;
+export type EventRange = {
+	from?: number;
+	to?: number;
+	fromInclusive?: boolean;
+	toInclusive?: boolean;
+	limit?: number;
+	type?: TabEventType;
+	types?: TabEventType[];
+};
+export type PageObservationSummary = Omit<
+	StoredPageObservation,
+	"segments" | "pageKey" | "captureIdentity"
+> & { segmentCount: number };
+export interface PageCaptureSiteSummary {
+	origin: string;
+	count: number;
+	latestTimestamp: number;
 }
 
-const DB_NAME = "tabot_events";
+const STORAGE_MESSAGE = "TABOT_STORAGE_REQUEST";
+const STORAGE_RESPONSE_TIMEOUT_MS = 10_000;
+export type StorageTransport = (message: {
+	kind: string;
+	requestId: number;
+	method: string;
+	args: unknown[];
+}) => Promise<unknown>;
 
-const deleteLegacyRxDb = () => {
-	try {
-		indexedDB.deleteDatabase("tabot_rxdb");
-	} catch {}
-};
-
-let dbPromise: Promise<TabotDatabase> | null = null;
-
-export const createEventsDb = async (): Promise<TabotDatabase> => {
-	if (dbPromise) return dbPromise;
-	deleteLegacyRxDb();
-	const db = new TabotDatabase(DB_NAME);
-	dbPromise = db
-		.open()
-		.then(() => db)
-		.catch((err) => {
-			logger.warn("createEventsDb failed", { error: err });
-			dbPromise = null;
-			throw err;
-		});
-	return dbPromise;
-};
-
-export const bulkInsertEvents = async (
-	db: TabotDatabase,
-	docs: StoredTabEvent[],
-): Promise<void> => {
-	if (docs.length === 0) return;
-	try {
-		await db.events.bulkPut(docs);
-	} catch (err: unknown) {
-		// BulkError: some keys conflicted, successful puts still committed
-		const e = err as { name?: string; failures?: unknown[] };
-		if (e?.name === "BulkError") {
-			logger.warn("bulkPut partial", { failures: e.failures?.length ?? 0 });
-			return;
+/** RPC facade; only the offscreen TalaDB owner opens the authoritative database. */
+export class TabotDatabase {
+	private requestSequence = 0;
+	private readonly transport: StorageTransport;
+	private request = async <T>(
+		method: string,
+		args: unknown[] = [],
+	): Promise<T> => {
+		// A timeout is an unknown outcome; mutation retries must reconcile stable IDs.
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		try {
+			const response = (await Promise.race([
+				this.transport({
+					kind: STORAGE_MESSAGE,
+					requestId: ++this.requestSequence,
+					method,
+					args,
+				}),
+				new Promise<never>((_, reject) => {
+					timeout = setTimeout(
+						() => reject(new Error("storage-response-timeout")),
+						STORAGE_RESPONSE_TIMEOUT_MS,
+					);
+				}),
+			])) as { ok?: boolean; code?: string; value?: T } | undefined;
+			if (!response?.ok) {
+				const code = response?.code ?? "storage-unavailable";
+				const error = new Error(code);
+				error.name = code;
+				throw error;
+			}
+			return response.value as T;
+		} finally {
+			if (timeout) clearTimeout(timeout);
 		}
-		logger.warn("bulkPut failed", { error: err });
-		throw err;
-	}
-};
+	};
 
-export const countEvents = async (db: TabotDatabase): Promise<number> => {
+	constructor(transport: StorageTransport) {
+		this.transport = transport;
+	}
+	commitIngest = (records: StoredIngestRecord[]) =>
+		this.request<InsertEventsResult>("commitIngest", [records]);
+	countEvents = () => this.request<number>("countEvents");
+	countPages = () => this.request<number>("countPages");
+	getFirstEventTimestamp = () =>
+		this.request<number | null>("getFirstEventTimestamp");
+	getLastEventTimestamp = () =>
+		this.request<number | null>("getLastEventTimestamp");
+	readEvents = (range?: EventRange) =>
+		this.request<StoredTabEvent[]>("readEvents", [range]);
+	findEvent = (id: string) =>
+		this.request<StoredTabEvent | undefined>("findEvent", [id]);
+	getPageObservation = (id: string) =>
+		this.request<StoredPageObservation | undefined>("getPageObservation", [id]);
+	readRelatedActivity = (
+		anchors: number[],
+		pageKeys: string[],
+		origins: string[],
+		seedIds: string[],
+		maxGapMs: number,
+		limit: number,
+		offset: number,
+		to: number,
+	) =>
+		this.request<StoredIngestRecord[]>("readRelatedActivity", [
+			anchors,
+			pageKeys,
+			origins,
+			seedIds,
+			maxGapMs,
+			limit,
+			offset,
+			to,
+		]);
+	getPageSummaries = (from: number, to: number, limit?: number) =>
+		this.request<PageObservationSummary[]>("getPageSummaries", [
+			from,
+			to,
+			limit,
+		]);
+	getPageCaptureSiteSummaries = () =>
+		this.request<PageCaptureSiteSummary[]>("getPageCaptureSiteSummaries");
+	browseLibrary = async (request: LibraryRequest): Promise<LibraryResponse> => {
+		if (!isLibraryRequest(request)) throw new Error("invalid-library-request");
+		const response = await this.request<unknown>("browseLibrary", [request]);
+		if (!isLibraryResponse(response))
+			throw new Error("invalid-library-response");
+		return response;
+	};
+	searchHistory = (query: string, options?: HistorySearchOptions) =>
+		this.request<HistorySearchResult[]>("searchHistory", [query, options]);
+	listPageNotes = (
+		pageKey: string,
+		fallback?: Pick<PageNote, "url" | "host" | "title">,
+	) => this.request<PageNote[]>("listPageNotes", [pageKey, fallback]);
+	saveNote = (note: PageNote) => this.request<PageNote>("saveNote", [note]);
+	updateNoteText = (id: string, text: string) =>
+		this.request<{ id: string; text: string; updatedAt: number } | null>(
+			"updateNoteText",
+			[id, text],
+		);
+	linkNoteEvent = (id: string, eventId: string) =>
+		this.request<boolean>("linkNoteEvent", [id, eventId]);
+	deleteNote = (id: string) =>
+		this.request<{ deleted: boolean }>("deleteNote", [id]);
+	searchNotes = (
+		query: string,
+		options?: {
+			from?: number;
+			to?: number;
+			domain?: string;
+			limit?: number;
+			offset?: number;
+		},
+	) => this.request<PageNote[]>("searchNotes", [query, options]);
+	listNotesForSite = (site: string) =>
+		this.request<PageNote[]>("listNotesForSite", [site]);
+	listNotesBetween = (from: number, to: number) =>
+		this.request<PageNote[]>("listNotesBetween", [from, to]);
+	getSearchStatus = () =>
+		this.request<SearchAvailability>("getSearchStatus", []);
+	warmSearchModel = () => this.request<void>("warmSearchModel", []);
+	getLegacyMigrationStatus = () =>
+		this.request<{
+			pendingRetirement: boolean;
+			events: number;
+			pages: number;
+		}>("getLegacyMigrationStatus");
+	confirmLegacyRetirement = () =>
+		this.request<{ retired: boolean }>("confirmLegacyRetirement");
+	purgeData = () => this.request<{ deleted: number }>("purgeData");
+	deletePageObservations = (
+		filter?: { origin?: string; from?: number; to?: number },
+		limit?: number,
+	) =>
+		this.request<{ deleted: number; more: boolean }>("deletePageObservations", [
+			filter,
+			limit,
+		]);
+	prunePageObservations = (maxBytes?: number, maxDeletes?: number) =>
+		this.request<{ deleted: number; more: boolean }>("prunePageObservations", [
+			maxBytes,
+			maxDeletes,
+		]);
+}
+
+export const createEventsDb = async (
+	transport: StorageTransport,
+): Promise<TabotDatabase> => new TabotDatabase(transport);
+
+const isPageObservation = (
+	row: StoredIngestRecord,
+): row is StoredPageObservation =>
+	"kind" in row && row.kind === "page-observation";
+export const bulkInsertIngestRecords = async (
+	database: TabotDatabase,
+	docs: StoredIngestRecord[],
+): Promise<InsertEventsResult> => {
+	const normalized = await Promise.all(
+		docs.map(async (row) => {
+			if (isPageObservation(row)) return row;
+			return normalizeEvent(await sanitizeEventForIngestion(row));
+		}),
+	);
+	return database.commitIngest(normalized);
+};
+export const bulkInsertEvents = (
+	database: TabotDatabase,
+	docs: StoredTabEvent[],
+) => bulkInsertIngestRecords(database, docs);
+export const countEvents = async (database: TabotDatabase) => {
 	try {
-		return await db.events.count();
-	} catch (err) {
-		logger.warn("countEvents failed", { error: err });
-		throw err;
+		return await database.countEvents();
+	} catch (error) {
+		logger.warn("countEvents failed", { error });
+		throw error;
 	}
 };
-
-/** Indexed local range read; end is exclusive, matching activity metrics. */
+export const sanitizeEventsForRead = (rows: StoredTabEvent[]) =>
+	Promise.all(rows.map(sanitizeEventForIngestion));
 export const getEventsBetween = async (
-	db: TabotDatabase,
+	database: TabotDatabase,
 	from: number,
 	to: number,
-): Promise<StoredTabEvent[]> =>
-	db.events.where("timestamp").between(from, to, true, false).toArray();
-
-export const getAllEvents = async (
-	db: TabotDatabase,
-): Promise<StoredTabEvent[]> => {
-	return db.events.toArray();
+) =>
+	sanitizeEventsForRead(
+		await database.readEvents({
+			from,
+			to,
+			fromInclusive: true,
+			toInclusive: false,
+		}),
+	);
+export const getAllEvents = async (database: TabotDatabase) =>
+	sanitizeEventsForRead(await database.readEvents());
+export const getPageObservations = (
+	database: TabotDatabase,
+	from: number,
+	to: number,
+	limit = 4,
+) => {
+	if (
+		!Number.isFinite(from) ||
+		!Number.isFinite(to) ||
+		from > to ||
+		!Number.isSafeInteger(limit) ||
+		limit < 1 ||
+		limit > 4
+	)
+		throw new Error("invalid-page-range");
+	return database.getPageSummaries(from, to, limit);
+};
+export const getPageObservationById = (database: TabotDatabase, id: string) =>
+	database.getPageObservation(id);
+export const getPageCaptureSiteSummaries = (database: TabotDatabase) =>
+	database.getPageCaptureSiteSummaries();
+export const deletePageObservations = (
+	database: TabotDatabase,
+	filter: { origin?: string; from?: number; to?: number } = {},
+	limit = 500,
+) => {
+	let invalidOrigin = false;
+	if (filter.origin !== undefined) {
+		try {
+			invalidOrigin = new URL(filter.origin).origin !== filter.origin;
+		} catch {
+			invalidOrigin = true;
+		}
+	}
+	if (
+		!Number.isSafeInteger(limit) ||
+		limit < 1 ||
+		limit > 500 ||
+		invalidOrigin ||
+		(filter.from !== undefined && !Number.isFinite(filter.from)) ||
+		(filter.to !== undefined && !Number.isFinite(filter.to)) ||
+		(filter.from !== undefined &&
+			filter.to !== undefined &&
+			filter.from > filter.to)
+	)
+		throw new Error("invalid-page-delete-filter");
+	return database.deletePageObservations(filter, limit);
+};
+export const prunePageObservations = (
+	database: TabotDatabase,
+	maxBytes = 25 * 1024 * 1024,
+	maxDeletes = 500,
+) => {
+	if (
+		!Number.isSafeInteger(maxBytes) ||
+		maxBytes < 1 ||
+		!Number.isSafeInteger(maxDeletes) ||
+		maxDeletes < 1 ||
+		maxDeletes > 500
+	)
+		throw new Error("invalid-page-storage-budget");
+	return database.prunePageObservations(maxBytes, maxDeletes);
 };

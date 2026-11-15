@@ -1,0 +1,52 @@
+.global-error-art-sparks,
+.global-error-art-cracks {
+	fill: none;
+	stroke: var(--primary);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2.4px;
+	filter: drop-shadow(0 0 1px var(--anatomy-hi))
+		drop-shadow(0 0 3px var(--primary));
+}
+
+.global-error-art-sparks path {
+	stroke-dasharray: 1;
+	stroke-dashoffset: 1;
+	animation: global-error-spark 1.5s ease-out infinite;
+}
+
+.global-error-art-sparks path:nth-child(2n) {
+	animation-delay: 0.65s;
+}
+
+.global-error-art-cracks {
+	stroke-width: 1.8px;
+}
+
+@keyframes global-error-spark {
+	0%,
+	12% {
+		opacity: 0;
+		stroke-dashoffset: 1;
+	}
+	20% {
+		opacity: 1;
+	}
+	40% {
+		opacity: 1;
+		stroke-dashoffset: 0;
+	}
+	60%,
+	100% {
+		opacity: 0;
+		stroke-dashoffset: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.global-error-art-sparks path {
+		animation: none;
+		opacity: 0.8;
+		stroke-dashoffset: 0;
+	}
+}

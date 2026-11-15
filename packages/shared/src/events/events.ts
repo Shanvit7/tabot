@@ -17,6 +17,7 @@ export const EVENT_TYPES = {
 	SW_TRACKING_TOGGLE: 12,
 	SW_DOWNLOAD: 13,
 	SW_LIFECYCLE: 14,
+	NOTE_SAVED: 15,
 } as const;
 
 export type TabEventType = keyof typeof EVENT_TYPES;
@@ -47,6 +48,7 @@ export interface TabEventMetadata {
 	source?: "popup" | "dashboard";
 	// SW_LIFECYCLE → decoded from windowId kind code
 	lifecycle?: LifecycleKind;
+	noteId?: string;
 }
 
 export interface TabEvent {

@@ -1,40 +1,232 @@
+import { logger, type PageEventType } from "@tabot/shared";
 import { Throttler } from "@tanstack/pacer";
 import type { PlasmoCSConfig } from "plasmo";
+import { createPageOutbox } from "../capture/outbox";
+import {
+	isPageCaptureExcludedUrl,
+	pageCaptureSite,
+} from "../capture/site-policy";
+import { extractVisibleExcerpts } from "../capture/visible-excerpts";
 
 export const config: PlasmoCSConfig = {
 	matches: ["<all_urls>"],
 	run_at: "document_idle",
 };
 
-// never capture key values, text, input contents — only that activity occurred
-const send = (type: string, metadata?: Record<string, number>) => {
-	if (type !== "PAGE_HIDDEN" && (document.hidden || !document.hasFocus()))
-		return;
-	void chrome.runtime
-		.sendMessage({
-			kind: "TABOT_PAGE_EVENT",
-			type,
-			timestamp: Date.now(),
-			metadata,
-		})
-		.catch(() => {}); // Extension may reload while this page stays open.
+// Never capture key values/text. Failures expose codes only, never private payloads.
+const outbox = createPageOutbox({
+	documentUrl: () => location.href,
+	send: (message) => chrome.runtime.sendMessage(message),
+	onFailure: (code) => logger.warn("page event not confirmed", { code }),
+});
+let flushingHidden = false;
+let excerptTimer: ReturnType<typeof setTimeout> | undefined;
+let mutationObserver: MutationObserver | undefined;
+let lastExcerptAt = 0;
+let captureAllowed = false;
+let trackingAllowed = false;
+let policyGeneration = 0;
+const TRACKING_KEY = "tabot_tracking_enabled";
+const captureEligible = (url = location.href) =>
+	captureAllowed &&
+	!document.hidden &&
+	document.hasFocus() &&
+	!chrome.extension.inIncognitoContext &&
+	!isPageCaptureExcludedUrl(url);
+let requestViewportExcerpt: (delay: number) => void;
+const rectInViewport = (rect: DOMRect) =>
+	rect.width > 0 &&
+	rect.height > 0 &&
+	rect.left >= 0 &&
+	rect.top >= 0 &&
+	rect.right <= innerWidth &&
+	rect.bottom <= innerHeight;
+const startMutationObserver = () => {
+	if (mutationObserver || !document.body) return;
+	mutationObserver = new MutationObserver((records) => {
+		let inspected = 0;
+		for (const record of records.slice(0, 100)) {
+			const roots =
+				record.type === "childList"
+					? Array.from(record.addedNodes).slice(0, 20)
+					: [record.target];
+			for (const root of roots) {
+				if (root.nodeType === Node.TEXT_NODE) {
+					const range = document.createRange();
+					range.selectNode(root);
+					if (Array.from(range.getClientRects()).some(rectInViewport)) {
+						requestViewportExcerpt(1000);
+						return;
+					}
+					continue;
+				}
+				if (!(root instanceof Element)) continue;
+				const walker = document.createTreeWalker(
+					root,
+					NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+					{
+						acceptNode(node) {
+							if (node.nodeType === Node.ELEMENT_NODE) {
+								return (node as Element).matches(
+									"input,textarea,select,[hidden],[aria-hidden='true'],[contenteditable]:not([contenteditable='false'])",
+								)
+									? NodeFilter.FILTER_REJECT
+									: NodeFilter.FILTER_SKIP;
+							}
+							return NodeFilter.FILTER_ACCEPT;
+						},
+					},
+				);
+				while (walker.nextNode() && inspected < 200) {
+					inspected++;
+					if (walker.currentNode.nodeType !== Node.TEXT_NODE) continue;
+					const range = document.createRange();
+					range.selectNode(walker.currentNode);
+					if (Array.from(range.getClientRects()).some(rectInViewport)) {
+						requestViewportExcerpt(1000);
+						return;
+					}
+				}
+				if (inspected >= 200) return;
+			}
+		}
+	});
+	mutationObserver.observe(document.body, {
+		childList: true,
+		characterData: true,
+		attributes: true,
+		subtree: true,
+	});
 };
-
+const stopMutationObserver = () => {
+	mutationObserver?.disconnect();
+	mutationObserver = undefined;
+};
+const captureExcerpt = (
+	trigger: "auto-dwell" | "viewport-dwell" | "interaction",
+	root: Element | undefined,
+	url = location.href,
+) => {
+	if (
+		Date.now() - lastExcerptAt < 5000 ||
+		!captureEligible(url) ||
+		location.href !== url
+	)
+		return;
+	const result = extractVisibleExcerpts(document, root);
+	const title = document.title.trim().slice(0, 512);
+	if ((!result.segments.length && !title) || location.href !== url) return;
+	lastExcerptAt = Date.now();
+	outbox.addObservation({
+		timestamp: lastExcerptAt,
+		documentUrl: url,
+		title,
+		trigger,
+		segments: result.segments,
+		truncated: result.truncated,
+		partial: result.partial,
+	});
+};
+requestViewportExcerpt = (delay: number) => {
+	clearTimeout(excerptTimer);
+	if (!captureEligible()) return;
+	const url = location.href;
+	excerptTimer = setTimeout(() => {
+		excerptTimer = undefined;
+		void captureExcerpt("viewport-dwell", undefined, url);
+	}, delay);
+};
+const syncCapturePolicy = async () => {
+	const generation = ++policyGeneration;
+	const allowed =
+		pageCaptureSite(location.href) !== null &&
+		!chrome.extension.inIncognitoContext &&
+		!isPageCaptureExcludedUrl(location.href);
+	let enabled = false;
+	try {
+		const stored = await chrome.storage.local.get(TRACKING_KEY);
+		enabled = stored[TRACKING_KEY] !== false;
+	} catch {}
+	if (generation !== policyGeneration) return;
+	trackingAllowed = enabled;
+	captureAllowed = allowed && enabled;
+	if (!enabled) {
+		scrollThrottler.cancel();
+		keyThrottler.cancel();
+	}
+	if (!captureAllowed || document.hidden || !document.hasFocus()) {
+		clearTimeout(excerptTimer);
+		excerptTimer = undefined;
+		stopMutationObserver();
+		if (!captureAllowed) outbox.clearObservations();
+		return;
+	}
+	startMutationObserver();
+	clearTimeout(excerptTimer);
+	const url = location.href;
+	excerptTimer = setTimeout(() => {
+		excerptTimer = undefined;
+		void captureExcerpt("auto-dwell", undefined, url);
+	}, 1000);
+};
+const send = (
+	type: PageEventType,
+	metadata?: Record<string, number>,
+	timestamp = Date.now(),
+) => {
+	if (!trackingAllowed) return;
+	if (
+		type !== "PAGE_HIDDEN" &&
+		!flushingHidden &&
+		(document.hidden || !document.hasFocus())
+	)
+		return;
+	outbox.add(type, metadata, timestamp);
+};
 const scrollThrottler = new Throttler(
-	(scrollY: number) => send("SCROLL", { scrollY }),
-	{ wait: 150 },
+	(scrollY: number, timestamp: number) =>
+		send("SCROLL", { scrollY }, timestamp),
+	{ wait: 150, leading: true, trailing: true },
 );
-const keyThrottler = new Throttler(() => send("KEY_ACTIVITY"), { wait: 150 });
+const keyThrottler = new Throttler(
+	(timestamp: number) => send("KEY_ACTIVITY", undefined, timestamp),
+	{ wait: 150, leading: true, trailing: true },
+);
 
-// standard read of the document's scroll offset (window.scrollY is not a real property)
+// Include nested scroll containers without recording element contents.
 const scrollY = () =>
 	document.documentElement?.scrollTop ?? document.body?.scrollTop ?? 0;
 
 document.addEventListener("click", (e: MouseEvent) => {
-	if (e.isTrusted) send("CLICK", { x: e.clientX, y: e.clientY });
+	if (!e.isTrusted) return;
+	send("CLICK", { x: e.clientX, y: e.clientY });
+	const target = e.target instanceof Element ? e.target : null;
+	if (
+		!target ||
+		target.closest(
+			"input,textarea,select,[contenteditable]:not([contenteditable='false'])",
+		)
+	)
+		return;
+	void captureExcerpt(
+		"interaction",
+		target.closest("button,a,[role='button']") ?? target,
+	);
 });
 document.addEventListener("keydown", (e) => {
-	if (e.isTrusted) keyThrottler.maybeExecute();
+	if (!e.isTrusted) return;
+	keyThrottler.maybeExecute(Date.now());
+	if (e.key !== "Enter" && e.key !== " ") return;
+	const target = e.target instanceof Element ? e.target : null;
+	if (
+		!target ||
+		target.closest(
+			"input,textarea,select,[contenteditable]:not([contenteditable='false'])",
+		)
+	)
+		return;
+	const control = target.closest("button,a,[role='button']");
+	if (control) void captureExcerpt("interaction", control);
 });
 
 // scroll events do NOT bubble: they fire on the scrolling node only.
@@ -42,21 +234,73 @@ document.addEventListener("keydown", (e) => {
 // overflow containers scroll independently → attach to each scrollable node.
 window.addEventListener(
 	"scroll",
-	() => scrollThrottler.maybeExecute(scrollY()),
+	() => {
+		scrollThrottler.maybeExecute(scrollY(), Date.now());
+		requestViewportExcerpt(1250);
+	},
 	{ passive: true },
 );
-for (const el of document.querySelectorAll("*")) {
-	if (el.scrollHeight <= el.clientHeight) continue;
-	const overflow = getComputedStyle(el).overflowY;
-	if (overflow !== "auto" && overflow !== "scroll") continue;
-	el.addEventListener(
-		"scroll",
-		() => scrollThrottler.maybeExecute(el.scrollTop),
-		{ passive: true },
-	);
-}
-
-document.addEventListener("visibilitychange", () => {
-	send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");
+document.addEventListener(
+	"scroll",
+	(event) => {
+		const target = event.target;
+		if (
+			target instanceof Element &&
+			target !== document.documentElement &&
+			target !== document.body
+		)
+			scrollThrottler.maybeExecute(target.scrollTop, Date.now());
+		requestViewportExcerpt(1250);
+	},
+	{ capture: true, passive: true },
+);
+window.addEventListener("resize", () => requestViewportExcerpt(1000), {
+	passive: true,
 });
-send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");
+document.addEventListener("visibilitychange", () => {
+	if (document.hidden) {
+		clearTimeout(excerptTimer);
+		excerptTimer = undefined;
+		stopMutationObserver();
+		flushingHidden = true;
+		scrollThrottler.flush();
+		keyThrottler.flush();
+		flushingHidden = false;
+	}
+	send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE");
+	if (!document.hidden) void syncCapturePolicy();
+});
+window.addEventListener("blur", () => {
+	clearTimeout(excerptTimer);
+	excerptTimer = undefined;
+	stopMutationObserver();
+});
+window.addEventListener("focus", () => void syncCapturePolicy());
+chrome.storage.onChanged.addListener((changes, areaName) => {
+	if (areaName !== "local" || !changes[TRACKING_KEY]) return;
+	trackingAllowed = false;
+	scrollThrottler.cancel();
+	keyThrottler.cancel();
+	captureAllowed = false;
+	clearTimeout(excerptTimer);
+	excerptTimer = undefined;
+	stopMutationObserver();
+	outbox.clearObservations();
+	void syncCapturePolicy();
+});
+chrome.runtime.onMessage.addListener((message) => {
+	if (
+		message?.kind === "TABOT_ROUTE_CHANGED" &&
+		message.url === location.href
+	) {
+		clearTimeout(excerptTimer);
+		excerptTimer = undefined;
+		lastExcerptAt = 0;
+		captureAllowed = false;
+		stopMutationObserver();
+		void syncCapturePolicy();
+	}
+});
+void syncCapturePolicy().then(() =>
+	send(document.hidden ? "PAGE_HIDDEN" : "PAGE_VISIBLE"),
+);

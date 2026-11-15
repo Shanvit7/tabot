@@ -24,9 +24,9 @@ const [
 	{ parseClientMessage },
 	{ MAX_PENDING_REQUESTS },
 ] = await Promise.all([
-	import("../src/installation.ts"),
-	import("../src/lib/protocol.ts"),
-	import("../src/lib/constants.ts"),
+	import("../src/auth/installation.ts"),
+	import("../src/mcp/protocol.ts"),
+	import("../src/config.ts"),
 ]);
 globalThis.WebSocketRequestResponsePair = class {};
 const socket = () => ({
@@ -136,10 +136,10 @@ const [
 	{ sha256Base64Url },
 	{ signInstallationToken },
 ] = await Promise.all([
-	import("../src/auth-store.ts"),
+	import("../src/auth/store.ts"),
 	import("../src/index.ts"),
-	import("../src/lib/oauth.ts"),
-	import("../src/lib/auth.ts"),
+	import("../src/auth/oauth.ts"),
+	import("../src/auth/tokens.ts"),
 ]);
 const authState = (legacy = new Map()) => {
 	const db = new DatabaseSync(":memory:");
@@ -288,13 +288,49 @@ try {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(body),
 		});
+	const resourceMetadataResponse = await request(
+		"/.well-known/oauth-protected-resource/mcp",
+	);
+	assert.equal(resourceMetadataResponse.status, 200);
+	assert.deepEqual(await resourceMetadataResponse.json(), {
+		resource: "https://test.invalid/mcp",
+		authorization_servers: ["https://test.invalid"],
+		scopes_supported: ["tabot.context"],
+		bearer_methods_supported: ["header"],
+		resource_name: "Tabot MCP",
+	});
+	const authorizationMetadata = await request(
+		"/.well-known/oauth-authorization-server",
+	);
+	assert.equal(authorizationMetadata.status, 200);
+	assert.deepEqual(await authorizationMetadata.json(), {
+		issuer: "https://test.invalid",
+		authorization_endpoint: "https://test.invalid/authorize",
+		token_endpoint: "https://test.invalid/token",
+		registration_endpoint: "https://test.invalid/register",
+		revocation_endpoint: "https://test.invalid/revoke",
+		response_types_supported: ["code"],
+		grant_types_supported: ["authorization_code", "refresh_token"],
+		code_challenge_methods_supported: ["S256"],
+		token_endpoint_auth_methods_supported: ["none", "client_secret_post"],
+		revocation_endpoint_auth_methods_supported: ["none", "client_secret_post"],
+		scopes_supported: ["tabot.context"],
+	});
 	const registered = await register({
 		redirect_uris: ["https://callback.invalid"],
-		client_name: "Test",
+		client_name: "ChatGPT",
+		token_endpoint_auth_method: "none",
 	});
 	assert.equal(registered.status, 201);
 	assert.equal(registered.headers.get("Cache-Control"), "no-store");
-	const { client_id: clientId } = await registered.json();
+	const registration = await registered.json();
+	assert.equal(registration.token_endpoint_auth_method, "none");
+	assert.deepEqual(registration.grant_types, [
+		"authorization_code",
+		"refresh_token",
+	]);
+	assert.deepEqual(registration.response_types, ["code"]);
+	const { client_id: clientId } = registration;
 	const clientKey = `client:${clientId}`;
 	const nearExpiry = Date.now() + 86_400_000;
 	auth.putRecord(clientKey, {
@@ -371,9 +407,9 @@ try {
 		).status,
 		200,
 	);
-	assert.equal(
-		await auth.hasAssistantConnection("test-installation"),
-		false,
+	assert.deepEqual(
+		await auth.getAssistantConnections("test-installation"),
+		{ chatgpt: false, claude: false, order: [] },
 		"approval alone is not an OAuth connection",
 	);
 	const approved = await formPost("/authorize", { transaction });
@@ -418,9 +454,35 @@ try {
 		400,
 		"code cannot replay",
 	);
-	assert.equal(await auth.hasAssistantConnection("test-installation"), true);
+	assert.deepEqual(await auth.getAssistantConnections("test-installation"), {
+		chatgpt: true,
+		claude: false,
+		order: ["chatgpt"],
+	});
+	const claudeClientId = "claude-test-client";
+	await auth.saveClient({
+		clientId: claudeClientId,
+		clientName: "Claude",
+		redirectUris: ["https://claude.ai/callback"],
+		tokenEndpointAuthMethod: "none",
+		createdAt: Date.now(),
+	});
+	await auth.issueTokens({
+		clientId: claudeClientId,
+		installationId: "test-installation",
+		resource: env.MCP_PUBLIC_URL,
+		scopes: ["tabot.context"],
+	});
+	const connectionResponse = await request("/connection", {
+		headers: { Authorization: `Bearer ${installationToken}` },
+	});
+	assert.deepEqual(await connectionResponse.json(), {
+		chatgpt: true,
+		claude: true,
+		order: ["chatgpt", "claude"],
+	});
 	const listCalls = state.listCalls;
-	await auth.hasAssistantConnection("not-connected");
+	await auth.getAssistantConnections("not-connected");
 	assert.equal(
 		state.listCalls,
 		listCalls,
@@ -436,7 +498,10 @@ try {
 			},
 			body: JSON.stringify({ jsonrpc: "2.0", id: 1, ...params }),
 		});
-	assert.equal((await mcp(tokens.access_token)).status, 200);
+	const discovery = await mcp(tokens.access_token);
+	assert.equal(discovery.status, 200);
+	const discoveryText = await discovery.text();
+	assert.match(discoveryText, /search_all/);
 	for (const [resource, scopes, expected] of [
 		["https://other.invalid/mcp", ["tabot.context"], 401],
 		["https://test.invalid/mcp", [], 403],
@@ -452,10 +517,12 @@ try {
 	assert.equal(dispatches, 0, "wrong audience/scope never dispatch");
 	const toolResponse = await mcp(tokens.access_token, {
 		method: "tools/call",
-		params: { name: "get_current_context", arguments: {} },
+		params: { name: "search_all", arguments: { query: "test" } },
 	});
 	assert.match(await toolResponse.text(), /private-error-sentinel/);
-	const toolLog = logs.find((entry) => entry.event === "tool_call");
+	const toolLog = logs.find(
+		(entry) => entry.requestId === toolResponse.headers.get("X-Request-Id"),
+	);
 	assert.equal(toolLog.code, "extension_timeout");
 	assert.equal(toolLog.outcome, "error");
 	assert.equal(toolLog.requestId, toolResponse.headers.get("X-Request-Id"));
@@ -473,6 +540,8 @@ try {
 		tokens.refresh_token,
 		"private-error-sentinel",
 		"private-state-sentinel",
+		"123e4567-e89b-42d3-a456-426614174000",
+		"Open the selected site",
 	])
 		assert.ok(
 			!serializedLogs.includes(sensitive),
@@ -549,10 +618,12 @@ try {
 	assert.equal(await challenge.text(), "test-domain-verification-token");
 	assert.match(challenge.headers.get("Content-Type"), /^text\/plain/);
 	assert.equal(challenge.headers.get("Cache-Control"), "no-store");
+	const unauthenticatedMcp = await request("/mcp");
+	assert.equal(unauthenticatedMcp.status, 401);
 	assert.equal(
-		(await request("/mcp")).status,
-		401,
-		"verification never bypasses MCP auth",
+		unauthenticatedMcp.headers.get("WWW-Authenticate"),
+		'Bearer resource_metadata="https://test.invalid/.well-known/oauth-protected-resource/mcp"',
+		"Claude discovery starts with a 401 resource_metadata pointer",
 	);
 	const noBinding = { ...env, TABOT_API_RATE_LIMITER: undefined };
 	assert.equal(
@@ -615,7 +686,11 @@ try {
 		null,
 		"refresh revocation invalidates entire rotated grant",
 	);
-	assert.equal(await auth.hasAssistantConnection("test-installation"), false);
+	assert.deepEqual(await auth.getAssistantConnections("test-installation"), {
+		chatgpt: false,
+		claude: true,
+		order: ["claude"],
+	});
 	const race = await auth.issueTokens({
 		clientId,
 		installationId: "race",
@@ -742,9 +817,12 @@ const legacyAuth = new TabotAuth(legacyState, {
 	MCP_PUBLIC_URL: "https://test.invalid/mcp",
 });
 await legacyState.ready;
-await assert.rejects(legacyAuth.hasAssistantConnection("legacy-installation"), {
-	name: "AuthMigrationError",
-});
+await assert.rejects(
+	legacyAuth.getAssistantConnections("legacy-installation"),
+	{
+		name: "AuthMigrationError",
+	},
+);
 await legacyAuth.revokeToken("legacy-refresh", "legacy-client");
 await legacyAuth.alarm();
 assert.equal(
@@ -752,9 +830,9 @@ assert.equal(
 	null,
 	"later migration cannot resurrect revoked legacy grant",
 );
-assert.equal(
-	await legacyAuth.hasAssistantConnection("legacy-installation"),
-	false,
+assert.deepEqual(
+	await legacyAuth.getAssistantConnections("legacy-installation"),
+	{ chatgpt: false, claude: false, order: [] },
 );
 assert.equal(
 	(await legacyAuth.getClient("legacy-client")).clientName,

@@ -1,115 +1,210 @@
 /// <reference types="chrome" />
 
-import notificationIcon from "data-base64:~assets/icon-128.png";
 import {
-	bulkInsertEvents,
-	chatGptContextUrl,
-	chatGptPromptUrl,
+	ACTIVITY_GAP_MS,
+	activeDuration,
+	activeSpans,
+	bulkInsertIngestRecords,
+	canonicalPageUrl,
 	countEvents,
-	createBuffer,
-	createEmptyStats,
-	createEventsDb,
+	deletePageObservations,
+	deriveSiteDomain,
+	foregroundEvents,
 	getAllEvents,
-	getContexts,
-	getMemories,
-	getMeta,
-	isAiReadyContext,
-	LIFECYCLE_KINDS,
+	getPageCaptureSiteSummaries,
+	getPageObservationById,
+	getPageObservations,
 	logger,
-	memoryPrompt,
-	nextNotifiableContext,
-	POPUP_SOURCE,
-	pushEvent,
-	removeMeta,
-	resolveChatGptConnectUrl,
+	type PageNote,
+	prunePageObservations,
+	readFailure,
 	type StatsSnapshot,
+	type StoredIngestRecord,
 	type StoredTabEvent,
+	safeRecallUrl,
+	sanitizeEventForIngestion,
+	sanitizeUrlForIngestion,
 	type TabEventMetadata,
 	type TabEventType,
-	updateMeta,
+	validateNoteText,
 } from "@tabot/shared";
-import { isForegroundTab, startForegroundTracking } from "./foreground";
+import { telemetry } from "./analytics/telemetry";
 import {
-	isNotifiableEpisode,
-	nextNotifiableMemory,
-} from "./notification-model";
+	isForegroundTab,
+	startForegroundTracking,
+} from "./background/foreground";
+import { pageCaptureSite } from "./capture/site-policy";
+import { readDashboardHistory } from "./dashboard/history";
+import { isDashboardSender } from "./dashboard/sender";
+import { createCaptureIdentity } from "./ingestion/capture-identity";
+import { createEventPipeline } from "./ingestion/event-pipeline";
+import {
+	ingestPageMessage,
+	ingestPageObservationMessage,
+} from "./ingestion/page-ingress";
 import {
 	approveAuthorizationTransaction,
-	getAssistantConnection,
+	getAssistantConnections,
 	getRelayStatus,
+	runRelaySanityCheck,
 	startRelay,
-} from "./relay";
+} from "./relay/relay";
+import { getStorageDb } from "./storage/client";
 
-// --- Shared buffer (transient hot path) ---
-const CAPACITY = 10_000;
-const { control, events, capacity } = createBuffer(CAPACITY);
+// One service worker, one bounded serial writer. Queued is not persisted.
+const RECOVERY_ALARM = "tabot-ingest-recovery";
+const PAGE_BUDGET_ALARM = "tabot-page-budget";
+void chrome.alarms.clear("tabot-page-retention").catch(() => {});
+void chrome.storage.local
+	.remove("tabot_page_capture_origins_v1")
+	.catch(() => {});
+const getDb = getStorageDb;
+const getStorageCounts = async (includeFirstEventTimestamp = false) => {
+	const db = await getDb();
+	const [eventCount, pageCount] = await Promise.all([
+		countEvents(db),
+		db.countPages(),
+	]);
+	if (!includeFirstEventTimestamp) return { eventCount, pageCount };
+	const [firstEventTimestamp, lastEventTimestamp] = await Promise.all([
+		db.getFirstEventTimestamp(),
+		db.getLastEventTimestamp(),
+	]);
+	return { eventCount, pageCount, firstEventTimestamp, lastEventTimestamp };
+};
+const getStorageEstimate = async () => {
+	const { usage, quota } = await navigator.storage.estimate();
+	if (
+		typeof usage !== "number" ||
+		!Number.isFinite(usage) ||
+		usage < 0 ||
+		typeof quota !== "number" ||
+		!Number.isFinite(quota) ||
+		quota <= 0
+	)
+		throw new Error("storage-estimate-unavailable");
+	return { usageBytes: usage, quotaBytes: quota };
+};
+const pipeline = createEventPipeline<StoredIngestRecord>({
+	commit: async (rows) => {
+		const result = await bulkInsertIngestRecords(await getDb(), rows);
+		return result;
+	},
+	onBlocked: (recoverable) => {
+		if (recoverable)
+			void chrome.alarms
+				.create(RECOVERY_ALARM, { delayInMinutes: 0.5 })
+				.catch(() => {});
+	},
+	onHealthy: () => {
+		void chrome.alarms.clear(RECOVERY_ALARM).catch(() => {});
+	},
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+	if (alarm.name === RECOVERY_ALARM) pipeline.retry();
+});
+// A retained batch cannot survive termination. Stale alarms never invent work.
+void chrome.alarms.clear(RECOVERY_ALARM).catch(() => {});
+const enforcePageBudget = async () => {
+	try {
+		const { more } = await prunePageObservations(await getDb());
+		await chrome.alarms.create(
+			PAGE_BUDGET_ALARM,
+			more ? { delayInMinutes: 1 } : { periodInMinutes: 360 },
+		);
+	} catch {
+		await chrome.alarms.create(PAGE_BUDGET_ALARM, { delayInMinutes: 60 });
+	}
+};
+chrome.alarms.onAlarm.addListener((alarm) => {
+	if (alarm.name === PAGE_BUDGET_ALARM) void enforcePageBudget();
+});
+void enforcePageBudget();
+globalThis.addEventListener?.("error", (event) => {
+	void telemetry.captureError(event.error, "unhandled_error");
+});
+globalThis.addEventListener?.("unhandledrejection", (event) => {
+	void telemetry.captureError(event.reason, "unhandled_rejection");
+});
 
-// ponytail: no Blob Worker — service workers have no URL.createObjectURL, inline drain keeps same SAB semantics
-const EVENT_SLOT_SIZE = 8;
-const READ_INDEX = 1;
-const PUBLISHED_INDEX = 3;
-const MAX_BATCH_SIZE = 512;
-const TYPE_NAMES: TabEventType[] = [
-	"TAB_CREATED",
-	"TAB_ACTIVATED",
-	"TAB_UPDATED",
-	"TAB_REMOVED",
-	"NAVIGATION",
-	"PAGE_VISIBLE",
-	"PAGE_HIDDEN",
-	"SCROLL",
-	"CLICK",
-	"KEY_ACTIVITY",
-	// --- SW telemetry — must stay index-aligned with EVENT_TYPES 10–14 ---
-	// FINAL: only SW_WINDOW_FOCUS is produced. Entries 11–14 remain index-aligned
-	// so HISTORICAL persisted rows still decode deterministically; they are never
-	// emitted by this producer anymore.
-	"SW_WINDOW_FOCUS",
-	"SW_POPUP_OPEN",
-	"SW_TRACKING_TOGGLE",
-	"SW_DOWNLOAD",
-	"SW_LIFECYCLE",
-];
+const nativeInstance = crypto.randomUUID();
+let nativeSequence = 0;
 
 const TRACKING_KEY = "tabot_tracking_enabled";
-const NOTIFICATION_KEY = "tabot_context_notification";
-const NOTIFICATION_ID = "tabot-context-ready";
-const NOTIFICATION_ALARM = "tabot-context-check";
-const PREVIEW_ALARM = "tabot-notification-preview";
-const PREVIEW_INDEX_KEY = "tabot_notification_preview_index";
-const notificationPreviewEnabled =
-	process.env.NODE_ENV === "development" &&
-	process.env.PLASMO_PUBLIC_NOTIFICATION_PREVIEW === "1";
-const POPUP_LAST_VIEWED_KEY = "tabot_popup_last_viewed_v1";
-const STARTUP_POPUP_DAY_KEY = "tabot_startup_popup_day";
-const HOME_URL =
-	process.env.PLASMO_PUBLIC_HOME_URL ?? "https://shanvit7.github.io/tabot/home";
-interface NotificationState {
-	lastEnd: number;
-	lastNotifiedAt: number;
-	lastMemorySeen?: number;
-	contextId?: string;
-	memoryId?: string;
-	kind?: "context" | "episode" | "memory";
-	chatGptConnected?: boolean;
-}
-
-const latestStats: StatsSnapshot = createEmptyStats(capacity);
-let droppedEvents = 0;
-let drainScheduled = false;
-let trackingEnabled = true;
+const TRACKING_RESUMED_KEY = "tabot_tracking_resumed_at";
+let trackingEnabled = false;
+let trackingGeneration = 0;
+let trackingResumedAt = 0;
 const trackingReady = chrome.storage.local
-	.get(TRACKING_KEY)
+	.get([TRACKING_KEY, TRACKING_RESUMED_KEY])
 	.then((stored) => {
 		trackingEnabled = stored[TRACKING_KEY] !== false;
+		trackingResumedAt =
+			typeof stored[TRACKING_RESUMED_KEY] === "number"
+				? stored[TRACKING_RESUMED_KEY]
+				: 0;
 	})
 	.catch(() => {});
-
-// ponytail: batch Dexie persistence downstream of SAB — IndexedDB bulkPut keeps hot path allocation-free
-let dbPromise: ReturnType<typeof createEventsDb> | null = null;
-const getDb = (): ReturnType<typeof createEventsDb> => {
-	if (!dbPromise) dbPromise = createEventsDb();
-	return dbPromise;
+let trackingUpdates = Promise.resolve();
+const readTracking = async () => {
+	await trackingReady;
+	await trackingUpdates;
+	const stored = await chrome.storage.local.get([
+		TRACKING_KEY,
+		TRACKING_RESUMED_KEY,
+	]);
+	trackingEnabled = stored[TRACKING_KEY] !== false;
+	trackingResumedAt =
+		typeof stored[TRACKING_RESUMED_KEY] === "number"
+			? stored[TRACKING_RESUMED_KEY]
+			: 0;
+	return trackingEnabled;
+};
+const setTracking = (enabled: boolean) => {
+	const update = trackingUpdates.then(async () => {
+		await trackingReady;
+		const previous = trackingEnabled;
+		if (enabled === previous) return enabled;
+		if (!enabled) {
+			trackingEnabled = false;
+			trackingGeneration++;
+		}
+		try {
+			const resumedAt = enabled ? Date.now() : trackingResumedAt;
+			await chrome.storage.local.set({
+				[TRACKING_KEY]: enabled,
+				[TRACKING_RESUMED_KEY]: resumedAt,
+			});
+			if (enabled) {
+				trackingResumedAt = resumedAt;
+				trackingGeneration++;
+				trackingEnabled = true;
+			}
+			await sampleForeground(enabled);
+		} catch (error) {
+			trackingEnabled = previous;
+			trackingGeneration++;
+			if (previous) await sampleForeground();
+			throw error;
+		}
+		return trackingEnabled;
+	});
+	trackingUpdates = update.then(
+		() => undefined,
+		() => undefined,
+	);
+	return update;
+};
+const isCaptureEligible = async (tabId: number, timestamp: unknown) => {
+	await trackingReady;
+	const generation = trackingGeneration;
+	return (
+		(await isForegroundTab(tabId)) &&
+		trackingEnabled &&
+		generation === trackingGeneration &&
+		typeof timestamp === "number" &&
+		timestamp >= trackingResumedAt
+	);
 };
 
 // --- SW telemetry: browser focus is the ONLY emitted SW signal ---
@@ -117,196 +212,119 @@ const getDb = (): ReturnType<typeof createEventsDb> => {
 // recording telemetry — extension UI interaction must not inflate event counts.
 let lastFocusedWindow = -1;
 
-const processBatch = (): number => {
-	const read = Atomics.load(control, READ_INDEX);
-	const published = Atomics.load(control, PUBLISHED_INDEX);
-	const available = published - read;
-	if (available <= 0) return 0;
-	const count = Math.min(available, MAX_BATCH_SIZE);
-	const docs: StoredTabEvent[] = [];
-	for (let i = 0; i < count; i++) {
-		const logical = read + i;
-		const slot = logical % capacity;
-		const base = slot * EVENT_SLOT_SIZE;
-		const typeVal = Atomics.load(events, base + 0);
-		const type = TYPE_NAMES[typeVal] ?? "TAB_CREATED";
-		const tabId = Atomics.load(events, base + 1);
-		const windowId = Atomics.load(events, base + 2);
-		const slot3 = Atomics.load(events, base + 3);
-		const tsHigh = Atomics.load(events, base + 4);
-		const tsLow = Atomics.load(events, base + 5);
-		const v0 = Atomics.load(events, base + 6);
-		const v1 = Atomics.load(events, base + 7);
-		const timestamp = tsHigh * 2 ** 32 + (tsLow >>> 0);
-		latestStats.totalEvents++;
-		latestStats.eventsProcessed++;
-		if (type === "TAB_CREATED") latestStats.tabCreated++;
-		else if (type === "TAB_ACTIVATED") latestStats.tabActivated++;
-		else if (type === "TAB_UPDATED") latestStats.tabUpdated++;
-		else if (type === "TAB_REMOVED") latestStats.tabRemoved++;
-		else if (type === "NAVIGATION") latestStats.navigation++;
-		else if (type === "PAGE_VISIBLE") latestStats.pageVisible++;
-		else if (type === "PAGE_HIDDEN") latestStats.pageHidden++;
-		else if (type === "SCROLL") latestStats.scroll++;
-		else if (type === "CLICK") latestStats.click++;
-		else if (type === "KEY_ACTIVITY") latestStats.keyActivity++;
-		let metadata: StoredTabEvent["metadata"];
-		if (type === "SCROLL" && v0 !== 0) metadata = { scrollY: v0 };
-		else if (type === "CLICK" && (v0 !== 0 || v1 !== 0))
-			metadata = { x: v0, y: v1 };
-		else if (type === "SW_WINDOW_FOCUS") metadata = { previousWindowId: slot3 };
-		else if (type === "SW_TRACKING_TOGGLE") metadata = { enabled: slot3 !== 0 };
-		else if (type === "SW_DOWNLOAD") metadata = { state: v0 };
-		else if (type === "SW_POPUP_OPEN")
-			metadata = {
-				source: windowId === POPUP_SOURCE.POPUP ? "popup" : "dashboard",
-			};
-		else if (type === "SW_LIFECYCLE") {
-			const kind = LIFECYCLE_KINDS[windowId];
-			if (kind) metadata = { lifecycle: kind };
-		}
-		docs.push({
-			id: `${timestamp}-${tabId}-${logical}`,
-			type,
-			tabId,
-			windowId,
-			timestamp,
-			metadata,
-		});
-	}
-	Atomics.store(control, READ_INDEX, read + count);
-	const occupancy = Math.max(
-		0,
-		Atomics.load(control, 0) - Atomics.load(control, 1),
-	);
-	latestStats.bufferOccupancy = occupancy;
-	if (occupancy > latestStats.peakBufferOccupancy)
-		latestStats.peakBufferOccupancy = occupancy;
-	latestStats.lastProcessedAt = Date.now();
-	latestStats.droppedEvents = droppedEvents;
-	if (docs.length) {
-		const enriched: StoredTabEvent[] = docs.map((d) => {
-			const meta = getMeta(d.tabId);
-			if (!meta) return d;
-			const next = { ...d };
-			if (meta.url) next.url = meta.url;
-			if (meta.favicon) next.favicon = meta.favicon;
-			return next;
-		});
-		getDb()
-			.then((db) => bulkInsertEvents(db, enriched))
-			.catch((err) => logger.warn("bulkInsert failed", { error: err }));
-	}
-	return count;
-};
-
-const scheduleDrain = () => {
-	if (drainScheduled) return;
-	drainScheduled = true;
-	const run = () => {
-		drainScheduled = false;
-		const n = processBatch();
-		// keep draining synchronously if more remains, otherwise poll
-		if (
-			Atomics.load(control, PUBLISHED_INDEX) > Atomics.load(control, READ_INDEX)
-		) {
-			scheduleDrain();
-		} else if (n > 0) {
-			// one more poll shortly after a batch in case of burst
-			setTimeout(scheduleDrain, 50);
-		}
-	};
-	// microtask then immediate — lets push() finish before draining
-	queueMicrotask(run);
-};
-
-// fallback poll for burst safety (service workers can't Atomics.wait — polling is the wakeup)
-setInterval(() => {
-	if (
-		Atomics.load(control, PUBLISHED_INDEX) > Atomics.load(control, READ_INDEX)
-	)
-		scheduleDrain();
-}, 200);
-
-// --- Single producer (spec §5, §9) ---
 const push = async (
 	type: TabEventType,
 	tabId: number,
 	windowId: number,
 	metadata?: TabEventMetadata,
 	timestamp = Date.now(),
+	snapshot?: { url?: string; favicon?: string },
+	terminalBoundary = false,
 ) => {
-	await trackingReady;
-	if (!trackingEnabled) return false;
-	if (
-		[
-			"TAB_ACTIVATED",
-			"NAVIGATION",
-			"PAGE_VISIBLE",
-			"SCROLL",
-			"CLICK",
-			"KEY_ACTIVITY",
-		].includes(type) &&
-		!(await isForegroundTab(tabId))
-	)
-		return false;
-	const ok = pushEvent(control, events, capacity, {
+	const generation = trackingGeneration;
+	const row: StoredTabEvent = {
+		id: crypto.randomUUID(),
 		type,
 		tabId,
 		windowId,
 		timestamp,
 		metadata,
-	});
-	if (!ok) {
-		droppedEvents++;
-		latestStats.droppedEvents = droppedEvents;
-	} else {
-		scheduleDrain();
+		url: snapshot?.url,
+		favicon: snapshot?.favicon,
+		source: { instanceId: nativeInstance, sequence: ++nativeSequence },
+	};
+	let sanitized: StoredTabEvent;
+	try {
+		sanitized = await sanitizeEventForIngestion(row);
+	} catch (error) {
+		logger.warn("event privacy processing failed", {
+			code: error instanceof Error ? error.name : "unknown",
+		});
+		return { status: "rejected", code: "privacy-processing-failed" };
 	}
-	return ok;
+	return pipeline.ingest(sanitized, async () => {
+		await trackingReady;
+		if (
+			([
+				"TAB_ACTIVATED",
+				"NAVIGATION",
+				"PAGE_VISIBLE",
+				"SCROLL",
+				"CLICK",
+				"KEY_ACTIVITY",
+				"NOTE_SAVED",
+			].includes(type) &&
+				!(await isForegroundTab(tabId))) ||
+			(type !== "NOTE_SAVED" &&
+				!(terminalBoundary && type === "PAGE_HIDDEN") &&
+				(!trackingEnabled ||
+					generation !== trackingGeneration ||
+					timestamp < trackingResumedAt))
+		)
+			return { status: "ignored", code: "capture-policy" };
+		return null;
+	});
 };
 
 // --- Chrome tab lifecycle ---
 chrome.tabs.onCreated.addListener((tab) => {
-	if (tab.id == null || tab.windowId == null) return;
-	push("TAB_CREATED", tab.id, tab.windowId);
-	if (tab.url) updateMeta(tab.id, { url: tab.url });
-	if (tab.title) updateMeta(tab.id, { title: tab.title });
-	if (tab.favIconUrl) updateMeta(tab.id, { favicon: tab.favIconUrl });
+	if (tab.id == null || tab.windowId == null || tab.incognito) return;
+	void push("TAB_CREATED", tab.id, tab.windowId, undefined, Date.now(), {
+		url: tab.url,
+		favicon: tab.favIconUrl,
+	});
 });
 
 chrome.tabs.onActivated.addListener((info) => {
+	const timestamp = Date.now();
 	void (async () => {
 		if (!(await isForegroundTab(info.tabId))) return;
 		lastFocusedWindow = info.windowId;
 		const tab = await chrome.tabs.get(info.tabId);
-		updateMeta(info.tabId, { url: tab.url, favicon: tab.favIconUrl });
-		await push("TAB_ACTIVATED", info.tabId, info.windowId);
+		await push(
+			"TAB_ACTIVATED",
+			info.tabId,
+			info.windowId,
+			undefined,
+			timestamp,
+			{ url: tab.url, favicon: tab.favIconUrl },
+		);
 	})().catch((error) => logger.warn("tab activation failed", { error }));
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener((tabId, _changeInfo, tab) => {
 	if (tab.windowId == null) return;
 	// avoid spamming on every property change — only when tab actually updated
-	push("TAB_UPDATED", tabId, tab.windowId);
-	if (changeInfo.url) updateMeta(tabId, { url: changeInfo.url });
-	if (changeInfo.title) updateMeta(tabId, { title: changeInfo.title });
-	if (changeInfo.favIconUrl)
-		updateMeta(tabId, { favicon: changeInfo.favIconUrl });
+	if (tab.incognito) return;
+	void push("TAB_UPDATED", tabId, tab.windowId, undefined, Date.now(), {
+		url: tab.url,
+		favicon: tab.favIconUrl,
+	});
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
-	// TAB_REMOVED has no windowId in the Chrome API — use 0 as sentinel, sidecar owns cleanup
-	push("TAB_REMOVED", tabId, 0);
-	removeMeta(tabId);
+chrome.tabs.onRemoved.addListener((tabId, info) => {
+	void push("TAB_REMOVED", tabId, info.windowId);
 });
 
 // --- Navigation (spec: chrome.webNavigation) ---
 if (chrome.webNavigation?.onCommitted) {
 	chrome.webNavigation.onCommitted.addListener((details) => {
 		if (details.frameId !== 0) return;
-		push("NAVIGATION", details.tabId, 0);
-		if (details.url) updateMeta(details.tabId, { url: details.url });
+		void push("NAVIGATION", details.tabId, 0, undefined, details.timeStamp, {
+			url: details.url,
+		});
+	});
+	chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+		if (details.frameId !== 0) return;
+		void push("NAVIGATION", details.tabId, 0, undefined, details.timeStamp, {
+			url: details.url,
+		});
+		void chrome.tabs
+			.sendMessage(details.tabId, {
+				kind: "TABOT_ROUTE_CHANGED",
+				url: details.url,
+			})
+			.catch(() => {});
 	});
 }
 
@@ -322,82 +340,326 @@ if (chrome.windows?.onFocusChanged) {
 	});
 }
 
-const sampleForeground = startForegroundTracking(async (type, state) => {
-	updateMeta(state.tabId, { url: state.url, favicon: state.favicon });
-	return push(type, state.tabId, state.windowId, undefined, state.timestamp);
-});
+const sampleForeground = startForegroundTracking(
+	async (type, state) => {
+		return push(
+			type,
+			state.tabId,
+			state.windowId,
+			undefined,
+			state.timestamp,
+			state,
+			// Only this trusted sampler may close an active span after pause blocks admission.
+			type === "PAGE_HIDDEN",
+		);
+	},
+	() => trackingReady.then(() => trackingEnabled),
+);
 
-// --- retired SW signals: NO producers. Historical rows still decode ---
+// --- retired SW signals: NO producers. Historical rows remain readable ---
 // (SW_POPUP_OPEN, SW_TRACKING_TOGGLE, SW_DOWNLOAD, SW_LIFECYCLE were removed
 // from the production telemetry path. The tracking state still lives in
 // chrome.storage.local via SET_TRACKING — just no longer persisted as a
 // behavioral event. See packages/shared/src/activities/sw-semantics.ts.)
 
-const getMergedStats = (): StatsSnapshot => {
-	const occupancy = Math.max(
-		0,
-		Atomics.load(control, 0) - Atomics.load(control, 1),
-	);
-	return {
-		...latestStats,
-		droppedEvents,
-		bufferCapacity: capacity,
-		bufferOccupancy: occupancy,
-		peakBufferOccupancy: Math.max(latestStats.peakBufferOccupancy, occupancy),
-	};
+const getMergedStats = (): StatsSnapshot => pipeline.stats();
+const isExtensionPageSender = (sender: chrome.runtime.MessageSender): boolean =>
+	sender.id === chrome.runtime.id &&
+	sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`) === true;
+const deletePageEvidence = async (origin?: string) => {
+	if (origin !== undefined && pageCaptureSite(origin)?.origin !== origin) {
+		return { ok: false as const, code: "invalid-origin" };
+	}
+	pipeline.flush();
+	const deadline = Date.now() + 15_000;
+	while (pipeline.stats().outstandingRows > 0 && Date.now() < deadline)
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	if (pipeline.stats().outstandingRows > 0)
+		return { ok: false as const, code: "writer-busy" };
+	let deleted = 0;
+	for (let batch = 0; batch < 100; batch++) {
+		const result = await deletePageObservations(await getDb(), { origin });
+		deleted += result.deleted;
+		if (!result.more) break;
+		if (batch === 99) return { ok: false as const, code: "delete-incomplete" };
+	}
+	return { ok: true as const, deleted };
 };
 
-const respondAssistantConnection = (
+const respondAssistantConnections = (
 	sendResponse: (response: unknown) => void,
 ) => {
 	void (async () => {
 		try {
-			sendResponse(await getAssistantConnection());
+			sendResponse(await getAssistantConnections());
 		} catch {
 			sendResponse(null); // Unknown is not disconnected.
 		}
 	})();
 };
 
-// --- Content-script page events (spec §5: never write SAB directly, background is single producer) ---
+const readActiveTrackingDuration = async () => {
+	const enabled = await readTracking();
+	const db = await getDb();
+	const events = await db.readEvents({
+		types: [
+			"PAGE_VISIBLE",
+			"PAGE_HIDDEN",
+			"SW_WINDOW_FOCUS",
+			"TAB_ACTIVATED",
+			"NAVIGATION",
+			"TAB_UPDATED",
+		],
+	});
+	const now = Date.now();
+	const spans = activeSpans(events);
+	const lastSpan = spans.at(-1);
+	const latest = foregroundEvents(events).at(-1);
+	const active =
+		enabled &&
+		lastSpan !== undefined &&
+		latest?.timestamp === lastSpan.end &&
+		now - lastSpan.end < ACTIVITY_GAP_MS;
+	return {
+		durationMs:
+			activeDuration(spans, 0, now) +
+			(active ? now - (lastSpan?.end ?? now) : 0),
+		active,
+	};
+};
+
+// Listeners register synchronously; literal true retains asynchronous response channel.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	if (message?.type === "SET_TRACKING") {
-		void (async () => {
-			await trackingReady;
-			if (message.enabled !== true) await sampleForeground(false);
-			trackingEnabled = message.enabled === true;
-			await chrome.storage.local.set({ [TRACKING_KEY]: trackingEnabled });
-			if (trackingEnabled) await sampleForeground();
-			sendResponse({ enabled: trackingEnabled });
-		})().catch(() => sendResponse({ enabled: trackingEnabled }));
+		void setTracking(message.enabled === true)
+			.then((enabled) => sendResponse({ enabled }))
+			.catch(() => sendResponse({ enabled: trackingEnabled }));
 		return true;
 	}
 
 	if (message?.type === "GET_TRACKING") {
-		trackingReady.then(() => sendResponse({ enabled: trackingEnabled }));
+		void readTracking()
+			.then((enabled) => sendResponse({ enabled }))
+			.catch(() =>
+				sendResponse({ ok: false, code: "tracking-status-unavailable" }),
+			);
+		return true;
+	}
+
+	if (message?.type === "GET_ACTIVE_TRACKING_DURATION") {
+		if (!isExtensionPageSender(sender)) return false;
+		void readActiveTrackingDuration()
+			.then(sendResponse)
+			.catch(() => sendResponse(readFailure()));
+		return true;
+	}
+
+	if (
+		["GET_ACTIVE_PAGE", "SAVE_NOTE", "DELETE_NOTE", "SEARCH_NOTES"].includes(
+			message?.type,
+		)
+	) {
+		if (!isExtensionPageSender(sender)) return false;
+		void (async () => {
+			try {
+				const searchOrigin =
+					message.type === "SEARCH_NOTES" && typeof message.origin === "string"
+						? safeRecallUrl(message.origin)
+						: null;
+				if (
+					message.type === "SEARCH_NOTES" &&
+					(typeof message.query !== "string" ||
+						!message.query.trim() ||
+						message.query.length > 200 ||
+						!searchOrigin ||
+						searchOrigin.origin !== message.origin)
+				)
+					throw new Error("invalid-query");
+				const db = await getDb();
+				if (message.type === "SEARCH_NOTES") {
+					const notes = await db.searchNotes(message.query.trim(), {
+						domain: deriveSiteDomain(searchOrigin.hostname),
+						limit: 20,
+					});
+					sendResponse({
+						notes: notes.map((note) => ({
+							id: note.id,
+							text: note.text,
+							createdAt: note.createdAt,
+							title: note.title,
+							host: note.host,
+							url: safeRecallUrl(note.url)?.href ?? null,
+						})),
+					});
+					return;
+				}
+				if (message.type === "GET_ACTIVE_PAGE") {
+					const [tab] = await chrome.tabs.query({
+						active: true,
+						lastFocusedWindow: true,
+					});
+					const rawUrl = tab?.url;
+					if (
+						!tab?.id ||
+						!tab.windowId ||
+						!rawUrl ||
+						tab.incognito ||
+						!/^https?:\/\//.test(rawUrl)
+					) {
+						sendResponse({
+							eligible: false,
+							reason: "Notes can't be added on this page",
+						});
+						return;
+					}
+					const canonical = canonicalPageUrl(rawUrl);
+					const [url, pageKey] = await Promise.all([
+						sanitizeUrlForIngestion(canonical),
+						createCaptureIdentity(["page-resource:v1", canonical]),
+					]);
+					if (!url) throw new Error("page-url-unavailable");
+					const parsed = new URL(url);
+					const noteTitle = (tab.title ?? "").slice(0, 300) || null;
+					sendResponse({
+						eligible: true,
+						tabId: tab.id,
+						windowId: tab.windowId,
+						url,
+						host: parsed.hostname,
+						origin: parsed.origin,
+						title: tab.title ?? null,
+						favicon: tab.favIconUrl ?? null,
+						pageKey,
+						notes: await db.listPageNotes(pageKey, {
+							url,
+							host: parsed.hostname,
+							title: noteTitle,
+						}),
+					});
+					return;
+				}
+				if (message.type === "SAVE_NOTE") {
+					if (
+						!validateNoteText(message.text) ||
+						!Number.isSafeInteger(message.tabId) ||
+						typeof message.pageKey !== "string"
+					)
+						throw new Error("invalid-note");
+					const tab = await chrome.tabs.get(message.tabId);
+					const [active] = await chrome.tabs.query({
+						active: true,
+						lastFocusedWindow: true,
+					});
+					if (
+						active?.id !== tab.id ||
+						tab.incognito ||
+						!tab.windowId ||
+						!tab.url ||
+						!/^https?:\/\//.test(tab.url)
+					)
+						throw new Error("page-changed");
+					const canonical = canonicalPageUrl(tab.url);
+					const pageKey = await createCaptureIdentity([
+						"page-resource:v1",
+						canonical,
+					]);
+					if (pageKey !== message.pageKey) throw new Error("page-changed");
+					const url = await sanitizeUrlForIngestion(canonical);
+					if (!url) throw new Error("page-url-unavailable");
+					const parsed = new URL(url);
+					const now = Date.now();
+					const note: PageNote = {
+						id:
+							typeof message.id === "string" ? message.id : crypto.randomUUID(),
+						text: message.text,
+						createdAt:
+							typeof message.id === "string"
+								? ((await db.listPageNotes(pageKey)).find(
+										(item) => item.id === message.id,
+									)?.createdAt ?? now)
+								: now,
+						updatedAt: now,
+						url,
+						origin: parsed.origin,
+						host: parsed.hostname,
+						site: deriveSiteDomain(parsed.hostname),
+						title: (tab.title ?? "").slice(0, 300) || null,
+						favicon: tab.favIconUrl ?? null,
+						pageKey,
+						tabId: tab.id,
+						windowId: tab.windowId,
+						eventId: null,
+					};
+					const saved = await db.saveNote(note);
+					if (typeof message.id !== "string") {
+						try {
+							const ack = await push(
+								"NOTE_SAVED",
+								tab.id,
+								tab.windowId,
+								{ noteId: saved.id },
+								now,
+								{ url, favicon: tab.favIconUrl },
+							);
+							if (ack.status === "persisted" && "id" in ack)
+								await db.linkNoteEvent(saved.id, ack.id);
+						} catch (error) {
+							logger.warn("note saved but activity link failed", {
+								code: error instanceof Error ? error.message : "unknown",
+							});
+						}
+					}
+					sendResponse({ note: saved });
+					return;
+				}
+				if (typeof message.id !== "string") throw new Error("invalid-note-id");
+				sendResponse(await db.deleteNote(message.id));
+			} catch (error) {
+				sendResponse({
+					ok: false,
+					code: error instanceof Error ? error.message : "notes-unavailable",
+				});
+			}
+		})();
+		return true;
+	}
+
+	if (message?.kind === "TABOT_PAGE_OBSERVATION") {
+		void ingestPageObservationMessage(message, sender, {
+			extensionId: chrome.runtime.id,
+			pipeline,
+			find: async (id) => getPageObservationById(await getDb(), id),
+			eligible: (tabId) => isCaptureEligible(tabId, message.timestamp),
+			captureIdentity: createCaptureIdentity,
+		})
+			.then(sendResponse)
+			.catch(() =>
+				sendResponse({ status: "retryable", code: "storage-unavailable" }),
+			);
 		return true;
 	}
 
 	if (message?.kind === "TABOT_PAGE_EVENT") {
-		const tabId = sender.tab?.id ?? 0;
-		const windowId = sender.tab?.windowId ?? 0;
-		const t = message.type as TabEventType;
-		if (
-			[
-				"PAGE_VISIBLE",
-				"PAGE_HIDDEN",
-				"SCROLL",
-				"CLICK",
-				"KEY_ACTIVITY",
-			].includes(t)
-		) {
-			push(t, tabId, windowId, message.metadata);
-		}
+		void ingestPageMessage(message, sender, {
+			extensionId: chrome.runtime.id,
+			pipeline,
+			find: async (id) => (await getDb()).findEvent(id),
+			eligible: (tabId) => isCaptureEligible(tabId, message.timestamp),
+			captureIdentity: createCaptureIdentity,
+		})
+			.then(sendResponse)
+			.catch(() =>
+				sendResponse({ status: "retryable", code: "storage-unavailable" }),
+			);
+		return true;
+	}
+	if (message?.type === "RETRY_INGEST") {
+		sendResponse({ resumed: pipeline.retry(true) });
 		return false;
 	}
 
-	if (message?.type === "GET_ASSISTANT_CONNECTION") {
-		respondAssistantConnection(sendResponse);
+	if (message?.type === "GET_ASSISTANT_CONNECTIONS") {
+		respondAssistantConnections(sendResponse);
 		return true;
 	}
 
@@ -408,6 +670,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		return false;
 	}
 
+	if (message?.type === "RUN_RELAY_SANITY_CHECK") {
+		if (!isExtensionPageSender(sender)) return false;
+		void runRelaySanityCheck().then(sendResponse);
+		return true;
+	}
+
 	if (message?.type === "GET_STATS") {
 		try {
 			sendResponse(getMergedStats());
@@ -416,16 +684,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	}
 
 	if (message?.type === "GET_COUNTS") {
-		getDb()
-			.then((db) => countEvents(db))
-			.then((dexieCount) => {
+		getStorageCounts(true)
+			.then((counts) => {
 				try {
-					sendResponse({ dexieCount, rxdbCount: dexieCount });
+					sendResponse(counts);
 				} catch {}
 			})
 			.catch(() => {
 				try {
-					sendResponse({ dexieCount: 0, rxdbCount: 0 });
+					sendResponse(readFailure());
 				} catch {}
 			});
 		return true;
@@ -441,9 +708,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 			})
 			.catch(() => {
 				try {
-					sendResponse([]);
+					sendResponse(readFailure());
 				} catch {}
 			});
+		return true;
+	}
+
+	if (message?.type === "GET_PAGE_CAPTURE_SUMMARIES") {
+		if (!isExtensionPageSender(sender)) return false;
+		getDb()
+			.then((db) => getPageCaptureSiteSummaries(db))
+			.then(sendResponse)
+			.catch(() => sendResponse(readFailure()));
+		return true;
+	}
+
+	if (message?.type === "GET_PAGE_OBSERVATIONS") {
+		if (!isExtensionPageSender(sender)) return false;
+		const { from, to, limit } = message;
+		getDb()
+			.then((db) => getPageObservations(db, from, to, limit))
+			.then(sendResponse)
+			.catch(() => sendResponse(readFailure()));
+		return true;
+	}
+
+	if (message?.type === "GET_PAGE_OBSERVATION") {
+		if (!isExtensionPageSender(sender) || typeof message.id !== "string")
+			return false;
+		getDb()
+			.then((db) => getPageObservationById(db, message.id))
+			.then(sendResponse)
+			.catch(() => sendResponse(readFailure()));
+		return true;
+	}
+
+	if (message?.type === "DELETE_PAGE_OBSERVATIONS") {
+		if (!isExtensionPageSender(sender)) return false;
+		const { origin } = message;
+		void deletePageEvidence(origin)
+			.then(sendResponse)
+			.catch(() => sendResponse({ ok: false, code: "delete-failed" }));
 		return true;
 	}
 
@@ -482,8 +787,56 @@ if (chrome.runtime.onMessageExternal) {
 				return true;
 			}
 
-			if (message?.type === "GET_ASSISTANT_CONNECTION") {
-				respondAssistantConnection(sendResponse);
+			if (
+				message?.type === "PRELOAD_SEARCH_MODEL" ||
+				message?.type === "BROWSE_LIBRARY" ||
+				message?.type === "SEARCH_HISTORY" ||
+				message?.type === "UPDATE_NOTE" ||
+				message?.type === "GET_PAGE_PREVIEW" ||
+				message?.type === "GET_PAGE_REFERENCE"
+			) {
+				void (async () => {
+					sendResponse(await readDashboardHistory(message, sender.url, getDb));
+				})();
+				return true;
+			}
+			if (!isDashboardSender(sender.url)) {
+				sendResponse({ ok: false, code: "unauthorized-sender" });
+				return false;
+			}
+			if (message?.type === "TABOT_PING") {
+				sendResponse({ ok: true });
+				return false;
+			}
+
+			if (message?.type === "GET_ACTIVE_TRACKING_DURATION") {
+				void readActiveTrackingDuration()
+					.then(sendResponse)
+					.catch(() => sendResponse(readFailure()));
+				return true;
+			}
+			if (message?.type === "GET_TRACKING") {
+				void readTracking()
+					.then((enabled) => sendResponse({ enabled }))
+					.catch(() =>
+						sendResponse({ ok: false, code: "tracking-status-unavailable" }),
+					);
+				return true;
+			}
+			if (message?.type === "SET_TRACKING") {
+				if (typeof message.enabled !== "boolean") {
+					sendResponse({ ok: false, code: "tracking-update-failed" });
+					return false;
+				}
+				void setTracking(message.enabled)
+					.then((enabled) => sendResponse({ enabled }))
+					.catch(() =>
+						sendResponse({ ok: false, code: "tracking-update-failed" }),
+					);
+				return true;
+			}
+			if (message?.type === "GET_ASSISTANT_CONNECTIONS") {
+				respondAssistantConnections(sendResponse);
 				return true;
 			}
 
@@ -494,18 +847,32 @@ if (chrome.runtime.onMessageExternal) {
 				return false;
 			}
 			if (message?.type === "GET_COUNTS") {
-				getDb()
-					.then((db) => countEvents(db))
-					.then((dexieCount) => {
+				getStorageCounts(true)
+					.then((counts) => {
 						try {
-							sendResponse({ dexieCount, rxdbCount: dexieCount });
+							sendResponse(counts);
 						} catch {}
 					})
 					.catch(() => {
 						try {
-							sendResponse({ dexieCount: 0, rxdbCount: 0 });
+							sendResponse(readFailure());
 						} catch {}
 					});
+				return true;
+			}
+			if (message?.type === "GET_STORAGE_ESTIMATE") {
+				void getStorageEstimate()
+					.then(sendResponse)
+					.catch(() =>
+						sendResponse({ ok: false, code: "storage-estimate-unavailable" }),
+					);
+				return true;
+			}
+			if (message?.type === "PURGE_DATA") {
+				void getDb()
+					.then((db) => db.purgeData())
+					.then(() => sendResponse({ ok: true }))
+					.catch(() => sendResponse({ ok: false, code: "purge-failed" }));
 				return true;
 			}
 			if (message?.type === "GET_EVENTS") {
@@ -518,7 +885,7 @@ if (chrome.runtime.onMessageExternal) {
 					})
 					.catch(() => {
 						try {
-							sendResponse([]);
+							sendResponse(readFailure());
 						} catch {}
 					});
 				return true;
@@ -527,215 +894,5 @@ if (chrome.runtime.onMessageExternal) {
 		},
 	);
 }
-
-// First run seeds high-water marks so existing contexts and memories never
-// trigger historical notifications. Only future, completed evidence counts.
-void chrome.storage.local
-	.get(NOTIFICATION_KEY)
-	.then((stored) => {
-		if (!stored[NOTIFICATION_KEY]) {
-			const now = Date.now();
-			return chrome.storage.local.set({
-				[NOTIFICATION_KEY]: {
-					lastEnd: now,
-					lastMemorySeen: now,
-					lastNotifiedAt: 0,
-				},
-			});
-		}
-	})
-	.catch((error) => logger.warn("notification init failed", { error }));
-void chrome.alarms
-	.get(NOTIFICATION_ALARM)
-	.then((alarm) => {
-		if (!alarm)
-			return chrome.alarms.create(NOTIFICATION_ALARM, { periodInMinutes: 15 });
-	})
-	.catch((error) => logger.warn("notification alarm failed", { error }));
-
-if (notificationPreviewEnabled) {
-	void chrome.alarms.get(PREVIEW_ALARM).then((alarm) => {
-		if (!alarm)
-			void chrome.alarms.create(PREVIEW_ALARM, { periodInMinutes: 0.25 });
-	});
-} else {
-	void chrome.alarms.clear(PREVIEW_ALARM);
-}
-
-let notificationCheckRunning = false;
-const checkNotifications = async () => {
-	if (notificationCheckRunning) return;
-	notificationCheckRunning = true;
-	try {
-		await trackingReady;
-		if (!trackingEnabled) return;
-		const stored = await chrome.storage.local.get(NOTIFICATION_KEY);
-		const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
-		if (!state) return;
-		const now = Date.now();
-		if (now - state.lastNotifiedAt < 6 * 3_600_000) return;
-		const db = await getDb();
-		const [contexts, memories] = await Promise.all([
-			getContexts(db),
-			getMemories(db),
-		]);
-		const context = nextNotifiableContext(contexts, state.lastEnd, now);
-		const memory = nextNotifiableMemory(
-			memories,
-			state.lastMemorySeen ?? state.lastEnd,
-			now,
-		);
-		if (!context && !memory) return;
-
-		const notifyMemory =
-			memory !== undefined &&
-			(!context || memory.lastSeen >= context.endTimestamp);
-		const selectedContext = notifyMemory
-			? contexts.find((item) => item.id === memory.lastContextId)
-			: context;
-		if (!selectedContext) return;
-		const episode = selectedContext.episodes
-			?.filter(
-				(item) =>
-					isNotifiableEpisode(item) &&
-					item.endTimestamp <= now - 30 * 60_000 &&
-					item.endTimestamp >= now - 24 * 3_600_000,
-			)
-			.toSorted((a, b) => b.endTimestamp - a.endTimestamp)[0];
-		const kind = notifyMemory ? "memory" : episode ? "episode" : "context";
-		const connected = await getAssistantConnection()
-			.then((result) => result.connected)
-			.catch(() => false);
-		const title =
-			kind === "memory"
-				? "A browsing pattern is repeating"
-				: kind === "episode"
-					? "Activity worth a look"
-					: "Activity summary ready";
-		const message =
-			kind === "memory"
-				? `Similar activity appeared ${memory.evidence.occurrenceCount} times across separate periods. Ask ChatGPT what repeats.`
-				: `${(episode ?? selectedContext).domains.length} sites · ${Math.round((episode ?? selectedContext).duration / 60_000)} min. Ask ChatGPT to explore this thread.`;
-		try {
-			await chrome.action.openPopup();
-		} catch {
-			await chrome.notifications.create(NOTIFICATION_ID, {
-				type: "basic",
-				iconUrl: notificationIcon,
-				title,
-				message,
-				buttons: [{ title: connected ? "Ask ChatGPT" : "Connect ChatGPT" }],
-			});
-		}
-		await chrome.storage.local.set({
-			[NOTIFICATION_KEY]: {
-				...state,
-				lastEnd: Math.max(state.lastEnd, selectedContext.endTimestamp),
-				lastMemorySeen: notifyMemory
-					? memory.lastSeen
-					: (state.lastMemorySeen ?? state.lastEnd),
-				lastNotifiedAt: now,
-				contextId: selectedContext.id,
-				memoryId: notifyMemory ? memory.id : undefined,
-				kind,
-				chatGptConnected: connected,
-			},
-		});
-	} catch (error) {
-		logger.warn("context notification failed", { error });
-	} finally {
-		notificationCheckRunning = false;
-	}
-};
-
-const openStartupPopupForUnreadInsight = async () => {
-	if (process.env.NODE_ENV === "development") return;
-	const now = Date.now();
-	const localDay = `${new Date(now).getFullYear()}-${new Date(now).getMonth()}-${new Date(now).getDate()}`;
-	const stored = await chrome.storage.local.get([
-		NOTIFICATION_KEY,
-		POPUP_LAST_VIEWED_KEY,
-		STARTUP_POPUP_DAY_KEY,
-	]);
-	const notificationState = stored[NOTIFICATION_KEY] as
-		| NotificationState
-		| undefined;
-	const lastViewed = stored[POPUP_LAST_VIEWED_KEY];
-	if (
-		stored[STARTUP_POPUP_DAY_KEY] === localDay ||
-		(notificationState?.lastNotifiedAt &&
-			now - notificationState.lastNotifiedAt < 6 * 3_600_000) ||
-		typeof lastViewed !== "number"
-	)
-		return;
-	const contexts = await getContexts(await getDb());
-	const hasUnreadInsight = contexts.some(
-		(context) =>
-			context.endTimestamp > lastViewed &&
-			context.endTimestamp >= now - 24 * 3_600_000 &&
-			context.endTimestamp <= now &&
-			isAiReadyContext(context),
-	);
-	if (!hasUnreadInsight) return;
-	await chrome.action.openPopup();
-	await chrome.storage.local.set({ [STARTUP_POPUP_DAY_KEY]: localDay });
-};
-
-chrome.runtime.onStartup.addListener(() => {
-	void checkNotifications()
-		.then(openStartupPopupForUnreadInsight)
-		.catch((error) => logger.warn("startup popup failed", { error }));
-});
-chrome.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name === PREVIEW_ALARM && notificationPreviewEnabled) {
-		void chrome.storage.local
-			.get(PREVIEW_INDEX_KEY)
-			.then(async (stored) => {
-				const current = stored[PREVIEW_INDEX_KEY];
-				const index = Number.isInteger(current) ? (current + 1) % 6 : 0;
-				await chrome.storage.local.set({ [PREVIEW_INDEX_KEY]: index });
-				await chrome.action.openPopup();
-			})
-			.catch((error) => logger.warn("notification preview failed", { error }));
-		return;
-	}
-	if (alarm.name === NOTIFICATION_ALARM) void checkNotifications();
-});
-
-chrome.notifications.onClicked.addListener((id) => {
-	if (id !== NOTIFICATION_ID) return;
-	void chrome.storage.local
-		.get(NOTIFICATION_KEY)
-		.then((stored) => {
-			const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
-			if (state?.contextId) {
-				const url = new URL(HOME_URL);
-				url.searchParams.set("context", state.contextId);
-				return chrome.tabs.create({ url: url.toString() });
-			}
-		})
-		.catch((error) => logger.warn("open context failed", { error }));
-});
-
-chrome.notifications.onButtonClicked.addListener((id, buttonIndex) => {
-	if (id !== NOTIFICATION_ID || buttonIndex !== 0) return;
-	void chrome.storage.local
-		.get(NOTIFICATION_KEY)
-		.then((stored) => {
-			const state = stored[NOTIFICATION_KEY] as NotificationState | undefined;
-			if (!state) return;
-			if (state.chatGptConnected !== true)
-				return resolveChatGptConnectUrl().then((url) =>
-					chrome.tabs.create({ url }),
-				);
-			if (state.kind === "memory" && state.memoryId)
-				return chrome.tabs.create({
-					url: chatGptPromptUrl(memoryPrompt(state.memoryId)),
-				});
-			if (state.contextId)
-				return chrome.tabs.create({ url: chatGptContextUrl(state.contextId) });
-		})
-		.catch((error) => logger.warn("open ChatGPT failed", { error }));
-});
 
 startRelay();

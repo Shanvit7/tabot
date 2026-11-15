@@ -1,123 +1,61 @@
 # Tabot MCP relay
 
-Tabot lets ChatGPT answer questions about your browser activity using context derived locally by the Tabot Chrome extension. Search recent or relevant contexts, inspect a selected context, review activity metrics for a time range or site, and discover recurring browsing patterns. Raw browser events, page paths, query strings, credentials, and favicons stay on your device. Tabot sends only the requested, privacy-filtered context or aggregate metrics through your authorized connection. Estimates are approximate and don’t measure attention or productivity. Requires the Tabot extension to be installed and connected.
+Tabot is building a browser activity data layer for AI-assisted work. This relay is the current beta bridge: eight read-only MCP tools expose supported activity and note results to connected assistants. Reusable contexts and user-directed automations are future direction, not relay capabilities today.
 
-## Development: stable public URL
+Tabot exposes eight read-only MCP tools. `search_all` searches locally retained pages, user-written notes, and sites in one request. Page results use local hybrid text and semantic search over activity and page content; note and site results use local keyword search. It returns up to 8 results per category; it is not paginated. Page titles, paths, visible text, and raw browser-event fields are excluded. Use `search_notes`, `list_pages`, or `list_sites` to browse further.
 
-`pnpm dev` watches MCP source and deploys changes to a **separate** Worker:
+`search_notes` searches user-written notes by text, timestamp range, or site domain. `list_sites` returns paginated sites with distinct page and note counts. `list_pages` returns paginated pages and complete note counts for one site; page paths and internal page keys stay on-device. Pass its opaque `pageRef` to `get_page_notes` for every note on that page, including pages without a capture. `get_page_notes` also accepts a canonical page URL. `get_site_notes` returns up to 50 notes for a website domain, including all its subdomains. Note results include derived site domain, host, redacted text, timestamps, and derived session when available; page paths stay on-device. Note content leaves the device only on these authorized read-only tool calls.
 
-- ChatGPT MCP connector: `https://tabot-mcp-dev.shanvit7.workers.dev/mcp`
-- Unpacked extension relay: `https://tabot-mcp-dev.shanvit7.workers.dev`
-- Production `tabot-mcp.shanvit7.workers.dev` is untouched.
+`find_related_activity` accepts 1–8 `{kind,id}` anchors from search and returns up to 8 matches for the same page, same site, or timestamps within `maxGapHours`. Each match lists `matchedBy` and `matchedAnchorIds`; this is literal matching, not a relevance score or inferred intent. `maxGapHours` defaults to 168 and is capped at 720.
 
-This is a remote deploy-on-change loop, **not a tunnel to localhost**. The Worker remains reachable when `pnpm dev` stops; the extension must still be running to serve requests. `pnpm --filter mcp-server dev:local` runs the isolated local config at `http://localhost:8787`; it uses local Durable Object state under `.wrangler/local-state` and never deploys. `pnpm --filter mcp-server dev:inspector` launches the official MCP Inspector UI. In Inspector, select **Streamable HTTP** and enter `http://localhost:8787/mcp`. Start both commands in separate terminals. The Inspector tests this server's actual MCP endpoint; tool calls need the unpacked extension connected to this same local Worker. Set the local extension relay URL to `http://localhost:8787` and make sure `.dev.vars` has the local installation secret and unpacked extension ID. For the local extension, run `PLASMO_PUBLIC_MCP_RELAY_URL=http://localhost:8787 pnpm --filter extension dev`; its default dev URL points to the remote dev Worker. The linked Hono v2 adapter requires `@modelcontextprotocol/server` v2, while this production service currently uses the stable v1 SDK. Inspector speaks MCP over HTTP, so it tests the real existing server without forcing a major SDK migration into the extension release.
+`get_browsing_timeline` accepts the same anchors and options, then returns selected anchors plus one page of matches in chronological order. Items use `role: "anchor"` or `role: "match"`; pagination applies to matches, while anchors repeat on each page.
 
-`pnpm dev` is different: it watches MCP source and deploys to the **remote dev Worker** below. Do not use it for offline local testing or deploy to production just to test a change. A local server cannot serve ChatGPT unless its URL is publicly reachable; `wrangler dev --remote` uses remote resources.
+Full URL paths, page titles/text, and raw browser events stay on-device. Read tools share only their documented projections on explicit calls. No results mean no matching retained activity, not proof of absence. The MCP client owns conversation and orchestration. Tabot does not expose legacy context, memory, recurring-pattern, or activity-metric tools.
 
-**Local-execution alternative (named Cloudflare Tunnel).** `wrangler dev --tunnel --tunnel-name=<name>` gives a stable public hostname to a local dev server, but the hostname needs DNS in a Cloudflare-managed zone, so it is not available in this account. The setup would be: a zone plus `cloudflared tunnel create`, one `cloudflared tunnel route dns` record, ChatGPT pointed at `https://<host>/mcp`, `PLASMO_PUBLIC_MCP_RELAY_URL` set to the origin, and that origin added to the extension's `externally_connectable.matches`. Quick `*.trycloudflare.com` tunnels have random hostnames and are unsuitable for a persistent connector. Requests fail whenever the tunnel or laptop is offline.
+## Development
 
-**Security.** Anyone with a reachable dev URL can call its endpoints; avoid production bindings and secrets there. `/installations` intentionally issues credentials without authentication, so a publicly exposed dev server has the same behavior.
+`pnpm dev` watches MCP source and deploys changes to a separate dev Worker:
 
-**Credential/secret mismatch.** A credential signed by one deployed Worker's `TABOT_AUTH_SECRET` cannot be reused against a server using a different secret. Use a fresh browser profile or reset only the dev installation credential and reconnect; never copy the production secret into development.
+- MCP: `https://tabot-mcp-dev.shanvit7.workers.dev/mcp`
+- Relay origin: `https://tabot-mcp-dev.shanvit7.workers.dev`
 
-Dev Worker is provisioned with a separate signing secret and the unpacked extension ID from gitignored `apps/mcp-server/.dev.vars`. If the unpacked extension ID changes, update `TABOT_EXTENSION_ID` there and run `pnpm exec wrangler secret put TABOT_EXTENSION_ID --config wrangler.dev.toml` from this directory. The dev extension's gitignored `.env.development` points to the dev Worker, and its OAuth consent page is allowed by `externally_connectable`. **Restart `pnpm dev` and reload the unpacked extension** after changing its env/manifest; Plasmo caches env values in the running dev process. Never commit `.dev.vars` or real extension environment files; never use the production signing secret for dev.
+This is remote deploy-on-change, not a localhost tunnel. The extension must be running to serve calls. For local-only testing, use `pnpm --filter mcp-server dev:local` at `http://localhost:8787`; local state is under `.wrangler/local-state`. Run `pnpm --filter mcp-server dev:inspector` separately and configure Inspector with Streamable HTTP URL `http://localhost:8787/mcp`. Point the unpacked extension at the same origin with `PLASMO_PUBLIC_MCP_RELAY_URL=http://localhost:8787`.
 
-### Connect and verify in ChatGPT
+Local Worker settings use gitignored `apps/mcp-server/.dev.vars`, not `.env`; copy `.dev.vars.example` and set both `TABOT_AUTH_SECRET` and the unpacked extension's `TABOT_EXTENSION_ID`. Keep the local secret stable—changing it invalidates local relay credentials. Never copy production secrets into dev or commit `.dev.vars`. Production secrets live in Cloudflare Worker bindings, not local env files. Restart the dev process and reload extension after changing env/manifest values.
 
-1. Load `apps/extension/build/chrome-mv3-dev` as an unpacked extension in the Chrome profile used for ChatGPT. Its `.env.development` must set `PLASMO_PUBLIC_MCP_RELAY_URL` to the dev Worker origin (without `/mcp`).
-2. Enable **Developer mode** in ChatGPT Settings → Security and login. In [ChatGPT Plugins](https://chatgpt.com/plugins), add an MCP connection with the **full** URL `https://tabot-mcp-dev.shanvit7.workers.dev/mcp` (not the bare Worker origin). Finish **Connect Tabot** in the same Chrome profile as the unpacked extension.
-3. On the connection page, confirm seven discovered tools: `search_context`, `get_recent_context`, `get_current_context`, `get_context`, `get_memory`, `get_activity_metrics`, `list_recurring_patterns`. In a new chat, enable Tabot Dev under Tools and ask for recent browser context. A successful response contains derived context from the local extension, not raw event history. Ask “Search Tabot contexts for Tabot over the last 24 hours, then get the context by its id.” Search and recent results include stable ids; `get_context(id)` retrieves one selected context. Time windows are in hours (1–168); recent returns at most 20 contexts, search at most 8. Discovery shows only evidence-rich contexts, but explicit id lookup can retrieve a thin context. Manual dashboard **Download Context** remains a separate JSONL export; MCP never sends that file.
+## Connect ChatGPT or Claude
 
-Dashboard **Connected** reflects an unexpired OAuth access or refresh token for this installation, not the always-on relay socket. The extension checks authenticated `GET /connection` without exposing credentials to the dashboard. Existing connections work without reconnecting. After updating the extension, reload it and the dashboard; inspect with `chrome.runtime.sendMessage({ type: 'GET_ASSISTANT_CONNECTION' }, console.log)` in the extension service-worker console. A failed status request is unknown, not disconnected.
+Use the full MCP URL ending in `/mcp`. ChatGPT developer connections and Claude custom connectors each require OAuth consent in the same Chrome profile where the Tabot extension is installed and running. After deploying a tool schema/name change, refresh the connector's tool list. Confirm `search_all`, `find_related_activity`, `get_browsing_timeline`, `search_notes`, `list_sites`, `list_pages`, `get_page_notes`, and `get_site_notes` are discovered.
 
-`/health` and `/.well-known/oauth-authorization-server` prove only Worker and OAuth discovery are reachable. The bare Worker origin returns 404 for MCP requests; use `/mcp`. **Connected account** with **No app tools available yet** means tool discovery is still incomplete, not that ChatGPT needs a different prompt. Verify the saved connection URI ends in `/mcp`, then click **Refresh** on its ChatGPT Plugins page and check the tool list. The server advertises all seven tools with `readOnlyHint: true`, `openWorldHint: false`, and `destructiveHint: false`; after tool names, schemas, annotations, or auth change, deploy/restart the Worker and refresh the connection. If tools appear but requests fail, check Chrome profile and extension relay status: open the extension's service-worker DevTools via `chrome://extensions` and run `chrome.runtime.sendMessage({ type: 'GET_RELAY_STATUS' }, console.log)`. Expect `state: 'connected'` and the dev `relayUrl`. The existing production installation credential remains separate from dev.
+The extension must stay connected while calls are served. `/health` and OAuth discovery prove only Worker availability; they do not prove extension connectivity. From the **Tabot popup or side-panel DevTools console** (not the service-worker console, which cannot answer its own runtime message), run:
 
-See [OpenAI's connection and refresh instructions](https://developers.openai.com/plugins/deploy/connect-chatgpt) and [MCP tool metadata guidance](https://developers.openai.com/plugins/build/mcp-server).
-
-## OpenAI domain verification and scan authorization
-
-Set the current verification token from the plugin editor on the **production** Worker, then deploy the challenge route:
-
-```bash
-cd apps/mcp-server
-pnpm exec wrangler secret put OPENAI_APPS_CHALLENGE_TOKEN --config wrangler.toml
-pnpm run deploy
-curl -fsS https://tabot-mcp.shanvit7.workers.dev/.well-known/openai-apps-challenge
+```js
+chrome.runtime.sendMessage({ type: 'RUN_RELAY_SANITY_CHECK' }, console.log)
 ```
 
-The URL must return HTTP 200 with the exact token as plain text, without OAuth. Leave **Challenge Base URL** blank or use `https://tabot-mcp.shanvit7.workers.dev`, then click **Verify**. A 404 means the route is not deployed or the token binding is missing. Replace this binding if OpenAI issues a new challenge; never rotate `TABOT_AUTH_SECRET` for verification.
+Check `relay.state`, `roundTrip.ok`, and `assistants.chatgpt`. A successful round trip proves the Worker routes to this extension installation; `assistants.chatgpt` confirms this installation has a ChatGPT OAuth grant. If both pass but ChatGPT still reports offline, ChatGPT is likely using an OAuth token bound to another installation or relay environment. Production and dev credentials are separate. Dev Worker logs include an 8-character installation tag for comparing authenticated relay upgrades with offline dispatches; bearer tokens are never logged.
 
-**“Authorization for scanning is missing or no longer works”** is separate from domain verification. Reconnect the account **in the plugin editor** using the production `/mcp` URL and complete consent in the Chrome profile with the configured production extension installed. Keep Chrome and the extension connected to the production relay during the scan, then rescan. Existing review results remain stale until a scan succeeds. Do not remove MCP authentication to make the scanner pass.
-
-## Activity metrics
-
-`get_activity_metrics({ from, to, origin? })` reads the authorized installation's local event store and computes the same estimates used by the Activities graph. Bounds are Unix milliseconds: `from` inclusive, `to` exclusive, `0 <= from < to <= now`. Use `from: 0` for all retained activity. Optional `origin` must be an exact HTTP(S) origin (`https://github.com`), without a trailing slash, credentials, path, query, or fragment.
-
-The response includes the range and extension-local timezone, estimate caveats, whole-period summary (estimated milliseconds, visits, active days, sites, longest observed single-site stretch, busiest hour, and transition count), site metrics, and directed site-to-site transition counts. An origin filters sites and adjacent transitions **after** time attribution; the summary remains whole-period. Up to 50 sites and 100 transition pairs fit within a 60,000-character response budget, with explicit `truncated` flags; summary totals include omitted sites. A site-specific query can retrieve a site outside the top 50. Empty results mean no retained observations, not proof of inactivity.
-
-Time is the gap to the next site observation, capped at five minutes per gap; no extrapolation follows the final observation. It is not a measure of attention or productivity. Raw events, IDs, page paths, query strings, credentials, and favicons never leave the extension for this tool. The relay forwards the response without saving browser history.
-
-On **Activities**, choose a period and press **Ask ChatGPT about this period**, or select a site in the graph/**Explore a place** selector and press **Ask ChatGPT about this place**. The prefilled prompt includes only the exact displayed range and optional origin; ChatGPT retrieves aggregates through the authorized connector. Without a verified connection, the action goes to **AI Assistants** on Home. After updating extension and Worker, refresh the ChatGPT connection's tool list; no production deployment is performed by these changes.
-
-Local checks (no deployment or real history):
+## Checks
 
 ```bash
-pnpm --filter @tabot/shared check:activityMetrics
-pnpm --filter extension check:metricsRelay
-pnpm --filter mcp-server check:activityMetrics
-pnpm --filter web check:activityMetrics
+pnpm --filter mcp-server check
+pnpm --filter extension check:activityRelay
+pnpm --filter @tabot/shared check:historySearch
 ```
 
-## Recurring patterns
+Checks use synthetic fixtures and local mocks; they do not deploy or establish whether database-query matches are useful on real browser history.
 
-`list_recurring_patterns({ limit? })` discovers recurrent patterns from all retained locally-derived contexts, using the same derivation and classification as the dashboard. `limit` is an integer from 1 to 20, default 10. Recurrent filtering happens before limiting; newest `lastSeen` comes first. Results include pattern ids for `get_memory`, site origins, representative fingerprint ordering, counts, first/last seen, heuristic confidence, local timezone, available pattern count and truncation. Deleted or uncaptured activity is unavailable, and an empty list does not prove there are no routines.
+## Security and operations
 
-`get_memory({ id })` retains its existing summary fields and adds up to 20 recent supporting occurrences (chronological order), their context ids, start/end timestamps and origin-only site sequences, plus representative fingerprint ordering and explicit truncation flags. Actual supporting context ids are capped at 100 overall and 20 per occurrence, domains at 20 and sequences at 50 origins. Internal occurrence range identifiers are resolved to real `get_context` ids, not exposed as lookup ids. Consecutive same-site page steps collapse; unsupported/internal sites are omitted and flagged. Both responses fit a 60,000-character budget; older occurrences or lower-ranked list entries may be omitted while counts remain intact. All returned text passes the existing fail-closed privacy sanitizer. No occurrence page paths, queries, credentials, favicons or raw events leave the device. Origins and subdomains remain visible.
+Anyone able to reach the dev URL can call its endpoints; avoid production bindings and secrets there. `/installations` issues setup credentials without authentication. MCP requires OAuth and scopes requests to the authenticated installation. The relay sends requested search results directly to the client and does not store browser history.
 
-Confidence is heuristic similarity, not probability of intent or productivity. Fingerprint and occurrence sequences use derived first-occurrence ordering, not complete navigation traces or proof of an exact repeated workflow; occurrence bounds are observed spans, not continuous attention. Discovery and explicit memory lookup derive the full retained history before applying response limits. Recent context reads also select after full derivation, preserving dashboard IDs and fingerprints. Previous composite memory IDs remain usable when new occurrences extend the same pattern; deletion or segmentation changes can still invalidate IDs.
+Application logs include route/status/duration, tool name/outcome, and relay lifecycle events; they exclude tool arguments/results, credentials, URLs, and browser activity. Cloudflare native rate limits are per IP and location, not a global WAF. Request bodies are capped at 16 KiB and relay requests at 32 pending per installation.
 
-On **Recurring patterns**, **Ask ChatGPT about recurring patterns** appears above the map only when the shared OAuth connection status is verified connected, including when the map is empty. It asks ChatGPT to discover patterns and inspect up to three through `get_memory`. Selecting a row exposes a compact **Ask ChatGPT** action and **View context** supporting-context link beside that row, inside the map card. When disconnected or status is unknown, the selected-pattern action goes to Home’s connection section; the overview CTA stays hidden. Prefills contain only tool instructions and a selected id, not local pattern evidence.
-
-The existing extension, MCP and web `check:metricsRelay` / `check:activityMetrics` checks also cover pattern discovery, schemas, authorization, occurrence projection, response budgets, fail-closed privacy and connected-only overview actions. No browser automation or deployment is needed to run them. Production Worker version 0.2.2 is deployed. Extension and dashboard updates require PR #19 to merge; then reload the updated extension and refresh the ChatGPT connection's tool list.
-
-## Production checks and logs
+Production deploy is explicit and never run by these checks:
 
 ```bash
-# Tests + production bundle dry-run. Does not deploy.
 pnpm --filter mcp-server deploy:check
-
-# Live production logs after an approved deployment.
-pnpm --filter mcp-server exec wrangler tail --config wrangler.toml
+cd apps/mcp-server && pnpm run deploy
 ```
 
-Stored logs: Cloudflare dashboard → **tabot-mcp → Observability → Logs**. Retention and quotas depend on your Cloudflare plan; no external log archive or alerts are configured.
-
-- `http_request`: route pattern, status, duration, request ID. Response header `X-Request-Id` links requests to logs.
-- `tool_call`: tool name, duration, outcome and relay error code—even when MCP returns HTTP 200.
-- `relay_connected`, `relay_disconnected`, `relay_error`, `relay_rejected`: connection lifecycle.
-- `auth_migration`, `auth_cleanup`: record counts, never record contents.
-
-Application logs exclude credentials, tool arguments/results, URLs and browser activity. Native invocation logs have query strings redacted. All requests are sampled; reduce sampling if volume warrants it.
-
-Rate limits use [hono-rate-limiter's native Cloudflare binding](https://honohub.dev/docs/rate-limiter/stores/cloudflare): 20 setup requests/minute and 120 API requests/minute per IP, **per Cloudflare location**, not a global DDoS quota. Limits live in Wrangler config; prod/dev use separate account-level namespace IDs. Keep those IDs unique across your other Workers. Rate-limited requests return 429 and `Retry-After: 60`. Request bodies are capped at 16 KiB; relay requests at 32 pending per installation.
-
-Auth state uses indexed SQLite in the existing auth Durable Object. Expired records are removed by scheduled alarms. Unused client registrations expire after 90 days; authenticated client use renews that window. New records are capped at 100,000; existing records are preserved during migration.
-
-**Existing grants:** old Durable Object KV records are copied in batches of 100, then removed from KV. Tokens without an audience are bound only to this Worker's configured `MCP_PUBLIC_URL`. Legacy grant revocation is preserved during backfill. Connection status may briefly be unknown while its index builds; it is never falsely reported disconnected. This storage conversion is one-way: rolling back to the old KV-only auth code requires clients to reconnect. Back up auth state before a production rollout if a rollback without reconnecting is required.
-
-## Production deployment (explicit only)
-
-`deploy` runs typecheck and both MCP check scripts before uploading. Set secrets only when provisioning or deliberately rotating them: changing `TABOT_AUTH_SECRET` invalidates installed extension credentials. Never rotate it just to redeploy code.
-
-```bash
-cd apps/mcp-server
-pnpm exec wrangler secret put TABOT_AUTH_SECRET
-pnpm exec wrangler secret put TABOT_EXTENSION_ID
-pnpm run deploy
-```
-
-`TABOT_EXTENSION_ID` must match the installed production extension's ID. Production deploy uses `wrangler.toml`, never `wrangler.dev.toml`.
-
-## ChatGPT connect destination
-
-`GET /client-config` is public and returns the marketplace URL or `null`. Web and extension clients treat `null` or fetch failure as prompt mode; the response is cached for 60 seconds. After the marketplace listing is approved, set `CHATGPT_MARKETPLACE_URL` in `wrangler.toml` to its `https://chatgpt.com/...` listing URL and deploy only this Worker. Existing web and extension installs will switch after their cached config expires; no extension redeploy is needed.
+Never rotate `TABOT_AUTH_SECRET` for an ordinary deploy; changing it invalidates installed extension credentials. See Cloudflare dashboard → **tabot-mcp → Observability → Logs** for sampled production logs.

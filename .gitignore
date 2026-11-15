@@ -55,7 +55,6 @@ pnpm-debug.log*
 
 # Misc
 .pi
-.agents
 .vercel
 .sentry-build-plugin
 package-lock.json
