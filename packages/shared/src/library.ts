@@ -218,7 +218,8 @@ export const browseLibrary = async (
 			: [];
 	const metadataMatches = new Set(historyResults.map((page) => page.url));
 	const noteMatches = (note: PageNote) => {
-		const url = scopedUrl(note.url)!;
+		const url = scopedUrl(note.url);
+		if (!url) return false;
 		return (
 			!hasQuery ||
 			(request.level !== "notes" && metadataMatches.has(url.href)) ||
@@ -230,7 +231,8 @@ export const browseLibrary = async (
 	const matchingUrls = new Set(metadataMatches);
 	const notesByUrl = new Map<string, PageNote[]>();
 	for (const note of retainedNotes) {
-		const url = scopedUrl(note.url)!;
+		const url = scopedUrl(note.url);
+		if (!url) continue;
 		const rows = notesByUrl.get(url.href) ?? [];
 		rows.push(note);
 		notesByUrl.set(url.href, rows);
@@ -311,28 +313,31 @@ export const browseLibrary = async (
 			);
 		response.total = rows.length;
 		const sessions = sessionize(events);
-		response.notes = rows.slice(offset, offset + limit).map((note) => {
-			const url = scopedUrl(note.url)!;
+		response.notes = rows.slice(offset, offset + limit).flatMap((note) => {
+			const url = scopedUrl(note.url);
+			if (!url) return [];
 			const session = sessionForNote(note, sessions);
 			const favicon = safeRecallUrl(note.favicon ?? undefined)?.href;
-			return {
-				id: note.id,
-				text: note.text.slice(0, 4000),
-				createdAt: note.createdAt,
-				updatedAt: note.updatedAt,
-				url: url.href,
-				host: url.hostname,
-				site: deriveSiteDomain(url.hostname),
-				title: note.title?.slice(0, 300) ?? null,
-				favicon: favicon && favicon.length <= 2048 ? favicon : null,
-				session: session
-					? {
-							start: session.startTimestamp,
-							end: session.endTimestamp,
-							durationMs: session.duration,
-						}
-					: null,
-			};
+			return [
+				{
+					id: note.id,
+					text: note.text.slice(0, 4000),
+					createdAt: note.createdAt,
+					updatedAt: note.updatedAt,
+					url: url.href,
+					host: url.hostname,
+					site: deriveSiteDomain(url.hostname),
+					title: note.title?.slice(0, 300) ?? null,
+					favicon: favicon && favicon.length <= 2048 ? favicon : null,
+					session: session
+						? {
+								start: session.startTimestamp,
+								end: session.endTimestamp,
+								durationMs: session.duration,
+							}
+						: null,
+				},
+			];
 		});
 	} else if (request.level === "pages") {
 		response.total = matchedPages.length;
