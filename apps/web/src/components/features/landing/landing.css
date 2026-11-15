@@ -71,11 +71,6 @@
 	margin-inline: auto;
 	font-size: clamp(48px, 5.2vw, 76px);
 }
-.void-copy p {
-	max-width: 530px;
-	margin-inline: auto;
-	color: #233728;
-}
 .void-actions {
 	position: absolute;
 	z-index: 2;
@@ -155,6 +150,48 @@
 		.void-terrain-light
 	) {
 	animation-play-state: running;
+}
+.void-pointer-reveal {
+	stroke-dasharray: 1;
+}
+.void-hero[data-intro="started"] .void-annotation-reveal {
+	animation: void-caption-in 550ms cubic-bezier(0.16, 1, 0.3, 1) 400ms both;
+}
+.void-hero[data-intro="started"] .void-pointer-reveal {
+	animation: void-pointer-draw 900ms cubic-bezier(0.45, 0, 0.2, 1) 950ms both;
+}
+.void-hero[data-intro="started"] .void-pointer-tip {
+	animation: void-pointer-tip-in 220ms ease-out 1800ms both;
+}
+.void-hero[data-motion="paused"]
+	:is(.void-annotation-reveal, .void-pointer-reveal, .void-pointer-tip) {
+	animation-play-state: paused;
+}
+@keyframes void-caption-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+@keyframes void-pointer-draw {
+	from {
+		stroke-dashoffset: 1;
+	}
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+@keyframes void-pointer-tip-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
 }
 @keyframes void-settle {
 	from {
@@ -280,6 +317,9 @@
 	.void-world {
 		transform: translateX(88px);
 	}
+	.void-annotation {
+		transform: translate(-200px, -20px);
+	}
 	.void-terrain-light {
 		display: none;
 	}
@@ -290,11 +330,6 @@
 	.void-copy h1 {
 		max-width: 500px;
 		font-size: clamp(38px, 8vw, 58px);
-	}
-	.void-copy p {
-		max-width: 350px;
-		font-size: 16px;
-		line-height: 1.55;
 	}
 	.void-actions {
 		bottom: max(28px, env(safe-area-inset-bottom));
@@ -310,9 +345,6 @@
 	.void-copy h1 {
 		font-size: 36px;
 	}
-	.void-copy p {
-		font-size: 15px;
-	}
 	.void-actions {
 		inset-inline: 16px;
 	}
@@ -327,6 +359,10 @@
 	}
 }
 @media (prefers-reduced-motion: reduce) {
+	.void-hero[data-intro="started"]
+		:is(.void-annotation-reveal, .void-pointer-reveal, .void-pointer-tip) {
+		animation: none;
+	}
 	.void-hero
 		:is(
 			.void-stratum,

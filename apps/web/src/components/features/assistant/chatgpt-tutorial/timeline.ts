@@ -24,14 +24,14 @@ const chapters = [
 	{
 		id: "authorize",
 		label: "Review & authorize",
-		seconds: 16,
+		seconds: 30,
 		body: "Tabot doesn’t store browsing data on its servers. It stays on-device; requested results reach ChatGPT.",
 	},
 	{
 		id: "verify",
 		label: "See Tabot’s response",
 		seconds: 30,
-		body: "Ask Tabot about your research, then watch ChatGPT summarize what you explored.",
+		body: "In a chat, type @Tabot, select Tabot, and ask about your browsing activity.",
 	},
 ] as const;
 
@@ -61,6 +61,12 @@ export const CHATGPT_TUTORIAL_DURATION = CHATGPT_TUTORIAL_CHAPTERS.reduce(
 export const getTutorialChapter = (frame: number) =>
 	CHATGPT_TUTORIAL_CHAPTERS.findLast((chapter) => frame >= chapter.from) ??
 	CHATGPT_TUTORIAL_CHAPTERS[0];
+
+export const getAuthorizationStage = (frame: number) => {
+	if (frame < 330) return "review";
+	if (frame < 570) return "connect";
+	return "consent";
+};
 
 export const getVerificationStage = (frame: number) => {
 	if (frame < 180) return "compose";

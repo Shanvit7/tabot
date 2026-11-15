@@ -5,6 +5,7 @@ import {
 	ChatGptShell,
 	DemoCursor,
 	Reveal,
+	TabotMention,
 } from "~/components/features/assistant/chatgpt-tutorial/primitives";
 import {
 	getTypedText,
@@ -59,7 +60,7 @@ export const ChatGptSearchComposition = () => {
 						) : (
 							<>
 								<div className="mb-4 ml-12 rounded-3xl bg-neutral-700/50 px-5 py-3 text-xl leading-7">
-									{SEARCH_QUERY}
+									<TabotMention /> {SEARCH_QUERY}
 								</div>
 								<div className="flex items-center gap-3 rounded-xl border border-tutorial-line px-4 py-3 text-lg">
 									<span

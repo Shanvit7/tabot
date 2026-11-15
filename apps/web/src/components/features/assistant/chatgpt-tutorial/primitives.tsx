@@ -19,6 +19,7 @@ import {
 	useCurrentFrame,
 	useCurrentScale,
 } from "remotion";
+import { LOGO_URL } from "~/lib/constants";
 
 export const Reveal = ({
 	children,
@@ -95,10 +96,12 @@ export const ChatGptShell = ({
 	children,
 	plugins,
 	headerless = false,
+	sidebar = true,
 }: {
 	children: ReactNode;
 	plugins: boolean;
 	headerless?: boolean;
+	sidebar?: boolean;
 }) => {
 	const scale = useCurrentScale();
 	// Player controls keep their screen size while the composition scales.
@@ -107,52 +110,61 @@ export const ChatGptShell = ({
 			className={`absolute inset-0 ${headerless ? "top-0" : "top-24"} flex bg-tutorial-browser text-tutorial-ink`}
 			style={{ bottom: `${Math.max(7, 4 / scale)}rem` }}
 		>
-			<aside className="flex w-72 shrink-0 flex-col border-r border-white/10 p-4">
-				<div className="mb-7 flex items-center gap-5 px-2 pt-2">
-					<span className="mr-auto text-2xl font-semibold">ChatGPT</span>
-					<Search className="size-6 text-tutorial-muted" />
-					<PanelLeft className="size-6 text-tutorial-muted" />
-				</div>
-				<div className="space-y-1 text-xl">
-					{[
-						{ label: "New chat", Icon: SquarePen },
-						{ label: "Scheduled", Icon: Clock3 },
-						{ label: "Library", Icon: Library },
-						{ label: "Plugins", Icon: AtSign },
-						{ label: "Codex", Icon: Terminal },
-						{ label: "Explore", Icon: MoreHorizontal },
-					].map(({ label, Icon }) => (
-						<div
-							key={label}
-							className={`relative flex h-12 items-center gap-3 rounded-xl px-3 ${(plugins && label === "Plugins") || (!plugins && label === "New chat") ? "bg-white/10 text-tutorial-ink" : "text-tutorial-muted"}`}
-						>
-							<Icon className="size-6 shrink-0" />
-							{label}
-						</div>
-					))}
-				</div>
-				<div className="mt-7 min-h-0 flex-1 space-y-4 overflow-hidden px-3 text-lg text-tutorial-muted">
-					<p>Pinned</p>
-					<p className="text-tutorial-ink">Browser research</p>
-					<p className="pt-4">Projects</p>
-					<p className="text-neutral-500">No projects</p>
-					<p className="pt-4">Recents</p>
-					<p>Research notes</p>
-				</div>
-				<div className="mt-auto flex items-center gap-3 border-t border-white/10 px-2 pt-4 text-lg">
-					<span className="flex size-9 items-center justify-center rounded-full bg-neutral-700 text-sm">
-						T
-					</span>
-					<div>
-						Tabot demo
-						<p className="text-sm text-tutorial-muted">Personal account</p>
+			{sidebar ? (
+				<aside className="flex w-72 shrink-0 flex-col border-r border-white/10 p-4">
+					<div className="mb-7 flex items-center gap-5 px-2 pt-2">
+						<span className="mr-auto text-2xl font-semibold">ChatGPT</span>
+						<Search className="size-6 text-tutorial-muted" />
+						<PanelLeft className="size-6 text-tutorial-muted" />
 					</div>
-				</div>
-			</aside>
+					<div className="space-y-1 text-xl">
+						{[
+							{ label: "New chat", Icon: SquarePen },
+							{ label: "Scheduled", Icon: Clock3 },
+							{ label: "Library", Icon: Library },
+							{ label: "Plugins", Icon: AtSign },
+							{ label: "Codex", Icon: Terminal },
+							{ label: "Explore", Icon: MoreHorizontal },
+						].map(({ label, Icon }) => (
+							<div
+								key={label}
+								className={`relative flex h-12 items-center gap-3 rounded-xl px-3 ${(plugins && label === "Plugins") || (!plugins && label === "New chat") ? "bg-white/10 text-tutorial-ink" : "text-tutorial-muted"}`}
+							>
+								<Icon className="size-6 shrink-0" />
+								{label}
+							</div>
+						))}
+					</div>
+					<div className="mt-7 min-h-0 flex-1 space-y-4 overflow-hidden px-3 text-lg text-tutorial-muted">
+						<p>Pinned</p>
+						<p className="text-tutorial-ink">Browser research</p>
+						<p className="pt-4">Projects</p>
+						<p className="text-neutral-500">No projects</p>
+						<p className="pt-4">Recents</p>
+						<p>Research notes</p>
+					</div>
+					<div className="mt-auto flex items-center gap-3 border-t border-white/10 px-2 pt-4 text-lg">
+						<span className="flex size-9 items-center justify-center rounded-full bg-neutral-700 text-sm">
+							T
+						</span>
+						<div>
+							Tabot demo
+							<p className="text-sm text-tutorial-muted">Personal account</p>
+						</div>
+					</div>
+				</aside>
+			) : null}
 			<div className="relative min-w-0 flex-1 overflow-hidden">{children}</div>
 		</div>
 	);
 };
+
+export const TabotMention = () => (
+	<span className="inline-flex items-center gap-1.5 whitespace-nowrap align-middle font-medium text-blue-400">
+		<img src={LOGO_URL} alt="" width="20" height="20" className="size-5" />
+		@Tabot
+	</span>
+);
 
 export const ChatComposer = ({
 	children,
@@ -162,12 +174,16 @@ export const ChatComposer = ({
 	tabot?: boolean;
 }) => (
 	<div className="rounded-3xl border border-white/10 bg-neutral-900 px-5 py-4 text-xl">
-		{tabot ? (
-			<span className="mb-3 inline-flex rounded-lg bg-white/10 px-3 py-1 text-lg">
-				Tabot
-			</span>
+		{children || tabot ? (
+			<p className="mb-5 leading-8">
+				{tabot ? (
+					<>
+						<TabotMention />{" "}
+					</>
+				) : null}
+				{children}
+			</p>
 		) : null}
-		{children ? <p className="mb-5 leading-8">{children}</p> : null}
 		<div className="flex items-center gap-4 text-tutorial-muted">
 			<Plus className="size-6" />
 			{!children ? (

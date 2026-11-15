@@ -11,7 +11,8 @@ export const VoidArt = memo(() => {
 			className="void-art"
 			viewBox="0 0 1440 940"
 			preserveAspectRatio="xMidYMid slice"
-			aria-hidden="true"
+			role="img"
+			aria-label="Lost in all that context? That little light is Tabot. An arrow points to the glowing orb."
 			focusable="false"
 		>
 			<defs>
@@ -170,6 +171,77 @@ export const VoidArt = memo(() => {
 				</g>
 			</g>
 			<rect width="1440" height="940" fill={ref("veil")} />
+			<g className="void-world">
+				<g className="void-annotation">
+					<g className="void-annotation-reveal">
+						<text
+							x="750"
+							y="458"
+							className="fill-work-ink font-sans text-base font-normal"
+						>
+							<tspan x="750">Lost in all that context?</tspan>
+							<tspan x="750" dy="24">
+								That little light is Tabot.
+							</tspan>
+						</text>
+					</g>
+				</g>
+				<defs>
+					<linearGradient id={`${id}-pointer-ink`} x1="0" y1="0" x2="0" y2="1">
+						<stop stopColor="var(--work-ink)" />
+						<stop offset=".6" stopColor="var(--work-muted)" />
+						<stop offset=".85" stopColor="var(--lime)" />
+					</linearGradient>
+					<path
+						id={`${id}-pointer-desktop`}
+						d="M793 510 C846 567 727 546 727 592 S707 655 680 620"
+						pathLength="1"
+					/>
+					<path
+						id={`${id}-pointer-mobile`}
+						d="M660 491 C733 515 732 582 715 615 S694 639 680 620"
+						pathLength="1"
+					/>
+					<mask
+						id={`${id}-pointer-mask`}
+						maskUnits="userSpaceOnUse"
+						x="620"
+						y="480"
+						width="240"
+						height="190"
+					>
+						<g fill="none" stroke="white" strokeWidth="9" strokeLinecap="round">
+							<use
+								href={`#${id}-pointer-desktop`}
+								className="void-pointer-reveal hidden md:block"
+							/>
+							<use
+								href={`#${id}-pointer-mobile`}
+								className="void-pointer-reveal md:hidden"
+							/>
+						</g>
+					</mask>
+				</defs>
+				<g
+					fill="none"
+					strokeWidth="3.5"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				>
+					<g
+						mask={ref("pointer-mask")}
+						stroke={ref("pointer-ink")}
+						strokeDasharray=".008 .04"
+					>
+						<use href={`#${id}-pointer-desktop`} className="hidden md:block" />
+						<use href={`#${id}-pointer-mobile`} className="md:hidden" />
+					</g>
+					<path
+						className="void-pointer-tip stroke-lime"
+						d="M680 636 Q681 628 680 620 Q689 623 697 623"
+					/>
+				</g>
+			</g>
 		</svg>
 	);
 });

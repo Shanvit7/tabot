@@ -4,21 +4,18 @@ import {
 	ChatComposer,
 	DemoCursor,
 	Reveal,
+	TabotMention,
 } from "~/components/features/assistant/chatgpt-tutorial/primitives";
 import {
 	getTypedText,
 	getVerificationStage,
 } from "~/components/features/assistant/chatgpt-tutorial/timeline";
 
-const prompt = "Use Tabot to summarize my research on CSS container queries.";
+const prompt = "Find my research on Acme company.";
 
-// Illustrative summary, never a read of the viewer’s browser data.
-const summary = "You explored CSS container queries for responsive components.";
-const takeaways = [
-	"Adapt components to their container, not the full viewport.",
-	"Declare a query container with container-type: inline-size.",
-	"Use @container rules to change styles as space changes.",
-];
+// Illustrative site-level results, never a read of the viewer’s browser data.
+const summary = "Found 2 pages on Acme company.";
+const takeaways = ["acme.example · 1 page", "market-brief.example · 1 page"];
 
 export const VerifyScene = () => {
 	const frame = useCurrentFrame();
@@ -53,7 +50,7 @@ export const VerifyScene = () => {
 							Illustrative response · sample data, not your history
 						</p>
 						<div className="mb-4 ml-12 rounded-3xl bg-neutral-700/50 px-5 py-3 text-xl leading-7">
-							{prompt}
+							<TabotMention /> {prompt}
 						</div>
 						<div className="rounded-xl border border-tutorial-line px-4 py-3">
 							<div className="flex items-center gap-3 text-lg">

@@ -4,13 +4,14 @@ import {
 	CHATGPT_TUTORIAL_CHAPTERS,
 	CHATGPT_TUTORIAL_DURATION,
 	CHATGPT_TUTORIAL_FPS,
+	getAuthorizationStage,
 	getTutorialChapter,
 	getTypedText,
 	getVerificationStage,
 } from "../components/features/assistant/chatgpt-tutorial/timeline.ts";
 
 assert.equal(CHATGPT_TUTORIAL_CHAPTERS.length, 5);
-assert.equal(CHATGPT_TUTORIAL_DURATION, 78 * CHATGPT_TUTORIAL_FPS);
+assert.equal(CHATGPT_TUTORIAL_DURATION, 92 * CHATGPT_TUTORIAL_FPS);
 assert.equal(new Set(CHATGPT_TUTORIAL_CHAPTERS.map(({ id }) => id)).size, 5);
 
 for (const chapter of CHATGPT_TUTORIAL_CHAPTERS) {
@@ -35,6 +36,29 @@ const verification = CHATGPT_TUTORIAL_CHAPTERS.find(
 	({ id }) => id === "verify",
 );
 assert.equal(verification.durationInFrames, 30 * CHATGPT_TUTORIAL_FPS);
+assert.match(verification.body, /@Tabot/);
+assert.doesNotMatch(verification.body, /Connect|authorize|consent/);
+const authorization = CHATGPT_TUTORIAL_CHAPTERS.find(
+	({ id }) => id === "authorize",
+);
+assert.equal(authorization.durationInFrames, 30 * CHATGPT_TUTORIAL_FPS);
+assert.equal(
+	authorization.from + authorization.durationInFrames,
+	verification.from,
+);
+// Seeking backwards must restore the earlier prompt before consent and chat.
+for (const [frame, stage] of [
+	[0, "review"],
+	[329, "review"],
+	[330, "connect"],
+	[569, "connect"],
+	[570, "consent"],
+	[899, "consent"],
+	[400, "connect"],
+	[100, "review"],
+]) {
+	assert.equal(getAuthorizationStage(frame), stage);
+}
 // Direct seeks and replay must restore the search and answer, not retain later state.
 for (const [frame, stage] of [
 	[0, "compose"],
@@ -74,8 +98,46 @@ const verificationSource = readFileSync(
 	"utf8",
 );
 assert.doesNotMatch(verificationSource, /sources|timestamps|UTC/);
-assert.match(verificationSource, /summarize my research/);
+assert.match(verificationSource, /Find my research on Acme company/);
+assert.match(verificationSource, /Found 2 pages on Acme company/);
+assert.doesNotMatch(verificationSource, /CSS|@container|container queries/);
 assert.match(verificationSource, /getTypedText\(summary/);
+
+// Both ChatGPT demos show the selected mention while composing and after sending.
+for (const path of [
+	"../components/features/assistant/chatgpt-tutorial/verify-scene.tsx",
+	"../components/features/landing/demo/chatgpt-search-demo.tsx",
+]) {
+	const source = readFileSync(new URL(path, import.meta.url), "utf8");
+	assert.match(source, /<ChatComposer tabot>/);
+	assert.match(source, /<TabotMention \/>/);
+}
+const primitivesSource = readFileSync(
+	new URL(
+		"../components/features/assistant/chatgpt-tutorial/primitives.tsx",
+		import.meta.url,
+	),
+	"utf8",
+);
+assert.match(primitivesSource, /@Tabot/);
+assert.match(primitivesSource, /<TabotMention \/>/);
+const setupSource = readFileSync(
+	new URL(
+		"../components/features/assistant/panels/setup-panel.tsx",
+		import.meta.url,
+	),
+	"utf8",
+);
+assert.match(setupSource, /Connect Tabot/);
+assert.match(
+	setupSource,
+	/After adding the server, click Connect Tabot in ChatGPT’s prompt, then Connect to ChatGPT on Tabot’s consent page/,
+);
+assert.match(setupSource, /Ask with @Tabot/);
+assert.match(
+	setupSource,
+	/In a chat, type @Tabot, select Tabot, and ask your question/,
+);
 
 const directory = new URL(
 	"../components/features/assistant/chatgpt-tutorial/",

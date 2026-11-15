@@ -57,10 +57,6 @@ export const LandingPage = () => {
 							>
 								Bring your browser work to ChatGPT.
 							</h1>
-							<p className="mt-5 max-w-97.5 text-pretty text-[17px] leading-relaxed text-work-muted sm:text-lg">
-								Search pages and notes by meaning, review activity by site, and
-								request supported results from ChatGPT when you choose.
-							</p>
 						</div>
 					</HeroScene>
 				</section>

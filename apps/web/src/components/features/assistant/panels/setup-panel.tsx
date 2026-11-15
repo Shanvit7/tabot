@@ -48,12 +48,12 @@ export const AssistantSetupPanel = ({
 					"Name it Tabot, choose OAuth, and paste the server URL below. Leave advanced settings unchanged.",
 				],
 				[
-					"Review and authorize",
-					"Approve in Chrome, then enable in ChatGPT. Browsing data stays on-device; Tabot’s relay stores none of it. Only requested results reach ChatGPT.",
+					"Connect Tabot",
+					"After adding the server, click Connect Tabot in ChatGPT’s prompt, then Connect to ChatGPT on Tabot’s consent page. Only requested results are shared.",
 				],
 				[
-					"Ask about your browsing activity",
-					"Find pages or notes, see activity around a visit, or ask ChatGPT for a timeline or summary.",
+					"Ask with @Tabot",
+					"In a chat, type @Tabot, select Tabot, and ask your question.",
 				],
 			].map(([title, stepDescription], index) => (
 				<li key={title} className="flex items-start gap-3 py-2 sm:gap-4">

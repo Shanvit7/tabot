@@ -19,6 +19,7 @@
 		"check:privacyFlow": "node scripts/check-privacy-flow.mjs",
 		"check:tutorial": "node --experimental-strip-types src/checks/chatgpt-tutorial.check.mjs",
 		"check:homeSearchState": "node src/checks/state.check.mjs",
+		"check:heroAnnotation": "node src/checks/hero-annotation.check.mjs",
 		"art:build:notFound": "node scripts/build-not-found-art.mjs",
 		"art:build:profileCheck": "node scripts/build-profile-check-art.mjs",
 		"doctor": "react-doctor",

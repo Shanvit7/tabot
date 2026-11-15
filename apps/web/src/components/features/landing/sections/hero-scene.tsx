@@ -15,10 +15,9 @@ export const HeroScene = ({
 		if (!node) return;
 		const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 		const sync = () => {
-			node.dataset.motion =
-				visible.current && !document.hidden && !reduced.matches
-					? "running"
-					: "paused";
+			const running = visible.current && !document.hidden && !reduced.matches;
+			node.dataset.motion = running ? "running" : "paused";
+			if (running) node.dataset.intro = "started";
 		};
 		const observer = new IntersectionObserver(
 			(entries) => {

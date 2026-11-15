@@ -42,7 +42,7 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 	const navigate = useNavigate();
 	const reduceMotion = useReducedMotion();
 	const handleInstallClick = () => {
-		if (connected) {
+		if (connected && !mobile) {
 			void navigate({ to: "/home" });
 			return;
 		}
@@ -54,7 +54,7 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 		if (storeUrl) window.open(storeUrl, "_blank", "noopener,noreferrer");
 	};
 
-	if (!connected && !storeUrl)
+	if (!storeUrl && (!connected || mobile))
 		return (
 			<span className="inline-flex min-h-14 items-center rounded-full bg-work-raised px-6 text-sm text-work-muted">
 				Chrome Store link unavailable
@@ -65,10 +65,10 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 		<button
 			type="button"
 			aria-label={
-				connected
-					? "Continue in Tabot"
-					: mobile
-						? "Copy store link"
+				mobile
+					? "Copy store link"
+					: connected
+						? "Continue in Tabot"
 						: "Add to Chrome"
 			}
 			onClick={handleInstallClick}
@@ -77,7 +77,7 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 			<LazyMotion features={domAnimation}>
 				<AnimatePresence initial={false} mode="wait">
 					<m.span
-						key={connected ? "continue" : mobile ? "copy" : "install"}
+						key={mobile ? "copy" : connected ? "continue" : "install"}
 						className="inline-flex items-center justify-center gap-3 whitespace-nowrap"
 						initial={{ opacity: 0, y: reduceMotion ? 0 : 4 }}
 						animate={{ opacity: 1, y: 0 }}
@@ -87,7 +87,12 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 							ease: [0.22, 1, 0.36, 1],
 						}}
 					>
-						{connected ? (
+						{mobile ? (
+							<>
+								<Copy aria-hidden="true" className="size-4" />
+								<span>Copy store link</span>
+							</>
+						) : connected ? (
 							<>
 								<img
 									src={LOGO_URL}
@@ -97,11 +102,6 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 									className="size-5.5 rounded-sm object-contain"
 								/>
 								<span>Continue in Tabot</span>
-							</>
-						) : mobile ? (
-							<>
-								<Copy aria-hidden="true" className="size-4" />
-								<span>Copy store link</span>
 							</>
 						) : (
 							<>

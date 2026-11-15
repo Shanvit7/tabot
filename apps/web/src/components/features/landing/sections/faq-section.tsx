@@ -31,6 +31,10 @@ const faqs = [
 		</>,
 	],
 	[
+		"Is Tabot free because you train AI on my data?",
+		"No—we don’t train AI on your browsing data. Tabot is free and open source, so you can use it without paying for another AI service or handing your browsing history to a cloud platform. We’d rather keep the core experience free and let the community shape where it goes next.",
+	],
+	[
 		"Can Tabot take actions for me?",
 		<>
 			Not yet. We’re working toward automations you can create locally and

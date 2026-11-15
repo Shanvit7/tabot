@@ -10,6 +10,7 @@ import {
 import {
 	CHATGPT_TUTORIAL_CHAPTERS,
 	CHATGPT_TUTORIAL_FPS,
+	getAuthorizationStage,
 	getTutorialChapter,
 } from "~/components/features/assistant/chatgpt-tutorial/timeline";
 import { VerifyScene } from "~/components/features/assistant/chatgpt-tutorial/verify-scene";
@@ -27,13 +28,16 @@ export const ChatGptConnectionTutorial = () => {
 	const frame = useCurrentFrame();
 	const chapter = getTutorialChapter(frame);
 	const index = CHATGPT_TUTORIAL_CHAPTERS.indexOf(chapter);
-	const completingOAuth =
-		chapter.id === "authorize" && frame - chapter.from >= 330;
+	const authorizationStage =
+		chapter.id === "authorize"
+			? getAuthorizationStage(frame - chapter.from)
+			: undefined;
 
 	return (
 		<AbsoluteFill className="bg-tutorial-browser font-chatgpt text-tutorial-ink">
 			<ChatGptShell
 				plugins={chapter.id !== "prepare" && chapter.id !== "verify"}
+				sidebar={authorizationStage !== "consent"}
 			>
 				{CHATGPT_TUTORIAL_CHAPTERS.map(
 					({ id, label, from, durationInFrames }) => {
@@ -63,9 +67,11 @@ export const ChatGptConnectionTutorial = () => {
 					<span>Illustrated walkthrough</span>
 				</div>
 				<p className="text-2xl leading-8">
-					{completingOAuth
-						? "Complete Tabot OAuth in this Chrome profile, then finish enabling the plugin."
-						: chapter.body}
+					{authorizationStage === "connect"
+						? "Click Connect Tabot in ChatGPT to open Tabot’s consent page."
+						: authorizationStage === "consent"
+							? "Review Tabot’s consent page, then click Connect to ChatGPT."
+							: chapter.body}
 				</p>
 			</div>
 		</AbsoluteFill>
