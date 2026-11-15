@@ -1,6 +1,10 @@
-# ![](assets/logo.png) Tabot
+<p align="center">
+	<img src="assets/logo.png" alt="" width="96" height="96" />
+</p>
 
-**Bring your browser work to ChatGPT.**
+<h1 align="center">Tabot</h1>
+
+<p align="center"><strong>Bring your browser work to ChatGPT.</strong></p>
 
 Tabot is the browser activity layer for AI-assisted work. It helps you use work already done in Chrome with ChatGPT.
 
