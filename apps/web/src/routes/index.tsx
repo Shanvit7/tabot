@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { LandingPage } from "~/components/features/landing/landing-page";
 import { OG_IMAGE_URL, SHARE_URL } from "~/lib/constants";
 
-const title = "Tabot — Your browsing context for ChatGPT";
+const title = "Tabot — Bring your browser work to your AI assistant";
 const description =
-	"Tabot helps you find things you've looked at in Chrome and save your own takeaways, so you can bring your browsing context to ChatGPT.";
+	"Search pages and notes, review browser activity, and ask ChatGPT about selected activity or saved notes.";
 
 export const Route = createFileRoute("/")({
 	head: () => ({
@@ -22,7 +22,8 @@ export const Route = createFileRoute("/")({
 			{ property: "og:image:height", content: "630" },
 			{
 				property: "og:image:alt",
-				content: "Tabot local search and a requested note in ChatGPT.",
+				content:
+					"Tabot helps you search pages and notes, review browser activity, and ask ChatGPT about selected results.",
 			},
 			{ name: "twitter:card", content: "summary_large_image" },
 			{ name: "twitter:title", content: title },
@@ -30,7 +31,8 @@ export const Route = createFileRoute("/")({
 			{ name: "twitter:image", content: OG_IMAGE_URL },
 			{
 				name: "twitter:image:alt",
-				content: "Tabot local search and a requested note in ChatGPT.",
+				content:
+					"Tabot helps you search pages and notes, review browser activity, and ask ChatGPT about selected results.",
 			},
 		],
 	}),

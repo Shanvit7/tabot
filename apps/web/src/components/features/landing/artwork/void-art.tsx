@@ -12,7 +12,7 @@ export const VoidArt = memo(() => {
 			viewBox="0 0 1440 940"
 			preserveAspectRatio="xMidYMid slice"
 			role="img"
-			aria-label="Lost in all that context? That little light is Tabot. An arrow points to the glowing orb."
+			aria-label="Lost in a stack of context? That light is Tabot. An arrow points to the glowing orb."
 			focusable="false"
 		>
 			<defs>
@@ -177,11 +177,11 @@ export const VoidArt = memo(() => {
 						<text
 							x="750"
 							y="458"
-							className="fill-work-ink font-sans text-base font-normal"
+							className="fill-work-ink font-sans text-sm font-normal"
 						>
-							<tspan x="750">Lost in all that context?</tspan>
-							<tspan x="750" dy="24">
-								That little light is Tabot.
+							<tspan x="750">Lost in a stack of context?</tspan>
+							<tspan x="750" dy="21" className="fill-work-ink font-medium">
+								That light is Tabot.
 							</tspan>
 						</text>
 					</g>

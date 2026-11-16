@@ -40,7 +40,7 @@ try {
 		evaluate(
 			"[...document.querySelectorAll('.void-annotation tspan')].map(node => node.textContent.trim())",
 		),
-		["Lost in all that context?", "That little light is Tabot."],
+		["Lost in a stack of context?", "That light is Tabot."],
 	);
 	assert.match(
 		evaluate(
@@ -48,22 +48,61 @@ try {
 		),
 		/Clash Grotesk/,
 	);
+	assert.equal(
+		evaluate(
+			"getComputedStyle(document.querySelector('.void-annotation text')).fontSize",
+		),
+		"14px",
+	);
 	for (const width of [1440, 390, 320]) {
 		browser("set", "viewport", String(width), "940");
+		// First paint matches the intro: arrow draws before any caption appears.
+		evaluate("delete document.querySelector('.void-hero').dataset.intro");
 		assert.deepEqual(frame(0), [0, 1, 0]);
-		const caption = frame(700);
-		assert.ok(caption[0] > 0 && caption[0] < 1);
-		assert.deepEqual(caption.slice(1), [1, 0]);
-		const drawing = frame(1300);
-		assert.equal(drawing[0], 1);
+		evaluate("document.querySelector('.void-hero').dataset.intro = 'started'");
+		assert.deepEqual(frame(0), [0, 1, 0]);
+		const drawing = frame(850);
+		assert.equal(drawing[0], 0);
 		assert.ok(drawing[1] > 0 && drawing[1] < 1);
 		assert.equal(drawing[2], 0);
-		assert.deepEqual(frame(2400), [1, 0, 1]);
+		assert.deepEqual(frame(1500), [0, 0, 1]);
+		const caption = frame(1700);
+		assert.ok(caption[0] > 0 && caption[0] < 1);
+		assert.deepEqual(caption.slice(1), [0, 1]);
+		assert.deepEqual(frame(2000), [1, 0, 1]);
+		assert.equal(
+			evaluate(
+				"getComputedStyle(document.querySelector('.void-annotation text')).fill === getComputedStyle(document.querySelector('.void-annotation tspan:last-child')).fill",
+			),
+			true,
+		);
+		if (width < 768) {
+			assert.deepEqual(
+				evaluate(`document.querySelector('.void-art').getAnimations({subtree:true})
+					.filter(animation => !animation.animationName.startsWith('void-pointer') && animation.animationName !== 'void-caption-in')
+					.map(animation => [animation.animationName, animation.effect.getTiming().duration])`),
+				[["void-float-mobile", 8000]],
+			);
+			assert.equal(
+				evaluate(
+					"[...document.querySelectorAll('.void-stratum')].every(node => getComputedStyle(node).transform === 'none')",
+				),
+				true,
+			);
+			assert.equal(
+				evaluate(
+					"getComputedStyle(document.querySelector('.void-orb > circle[filter]')).display",
+				),
+				"none",
+			);
+		}
 		assert.equal(
 			evaluate("document.documentElement.scrollWidth > innerWidth"),
 			false,
 		);
 	}
+	browser("set", "viewport", "1440", "940");
+	frame(2400);
 	evaluate("window.scrollTo(0, 2000)");
 	browser(
 		"wait",
@@ -89,7 +128,14 @@ try {
 		1,
 	);
 
+	browser("set", "viewport", "390", "844");
 	browser("set", "media", "light", "reduced-motion");
+	assert.equal(
+		evaluate(
+			"document.querySelector('.void-art').getAnimations({subtree:true}).length",
+		),
+		0,
+	);
 	assert.deepEqual(frame(0), [1, 0, 1]);
 	browser("reload");
 	browser("wait", "--fn", "!!document.querySelector('.void-annotation')");
@@ -99,7 +145,7 @@ try {
 		false,
 	);
 	console.log(
-		"Hero annotation: approved copy, Clash, caption → dotted arrow → tip, desktop/mobile, offscreen pause, no replay and reduced motion passed.",
+		"Hero: arrow before dark caption, stable first frame, gentle mobile drift, offscreen pause, no replay and reduced motion passed.",
 	);
 } finally {
 	browser("close");
