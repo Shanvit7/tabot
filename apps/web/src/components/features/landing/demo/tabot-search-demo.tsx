@@ -35,12 +35,8 @@ export const TabotSearchComposition = ({
 }) => {
 	const frame = useCurrentFrame();
 	const stage = getTabotSearchStage(frame);
-	const query = getTypedText(
-		notes ? NOTE_SEARCH_QUERY : SEARCH_QUERY,
-		frame,
-		18,
-		100,
-	);
+	const searchQuery = notes ? NOTE_SEARCH_QUERY : SEARCH_QUERY;
+	const query = getTypedText(searchQuery, frame, 18, 100);
 	const counts = notes
 		? { Everything: 1, Sites: 0, Pages: 0, Notes: 1 }
 		: TABOT_SEARCH_COUNTS;
@@ -86,8 +82,23 @@ export const TabotSearchComposition = ({
 				>
 					<h1 className="mb-6 text-center text-2xl font-medium tracking-tight">
 						Find your way back to
-						<span className="ml-1 inline-block font-semibold underline decoration-primary decoration-2 underline-offset-4">
-							{query ? `“${query}”` : "a page you visited"}
+						<span className="ml-1 inline-grid text-left font-semibold underline decoration-primary decoration-2 underline-offset-4">
+							{/* Reserve both states so centered heading stays still while typing. */}
+							<span
+								aria-hidden="true"
+								className="invisible col-start-1 row-start-1"
+							>
+								{`“${searchQuery}”`}
+							</span>
+							<span
+								aria-hidden="true"
+								className="invisible col-start-1 row-start-1"
+							>
+								a page you visited
+							</span>
+							<span className="col-start-1 row-start-1">
+								{query ? `“${query}”` : "a page you visited"}
+							</span>
 						</span>
 					</h1>
 					<div className="relative flex h-14 items-center gap-2 border-b border-input bg-background p-1.5 focus-within:border-work-ink">

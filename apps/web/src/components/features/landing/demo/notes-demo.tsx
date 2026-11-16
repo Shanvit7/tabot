@@ -1,12 +1,12 @@
 import { Player } from "@remotion/player";
 import { useReducedMotion } from "motion/react";
 import {
-	CHATGPT_TUTORIAL_FPS,
 	CHATGPT_TUTORIAL_HEIGHT,
 	CHATGPT_TUTORIAL_WIDTH,
 } from "~/components/features/assistant/chatgpt-tutorial/timeline";
 import { NotesDemoComposition } from "~/components/features/landing/demo/notes-demo-composition";
 import { NOTES_DEMO_DURATION } from "~/components/features/landing/demo/notes-demo-data";
+import { LANDING_DEMO_FPS } from "~/components/features/landing/demo/paired-search-demo-data";
 
 const NotesDemo = () => {
 	const reduceMotion = useReducedMotion();
@@ -24,7 +24,7 @@ const NotesDemo = () => {
 					compositionWidth={CHATGPT_TUTORIAL_WIDTH}
 					compositionHeight={CHATGPT_TUTORIAL_HEIGHT}
 					durationInFrames={NOTES_DEMO_DURATION}
-					fps={CHATGPT_TUTORIAL_FPS}
+					fps={LANDING_DEMO_FPS}
 					autoPlay={!reduceMotion}
 					controls
 					alwaysShowControls

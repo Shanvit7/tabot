@@ -1,12 +1,14 @@
 import { Player } from "@remotion/player";
 import { useReducedMotion } from "motion/react";
 import {
-	CHATGPT_TUTORIAL_FPS,
 	CHATGPT_TUTORIAL_HEIGHT,
 	CHATGPT_TUTORIAL_WIDTH,
 } from "~/components/features/assistant/chatgpt-tutorial/timeline";
 import { ChatGptSearchComposition } from "~/components/features/landing/demo/chatgpt-search-demo";
-import { SEARCH_DEMO_DURATION } from "~/components/features/landing/demo/paired-search-demo-data";
+import {
+	LANDING_DEMO_FPS,
+	SEARCH_DEMO_DURATION,
+} from "~/components/features/landing/demo/paired-search-demo-data";
 
 const ChatGptSearchDemo = () => {
 	const reduceMotion = useReducedMotion();
@@ -18,7 +20,7 @@ const ChatGptSearchDemo = () => {
 					compositionWidth={CHATGPT_TUTORIAL_WIDTH}
 					compositionHeight={CHATGPT_TUTORIAL_HEIGHT}
 					durationInFrames={SEARCH_DEMO_DURATION}
-					fps={CHATGPT_TUTORIAL_FPS}
+					fps={LANDING_DEMO_FPS}
 					autoPlay={!reduceMotion}
 					controls
 					alwaysShowControls
