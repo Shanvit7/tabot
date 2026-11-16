@@ -30,11 +30,80 @@ const frame = (time) =>
 })()`);
 
 try {
-	browser("open", process.argv[2] ?? "http://127.0.0.1:3000/");
+	const url = process.argv[2] ?? "http://127.0.0.1:3000/";
+	// With JS held back, streamed mobile paths must stay hidden; copy/actions must not wait on them.
+	browser("set", "viewport", "390", "844");
+	browser("network", "route", "**/*.js", "--abort");
+	browser("open", url);
+	assert.equal(
+		evaluate("getComputedStyle(document.querySelector('.void-art')).opacity"),
+		"0",
+	);
+	assert.equal(
+		evaluate("document.querySelector('.void-hero').hasAttribute('data-ready')"),
+		false,
+	);
+	assert.equal(
+		evaluate(
+			"getComputedStyle(document.querySelector('#landing-title')).opacity",
+		),
+		"1",
+	);
+	assert.equal(
+		evaluate(`(() => {
+		const scene = document.querySelector('.void-hero');
+		return [...scene.children].indexOf(scene.querySelector('.void-art')) > [...scene.children].indexOf(scene.querySelector('.void-actions'));
+	})()`),
+		true,
+	);
+	const heroHeight = evaluate(
+		"document.querySelector('.void-hero').getBoundingClientRect().height",
+	);
+	assert.deepEqual(
+		evaluate(
+			"[...document.fonts].filter(face => face.family.includes('Mobile')).map(face => face.display)",
+		),
+		["optional", "optional"],
+	);
+	assert.equal(
+		evaluate(
+			"document.querySelectorAll('link[rel=preload][as=font][media=\"(max-width: 767px)\"]').length",
+		),
+		2,
+	);
+	browser("network", "unroute", "**/*.js");
+	browser("reload");
 	browser(
 		"wait",
 		"--fn",
 		"document.querySelector('.void-hero')?.dataset.intro === 'started'",
+	);
+	browser(
+		"wait",
+		"--fn",
+		"getComputedStyle(document.querySelector('.void-art')).opacity === '1'",
+	);
+	assert.equal(
+		evaluate(
+			"document.querySelector('.void-hero').getBoundingClientRect().height",
+		),
+		heroHeight,
+	);
+	assert.equal(
+		evaluate("document.querySelectorAll('.void-stratum path').length"),
+		2640,
+	);
+	assert.equal(
+		evaluate(
+			"document.querySelector('#hero-install button').textContent.trim()",
+		),
+		"Copy store link",
+	);
+	assert.equal(
+		evaluate(
+			"getComputedStyle(document.querySelector('#hero-install button > span')).opacity",
+		),
+		"1",
 	);
 	assert.deepEqual(
 		evaluate(
@@ -56,6 +125,16 @@ try {
 	);
 	for (const width of [1440, 390, 320]) {
 		browser("set", "viewport", String(width), "940");
+		assert.equal(
+			evaluate("getComputedStyle(document.querySelector('.void-art')).opacity"),
+			"1",
+		);
+		assert.equal(
+			evaluate(
+				"getComputedStyle(document.querySelector('#landing-title')).fontFamily.includes('Mobile')",
+			),
+			width < 768,
+		);
 		// First paint matches the intro: arrow draws before any caption appears.
 		evaluate("delete document.querySelector('.void-hero').dataset.intro");
 		assert.deepEqual(frame(0), [0, 1, 0]);
@@ -145,7 +224,7 @@ try {
 		false,
 	);
 	console.log(
-		"Hero: arrow before dark caption, stable first frame, gentle mobile drift, offscreen pause, no replay and reduced motion passed.",
+		"Hero: complete mobile reveal, stable bounds/CTA, arrow before caption, desktop intro, gentle mobile drift, offscreen pause and reduced motion passed.",
 	);
 } finally {
 	browser("close");

@@ -25,9 +25,13 @@ const RootLayout = () => {
 		if (isLoading) return;
 		if (
 			isMobile &&
-			pathname !== "/" &&
-			pathname !== "/mobile" &&
-			pathname !== "/privacy"
+			[
+				"/home",
+				"/assistant",
+				"/settings",
+				"/automations",
+				"/extension-not-connected",
+			].includes(pathname)
 		) {
 			void navigate({ to: "/mobile", replace: true });
 		} else if (!isMobile && pathname === "/mobile") {

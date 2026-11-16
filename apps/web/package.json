@@ -15,6 +15,7 @@
 		"check:pairedSearchDemo": "node src/checks/paired-search-demo.check.mjs",
 		"check:searchResults": "node src/checks/result-section.check.mjs",
 		"check:notFoundArt": "node src/checks/art.check.mjs",
+		"check:notFoundRoute": "node src/checks/not-found-route.check.mjs",
 		"check:webVitals": "node src/checks/landing-web-vitals.check.mjs",
 		"check:privacyFlow": "node scripts/check-privacy-flow.mjs",
 		"check:tutorial": "node --experimental-strip-types src/checks/chatgpt-tutorial.check.mjs",

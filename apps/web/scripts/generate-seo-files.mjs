@@ -44,9 +44,15 @@ for (const route of [
 	"settings",
 	"mobile",
 	"extension-not-connected",
+	"404",
 ]) {
 	const html = readFileSync(new URL(`${route}/index.html`, outputDir), "utf8");
 	assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
 }
+
+writeFileSync(
+	new URL("404.html", outputDir),
+	readFileSync(new URL("404/index.html", outputDir)),
+);
 
 console.log(`Generated and checked SEO files for ${siteUrl}.`);
