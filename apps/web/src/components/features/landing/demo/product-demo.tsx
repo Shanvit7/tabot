@@ -1,7 +1,9 @@
-import { MessageSquare, Search, StickyNote } from "lucide-react";
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import { Search, StickyNote } from "lucide-react";
 import { useInView } from "motion/react";
 import { lazy, memo, Suspense, useRef, useState } from "react";
 import FluidTabs from "~/components/ui/motion/tabs/fluid-tabs";
+import { Skeleton } from "~/components/ui/skeleton";
 
 const ChatGptSearchDemo = lazy(
 	() => import("~/components/features/landing/demo/chatgpt-search-player"),
@@ -13,12 +15,46 @@ const NotesDemo = lazy(
 	() => import("~/components/features/landing/demo/notes-demo"),
 );
 
+const DemoLoading = ({
+	label,
+	className,
+}: {
+	label: string;
+	className: string;
+}) => (
+	<div
+		role="status"
+		aria-label={`Loading ${label} demo`}
+		className={`aspect-8/5 overflow-hidden rounded-2xl border border-work-line ${className}`}
+	>
+		<div
+			aria-hidden="true"
+			className="mx-auto flex h-full max-w-2xl flex-col gap-5 p-5 sm:gap-7 sm:p-8"
+		>
+			<div className="flex items-center gap-3 border-b border-current/10 pb-4">
+				<Skeleton className="size-7 shrink-0 rounded-full motion-reduce:animate-none" />
+				<Skeleton className="h-3 w-28 motion-reduce:animate-none" />
+				<Skeleton className="ml-auto h-3 w-12 motion-reduce:animate-none" />
+			</div>
+			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center gap-4">
+				<Skeleton className="mx-auto h-4 w-2/5 motion-reduce:animate-none" />
+				<Skeleton className="h-11 w-full rounded-xl motion-reduce:animate-none" />
+				<div className="flex flex-col gap-3 pt-2">
+					<Skeleton className="h-3 w-full motion-reduce:animate-none" />
+					<Skeleton className="h-3 w-4/5 motion-reduce:animate-none" />
+					<Skeleton className="h-3 w-2/3 motion-reduce:animate-none" />
+				</div>
+			</div>
+		</div>
+	</div>
+);
+
 const scenes = [
 	{
 		id: "chatgpt",
 		title: "Search in ChatGPT",
 		shortTitle: "ChatGPT",
-		icon: MessageSquare,
+		icon: OpenAIMono,
 	},
 	{ id: "tabot", title: "Search in Tabot", shortTitle: "Tabot", icon: Search },
 	{ id: "notes", title: "Saved notes", shortTitle: "Notes", icon: StickyNote },
@@ -80,12 +116,10 @@ export const ProductDemo = memo(() => {
 							selected === 0 && inView ? (
 								<Suspense
 									fallback={
-										<div
-											role="status"
-											className="grid aspect-8/5 place-items-center rounded-2xl bg-tutorial-browser text-white"
-										>
-											Loading ChatGPT search…
-										</div>
+										<DemoLoading
+											label="ChatGPT search"
+											className="bg-tutorial-browser text-white"
+										/>
 									}
 								>
 									<ChatGptSearchDemo />
@@ -95,12 +129,10 @@ export const ProductDemo = memo(() => {
 							selected === 1 && inView ? (
 								<Suspense
 									fallback={
-										<div
-											role="status"
-											className="grid aspect-8/5 place-items-center rounded-2xl bg-background text-foreground"
-										>
-											Loading Tabot search…
-										</div>
+										<DemoLoading
+											label="Tabot search"
+											className="bg-background text-foreground"
+										/>
 									}
 								>
 									<TabotSearchDemo />
@@ -109,12 +141,10 @@ export const ProductDemo = memo(() => {
 						) : selected === 2 && inView ? (
 							<Suspense
 								fallback={
-									<div
-										role="status"
-										className="grid aspect-8/5 place-items-center rounded-2xl bg-[#eef0ec] text-work-muted"
-									>
-										Loading Notes demo…
-									</div>
+									<DemoLoading
+										label="saved notes"
+										className="bg-[#eef0ec] text-work-muted"
+									/>
 								}
 							>
 								<NotesDemo />

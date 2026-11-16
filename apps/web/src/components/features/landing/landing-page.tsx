@@ -77,8 +77,8 @@ export const LandingPage = () => {
 							</h2>
 							<p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-work-muted">
 								ChatGPT can use selected context from your browsing when you
-								ask. In Tabot, search that browsing context across saved pages,
-								activity, and notes.
+								ask. In Tabot, search that browsing context across pages, sites,
+								and notes.
 							</p>
 						</div>
 						<ProductDemo />

@@ -154,14 +154,24 @@
 .void-pointer-reveal {
 	stroke-dasharray: 1;
 }
+/* Match the first animated frame before hydration; keep no-JS/reduced-motion text visible. */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+	.void-hero:not([data-intro="started"])
+		:is(.void-annotation-reveal, .void-pointer-tip) {
+		opacity: 0;
+	}
+	.void-hero:not([data-intro="started"]) .void-pointer-reveal {
+		stroke-dashoffset: 1;
+	}
+}
 .void-hero[data-intro="started"] .void-annotation-reveal {
-	animation: void-caption-in 550ms cubic-bezier(0.16, 1, 0.3, 1) 400ms both;
+	animation: void-caption-in 400ms cubic-bezier(0.16, 1, 0.3, 1) 1500ms both;
 }
 .void-hero[data-intro="started"] .void-pointer-reveal {
-	animation: void-pointer-draw 900ms cubic-bezier(0.45, 0, 0.2, 1) 950ms both;
+	animation: void-pointer-draw 900ms cubic-bezier(0.45, 0, 0.2, 1) 400ms both;
 }
 .void-hero[data-intro="started"] .void-pointer-tip {
-	animation: void-pointer-tip-in 220ms ease-out 1800ms both;
+	animation: void-pointer-tip-in 180ms ease-out 1300ms both;
 }
 .void-hero[data-motion="paused"]
 	:is(.void-annotation-reveal, .void-pointer-reveal, .void-pointer-tip) {
@@ -208,6 +218,15 @@
 	}
 	50% {
 		transform: translateY(-9px);
+	}
+}
+@keyframes void-float-mobile {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-3px);
 	}
 }
 @keyframes void-illumination {
@@ -320,7 +339,17 @@
 	.void-annotation {
 		transform: translate(-200px, -20px);
 	}
-	.void-terrain-light {
+	/* Keep terrain assembled before hydration; only the small orb drifts on mobile. */
+	.void-hero :is(.void-stratum, .void-spill, .void-orb-shadow) {
+		animation: none;
+	}
+	.void-orb {
+		animation-name: void-float-mobile;
+		animation-duration: 8s;
+	}
+	.void-terrain-light,
+	.void-orb-shine,
+	.void-orb > circle[filter] {
 		display: none;
 	}
 	.void-copy {
@@ -403,38 +432,38 @@
 }
 .automation-head {
 	transform-origin: 532px 128px;
-	animation: automation-look 4.8s ease-in-out both;
+	animation: automation-look 4.8s ease-in-out infinite;
 }
 .automation-gaze {
-	animation: automation-gaze 4.8s ease-in-out both;
+	animation: automation-gaze 4.8s ease-in-out infinite;
 }
 .automation-eyes {
 	transform-box: fill-box;
 	transform-origin: center;
-	animation: automation-blink 4.8s linear both;
+	animation: automation-blink 4.8s linear infinite;
 }
 .automation-forearm {
 	transform-origin: 625px 177px;
 	transform: rotate(10deg);
-	animation: automation-tap 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: automation-tap 4.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 .automation-play {
 	transform-origin: 581px 274px;
-	animation: automation-press 4.8s ease-in-out both;
+	animation: automation-press 4.8s ease-in-out infinite;
 }
 .automation-click-ring {
 	transform-origin: 581px 274px;
 	opacity: 0;
-	animation: automation-click 4.8s ease-out both;
+	animation: automation-click 4.8s ease-out infinite;
 }
 .automation-step-0 .automation-step-done {
-	animation: automation-first 4.8s ease-in-out both;
+	animation: automation-first 4.8s ease-in-out infinite;
 }
 .automation-step-1 .automation-step-done {
-	animation: automation-second 4.8s ease-in-out both;
+	animation: automation-second 4.8s ease-in-out infinite;
 }
 .automation-step-2 .automation-step-done {
-	animation: automation-third 4.8s ease-in-out both;
+	animation: automation-third 4.8s ease-in-out infinite;
 }
 .automation-scene[data-motion="paused"] * {
 	animation-play-state: paused;

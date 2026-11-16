@@ -53,7 +53,7 @@ try {
 	assert.equal(
 		evaluate(`document.querySelector('.automation-figure').getAnimations({subtree:true}).every(animation => {
 			const timing = animation.effect.getTiming();
-			return timing.iterations === 1 && timing.duration <= 5000 && timing.fill === 'both';
+			return timing.iterations === Infinity && timing.duration <= 5000 && timing.fill === 'none';
 		})`),
 		true,
 	);
@@ -61,7 +61,7 @@ try {
 	assert.deepEqual(pose(1920), [1, 0, 0]);
 	assert.deepEqual(pose(2496), [1, 1, 0]);
 	assert.deepEqual(pose(3072), [1, 1, 1]);
-	assert.deepEqual(pose(4800), [1, 1, 1]);
+	assert.deepEqual(pose(4800), [0, 0, 0]);
 	evaluate("window.scrollTo(0, 0)");
 	waitForMotion("paused");
 
@@ -88,7 +88,7 @@ try {
 		[1, 1, 1],
 	);
 	console.log(
-		"Automation illustration: no controls, finite sequence, held final frame, offscreen, mobile, reduced motion passed.",
+		"Automation illustration: no controls, looping sequence, offscreen, mobile, reduced motion passed.",
 	);
 } finally {
 	browser("close");

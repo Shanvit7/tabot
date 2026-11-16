@@ -30,7 +30,7 @@ export const ClosingSection = ({
 				strokeDashoffset={100}
 				strokeLinecap="round"
 				strokeWidth="6"
-				className="animate-[zigzag-pulse_4800ms_ease-out_infinite] motion-reduce:hidden"
+				className="animate-[zigzag-pulse_2000ms_ease-out_infinite] motion-reduce:hidden"
 			/>
 		</svg>
 		<div className="relative mx-auto max-w-3xl">
@@ -40,9 +40,9 @@ export const ClosingSection = ({
 			>
 				Search your browser activity. Connect ChatGPT when you need it.
 			</h2>
-			<p className="mx-auto mb-8 mt-5 max-w-lg text-lg leading-relaxed text-work-muted">
-				Search pages and notes on this device. Connect ChatGPT for captured site
-				activity or a saved note.
+			<p className="mx-auto mb-8 mt-5 max-w-lg text-base leading-relaxed text-work-muted">
+				Find pages you’ve visited, save useful notes, and ask ChatGPT about the
+				details you choose.
 			</p>
 			<InstallLink connected={connected} mobile={mobile} />
 		</div>
