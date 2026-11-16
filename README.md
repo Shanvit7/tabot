@@ -22,7 +22,7 @@ Tabot is in early beta. Search and review your browsing context locally—includ
 
 Browser history, excerpts, notes, and search indexes stay in Chrome on your device. When you ask ChatGPT about activity or request saved notes, selected results go to ChatGPT; the relay routes requests but does not store browser history or tool results. Excerpts stay local. Tabot does not record what you type or enter in forms, take screenshots, or save full-page copies. Selected sensitive patterns are filtered from captured text and URLs and from requested note text and titles; filtering can miss sensitive details.
 
-## Demos
+## Demo
 
 Search fictional Acme browsing activity locally in Tabot. Sample data is illustrative, not live browsing history.
 
