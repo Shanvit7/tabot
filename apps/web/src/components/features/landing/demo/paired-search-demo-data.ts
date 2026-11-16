@@ -1,6 +1,8 @@
 import type { ActivitySearchResult, HistorySearchResult } from "@tabot/shared";
 
 export const SEARCH_DEMO_DURATION = 20 * 30;
+// Play the original 30 fps choreography 1.5× faster without skipping source frames.
+export const LANDING_DEMO_FPS = 45;
 export const SEARCH_QUERY = "Search on Acme company";
 export const CHATGPT_SEARCH_ANSWER = "Found 2 pages on Acme company.";
 

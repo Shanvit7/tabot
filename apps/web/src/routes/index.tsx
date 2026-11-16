@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import clashDisplay from "~/assets/fonts/clash-display-600.woff2";
+import clashGrotesk from "~/assets/fonts/clash-grotesk-var.woff2";
 import { LandingPage } from "~/components/features/landing/landing-page";
 import { OG_IMAGE_URL, SHARE_URL } from "~/lib/constants";
 
@@ -8,7 +10,17 @@ const description =
 
 export const Route = createFileRoute("/")({
 	head: () => ({
-		links: [{ rel: "canonical", href: SHARE_URL }],
+		links: [
+			{ rel: "canonical", href: SHARE_URL },
+			...[clashDisplay, clashGrotesk].map((href) => ({
+				rel: "preload",
+				as: "font",
+				type: "font/woff2",
+				href,
+				crossOrigin: "anonymous" as const,
+				media: "(max-width: 767px)",
+			})),
+		],
 		meta: [
 			{ title },
 			{ name: "description", content: description },

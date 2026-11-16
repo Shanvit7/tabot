@@ -13,6 +13,8 @@ export const HeroScene = ({
 	useEffect(() => {
 		const node = stage.current;
 		if (!node) return;
+		// Mobile must not paint the SVG while its streamed paths are still being parsed.
+		node.dataset.ready = "true";
 		const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 		const sync = () => {
 			const running = visible.current && !document.hidden && !reduced.matches;
@@ -42,9 +44,9 @@ export const HeroScene = ({
 			className="landing-hero-scene void-hero"
 			data-motion="paused"
 		>
-			<VoidArt />
 			<div className="void-copy">{children}</div>
 			<div className="void-actions">{actions}</div>
+			<VoidArt />
 		</div>
 	);
 };

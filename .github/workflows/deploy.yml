@@ -46,9 +46,7 @@ jobs:
 
       - name: Prepare Pages artifact
         run: |
-          # SPA fallback for unknown deep links only. Registered routes are
-          # prerendered separately by the build.
-          cp apps/web/.output/client/index.html apps/web/.output/client/404.html
+          # Serve prerendered NotFound UI on GitHub Pages' native 404 response.
           touch apps/web/.output/client/.nojekyll
 
       - uses: actions/upload-pages-artifact@v4

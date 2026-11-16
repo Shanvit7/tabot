@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as R404RouteImport } from './routes/404'
 import { Route as WorkspaceRouteImport } from './routes/_workspace'
 import { Route as ExtensionNotConnectedRouteImport } from './routes/extension-not-connected'
 import { Route as MobileRouteImport } from './routes/mobile'
@@ -22,6 +23,11 @@ import { Route as WorkspaceSettingsRouteImport } from './routes/_workspace.setti
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const R404Route = R404RouteImport.update({
+  id: '/404',
+  path: '/404',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorkspaceRoute = WorkspaceRouteImport.update({
@@ -66,6 +72,7 @@ const WorkspaceSettingsRoute = WorkspaceSettingsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/404': typeof R404Route
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/mobile': typeof MobileRoute
   '/privacy': typeof PrivacyRoute
@@ -76,6 +83,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/404': typeof R404Route
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/mobile': typeof MobileRoute
   '/privacy': typeof PrivacyRoute
@@ -87,6 +95,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/404': typeof R404Route
   '/_workspace': typeof WorkspaceRouteWithChildren
   '/extension-not-connected': typeof ExtensionNotConnectedRoute
   '/mobile': typeof MobileRoute
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/404'
     | '/extension-not-connected'
     | '/mobile'
     | '/privacy'
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/404'
     | '/extension-not-connected'
     | '/mobile'
     | '/privacy'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/404'
     | '/_workspace'
     | '/extension-not-connected'
     | '/mobile'
@@ -132,6 +144,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  R404Route: typeof R404Route
   WorkspaceRoute: typeof WorkspaceRouteWithChildren
   ExtensionNotConnectedRoute: typeof ExtensionNotConnectedRoute
   MobileRoute: typeof MobileRoute
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/404': {
+      id: '/404'
+      path: '/404'
+      fullPath: '/404'
+      preLoaderRoute: typeof R404RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_workspace': {
@@ -226,6 +246,7 @@ const WorkspaceRouteWithChildren = WorkspaceRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  R404Route: R404Route,
   WorkspaceRoute: WorkspaceRouteWithChildren,
   ExtensionNotConnectedRoute: ExtensionNotConnectedRoute,
   MobileRoute: MobileRoute,

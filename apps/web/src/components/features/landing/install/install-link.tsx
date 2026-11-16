@@ -77,7 +77,7 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 			<LazyMotion features={domAnimation}>
 				<AnimatePresence initial={false} mode="wait">
 					<m.span
-						key={mobile ? "copy" : connected ? "continue" : "install"}
+						key={connected && !mobile ? "continue" : "install"}
 						className="inline-flex items-center justify-center gap-3 whitespace-nowrap"
 						initial={{ opacity: 0, y: reduceMotion ? 0 : 4 }}
 						animate={{ opacity: 1, y: 0 }}

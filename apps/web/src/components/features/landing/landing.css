@@ -1,3 +1,18 @@
+/* Mobile keeps its first font choice if a slow download misses first paint. */
+@font-face {
+	font-family: "Clash Display Mobile";
+	font-style: normal;
+	font-weight: 600;
+	font-display: optional;
+	src: url("../../../assets/fonts/clash-display-600.woff2") format("woff2");
+}
+@font-face {
+	font-family: "Clash Grotesk Mobile";
+	font-style: normal;
+	font-weight: 200 700;
+	font-display: optional;
+	src: url("../../../assets/fonts/clash-grotesk-var.woff2") format("woff2");
+}
 .landing :where(a, button, input, summary, [role="tabpanel"]):focus-visible {
 	outline: 2px solid var(--work-ink);
 	outline-offset: 5px;
@@ -328,7 +343,21 @@
 		padding-top: 175px;
 	}
 }
+/* SVG markup streams incrementally. Reveal a complete mobile scene, never partial terrain. */
+@media (max-width: 767px) and (scripting: enabled) {
+	.void-art {
+		opacity: 0;
+		transition: opacity 300ms ease-out;
+	}
+	.void-hero[data-ready="true"] .void-art {
+		opacity: 1;
+	}
+}
 @media (max-width: 767px) {
+	.landing {
+		--font-sans: "Clash Grotesk Mobile", system-ui, sans-serif;
+		--font-display: "Clash Display Mobile", var(--font-sans);
+	}
 	.void-hero {
 		min-height: 810px;
 		max-height: 1100px;

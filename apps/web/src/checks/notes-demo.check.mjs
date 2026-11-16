@@ -14,8 +14,11 @@ import {
 	NOTE_TYPE_START,
 	NOTES_DEMO_DURATION,
 } from "../components/features/landing/demo/notes-demo-data.ts";
+import { LANDING_DEMO_FPS } from "../components/features/landing/demo/paired-search-demo-data.ts";
 
 assert.equal(NOTES_DEMO_DURATION, 30 * CHATGPT_TUTORIAL_FPS);
+assert.equal(NOTES_DEMO_DURATION / LANDING_DEMO_FPS, 20);
+assert.equal(NOTE_SEARCH_FRAME / LANDING_DEMO_FPS, 10 / 1.5);
 assert.equal(NOTE_SEARCH_FRAME, 10 * CHATGPT_TUTORIAL_FPS);
 assert.ok(NOTE_SEARCH_FRAME > NOTE_SAVED_FRAME + 60);
 assert.equal(new URL(NOTE_PAGE.url).hostname, NOTE_PAGE.host);

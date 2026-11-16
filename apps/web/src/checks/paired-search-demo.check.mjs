@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
 	getTypedText,
 	getVerificationStage,
@@ -7,6 +8,7 @@ import {
 	CHATGPT_SEARCH_ANSWER,
 	CHATGPT_SEARCH_RESULTS,
 	getTabotSearchStage,
+	LANDING_DEMO_FPS,
 	SEARCH_DEMO_DURATION,
 	SEARCH_QUERY,
 	TABOT_SEARCH_COUNTS,
@@ -14,9 +16,39 @@ import {
 } from "../components/features/landing/demo/paired-search-demo-data.ts";
 
 assert.equal(SEARCH_DEMO_DURATION, 20 * 30);
+assert.equal(LANDING_DEMO_FPS, 30 * 1.5);
+assert.equal(SEARCH_DEMO_DURATION / LANDING_DEMO_FPS, 20 / 1.5);
+for (const player of [
+	"chatgpt-search-player.tsx",
+	"tabot-search-player.tsx",
+	"notes-demo.tsx",
+]) {
+	const source = readFileSync(
+		new URL(`../components/features/landing/demo/${player}`, import.meta.url),
+		"utf8",
+	);
+	assert.match(source, /fps=\{LANDING_DEMO_FPS\}/);
+	assert.doesNotMatch(source, /playbackRate=/);
+}
 assert.equal(SEARCH_QUERY, "Search on Acme company");
 assert.equal(getTypedText(SEARCH_QUERY, 120, 18, 100), SEARCH_QUERY);
 assert.equal(getTypedText(SEARCH_QUERY, 150, 20, 130), SEARCH_QUERY);
+assert.notEqual(getTypedText(SEARCH_QUERY, 149, 20, 130), SEARCH_QUERY);
+// At 45 fps every original frame renders; typing advances at most one character per frame.
+for (const [text, start, duration] of [
+	[SEARCH_QUERY, 20, 130],
+	[CHATGPT_SEARCH_ANSWER, 240, 55],
+]) {
+	for (const frame of Array.from(
+		{ length: duration },
+		(_, index) => start + index + 1,
+	)) {
+		const added =
+			getTypedText(text, frame, start, duration).length -
+			getTypedText(text, frame - 1, start, duration).length;
+		assert.ok(added >= 0 && added <= 1);
+	}
+}
 assert.deepEqual([0, 150, 180, 240, 599, 200, 0].map(getVerificationStage), [
 	"compose",
 	"compose",

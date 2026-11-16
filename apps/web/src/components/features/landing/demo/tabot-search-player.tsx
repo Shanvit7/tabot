@@ -1,6 +1,9 @@
 import { Player } from "@remotion/player";
 import { useReducedMotion } from "motion/react";
-import { SEARCH_DEMO_DURATION } from "~/components/features/landing/demo/paired-search-demo-data";
+import {
+	LANDING_DEMO_FPS,
+	SEARCH_DEMO_DURATION,
+} from "~/components/features/landing/demo/paired-search-demo-data";
 import { TabotSearchComposition } from "~/components/features/landing/demo/tabot-search-demo";
 
 const TabotSearchDemo = () => {
@@ -13,7 +16,7 @@ const TabotSearchDemo = () => {
 					compositionWidth={1280}
 					compositionHeight={800}
 					durationInFrames={SEARCH_DEMO_DURATION}
-					fps={30}
+					fps={LANDING_DEMO_FPS}
 					autoPlay={!reduceMotion}
 					controls
 					alwaysShowControls
