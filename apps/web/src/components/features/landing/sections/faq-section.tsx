@@ -35,6 +35,10 @@ const faqs = [
 		"No—we don’t train AI on your browsing data. Tabot is free and open source, so you can use it without paying for another AI service or handing your browsing history to a cloud platform. We’d rather keep the core experience free and let the community shape where it goes next.",
 	],
 	[
+		"Does my computer need to be on to use Tabot with ChatGPT?",
+		"Yes. Keep your computer on, Chrome open, and the Tabot extension connected while ChatGPT accesses your browsing data. If your computer is off or the extension is disconnected, ChatGPT can't access it through Tabot.",
+	],
+	[
 		"Can Tabot take actions for me?",
 		<>
 			Not yet. We’re working toward automations you can create locally and

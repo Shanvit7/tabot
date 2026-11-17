@@ -44,4 +44,5 @@ export const trackDashboardError = (
 	value: unknown,
 	source: TelemetryErrorSource,
 	handled = false,
-) => telemetry.captureError(value, source, handled);
+	fallbackFrame?: { filename: string; lineno: number; colno: number },
+) => telemetry.captureError(value, source, handled, fallbackFrame);

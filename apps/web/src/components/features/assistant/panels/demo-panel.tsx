@@ -25,6 +25,7 @@ export const AssistantDemoPanel = ({
 			alwaysShowControls
 			showPlaybackRateControl={[0.5, 1, 1.5, 2]}
 			showVolumeControls={false}
+			acknowledgeRemotionLicense
 			spaceKeyToPlayOrPause
 			moveToBeginningWhenEnded={false}
 			className="absolute! inset-0! h-full! w-full!"

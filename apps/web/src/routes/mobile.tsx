@@ -1,24 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Copy } from "lucide-react";
-import { DingToaster, toast } from "~/components/alerts/ding-toaster";
 import { MobileGateFigure } from "~/components/features/mobile/mobile-gate-figure";
 import { Button } from "~/components/ui/button";
-import { LOGO_URL } from "~/lib/constants";
+import {
+	CHROME_LOGO_URL,
+	CHROME_WEB_STORE_URL,
+	LOGO_URL,
+} from "~/lib/constants";
 
 const MobilePage = () => {
-	const copyPageLink = async () => {
-		try {
-			await navigator.clipboard.writeText(window.location.href);
-			toast.success("Link copied", {
-				description: "Open this page in Chrome on your computer.",
-			});
-		} catch {
-			toast.error("Couldn’t copy link", {
-				description: "Copy the page URL from your browser’s address bar.",
-			});
-		}
-	};
-
 	return (
 		<main className="min-h-svh bg-work-canvas px-5 text-work-ink sm:px-8">
 			<header className="mx-auto flex w-full max-w-5xl items-center gap-2 py-5 sm:py-6">
@@ -47,20 +36,28 @@ const MobilePage = () => {
 					<div className="mt-6 rounded-xl border border-work-line bg-work-surface p-4 sm:p-5">
 						<p className="text-sm font-semibold">Continue on your computer</p>
 						<p className="mt-1 text-sm leading-6 text-work-muted">
-							Copy this page’s link, then open it in Chrome on your laptop or
-							desktop.
+							Open the Chrome Web Store to add Tabot to Chrome on your computer.
 						</p>
 						<Button
 							className="mt-4 w-full sm:w-fit"
-							onClick={() => void copyPageLink()}
+							disabled={!CHROME_WEB_STORE_URL}
+							onClick={() =>
+								CHROME_WEB_STORE_URL &&
+								window.open(
+									CHROME_WEB_STORE_URL,
+									"_blank",
+									"noopener,noreferrer",
+								)
+							}
 						>
-							<Copy aria-hidden="true" className="size-4" />
-							Copy page link
+							<img src={CHROME_LOGO_URL} width="22" height="22" alt="" />
+							{CHROME_WEB_STORE_URL
+								? "Add to Chrome"
+								: "Chrome Store link unavailable"}
 						</Button>
 					</div>
 				</div>
 			</section>
-			<DingToaster position="top-center" theme="light" />
 		</main>
 	);
 };
