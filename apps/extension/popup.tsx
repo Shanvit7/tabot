@@ -286,7 +286,16 @@ export default function Popup() {
 						className="mt-0.5 size-6.5 shrink-0 object-contain"
 					/>
 					<div className="min-w-0">
-						<p className="text-sm font-semibold leading-5">Tabot</p>
+						<a
+							href="https://shanvit7.github.io/tabot/home"
+							target="_blank"
+							rel="noreferrer"
+							aria-label="Open Tabot dashboard (new tab)"
+							title="Open Tabot dashboard"
+							className="-mx-1 -my-0.5 inline-flex min-h-6 items-center rounded-sm px-1 text-sm font-semibold leading-5 underline decoration-transparent underline-offset-4 hover:decoration-muted focus-visible:decoration-muted"
+						>
+							Tabot
+						</a>
 						<div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
 							<span
 								role="status"

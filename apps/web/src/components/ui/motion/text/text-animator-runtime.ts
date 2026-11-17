@@ -259,7 +259,10 @@ export function cleanupLoop(c: LoopController) {
 
 function registerAnimation(c: LoopController, a: Animation): Animation {
 	c.animations.add(a);
-	void a.finished.finally(() => c.animations.delete(a));
+	void a.finished.then(
+		() => c.animations.delete(a),
+		() => c.animations.delete(a),
+	);
 	return a;
 }
 

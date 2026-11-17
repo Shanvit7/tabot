@@ -1,5 +1,4 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Copy } from "lucide-react";
 import {
 	AnimatePresence,
 	domAnimation,
@@ -7,7 +6,6 @@ import {
 	m,
 	useReducedMotion,
 } from "motion/react";
-import { toast } from "~/components/alerts/ding-toaster";
 import {
 	CHROME_LOGO_URL,
 	CHROME_WEB_STORE_URL,
@@ -22,20 +20,6 @@ const installClass =
 const handleAddToChromeClick = () =>
 	trackLandingAction({ name: "landing_add_to_chrome_clicked" });
 
-const handleCopyStoreLink = async () => {
-	if (!storeUrl) return;
-	try {
-		await navigator.clipboard.writeText(storeUrl);
-		toast.success("Chrome Web Store link copied", {
-			description: "Send it to your computer, then open it in Chrome.",
-		});
-	} catch {
-		toast.error("Couldn’t copy link", {
-			description: "Open this page on your computer and use Add to Chrome.",
-		});
-	}
-};
-
 type InstallLinkProps = { connected: boolean; mobile: boolean };
 
 export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
@@ -47,10 +31,6 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 			return;
 		}
 		handleAddToChromeClick();
-		if (mobile) {
-			void handleCopyStoreLink();
-			return;
-		}
 		if (storeUrl) window.open(storeUrl, "_blank", "noopener,noreferrer");
 	};
 
@@ -66,7 +46,7 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 			type="button"
 			aria-label={
 				mobile
-					? "Copy store link"
+					? "Add to Chrome"
 					: connected
 						? "Continue in Tabot"
 						: "Add to Chrome"
@@ -89,8 +69,8 @@ export const InstallLink = ({ connected, mobile }: InstallLinkProps) => {
 					>
 						{mobile ? (
 							<>
-								<Copy aria-hidden="true" className="size-4" />
-								<span>Copy store link</span>
+								<img src={CHROME_LOGO_URL} width="22" height="22" alt="" />
+								<span>Add to Chrome</span>
 							</>
 						) : connected ? (
 							<>

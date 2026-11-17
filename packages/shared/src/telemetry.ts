@@ -125,7 +125,10 @@ const SAFE_FAILURE_CODES: ReadonlySet<string> = new Set([
 	"embedding-busy",
 ]);
 
-const safeException = (value: unknown) => {
+const safeException = (
+	value: unknown,
+	fallbackFrame?: Pick<SafeExceptionFrame, "filename" | "lineno" | "colno">,
+) => {
 	let name = "Error";
 	let stack: string | undefined;
 	try {
@@ -136,7 +139,15 @@ const safeException = (value: unknown) => {
 	} catch {
 		// Malformed thrown values are reduced to generic diagnostics.
 	}
-	return { name, message: "redacted", frames: safeFrames(stack) };
+	const frames = safeFrames(stack);
+	if (!frames.length && fallbackFrame) {
+		frames.push(
+			...safeFrames(
+				`Error\n    at ${fallbackFrame.filename}:${fallbackFrame.lineno}:${fallbackFrame.colno}`,
+			),
+		);
+	}
+	return { name, message: "redacted", frames };
 };
 
 export const createTelemetry = (
@@ -174,6 +185,7 @@ export const createTelemetry = (
 			value: unknown,
 			source: TelemetryErrorSource,
 			handled = false,
+			fallbackFrame?: Pick<SafeExceptionFrame, "filename" | "lineno" | "colno">,
 		) => {
 			const failureCode = safeFailureCode(value);
 			send({
@@ -181,7 +193,7 @@ export const createTelemetry = (
 				source: SAFE_SOURCES.has(source) ? source : "unknown",
 				handled,
 				...(failureCode ? { failureCode } : {}),
-				exception: safeException(value),
+				exception: safeException(value, fallbackFrame),
 				context,
 			});
 		},

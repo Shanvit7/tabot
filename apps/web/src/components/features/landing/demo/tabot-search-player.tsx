@@ -18,6 +18,8 @@ const TabotSearchDemo = () => {
 					durationInFrames={SEARCH_DEMO_DURATION}
 					fps={LANDING_DEMO_FPS}
 					autoPlay={!reduceMotion}
+					initiallyMuted
+					acknowledgeRemotionLicense
 					controls
 					alwaysShowControls
 					showVolumeControls={false}

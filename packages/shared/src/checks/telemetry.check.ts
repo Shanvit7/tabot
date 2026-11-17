@@ -119,6 +119,55 @@ assert.doesNotMatch(
 	JSON.stringify(actionPayload),
 	/private\.example|secret|account-reset|Alice|user@example\.com/,
 );
+const errorWithoutStack = new TypeError("sensitive-error-message");
+errorWithoutStack.stack = "";
+telemetry.captureError(errorWithoutStack, "window_error", false, {
+	filename: "https://private.example/assets/chunk.js?token=secret",
+	lineno: 12,
+	colno: 8,
+});
+const fallbackEvent = events.at(-1);
+assert.equal(fallbackEvent?.type, "exception");
+if (fallbackEvent?.type !== "exception")
+	throw new Error("window error fallback trace missing");
+assert.deepEqual(fallbackEvent.exception.frames, [
+	{ filename: "chunk.js", lineno: 12, colno: 8, platform: "web:javascript" },
+]);
+assert.doesNotMatch(
+	JSON.stringify(fallbackEvent),
+	/private\.example|secret|sensitive-error-message/,
+);
+let fallbackPayload: Record<string, unknown> | undefined;
+globalThis.fetch = async (_input, init) => {
+	fallbackPayload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+	return new Response(null, { status: 200 });
+};
+try {
+	await createPostHogTransport({
+		projectKey: "test-key",
+		distinctId: "tabot_web",
+	}).capture(fallbackEvent);
+} finally {
+	globalThis.fetch = originalFetch;
+}
+const fallbackProperties = fallbackPayload?.properties as Record<
+	string,
+	unknown
+>;
+const exceptionList = fallbackProperties?.$exception_list as Array<{
+	stacktrace?: { frames?: Array<Record<string, unknown>> };
+}>;
+assert.deepEqual(exceptionList[0]?.stacktrace?.frames?.[0], {
+	filename: "chunk.js",
+	lineno: 12,
+	colno: 8,
+	platform: "web:javascript",
+	function: "<redacted>",
+});
+assert.doesNotMatch(
+	JSON.stringify(fallbackPayload),
+	/private\.example|secret|sensitive-error-message/,
+);
 console.log(
 	"telemetry: provider-neutral API, bounded routes, and sanitized PostHog exception payload passed",
 );

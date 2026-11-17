@@ -40,7 +40,11 @@ const RootLayout = () => {
 	}, [isLoading, isMobile, navigate, pathname]);
 	useEffect(() => {
 		const onError = (event: ErrorEvent) =>
-			trackDashboardError(event.error, "window_error");
+			trackDashboardError(event.error, "window_error", false, {
+				filename: event.filename,
+				lineno: event.lineno,
+				colno: event.colno,
+			});
 		const onUnhandledRejection = (event: PromiseRejectionEvent) =>
 			trackDashboardError(event.reason, "unhandled_rejection");
 		window.addEventListener("error", onError);

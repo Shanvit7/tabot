@@ -1,5 +1,11 @@
 # extension
 
+## 0.2.6
+
+### Patch Changes
+
+- Open the dashboard by clicking the Tabot wordmark in the extension popup.
+
 ## 0.2.5
 
 ### UX revamp, local storage change and product pivot
