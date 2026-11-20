@@ -81,6 +81,7 @@ export type HistorySearchOptions = {
 	limit?: number;
 	offset?: number;
 	candidateOrder?: string[];
+	sparseEvents?: boolean;
 	nearestTo?: number;
 };
 export type ActivitySearchResult = {
@@ -245,13 +246,16 @@ export const collectHistoryResults = async (
 		0,
 		48,
 	);
-	const pageDurations = estimatePageTime(
-		events.filter(
-			(event) =>
-				event.timestamp >= (options.from ?? 0) &&
-				event.timestamp <= (options.to ?? Number.MAX_SAFE_INTEGER),
-		),
-	);
+	// Ranked candidate events are sparse, not a contiguous foreground timeline.
+	const pageDurations = options.sparseEvents
+		? new Map<string, number>()
+		: estimatePageTime(
+				events.filter(
+					(event) =>
+						event.timestamp >= (options.from ?? 0) &&
+						event.timestamp <= (options.to ?? Number.MAX_SAFE_INTEGER),
+				),
+			);
 	if (
 		(options.nearestTo !== undefined && !Number.isFinite(options.nearestTo)) ||
 		(options.from !== undefined && !Number.isFinite(options.from)) ||
@@ -384,7 +388,10 @@ export const collectHistoryResults = async (
 	const averageLength = totalLength / (corpus.length || 1);
 	const results: HistorySearchResult[] = [];
 	const candidateRanks = new Map(
-		(options.candidateOrder ?? []).map((url, index) => [url, index]),
+		[...new Set(options.candidateOrder ?? [])].map((url, index) => [
+			url,
+			index,
+		]),
 	);
 	for (let index = 0; index < documents.length; index++) {
 		const document = documents[index];
@@ -433,7 +440,8 @@ export const collectHistoryResults = async (
 				),
 				...(document.pageTitle ? { pageTitle: document.pageTitle } : {}),
 				evidenceKinds: [...(document.evidenceKinds ?? [])],
-				matchedTerms,
+				// Normalization may expand a bounded query; omit oversized highlight metadata.
+				matchedTerms: matchedTerms.filter((term) => term.length <= 240),
 				sources: document.sources.map(
 					({ kind, id, timestamp, url: sourceUrl, evidenceKind }) => ({
 						kind,
@@ -466,23 +474,34 @@ export const collectHistoryResults = async (
 	});
 };
 
-export const searchHistory = async (
+export const searchHistoryWithTotal = async (
 	events: StoredTabEvent[],
 	pages: StoredPageObservation[],
 	query: string,
 	options: HistorySearchOptions = {},
-): Promise<HistorySearchResult[]> => {
+): Promise<{ results: HistorySearchResult[]; total: number }> => {
 	if (
 		!tokenizeRecallText(query.slice(0, 240)).length &&
 		options.nearestTo === undefined &&
 		!options.candidateOrder?.length
 	)
-		return [];
+		return { results: [], total: 0 };
 	const results = await collectHistoryResults(events, pages, query, options);
 	const offset = options.offset ?? 0;
 	const limit = Math.max(1, Math.min(20, Math.floor(options.limit ?? 10)));
-	return results.slice(offset, offset + limit);
+	return {
+		results: results.slice(offset, offset + limit),
+		total: results.length,
+	};
 };
+
+export const searchHistory = async (
+	events: StoredTabEvent[],
+	pages: StoredPageObservation[],
+	query: string,
+	options: HistorySearchOptions = {},
+): Promise<HistorySearchResult[]> =>
+	(await searchHistoryWithTotal(events, pages, query, options)).results;
 
 /** Keep page titles, excerpts, URL paths, and raw event fields out of assistant activity results. */
 export const projectActivitySearchResults = (

@@ -39,11 +39,17 @@ module.exports = () => {
 	if (!workerFile) throw new Error("search-embedding-worker-not-built");
 	const workerPath = resolve(directory, workerFile);
 	const worker = readFileSync(workerPath, "utf8");
+	// Plasmo dev emits a parenthesized argument and webpackIgnore comment.
 	const parcelDynamicImport =
-		/([A-Za-z_$][\w$]*)=async ([A-Za-z_$][\w$]*)=>\(await [A-Za-z_$][\w$]*\(\2\)\)\.default/;
+		/=\s*async\s+(?:\(\s*([A-Za-z_$][\w$]*)\s*\)|([A-Za-z_$][\w$]*))\s*=>\s*\(\s*await\s+[A-Za-z_$][\w$]*\(\s*(?:\/\*webpackIgnore:true\*\/\s*)?([A-Za-z_$][\w$]*)\s*\)\s*\)\.default/;
 	const patchedWorker = worker.replace(
 		parcelDynamicImport,
-		"$1=async $2=>(await import($2)).default",
+		(match, parenthesizedArg, bareArg, callArg) => {
+			const arg = parenthesizedArg ?? bareArg;
+			return arg === callArg
+				? `=async ${arg}=>(await import(${arg})).default`
+				: match;
+		},
 	);
 	if (patchedWorker === worker)
 		throw new Error("search-embedding-wasm-import-patch-missed");

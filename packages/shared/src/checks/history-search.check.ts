@@ -6,6 +6,7 @@ import {
 	parseTemporalRecallQuery,
 	projectActivitySearchResults,
 	searchHistory,
+	searchHistoryWithTotal,
 } from "../recall/history-search";
 
 const event = (
@@ -200,6 +201,10 @@ const secondPage = await searchHistory(paginationEvents, [], "PKCE", {
 });
 assert.equal(firstPage.length, 1);
 assert.equal(secondPage.length, 1);
+const { results: countedPage, total: countedTotal } =
+	await searchHistoryWithTotal(paginationEvents, [], "PKCE", { limit: 1 });
+assert.equal(countedPage.length, 1);
+assert.equal(countedTotal, 2);
 assert.notEqual(firstPage[0]?.url, secondPage[0]?.url);
 const semanticPage = pages[0];
 assert.ok(semanticPage);
@@ -337,6 +342,39 @@ assert.equal(
 	true,
 );
 assert.equal(evidence?.excerpt.includes("needle phrase"), true);
+
+const normalizedQuery = "ﬃ".repeat(81);
+const expanded = await searchHistory(
+	[],
+	[page("normalized", "https://unicode.example/", 100, normalizedQuery)],
+	normalizedQuery,
+);
+assert.equal(expanded.length, 1);
+assert.ok(
+	expanded[0].matchedTerms.every((term) => term.length <= 240),
+	"normalization cannot emit incompatible metadata",
+);
+const rankedEvents = [
+	event("a-new", "https://rank.example/a", 300),
+	event("b", "https://rank.example/b", 200),
+	event("a-old", "https://rank.example/a", 100),
+];
+const stableRanking = await searchHistory(rankedEvents, [], "rank", {
+	candidateOrder: [
+		"https://rank.example/a",
+		"https://rank.example/b",
+		"https://rank.example/a",
+	],
+});
+assert.deepEqual(
+	stableRanking.map((row) => row.url),
+	["https://rank.example/a", "https://rank.example/b"],
+);
+assert.equal(
+	stableRanking[0].estimatedActiveMs,
+	undefined,
+	"sparse ranked candidates cannot establish time spent",
+);
 
 let searchYielded = false;
 const yieldCheck = new Promise<void>((resolve) =>

@@ -98,6 +98,7 @@ export const PageNotes = ({
 	url: string;
 	onUpdateNote: UpdateNote;
 }) => {
+	"use no memo"; // Virtualizer identity stays stable while visible rows change.
 	const { data, setData, loading, error, retry, loadMore } = useLibrary({
 		level: "notes",
 		url,
@@ -111,7 +112,7 @@ export const PageNotes = ({
 		estimateSize: () => 180,
 		useAnimationFrameWithResizeObserver: true,
 		overscan: 3,
-		getItemKey: (index) => data.notes[index]?.id ?? index,
+		getItemKey: (index) => data.notes[index].id,
 	});
 	return (
 		<section
@@ -152,7 +153,7 @@ export const PageNotes = ({
 						if (list.scrollHeight - list.scrollTop - list.clientHeight < 250)
 							loadMore();
 					}}
-					className="relative max-h-[60svh] min-h-40 overflow-y-auto overscroll-y-contain"
+					className="relative max-h-[60svh] overflow-y-auto overscroll-y-contain"
 					style={{ height: Math.min(480, virtualizer.getTotalSize()) }}
 				>
 					<div

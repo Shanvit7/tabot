@@ -14,6 +14,7 @@ export type SitePreview = {
 	hasMore: boolean;
 	loading: boolean;
 	error: string;
+	retry?: () => void;
 };
 
 export type SearchPeriodOption = (typeof searchPeriods)[number];

@@ -9,7 +9,7 @@
 		"check:storageOwner": "node --experimental-test-module-mocks --import ../../packages/shared/resolve-hook.mjs storage/owner.check.mts && node --import ../../packages/shared/resolve-hook.mjs storage/client.check.mts",
 		"check:dashboardSender": "node --import ../../packages/shared/resolve-hook.mjs dashboard/sender.check.mts",
 		"check:dashboardHistory": "node --import ../../packages/shared/resolve-hook.mjs dashboard/history.check.mts",
-		"check:searchEmbedding": "node --import ../../packages/shared/resolve-hook.mjs storage/search-embedding.check.mts",
+		"check:searchEmbedding": "node --import ../../packages/shared/resolve-hook.mjs storage/search-embedding.check.mts && node scripts/copy-taladb-wasm.check.cjs",
 		"eval:search": "node scripts/prepare-search-assets.mjs && node --import ../../packages/shared/resolve-hook.mjs storage/search-quality.check.mts",
 		"check:pageCapturePolicy": "node --import ../../packages/shared/resolve-hook.mjs capture/site-policy.check.mts",
 		"check:pageCapture": "node --import ../../packages/shared/resolve-hook.mjs ingestion/page-capture.check.mts",

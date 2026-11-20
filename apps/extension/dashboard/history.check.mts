@@ -6,6 +6,7 @@ import {
 	type TabotDatabase,
 } from "@tabot/shared";
 import {
+	isDashboardNotes,
 	isDashboardPagePreview,
 	isDashboardSearchResults,
 } from "@tabot/shared/dashboard";
@@ -42,6 +43,8 @@ let lastOptions: unknown;
 const getDb = async (): Promise<
 	Pick<
 		TabotDatabase,
+		| "searchHistoryWithTotal"
+		| "searchNotesWithTotal"
 		| "searchHistory"
 		| "searchNotes"
 		| "getSearchStatus"
@@ -53,12 +56,14 @@ const getDb = async (): Promise<
 	opens++;
 	if (fail) throw new Error("offline");
 	return {
+		searchNotesWithTotal: async () => ({ results: [], total: 0 }),
 		searchNotes: async () => [],
 		readEvents: async () => [],
-		searchHistory: async (query, options) => {
+		searchHistory: async () => [],
+		searchHistoryWithTotal: async (query, options) => {
 			assert.equal(query, "guide");
 			lastOptions = options;
-			return [];
+			return { results: [], total: 0 };
 		},
 		getSearchStatus: async () => ({
 			mode: "keyword",
@@ -198,6 +203,8 @@ assert.deepEqual(
 	),
 	{
 		results: [],
+		resultsTotal: 0,
+		notesTotal: 0,
 		searchStatus: { mode: "keyword", indexing: true, model: "loading" },
 		notes: [],
 	},
@@ -209,6 +216,23 @@ assert.deepEqual(lastOptions, {
 	limit: 10,
 	offset: 40,
 });
+const pagedResponse = await readDashboardHistory(
+	{
+		type: "SEARCH_HISTORY",
+		query: "guide",
+		includeTotals: false,
+	},
+	sender,
+	getDb,
+);
+assert.equal(
+	"resultsTotal" in pagedResponse ? pagedResponse.resultsTotal : undefined,
+	undefined,
+);
+assert.equal(
+	"notesTotal" in pagedResponse ? pagedResponse.notesTotal : undefined,
+	undefined,
+);
 Object.assign(page.coverage, { internalDocumentId: "internal-document" });
 const response = await readDashboardHistory(previewRequest, sender, getDb);
 assert.ok("preview" in response && isDashboardPagePreview(response.preview));
@@ -260,6 +284,7 @@ assert.deepEqual(
 	await readDashboardHistory({ type: "PRELOAD_SEARCH_MODEL" }, sender, getDb),
 	{ ok: false, code: "search-preload-unavailable" },
 );
+fail = false;
 assert.equal(isDashboardSearchResults([]), true);
 assert.equal(isDashboardSearchResults({ ok: false }), false);
 const result = {
@@ -297,10 +322,19 @@ const wiredResponse = JSON.parse(
 			{ type: "SEARCH_HISTORY", query: "guide" },
 			sender,
 			async () => ({
+				searchNotesWithTotal: async () => ({ results: [], total: 0 }),
 				searchNotes: async () => [],
+				searchHistory: async () => [],
 				readEvents: async () => [],
-				searchHistory: (query, options) =>
-					searchHistory([navigation], [capturedPage], query, options),
+				searchHistoryWithTotal: async (query, options) => {
+					const result = await searchHistory(
+						[navigation],
+						[capturedPage],
+						query,
+						options,
+					);
+					return { results: result, total: result.length };
+				},
 				getSearchStatus: async () => ({
 					mode: "hybrid",
 					indexing: false,
@@ -312,6 +346,8 @@ const wiredResponse = JSON.parse(
 	),
 );
 assert.equal(wiredResponse.results.length, 1);
+assert.equal(wiredResponse.resultsTotal, 1);
+assert.equal(wiredResponse.notesTotal, 0);
 assert.equal(wiredResponse.results[0].firstSeen, navigation.timestamp);
 assert.equal(wiredResponse.results[0].lastSeen, capturedPage.timestamp);
 assert.equal(isDashboardSearchResults(wiredResponse.results), true);
@@ -320,6 +356,58 @@ assert.deepEqual(wiredResponse.searchStatus, {
 	indexing: false,
 	model: "ready",
 });
+const truncatedResponse = await readDashboardHistory(
+	{ type: "SEARCH_HISTORY", query: "guide" },
+	sender,
+	async () => ({
+		...(await getDb()),
+		searchHistoryWithTotal: async () => ({
+			results: [result],
+			total: 500,
+			truncated: true,
+		}),
+		readEvents: async () => {
+			throw new Error("empty notes must not read events");
+		},
+	}),
+);
+assert.ok("results" in truncatedResponse);
+assert.equal(
+	"resultsTotal" in truncatedResponse,
+	false,
+	"capped candidate counts are not exact totals",
+);
+const faviconResponse = await readDashboardHistory(
+	{ type: "SEARCH_HISTORY", query: "guide" },
+	sender,
+	async () => ({
+		...(await getDb()),
+		searchNotesWithTotal: async () => ({
+			total: 1,
+			results: [
+				{
+					id,
+					text: "guide",
+					createdAt: 1000,
+					updatedAt: 1000,
+					url,
+					origin: "https://example.com",
+					host: "example.com",
+					title: "Guide",
+					site: "example.com",
+					favicon: `https://example.com/${"x".repeat(2050)}`,
+					pageKey: "a".repeat(64),
+					tabId: 1,
+					windowId: 1,
+					eventId: null,
+				},
+			],
+		}),
+	}),
+);
+assert.ok("notes" in faviconResponse);
+assert.equal(faviconResponse.notes[0].favicon, null);
+assert.equal(isDashboardNotes(faviconResponse.notes), true);
 for (const invalidTime of [
 	NaN,
 	Infinity,
@@ -362,7 +450,6 @@ for (const broken of [
 	},
 ])
 	assert.equal(isDashboardSearchResults([broken]), false);
-fail = false;
 const editedNote = await readDashboardHistory(
 	{ type: "UPDATE_NOTE", id: "note-1", text: "Updated note" },
 	sender,

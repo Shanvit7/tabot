@@ -22,7 +22,10 @@ export const handleTabListFocusCapture = (
 	setFocusedIndex: (index: number) => void,
 ) => {
 	const related = event.relatedTarget as Node | null;
-	if (related && event.currentTarget.contains(related)) {
+	if (
+		event.target !== event.currentTarget ||
+		(related && event.currentTarget.contains(related))
+	) {
 		return;
 	}
 	const index = activeIndex >= 0 ? activeIndex : 0;

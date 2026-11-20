@@ -1,6 +1,6 @@
 "use client";
 
-import { Link, useMatchRoute } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { MotionProps } from "motion/react";
 import {
@@ -174,7 +174,9 @@ AppleDockIcon.displayName = "AppleDockIcon";
 
 export const Dock = () => {
 	const reduceMotion = useReducedMotion();
-	const matchRoute = useMatchRoute();
+	const pathname = useRouterState({
+		select: (state) => state.location.pathname,
+	});
 	const navigation = [
 		{ to: "/home", label: "Home", Icon: Home03 },
 		{ to: "/assistant", label: "Assistant", Icon: Bot },
@@ -193,7 +195,7 @@ export const Dock = () => {
 					iconMagnification={68}
 				>
 					{navigation.map(({ to, label, Icon }) => {
-						const isActive = matchRoute({ to, fuzzy: false });
+						const isActive = pathname.replace(/\/+$/, "") === to;
 						return (
 							<AppleDockIcon
 								key={to}

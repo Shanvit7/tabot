@@ -22,7 +22,7 @@ import {
 	safeRecallUrl,
 	sanitizeEventForIngestion,
 	sanitizePageObservationForIngestion,
-	searchHistory as searchHistoryCore,
+	searchHistoryWithTotal,
 	searchNoteRows,
 	searchQueryFromUrl,
 	storageErrorCode,
@@ -1155,8 +1155,12 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		),
 	searchHistory: async (
 		query: string,
-		options: HistorySearchOptions = {},
-	): Promise<HistorySearchResult[]> => {
+		options: HistorySearchOptions & { includeTotal?: boolean } = {},
+	): Promise<
+		| HistorySearchResult[]
+		| { results: HistorySearchResult[]; total: number; truncated?: boolean }
+	> => {
+		const includeTotal = options.includeTotal === true;
 		if (
 			!options ||
 			typeof options !== "object" ||
@@ -1181,14 +1185,19 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		)
 			throw new Error("invalid-search-request");
 		const temporalRecall = parseTemporalRecallQuery(query);
-		let temporalFallback: (() => Promise<HistorySearchResult[]>) | undefined;
+		let temporalFallback:
+			| (() => Promise<
+					| HistorySearchResult[]
+					| { results: HistorySearchResult[]; total: number }
+			  >)
+			| undefined;
 		if (temporalRecall) {
 			const from = Math.max(temporalRecall.from, options.from ?? 0);
 			const to = Math.min(
 				temporalRecall.to,
 				options.to ?? Number.MAX_SAFE_INTEGER,
 			);
-			if (from > to) return [];
+			if (from > to) return includeTotal ? { results: [], total: 0 } : [];
 			const { records } = await getDb();
 			temporalFallback = async () => {
 				const filter = {
@@ -1208,7 +1217,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					)?.href;
 					return url ? [url] : [];
 				});
-				return searchHistoryCore(
+				const result = await searchHistoryWithTotal(
 					withPayload<StoredTabEvent>(
 						chronological.filter((row) => row.recordKind === "event"),
 						"event",
@@ -1220,6 +1229,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					"",
 					{ ...options, from, to, candidateOrder },
 				);
+				return includeTotal ? result : result.results;
 			};
 			if (!temporalRecall.query) return temporalFallback();
 			query = temporalRecall.query;
@@ -1249,20 +1259,22 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					...timeFilter,
 				}),
 			]);
-			const results = await searchHistoryCore(
+			const result = await searchHistoryWithTotal(
 				withPayload<StoredTabEvent>(eventRows, "event"),
 				withPayload<StoredPageObservation>(pageRows, "page"),
 				query,
 				options,
 			);
-			return results.length || !temporalFallback ? results : temporalFallback();
+			return result.total > 0 || !temporalFallback
+				? includeTotal
+					? result
+					: result.results
+				: temporalFallback();
 		}
 		scheduleSearchIndexer();
-		const limit = options.limit ?? 20;
-		const candidateLimit = Math.min(
-			500,
-			Math.max(100, ((options.offset ?? 0) + limit) * 10),
-		);
+		// ponytail: one fixed top-500 pool keeps ranking consistent across offsets/totals.
+		// Exhaustive BM25/vector counts require full local index scans.
+		const candidateLimit = 500;
 		const filter = {
 			...(options.origin ? { origin: options.origin } : {}),
 			...(options.from !== undefined || options.to !== undefined
@@ -1279,6 +1291,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			passages.count({ modelVersion: SEARCH_MODEL_VERSION, ...filter }),
 		]);
 		let semanticHits: Awaited<ReturnType<typeof passages.hybridSearch>> = [];
+		let semanticCandidatesTruncated = false;
 		if (passageCount) {
 			try {
 				const vector = await encodeSearchText(query);
@@ -1298,6 +1311,9 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 						vectorFilter,
 					),
 				]);
+				semanticCandidatesTruncated =
+					hybridHits.length === candidateLimit ||
+					vectorHits.length === candidateLimit;
 				const similarity = new Map(
 					vectorHits.map(({ document, score }) => [document._id, score]),
 				);
@@ -1349,13 +1365,21 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		const candidateOrder = fuseCandidateUrls(rankedUrls);
 		const eventRows = sourceRows.filter((row) => row.recordKind === "event");
 		const pageRows = sourceRows.filter((row) => row.recordKind === "page");
-		const results = await searchHistoryCore(
+		const result = await searchHistoryWithTotal(
 			withPayload<StoredTabEvent>(eventRows, "event"),
 			withPayload<StoredPageObservation>(pageRows, "page"),
 			query,
-			{ ...options, candidateOrder },
+			{ ...options, candidateOrder, sparseEvents: true },
 		);
-		return results.length || !temporalFallback ? results : temporalFallback();
+		return result.total > 0 || !temporalFallback
+			? includeTotal
+				? {
+						...result,
+						truncated:
+							textHits.length === candidateLimit || semanticCandidatesTruncated,
+					}
+				: result.results
+			: temporalFallback();
 	},
 	listPageNotes: async (
 		pageKey: string,
@@ -1398,6 +1422,9 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			)
 				throw new Error("invalid-note");
 			const { notes } = await getDb();
+			const safeFavicon = safeRecallUrl(input.favicon ?? undefined)?.href;
+			const favicon =
+				safeFavicon && safeFavicon.length <= 2048 ? safeFavicon : null;
 			const documentId = deriveNoteDocumentId(input.id);
 			const existing = await notes.findOne({ _id: documentId });
 			if (existing) {
@@ -1411,6 +1438,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					throw new Error("note-page-mismatch");
 				const updated = {
 					...original,
+					favicon,
 					text: input.text,
 					updatedAt: input.updatedAt,
 					pageKey: input.pageKey,
@@ -1419,7 +1447,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				await notes.updateOne({ _id: documentId }, { $set: updated });
 				return updated;
 			}
-			const note = { ...input, site: deriveSiteDomain(input.host) };
+			const note = { ...input, favicon, site: deriveSiteDomain(input.host) };
 			await notes.insert({ ...note, _id: documentId } as PageNote & Document);
 			return note;
 		}),
@@ -1470,11 +1498,21 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			domain?: string;
 			limit?: number;
 			offset?: number;
+			includeTotal?: boolean;
 		} = {},
 	) => {
 		if (
+			!options ||
+			typeof options !== "object" ||
+			Array.isArray(options) ||
+			typeof query !== "string" ||
 			!query.trim() ||
-			query.length > 200 ||
+			query.length > 240 ||
+			(options.from !== undefined && !Number.isFinite(options.from)) ||
+			(options.to !== undefined && !Number.isFinite(options.to)) ||
+			(options.from !== undefined &&
+				options.to !== undefined &&
+				options.from > options.to) ||
 			(options.limit !== undefined &&
 				(!Number.isSafeInteger(options.limit) ||
 					options.limit < 1 ||
@@ -1484,7 +1522,17 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		)
 			throw new Error("invalid-note-search");
 		const rows = (await (await getDb()).notes.find()) as unknown as PageNote[];
-		return searchNoteRows(rows, query, options);
+		const { includeTotal, ...searchOptions } = options;
+		const results = searchNoteRows(rows, query, searchOptions);
+		if (!includeTotal) return results;
+		return {
+			results,
+			total: searchNoteRows(rows, query, {
+				...searchOptions,
+				offset: 0,
+				limit: rows.length,
+			}).length,
+		};
 	},
 	listNotesBetween: async (from: number, to: number): Promise<PageNote[]> => {
 		if (!Number.isFinite(from) || !Number.isFinite(to) || from > to)

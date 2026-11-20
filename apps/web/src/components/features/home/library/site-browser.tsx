@@ -1,16 +1,13 @@
-import {
-	type LibraryRequest,
-	type LibrarySite,
-	rankLibrarySites,
-} from "@tabot/shared/library";
+import { type LibraryRequest, rankLibrarySites } from "@tabot/shared/library";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { HomeEmptyState } from "~/components/features/home/components/empty-state";
 import { HomeListSkeleton } from "~/components/features/home/components/list-skeleton";
+import { HomeResultColumn } from "~/components/features/home/components/result-column";
 import { ChatGptResultAction } from "~/components/features/home/library/chatgpt-result-action";
 import { PageFavicon } from "~/components/features/home/library/page-favicon";
 import { SearchEverythingBoard } from "~/components/features/home/search/everything-board";
+import type { SitePreview } from "~/components/features/home/search/result-section/types";
 import {
 	approxTimeSpentLabel,
 	dateLabel,
@@ -19,13 +16,8 @@ import { Button } from "~/components/ui/button";
 import { useLibrary } from "~/hooks/use-library";
 
 type Props = {
-	onSitesStateChange: (state: {
-		sites: LibrarySite[];
-		total: number;
-		hasMore: boolean;
-		loading: boolean;
-		error: string;
-	}) => void;
+	visible?: boolean;
+	onSitesStateChange: (state: SitePreview) => void;
 	query: string;
 	from?: number;
 	to?: number;
@@ -37,18 +29,21 @@ type Props = {
 };
 
 const LibraryEntries = ({
+	visible,
 	request,
 	onOpenSite,
 	onUpdateNote,
 	onSitesStateChange,
 	chatGptConnected,
 }: {
+	visible: boolean;
 	request: LibraryRequest;
 	onOpenSite: (site: string) => void;
 	onUpdateNote: Props["onUpdateNote"];
 	onSitesStateChange: Props["onSitesStateChange"];
 	chatGptConnected: boolean;
 }) => {
+	"use no memo"; // TanStack Virtual mutates its instance; compiler caching hides live rows.
 	const { data, loading, error, retry, loadMore } = useLibrary(request);
 	const sites = useMemo(
 		() => rankLibrarySites(data.sites, request.query ?? ""),
@@ -56,12 +51,13 @@ const LibraryEntries = ({
 	);
 	const scrollRef = useRef<HTMLUListElement>(null);
 	const virtualizer = useVirtualizer({
+		enabled: visible && request.level === "sites",
 		count: sites.length,
 		getScrollElement: () => scrollRef.current,
 		estimateSize: () => 100,
 		useAnimationFrameWithResizeObserver: true,
 		overscan: 4,
-		getItemKey: (index) => sites[index]?.site ?? index,
+		getItemKey: (index) => sites[index].site,
 	});
 	useEffect(() => {
 		if (request.level === "sites") {
@@ -72,9 +68,12 @@ const LibraryEntries = ({
 				hasMore: data.hasMore,
 				loading,
 				error,
+				retry,
 			});
 		}
-	}, [data, error, loading, onSitesStateChange, request.level, sites]);
+	}, [data, error, loading, onSitesStateChange, request.level, sites, retry]);
+	// Keep the reader alive for counts, but mount scroll containers only when visible.
+	if (!visible) return null;
 	return (
 		<div className="flex flex-col gap-4" aria-busy={loading}>
 			<p className="sr-only" aria-live="polite">
@@ -82,9 +81,14 @@ const LibraryEntries = ({
 				{request.query ? " matching your search" : " in retained history"}
 			</p>
 			{request.level === "sites" ? (
-				!loading && !error && !data.total ? (
-					<HomeEmptyState kind="Sites" />
-				) : (
+				<HomeResultColumn
+					kind="Sites"
+					compactHeading
+					count={data.total}
+					loading={loading && !sites.length}
+					error={error}
+					onRetry={retry}
+				>
 					<ul
 						ref={scrollRef}
 						onScroll={(event) => {
@@ -93,7 +97,8 @@ const LibraryEntries = ({
 								loadMore();
 						}}
 						aria-label="Sites"
-						className="relative h-[min(60svh,36rem)] min-h-32 overflow-y-auto overscroll-y-contain scrollbar-thin"
+						className="relative h-auto max-h-[min(60svh,36rem)] overflow-y-auto overscroll-y-contain scrollbar-thin"
+						style={{ height: virtualizer.getTotalSize() }}
 					>
 						<li
 							aria-hidden="true"
@@ -163,18 +168,18 @@ const LibraryEntries = ({
 								)
 							);
 						})}
-						{loading && (
+						{loading && sites.length > 0 && (
 							<li
 								className="absolute left-0 top-0 w-full"
 								style={{
 									transform: `translateY(${virtualizer.getTotalSize()}px)`,
 								}}
 							>
-								<HomeListSkeleton kind="sites" count={sites.length ? 1 : 3} />
+								<HomeListSkeleton kind="sites" count={3} />
 							</li>
 						)}
 					</ul>
-				)
+				</HomeResultColumn>
 			) : (
 				<SearchEverythingBoard
 					pagesOnly
@@ -188,18 +193,14 @@ const LibraryEntries = ({
 					onLoadMore={() => (error ? retry() : loadMore())}
 					hasMorePages={data.hasMore}
 					hasMoreNotes={false}
+					loading={loading && !data.pages.length}
+					error={error}
+					onRetry={retry}
 					loadingMorePages={loading}
 					loadingMoreNotes={false}
-					loadMoreError={error}
+					loadMorePagesError={error}
+					loadMoreNotesError=""
 				/>
-			)}
-			{error && (
-				<div role="alert" className="flex flex-col items-start gap-2">
-					<p className="text-sm text-destructive">{error}</p>
-					<Button variant="outline" onClick={retry}>
-						Retry {request.level}
-					</Button>
-				</div>
 			)}
 			{data.hasMore && request.level === "sites" && !error && (
 				<Button
@@ -216,6 +217,7 @@ const LibraryEntries = ({
 };
 
 export const SiteBrowser = ({
+	visible = true,
 	query,
 	from,
 	to,
@@ -224,6 +226,13 @@ export const SiteBrowser = ({
 	chatGptConnected,
 }: Props) => {
 	const [site, setSite] = useState<string | null>(null);
+	const entryProps = {
+		onOpenSite: setSite,
+		onUpdateNote,
+		onSitesStateChange,
+		chatGptConnected,
+	};
+	const request = { query, from, to, limit: 20 };
 	return (
 		<section
 			aria-label="Browse sites and pages"
@@ -246,21 +255,22 @@ export const SiteBrowser = ({
 					</ol>
 				</nav>
 			)}
-			<LibraryEntries
-				key={site ?? "sites"}
-				request={{
-					level: site ? "pages" : "sites",
-					...(site ? { site } : {}),
-					query,
-					from,
-					to,
-					limit: 20,
-				}}
-				onOpenSite={setSite}
-				onUpdateNote={onUpdateNote}
-				onSitesStateChange={onSitesStateChange}
-				chatGptConnected={chatGptConnected}
-			/>
+			{/* Keep preview state and retry owned by a live reader during drill-down. */}
+			<div hidden={site !== null}>
+				<LibraryEntries
+					visible={visible && site === null}
+					request={{ ...request, level: "sites" }}
+					{...entryProps}
+				/>
+			</div>
+			{site && (
+				<LibraryEntries
+					key={site}
+					visible={visible}
+					request={{ ...request, level: "pages", site }}
+					{...entryProps}
+				/>
+			)}
 		</section>
 	);
 };
