@@ -36,6 +36,8 @@ export type DashboardHistoryResponse =
 	| { note: { id: string; text: string; updatedAt: number } }
 	| {
 			results: HistorySearchResult[];
+			resultsTotal?: number;
+			notesTotal?: number;
 			searchStatus: SearchAvailability;
 			notes?: DashboardNoteResult[];
 	  }

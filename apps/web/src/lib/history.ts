@@ -203,11 +203,24 @@ export const preloadSearchModel = async (): Promise<void> => {
 
 export const searchRetainedPages = async (
 	query: string,
-	offset = 0,
-	noteOffset = 0,
+	{
+		offset = 0,
+		noteOffset = 0,
+		from,
+		to,
+		includeTotals = true,
+	}: {
+		offset?: number;
+		noteOffset?: number;
+		from?: number;
+		to?: number;
+		includeTotals?: boolean;
+	} = {},
 ): Promise<{
 	results: HistorySearchResult[];
+	resultsTotal: number | null;
 	notes: DashboardNoteResult[];
+	notesTotal: number | null;
 	searchStatus: SearchAvailability;
 }> => {
 	const response = await request({
@@ -216,9 +229,20 @@ export const searchRetainedPages = async (
 		limit: 20,
 		offset,
 		noteOffset,
+		from,
+		to,
+		includeTotals,
 	});
 	if (
 		!isDashboardSearchResults(response.results) ||
+		(response.resultsTotal !== undefined &&
+			(typeof response.resultsTotal !== "number" ||
+				!Number.isSafeInteger(response.resultsTotal) ||
+				response.resultsTotal < 0)) ||
+		(response.notesTotal !== undefined &&
+			(typeof response.notesTotal !== "number" ||
+				!Number.isSafeInteger(response.notesTotal) ||
+				response.notesTotal < 0)) ||
 		!isDashboardSearchAvailability(response.searchStatus) ||
 		(response.notes !== undefined && !isDashboardNotes(response.notes))
 	)
@@ -227,7 +251,10 @@ export const searchRetainedPages = async (
 		);
 	return {
 		results: response.results,
+		// Older extensions return valid rows without totals; unknown is not zero.
+		resultsTotal: (response.resultsTotal as number | undefined) ?? null,
 		notes: (response.notes as DashboardNoteResult[] | undefined) ?? [],
+		notesTotal: (response.notesTotal as number | undefined) ?? null,
 		searchStatus: response.searchStatus,
 	};
 };

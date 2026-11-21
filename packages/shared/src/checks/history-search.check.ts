@@ -3,9 +3,12 @@ import type { StoredTabEvent } from "../events/db";
 import { logger } from "../lib/logger";
 import type { StoredPageObservation } from "../pages/observations";
 import {
+	type HistorySearchResult,
 	parseTemporalRecallQuery,
 	projectActivitySearchResults,
+	rerankCandidates,
 	searchHistory,
+	searchHistoryWithTotal,
 } from "../recall/history-search";
 
 const event = (
@@ -200,6 +203,10 @@ const secondPage = await searchHistory(paginationEvents, [], "PKCE", {
 });
 assert.equal(firstPage.length, 1);
 assert.equal(secondPage.length, 1);
+const { results: countedPage, total: countedTotal } =
+	await searchHistoryWithTotal(paginationEvents, [], "PKCE", { limit: 1 });
+assert.equal(countedPage.length, 1);
+assert.equal(countedTotal, 2);
 assert.notEqual(firstPage[0]?.url, secondPage[0]?.url);
 const semanticPage = pages[0];
 assert.ok(semanticPage);
@@ -338,6 +345,39 @@ assert.equal(
 );
 assert.equal(evidence?.excerpt.includes("needle phrase"), true);
 
+const normalizedQuery = "ﬃ".repeat(81);
+const expanded = await searchHistory(
+	[],
+	[page("normalized", "https://unicode.example/", 100, normalizedQuery)],
+	normalizedQuery,
+);
+assert.equal(expanded.length, 1);
+assert.ok(
+	expanded[0].matchedTerms.every((term) => term.length <= 240),
+	"normalization cannot emit incompatible metadata",
+);
+const rankedEvents = [
+	event("a-new", "https://rank.example/a", 300),
+	event("b", "https://rank.example/b", 200),
+	event("a-old", "https://rank.example/a", 100),
+];
+const stableRanking = await searchHistory(rankedEvents, [], "rank", {
+	candidateOrder: [
+		"https://rank.example/a",
+		"https://rank.example/b",
+		"https://rank.example/a",
+	],
+});
+assert.deepEqual(
+	stableRanking.map((row) => row.url),
+	["https://rank.example/a", "https://rank.example/b"],
+);
+assert.equal(
+	stableRanking[0].estimatedActiveMs,
+	undefined,
+	"sparse ranked candidates cannot establish time spent",
+);
+
 let searchYielded = false;
 const yieldCheck = new Promise<void>((resolve) =>
 	setTimeout(() => {
@@ -359,6 +399,115 @@ await yieldCheck;
 assert.equal(searchYielded, true);
 assert.equal(largeResult[0]?.url, "https://load.example/needle");
 assert.equal(largeResult[0]?.sourceCount, 1);
+
+// Phase 3/4 rerank: recency + metadata nudge near-equal fused ranks, duplicates are diversified, strong rank still wins.
+const DAY = 86_400_000;
+const rerankNow = 100 * DAY;
+const hit = (
+	url: string,
+	lastSeen: number,
+	pageTitle?: string,
+): HistorySearchResult =>
+	({
+		url,
+		host: new URL(url).host,
+		lastSeen,
+		...(pageTitle ? { pageTitle } : {}),
+	}) as HistorySearchResult;
+const rank = (urls: string[]) =>
+	new Map(urls.map((url, index) => [url, index]));
+const order = (results: HistorySearchResult[]) => results.map((r) => r.url);
+
+const recentWins = rerankCandidates(
+	[hit("https://a.example/old", 0), hit("https://b.example/new", rerankNow)],
+	rank(["https://a.example/old", "https://b.example/new"]),
+	"guide",
+	rerankNow,
+);
+assert.deepEqual(order(recentWins), [
+	"https://b.example/new",
+	"https://a.example/old",
+]);
+
+const strongRankStays = rerankCandidates(
+	[
+		hit("https://a.example/best", 0),
+		...Array.from({ length: 30 }, (_, i) =>
+			hit(`https://c${i}.example/x`, rerankNow),
+		),
+	],
+	rank([
+		"https://a.example/best",
+		...Array.from({ length: 30 }, (_, i) => `https://c${i}.example/x`),
+	]),
+	"guide",
+	rerankNow,
+);
+assert.ok(
+	order(strongRankStays).indexOf("https://a.example/best") <
+		order(strongRankStays).indexOf("https://c29.example/x"),
+);
+
+const titleBoost = rerankCandidates(
+	[
+		hit("https://a.example/1", rerankNow, "Unrelated"),
+		hit("https://b.example/2", rerankNow, "Acmecorp careers"),
+	],
+	rank(["https://a.example/1", "https://b.example/2"]),
+	"acmecorp",
+	rerankNow,
+);
+assert.equal(titleBoost[0]?.url, "https://b.example/2");
+
+const hostUrls = [
+	"https://linkedin.com/1",
+	"https://linkedin.com/2",
+	"https://linkedin.com/3",
+	"https://other.example/1",
+];
+const diversified = rerankCandidates(
+	hostUrls.map((url) => hit(url, rerankNow)),
+	rank(hostUrls),
+	"profile",
+	rerankNow,
+);
+assert.ok(order(diversified).indexOf("https://other.example/1") < 3);
+const dupTitle = rerankCandidates(
+	[
+		hit("https://a.example/1", rerankNow, "Same Article"),
+		hit("https://b.example/2", rerankNow, "same article"),
+		hit("https://c.example/3", rerankNow, "Different"),
+	],
+	rank(["https://a.example/1", "https://b.example/2", "https://c.example/3"]),
+	"notes",
+	rerankNow,
+);
+assert.equal(order(dupTitle)[1], "https://c.example/3");
+const nonCandidate = rerankCandidates(
+	[hit("https://z.example/z", rerankNow), hit("https://a.example/1", 0)],
+	rank(["https://a.example/1"]),
+	"x",
+	rerankNow,
+);
+assert.equal(nonCandidate[1]?.url, "https://z.example/z");
+// Regression: a query like "acme ai" buried excerpt matches behind unrelated *.ai hosts. A term matching most of the pool (the TLD "ai")
+// must not earn the metadata boost, and a few same-host matches must not be demoted behind unrelated hosts.
+const aiUrls = [
+	"https://www.linkedin.com/in/a",
+	"https://www.linkedin.com/in/b",
+	"https://www.linkedin.com/in/c",
+	...Array.from({ length: 6 }, (_, i) => `https://tool${i}.ai/x`),
+];
+const aiOrder = order(
+	rerankCandidates(
+		aiUrls.map((url) => hit(url, rerankNow)),
+		new Map(aiUrls.map((url, index) => [url, index < 3 ? index : index + 8])),
+		"acme ai",
+		rerankNow,
+	),
+);
+assert.deepEqual(aiOrder.slice(0, 3), aiUrls.slice(0, 3));
+
 logger.info(
 	"history-search: synthetic fixture assertions passed (not product quality evidence); privacy, provenance, filters, deletion, and no-answer passed",
 );

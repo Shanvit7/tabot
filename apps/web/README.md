@@ -18,7 +18,7 @@ The extension accepts dashboard reads from localhost ports 3000/3001 and `https:
 - Open the original page in a new tab; inspect first/last-seen dates and capture/event counts.
 - Distinguish missing captures, no matches, unavailable extension, invalid responses, and storage failures. Previous results survive a failed search.
 
-Search queries and returned evidence stay in browser memory. They are not placed in route URLs, sent through server functions, or uploaded to the optional MCP relay. Captured text renders as text, never HTML; page labels come from URL paths rather than invented titles. No remote favicons are fetched.
+Search text, category, and period stay in the local route URL for direct links. Returned evidence stays in browser memory and is not sent through server functions or uploaded to the optional MCP relay. Captured text renders as text, never HTML; page labels come from URL paths rather than invented titles. No remote favicons are fetched.
 
 Server rendering/prerendering produces a stable search shell. Chrome messaging runs only after hydration or user actions, behind `createClientOnlyFn`. Components use Tailwind utilities and existing semantic theme tokens; no inline styles or CSS modules.
 

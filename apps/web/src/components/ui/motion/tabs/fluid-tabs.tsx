@@ -124,7 +124,8 @@ function FluidTabsList({
 		>
 			<div
 				role="tablist"
-				tabIndex={0}
+				aria-label={ariaLabel}
+				tabIndex={-1}
 				onFocusCapture={(event: FocusEvent<HTMLElement>) => {
 					onFocusCapture?.(event);
 					handleTabListFocusCapture(event, activeIndex, setFocusedIndex);
@@ -176,8 +177,13 @@ function FluidTabsTab({
 	onFocus,
 	...props
 }: FluidTabsTabProps) {
-	const { activeIndex, setActiveIndex, setFocusedIndex, indicatorLayoutId } =
-		useFluidTabs();
+	const {
+		activeIndex,
+		focusedIndex,
+		setActiveIndex,
+		setFocusedIndex,
+		indicatorLayoutId,
+	} = useFluidTabs();
 	const { index } = useFluidTabSlot();
 	const isSelected = activeIndex === index;
 	const reduceMotion = useReducedMotion();
@@ -188,6 +194,7 @@ function FluidTabsTab({
 			transition={INDICATOR_SPRING}
 			type="button"
 			role="tab"
+			tabIndex={focusedIndex === index ? 0 : -1}
 			aria-selected={isSelected}
 			{...(label ? { "aria-label": label } : {})}
 			onClick={(event) => {
@@ -213,7 +220,7 @@ function FluidTabsTab({
 			{isSelected ? (
 				<m.span
 					layoutId={indicatorLayoutId}
-					className="absolute inset-0 block rounded-full bg-background shadow-sm"
+					className="pointer-events-none absolute inset-0 block rounded-full bg-background shadow-sm"
 					transition={INDICATOR_SPRING}
 					aria-hidden
 				/>

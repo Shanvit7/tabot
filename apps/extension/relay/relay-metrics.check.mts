@@ -201,6 +201,7 @@ const originalChrome = globalThis.chrome;
 const originalWebSocket = globalThis.WebSocket;
 const originalFetch = globalThis.fetch;
 globalThis.chrome = {
+	alarms: { create: async () => {}, onAlarm: { addListener: () => {} } },
 	storage: {
 		local: {
 			set: async () => {},
