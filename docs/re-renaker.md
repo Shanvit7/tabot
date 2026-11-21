@@ -14,7 +14,7 @@ A cross-encoder reads the query and one candidate's text together and returns a 
 
 ## When to build it (all must hold)
 
-1. A labeled eval set built from real queries (brand terms like `Wayfair`, `zosma ai`, `linkedin`, conceptual queries, and
+1. A labeled eval set built from real queries (brand terms like `Acmecorp`, `acme ai`, `social`, conceptual queries, and
    no-answer queries like `zzqxjvk`) exists and runs in `pnpm eval:search`.
 2. On that set, recall@5 / nDCG on conceptual queries, or the no-answer false-positive rate, stays below target after tuning
    the cheap levers: cosine thresholds, RRF weights, pool depth, rerank weights.

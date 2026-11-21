@@ -451,10 +451,10 @@ assert.ok(
 const titleBoost = rerankCandidates(
 	[
 		hit("https://a.example/1", rerankNow, "Unrelated"),
-		hit("https://b.example/2", rerankNow, "Wayfair careers"),
+		hit("https://b.example/2", rerankNow, "Acmecorp careers"),
 	],
 	rank(["https://a.example/1", "https://b.example/2"]),
-	"wayfair",
+	"acmecorp",
 	rerankNow,
 );
 assert.equal(titleBoost[0]?.url, "https://b.example/2");
@@ -490,7 +490,7 @@ const nonCandidate = rerankCandidates(
 	rerankNow,
 );
 assert.equal(nonCandidate[1]?.url, "https://z.example/z");
-// Real finding: "zosma ai" buried excerpt matches behind unrelated *.ai hosts. A term matching most of the pool (the TLD "ai")
+// Regression: a query like "acme ai" buried excerpt matches behind unrelated *.ai hosts. A term matching most of the pool (the TLD "ai")
 // must not earn the metadata boost, and a few same-host matches must not be demoted behind unrelated hosts.
 const aiUrls = [
 	"https://www.linkedin.com/in/a",
@@ -502,7 +502,7 @@ const aiOrder = order(
 	rerankCandidates(
 		aiUrls.map((url) => hit(url, rerankNow)),
 		new Map(aiUrls.map((url, index) => [url, index < 3 ? index : index + 8])),
-		"zosma ai",
+		"acme ai",
 		rerankNow,
 	),
 );

@@ -122,7 +122,7 @@ const queries: Query[] = [
 	{ query: "how do I bake croissants", relevant: { cooking: 2 } },
 	{ query: "design system dashboard typography", relevant: { design: 2 } },
 	{ query: "how do I renew my car registration", relevant: {} },
-	{ query: "Wayfair", relevant: {} },
+	{ query: "Acmecorp", relevant: {} },
 ];
 const cosine = (left: number[], right: number[]) =>
 	left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
