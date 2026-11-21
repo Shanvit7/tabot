@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+	type HistorySearchResult,
 	normalizeEvent,
 	type StoredPageObservation,
 	searchHistory,
@@ -287,7 +288,7 @@ assert.deepEqual(
 fail = false;
 assert.equal(isDashboardSearchResults([]), true);
 assert.equal(isDashboardSearchResults({ ok: false }), false);
-const result = {
+const result: HistorySearchResult = {
 	url,
 	host: "example.com",
 	firstSeen: 0,

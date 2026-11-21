@@ -159,7 +159,7 @@ for (const state of [
 		total: 1,
 		sites: [{ site: "example.com", pageCount: 2, noteCount: 1 }],
 	});
-	assert.ok(html.includes("https://example.com/"));
+	assert.match(html, /https:\/\/example\.com\//);
 	assert.ok(!html.includes('data-home-empty="Sites"'));
 }
 
