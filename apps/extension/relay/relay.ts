@@ -51,6 +51,8 @@ const STORAGE_KEY =
 		? "tabot_relay_credentials"
 		: `tabot_relay_credentials:${new URL(RELAY_URL).host}`;
 const HEARTBEAT_MS = 25_000;
+// Wakes a terminated MV3 service worker so the reconnect timer cannot be lost.
+const RELAY_ALARM = "tabot-relay-keepalive";
 const BACKOFF_MIN_MS = 1_000;
 const BACKOFF_MAX_MS = 60_000;
 
@@ -113,6 +115,8 @@ let heartbeat: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffMs = BACKOFF_MIN_MS;
 let connecting = false;
+let awaitingPong = false;
+let alarmListening = false;
 
 const status: {
 	state: RelayState;
@@ -855,7 +859,10 @@ const handleRequest = async (message: ServerRequest) => {
 
 const onMessage = (event: MessageEvent) => {
 	if (typeof event.data !== "string") return;
-	if (event.data === "pong") return;
+	if (event.data === "pong") {
+		awaitingPong = false;
+		return;
+	}
 	let parsed: ServerRequest;
 	try {
 		parsed = JSON.parse(event.data) as ServerRequest;
@@ -873,8 +880,21 @@ const stopHeartbeat = () => {
 
 const startHeartbeat = () => {
 	stopHeartbeat();
+	awaitingPong = false;
 	heartbeat = setInterval(() => {
-		if (socket?.readyState === WebSocket.OPEN) socket.send("ping");
+		if (socket?.readyState !== WebSocket.OPEN) return;
+		// No pong for a full interval: half-open socket the server still lists as OPEN.
+		if (awaitingPong) {
+			const stale = socket;
+			stale.onclose = null;
+			try {
+				stale.close(4000, "heartbeat timeout");
+			} catch {}
+			markOffline("heartbeat timeout");
+			return;
+		}
+		awaitingPong = true;
+		socket.send("ping");
 	}, HEARTBEAT_MS);
 };
 
@@ -893,6 +913,13 @@ const scheduleReconnect = () => {
 const teardown = () => {
 	stopHeartbeat();
 	socket = null;
+};
+
+const markOffline = (error: string) => {
+	teardown();
+	status.state = "offline";
+	status.lastError = error;
+	scheduleReconnect();
 };
 
 const connect = async (): Promise<void> => {
@@ -927,9 +954,8 @@ const connect = async (): Promise<void> => {
 				logger.warn("relay socket error", { relayUrl: RELAY_URL });
 		};
 		ws.onclose = (event) => {
-			teardown();
-			status.state = "offline";
-			status.lastError = `socket closed (${event.code})`;
+			// A superseded socket must not tear down its replacement.
+			if (socket !== ws) return;
 			if (process.env.NODE_ENV !== "production")
 				logger.warn("relay disconnected", {
 					relayUrl: RELAY_URL,
@@ -937,7 +963,7 @@ const connect = async (): Promise<void> => {
 					reason: event.reason,
 					wasClean: event.wasClean,
 				});
-			scheduleReconnect();
+			markOffline(`socket closed (${event.code})`);
 		};
 	} catch (error) {
 		status.state = "offline";
@@ -952,5 +978,12 @@ const connect = async (): Promise<void> => {
 
 /** Start (and keep alive) the relay connection. Safe to call repeatedly. */
 export const startRelay = (): void => {
+	if (!alarmListening) {
+		alarmListening = true;
+		chrome.alarms.onAlarm.addListener((alarm) => {
+			if (alarm.name === RELAY_ALARM) void connect();
+		});
+	}
+	void chrome.alarms.create(RELAY_ALARM, { periodInMinutes: 0.5 });
 	void connect();
 };

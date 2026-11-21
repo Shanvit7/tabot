@@ -41,7 +41,7 @@ import type {
 } from "taladb";
 import { telemetry } from "../analytics/telemetry";
 import { embedSearchText } from "./search-embedding";
-import { fuseCandidateUrls } from "./search-ranking";
+import { admitSemanticHit, fuseCandidateUrls } from "./search-ranking";
 
 const DB_NAME = "tabot_events";
 const loadTalaDB = async () =>
@@ -67,8 +67,6 @@ const MIGRATION_ID = "legacy-indexeddb-to-taladb:v1";
 const SEARCH_BACKFILL_ID = "semantic-search-backfill:v3";
 const SEARCH_MODEL_VERSION = "multi-qa-MiniLM-L6-cos-v1:3c96c1df:chunks-v1";
 const SEARCH_DIMENSIONS = 384;
-// search-quality.check.mts: 0.20 improves recall without no-answer hits on labeled cases.
-const SEARCH_MIN_COSINE_SIMILARITY = 0.2;
 let deriveDocumentId: (kind: Kind, id: string) => string;
 let deriveSearchJobId: (kind: Kind, id: string) => string;
 let deriveSearchPassageId: (id: string) => string;
@@ -1317,11 +1315,12 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				const similarity = new Map(
 					vectorHits.map(({ document, score }) => [document._id, score]),
 				);
-				semanticHits = hybridHits.filter(
-					(hit) =>
-						hit.textRank !== null ||
-						(similarity.get(hit.document._id) ?? -1) >=
-							SEARCH_MIN_COSINE_SIMILARITY,
+				semanticHits = hybridHits.filter((hit) =>
+					admitSemanticHit(
+						hit,
+						similarity.get(hit.document._id),
+						textHits.length,
+					),
 				);
 				semanticSearchAvailable = true;
 				searchQueryFailureReported = false;
@@ -1369,7 +1368,12 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			withPayload<StoredTabEvent>(eventRows, "event"),
 			withPayload<StoredPageObservation>(pageRows, "page"),
 			query,
-			{ ...options, candidateOrder, sparseEvents: true },
+			{
+				...options,
+				candidateOrder,
+				rerankNow: Date.now(),
+				sparseEvents: true,
+			},
 		);
 		return result.total > 0 || !temporalFallback
 			? includeTotal

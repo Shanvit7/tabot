@@ -81,6 +81,8 @@ export type HistorySearchOptions = {
 	limit?: number;
 	offset?: number;
 	candidateOrder?: string[];
+	// Second-stage rescoring of candidateOrder: recency, title/host match, same-host/title duplicate penalty.
+	rerankNow?: number;
 	sparseEvents?: boolean;
 	nearestTo?: number;
 };
@@ -457,7 +459,7 @@ export const collectHistoryResults = async (
 		}
 		if (index > 0 && index % 512 === 0) await yieldTurn();
 	}
-	return results.sort((a, b) => {
+	const sorted = results.sort((a, b) => {
 		if (options.nearestTo !== undefined)
 			return (
 				Math.abs(a.lastSeen - options.nearestTo) -
@@ -472,6 +474,102 @@ export const collectHistoryResults = async (
 			);
 		return b.score - a.score || b.lastSeen - a.lastSeen;
 	});
+	return options.rerankNow !== undefined && candidateRanks.size
+		? rerankCandidates(sorted, candidateRanks, query, options.rerankNow)
+		: sorted;
+};
+
+const RERANK_WEIGHTS = { fused: 0.75, recency: 0.15, metadata: 0.1 };
+const RECENCY_HALF_LIFE_MS = 14 * 24 * 60 * 60 * 1000;
+const HOST_FREE_RESULTS = 1;
+const HOST_PENALTY = 0.04;
+const HOST_PENALTY_MAX = 0.12;
+const TITLE_PENALTY = 0.1;
+
+// Deterministic second stage over fused (RRF) candidates; no model. Weights are a starting point tuned by search-quality.check.mts.
+// Recency never dominates: it is 15% of the score, so a far-better fused rank still wins. Duplicates are penalised greedily
+// (same host a little after the first result, same title more) so one site or repeated article cannot fill the top results.
+export const rerankCandidates = (
+	results: HistorySearchResult[],
+	candidateRanks: ReadonlyMap<string, number>,
+	query: string,
+	now: number,
+): HistorySearchResult[] => {
+	const terms = new Set(tokenizeRecallText(query.slice(0, 240)));
+	const candidates = results.filter((result) => candidateRanks.has(result.url));
+	const tokens = candidates.map(
+		(result) =>
+			new Set(tokenizeRecallText(`${result.pageTitle ?? ""} ${result.host}`)),
+	);
+	// A term found in most candidates' title/host (e.g. the "ai" TLD) says nothing about relevance; weight by rarity.
+	const weights = new Map(
+		[...terms].map((term) => [
+			term,
+			1 -
+				tokens.filter((set) => set.has(term)).length /
+					Math.max(1, candidates.length),
+		]),
+	);
+	const pool = candidates.map((result, index) => {
+		const fused = 1 / (60 + (candidateRanks.get(result.url) ?? 0) + 1);
+		const metadata = terms.size
+			? [...terms].reduce(
+					(sum, term) =>
+						sum + (tokens[index]?.has(term) ? (weights.get(term) ?? 0) : 0),
+					0,
+				) / terms.size
+			: 0;
+		return {
+			result,
+			fused,
+			recency: Math.exp(
+				-Math.max(0, now - result.lastSeen) / RECENCY_HALF_LIFE_MS,
+			),
+			metadata,
+			title: result.pageTitle?.trim().toLowerCase(),
+		};
+	});
+	const bestFused = Math.max(...pool.map((item) => item.fused), 0) || 1;
+	const hostCounts = new Map<string, number>();
+	const titleCounts = new Map<string, number>();
+	const ranked: HistorySearchResult[] = [];
+	while (pool.length) {
+		let bestIndex = 0;
+		let bestScore = Number.NEGATIVE_INFINITY;
+		for (let index = 0; index < pool.length; index++) {
+			const item = pool[index];
+			if (!item) continue;
+			const penalty =
+				Math.min(
+					HOST_PENALTY_MAX,
+					Math.max(
+						0,
+						(hostCounts.get(item.result.host) ?? 0) - HOST_FREE_RESULTS,
+					) * HOST_PENALTY,
+				) + (item.title && titleCounts.has(item.title) ? TITLE_PENALTY : 0);
+			const score =
+				RERANK_WEIGHTS.fused * (item.fused / bestFused) +
+				RERANK_WEIGHTS.recency * item.recency +
+				RERANK_WEIGHTS.metadata * item.metadata -
+				penalty;
+			if (score > bestScore) {
+				bestScore = score;
+				bestIndex = index;
+			}
+		}
+		const [chosen] = pool.splice(bestIndex, 1);
+		if (!chosen) break;
+		hostCounts.set(
+			chosen.result.host,
+			(hostCounts.get(chosen.result.host) ?? 0) + 1,
+		);
+		if (chosen.title) titleCounts.set(chosen.title, 1);
+		ranked.push(chosen.result);
+	}
+	return [
+		...ranked,
+		...results.filter((result) => !candidateRanks.has(result.url)),
+	];
 };
 
 export const searchHistoryWithTotal = async (

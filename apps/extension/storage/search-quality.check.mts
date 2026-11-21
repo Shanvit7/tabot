@@ -46,6 +46,11 @@ const documents: Document[] = [
 		text: "LinkedIn job search results list open roles, employers, locations, and filters for finding work.",
 	},
 	{
+		id: "linkedin-profile",
+		evidenceType: "auto-snippet",
+		text: "LinkedIn feed for you. Software engineer profile, connections, posts, followers, and recent activity from people in your network.",
+	},
+	{
 		id: "react-router",
 		evidenceType: "interaction-excerpt",
 		text: "TanStack Router loaders fetch route data before rendering a page and surface failures through route error boundaries.",
@@ -117,6 +122,7 @@ const queries: Query[] = [
 	{ query: "how do I bake croissants", relevant: { cooking: 2 } },
 	{ query: "design system dashboard typography", relevant: { design: 2 } },
 	{ query: "how do I renew my car registration", relevant: {} },
+	{ query: "Wayfair", relevant: {} },
 ];
 const cosine = (left: number[], right: number[]) =>
 	left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
@@ -235,17 +241,17 @@ const results = thresholds.map((threshold) => ({
 }));
 console.table(results);
 const current = results.find(({ threshold }) => threshold === 0.45);
-const tuned = results.find(({ threshold }) => threshold === 0.2);
+const tuned = results.find(({ threshold }) => threshold === 0.25);
 assert.ok(current && tuned);
 assert.ok(tuned.recallAt5 !== null && current.recallAt5 !== null);
 assert.ok(tuned.ndcgAt5 !== null && current.ndcgAt5 !== null);
 assert.ok(
 	tuned.recallAt5 > current.recallAt5,
-	"0.2 should improve Recall@5 over the former 0.45 cutoff",
+	"0.25 should improve Recall@5 over the former 0.45 cutoff",
 );
 assert.ok(
 	tuned.ndcgAt5 > current.ndcgAt5,
-	"0.2 should improve nDCG@5 over the former 0.45 cutoff",
+	"0.25 should improve nDCG@5 over the former 0.45 cutoff",
 );
 assert.equal(
 	tuned.noAnswerRate,
