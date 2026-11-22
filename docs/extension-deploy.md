@@ -2,9 +2,14 @@
 
 ## 0.2.7 release
 
-Release plan: production MCP deploy, GitHub Pages deploy, and Chrome Web Store draft upload. Store submission and publication remain manual.
-
 Changeset: none. This is the repository's pre-bumped release path; notes are in `apps/extension/CHANGELOG.md` and `apps/mcp-server/CHANGELOG.md`.
+
+### Deployment status
+
+- Release commit `519e3da` pushed; tag `v0.2.7` created.
+- Production MCP Worker deployed; `/health` reports `0.2.7`.
+- Chrome Web Store draft upload succeeded for `v0.2.7`. Not submitted or published.
+- GitHub Pages build succeeded, but deployment was blocked because `fix/ui-improve-home` is not allowed by the protected production Pages environment. PR [#27](https://github.com/Shanvit7/tabot/pull/27) is open; merge to `main` is required for the automatic Pages deployment. Failed dispatch: [run 45025720807](https://github.com/Shanvit7/tabot/actions/runs/45025720807).
 
 ### User-facing release summary
 
@@ -57,7 +62,7 @@ The normal Changesets path is:
 2. Review the generated Version Packages PR: versions, changelogs and intended release number.
 3. Merge the version PR. The release hook pushes `v<version>` and dispatches the store workflow **at that tag**, not a later `main` commit.
 
-For this pre-bumped 0.2.7 release, skip steps 1–2; tag `v0.2.7` and dispatch the draft upload only after the release commit is pushed.
+For this pre-bumped 0.2.7 release, the release commit was tagged `v0.2.7` and the draft upload completed. For future releases, follow the normal version/tag workflow above.
 4. Download `tabot-extension-<version>` from the workflow artifacts if needed; ZIP is retained for 30 days.
 5. Review the uploaded draft, listing, screenshots, disclosures and upgrade behavior in the [Chrome Web Store dashboard](https://chrome.google.com/webstore/devconsole).
 6. **You** choose when to submit/publish. No agent or workflow clicks Publish.
