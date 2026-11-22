@@ -1,5 +1,12 @@
 # mcp-server
 
+## 0.2.6
+
+### Patch Changes
+
+- Strengthen OAuth consent and token validation, and bind discovery and authorization responses to the configured public origin.
+- Instruct MCP clients to treat returned activity and notes as untrusted data.
+
 ## 0.2.5
 
 ### Unified read-only tool surface

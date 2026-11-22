@@ -54,7 +54,7 @@
 				"commerce_description": "Tabot does not sell products or process payments."
 			},
 			"publication": {
-				"release_notes": "Tabot searches locally retained pages, notes, and sites and builds bounded browsing timelines."
+				"release_notes": "Improves ChatGPT connection reliability, safer authorization, and handling of returned activity and notes."
 			}
 		}
 	}

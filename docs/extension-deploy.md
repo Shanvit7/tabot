@@ -1,28 +1,26 @@
 # Release and deployment — Tabot
 
-## 0.2.5 release draft
+## 0.2.6 release
 
-**Preparation only. No production deploy, store upload, store submission or publication has been performed.**
+Release plan: production MCP deploy, GitHub Pages deploy, and Chrome Web Store draft upload. Store submission and publication remain manual.
 
-Changeset: none. Pre-bumped release; notes are in `apps/extension/CHANGELOG.md` and `apps/mcp-server/CHANGELOG.md`.
+Changeset: none. This is the repository's pre-bumped release path; notes are in `apps/extension/CHANGELOG.md` and `apps/mcp-server/CHANGELOG.md`.
 
 ### User-facing release summary
 
-Tabot is evolving from a browser timeline into a browser activity layer for AI-assisted work. This beta refreshes the landing page, Home, assistant connection guidance and note-first popup. Users can search retained pages, sites and notes locally, review browsing activity and choose when to request supported results through ChatGPT.
-
-Local storage moves from IndexedDB to TalaDB on OPFS, with verified migration, replay-safe commits and rebuildable local search indexes. Page search combines keyword and semantic matching; note and site search use keyword matching. The relay exposes eight read-only tools, including related activity and chronological browsing results.
+This patch keeps Home responsive with large local activity histories and makes ChatGPT connection status reflect the extension, live relay, and a test request. Setup guidance uses plain language. The relay hardens OAuth consent and token validation and tells MCP clients to treat returned activity and notes as untrusted data.
 
 Browser events, automatic excerpts, notes and search indexes remain local. Authorized assistant calls return bounded results; explicitly requested note titles/text are filtered for selected sensitive patterns, not guaranteed free of sensitive information. Reusable contexts and user-directed automations remain product direction, not shipped beta features.
 
 ### Version decision — resolved as a pre-bumped release
 
-The latest tag is v0.2.2, and both `apps/extension/package.json` and `apps/mcp-server/package.json` already carry the **0.2.5** release version, with matching `packages/shared/src/version.ts` and ChatGPT plugin manifest.
+The latest tag is v0.2.5. Both `apps/extension/package.json` and `apps/mcp-server/package.json` already carry the **0.2.6** release version, matching `packages/shared/src/version.ts` and the ChatGPT plugin manifest.
 
-Changesets versions from the current package version, so a changeset here would ship **0.2.6**, not 0.2.5. This release uses the repository's existing **pre-bumped path** (the one 0.2.2 used): release notes live in `apps/extension/CHANGELOG.md` and `apps/mcp-server/CHANGELOG.md`, and **no pending changeset is merged**. Merge the versioned changes directly; the Changesets publish hook then tags `v0.2.5` and dispatches the draft upload.
+Changesets versions from the current package version, so a new changeset here would ship **0.2.7**, not 0.2.6. This release uses the repository's existing **pre-bumped path**: release notes live in `apps/extension/CHANGELOG.md` and `apps/mcp-server/CHANGELOG.md`, and there is **no pending changeset**. The release tag is `v0.2.6`; the draft upload must use that exact tag.
 
 `scripts/release-version.check.mjs` (run by `pnpm test`) fails if the version sources disagree or a pending changeset would re-price the release. The extension manifest no longer hard-codes a second version; Plasmo derives it from the package version (verified in the built artifact).
 
-If you would rather ship this work as the next Changesets release, drop `scripts/release-version.check.mjs` from `check:release`, lower both package versions to 0.2.4, and let a patch changeset produce 0.2.5. Do not do both.
+If instead switching to the Changesets path, first revert package versions to 0.2.5, remove the pre-bump guard, and let a patch changeset produce 0.2.6. Do not combine both paths.
 
 ## Deployment map
 
@@ -59,7 +57,7 @@ The normal Changesets path is:
 2. Review the generated Version Packages PR: versions, changelogs and intended release number.
 3. Merge the version PR. The release hook pushes `v<version>` and dispatches the store workflow **at that tag**, not a later `main` commit.
 
-For this pre-bumped 0.2.5 release, skip steps 1–2 and merge the versioned branch; the release hook still tags `v0.2.5` and dispatches the draft upload.
+For this pre-bumped 0.2.6 release, skip steps 1–2; tag `v0.2.6` and dispatch the draft upload only after the release commit is pushed.
 4. Download `tabot-extension-<version>` from the workflow artifacts if needed; ZIP is retained for 30 days.
 5. Review the uploaded draft, listing, screenshots, disclosures and upgrade behavior in the [Chrome Web Store dashboard](https://chrome.google.com/webstore/devconsole).
 6. **You** choose when to submit/publish. No agent or workflow clicks Publish.
@@ -68,7 +66,7 @@ If upload fails after tagging, fix the failure and manually rerun the workflow a
 
 ```bash
 # Example only, after version selection and approval:
-gh workflow run submit.yml --ref v0.2.5
+gh workflow run submit.yml --ref v0.2.6
 ```
 
 The release hook exits when the tag already exists; it does not automatically retry a failed upload. Do not delete a tag to force a retry, and do not blindly re-upload a version Chrome already accepted.
