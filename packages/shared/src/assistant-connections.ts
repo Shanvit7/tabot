@@ -100,6 +100,7 @@ export type ConnectionState =
 	| "extension-unreachable"
 	| "not-authorized"
 	| "auth-unknown"
+	| "relay-unavailable"
 	| "relay-connecting"
 	| "relay-offline"
 	| "round-trip-failed"
@@ -107,17 +108,20 @@ export type ConnectionState =
 
 /**
  * First failing link wins. `reachable` null = first check still running;
- * `health` null with a reachable extension = status could not be read.
+ * relay health can be unavailable while account authorization is still known.
  * "healthy" requires OAuth grant AND live socket AND a working test request.
  */
 export const deriveConnectionState = (
 	reachable: boolean | null,
 	health: RelayHealth | null,
+	assistants: AssistantConnections | null = null,
 ): ConnectionState => {
 	if (reachable === null) return "checking";
 	if (!reachable) return "extension-unreachable";
-	if (!health?.assistants) return "auth-unknown";
-	if (!health.assistants.chatgpt) return "not-authorized";
+	const connection = health?.assistants ?? assistants;
+	if (!connection) return "auth-unknown";
+	if (!connection.chatgpt) return "not-authorized";
+	if (!health) return "relay-unavailable";
 	if (health.relay.state === "idle" || health.relay.state === "connecting")
 		return "relay-connecting";
 	if (health.relay.state === "offline") return "relay-offline";

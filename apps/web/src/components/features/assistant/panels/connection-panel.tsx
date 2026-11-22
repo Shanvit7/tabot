@@ -12,50 +12,55 @@ import type { ReactNode } from "react";
 import { CONNECTION_TAB_LABEL } from "./connection-tab-label";
 
 type RowStatus = "ok" | "fail" | "pending" | "unknown" | "skipped";
-type Primary = "connect" | "diagnose" | "reconnect" | "recheck" | "extensions";
+type Primary = "connect" | "diagnose" | "reconnect" | "extensions";
 
 const COPY: Record<
 	ConnectionState,
 	{ title: string; body: string; primary: Primary | null }
 > = {
 	checking: {
-		title: "Checking your ChatGPT connection…",
-		body: "Checking that Tabot is available and ChatGPT can use it.",
+		title: "Checking ChatGPT connection…",
+		body: "This usually takes a few seconds.",
 		primary: null,
 	},
 	"extension-unreachable": {
-		title: "Tabot isn’t available in this Chrome browser",
-		body: "Copy the address below, paste it into Chrome’s address bar, and make sure Tabot is turned on. If you have more than one copy installed, set up that same copy in ChatGPT.",
+		title: "Tabot isn’t responding in Chrome",
+		body: "Open Chrome’s extensions page and switch Tabot on. Then return here and check again.",
 		primary: "extensions",
 	},
 	"not-authorized": {
-		title: "ChatGPT access isn’t set up",
-		body: "Allow ChatGPT to use Tabot. You’ll finish setup in ChatGPT.",
+		title: "ChatGPT isn’t connected to Tabot",
+		body: "In ChatGPT, open Plugins → Tabot and choose Connect. If you can’t find Tabot, review the setup steps.",
 		primary: "connect",
 	},
 	"auth-unknown": {
-		title: "Can’t check ChatGPT access",
-		body: "We couldn’t confirm that ChatGPT can use Tabot. Try again, or ask ChatGPT for help.",
-		primary: "recheck",
+		title: "Couldn’t check your ChatGPT connection",
+		body: "In ChatGPT, open Plugins → Tabot. If it shows disconnected, choose Reconnect. If Tabot isn’t listed, review the setup steps, then check again here.",
+		primary: "diagnose",
+	},
+	"relay-unavailable": {
+		title: "ChatGPT is connected, but Tabot isn’t responding",
+		body: "In ChatGPT, open Plugins → Tabot and reconnect it. Then return here and check again. If it still doesn’t work, reload the Tabot extension in Chrome.",
+		primary: "diagnose",
 	},
 	"relay-connecting": {
-		title: "Tabot is reconnecting",
-		body: "This usually takes a few seconds. We’ll check again automatically.",
+		title: "Tabot is reconnecting to ChatGPT",
+		body: "Wait up to 30 seconds; we’ll check again automatically. If it doesn’t reconnect, open ChatGPT → Plugins → Tabot and choose Reconnect.",
 		primary: null,
 	},
 	"relay-offline": {
-		title: "Tabot can’t connect right now",
-		body: "Tabot is having trouble connecting to ChatGPT. Try reconnecting.",
+		title: "Tabot is offline",
+		body: "Make sure Tabot is switched on in Chrome, then reconnect it here. If it stays offline, open ChatGPT → Plugins → Tabot and choose Reconnect.",
 		primary: "reconnect",
 	},
 	"round-trip-failed": {
-		title: "Tabot didn’t get a reply",
-		body: "Tabot is connected, but its connection test got no response. Reconnect; if this keeps happening, reload Tabot in Chrome.",
-		primary: "reconnect",
+		title: "ChatGPT didn’t get a reply from Tabot",
+		body: "In ChatGPT, open Plugins → Tabot and reconnect it. If it already says connected, reload the Tabot extension in Chrome, then check again.",
+		primary: "diagnose",
 	},
 	healthy: {
-		title: "ChatGPT can use Tabot",
-		body: "Everything is working. Last checked just now.",
+		title: "ChatGPT is ready to use Tabot",
+		body: "Open ChatGPT and ask a question using Tabot.",
 		primary: "diagnose",
 	},
 };
@@ -63,66 +68,54 @@ const COPY: Record<
 const rows = (
 	state: ConnectionState,
 ): { label: string; status: RowStatus }[] => {
+	if (state === "not-authorized")
+		return [{ label: "ChatGPT isn’t connected to Tabot", status: "fail" }];
 	const reached = state !== "checking" && state !== "extension-unreachable";
-	const granted =
-		reached && state !== "not-authorized" && state !== "auth-unknown";
-	const relayUp = state === "healthy" || state === "round-trip-failed";
 	return [
 		{
 			label:
 				state === "checking"
-					? "Checking your ChatGPT account connection…"
+					? "Checking ChatGPT connection…"
 					: !reached
-						? "ChatGPT account connection not checked"
-						: state === "not-authorized"
-							? "ChatGPT isn’t connected to your account"
-							: state === "auth-unknown"
-								? "Couldn’t verify your ChatGPT account connection"
-								: "Your ChatGPT account is connected to Tabot",
+						? "ChatGPT connection not checked"
+						: state === "auth-unknown"
+							? "Couldn’t check whether ChatGPT is connected"
+							: "ChatGPT is connected to Tabot",
 			status:
 				state === "checking"
 					? "pending"
 					: !reached
 						? "skipped"
-						: state === "not-authorized"
-							? "fail"
-							: state === "auth-unknown"
-								? "unknown"
-								: "ok",
+						: state === "auth-unknown"
+							? "unknown"
+							: "ok",
 		},
 		{
 			label:
 				state === "checking"
-					? "Checking if Tabot is reachable from ChatGPT…"
-					: !granted
-						? "Tabot availability not checked yet"
-						: state === "healthy"
-							? "Tabot is reachable from ChatGPT"
-							: state === "relay-connecting"
-								? "Tabot is reconnecting to ChatGPT"
-								: state === "round-trip-failed"
-									? "ChatGPT can’t get a reply from Tabot"
-									: "Tabot can’t reach ChatGPT right now",
-			status:
-				state === "checking"
-					? "pending"
-					: !granted
-						? "skipped"
-						: relayUp
-							? "ok"
-							: state === "relay-connecting"
-								? "pending"
-								: "fail",
+					? "Checking Tabot in this Chrome profile…"
+					: state === "extension-unreachable"
+						? "Tabot didn’t respond in this Chrome profile"
+						: "Tabot extension found in this Chrome profile",
+			status: state === "checking" ? "pending" : reached ? "ok" : "fail",
 		},
 		{
 			label:
 				state === "checking"
-					? "Checking whether Tabot responds to ChatGPT…"
+					? "Checking whether ChatGPT can reach Tabot…"
 					: state === "healthy"
-						? "Tabot responds to ChatGPT"
+						? "ChatGPT got a reply from Tabot"
 						: state === "round-trip-failed"
 							? "ChatGPT didn’t get a reply from Tabot"
-							: "ChatGPT response check not run yet",
+							: state === "relay-connecting"
+								? "Waiting for Tabot to reconnect"
+								: state === "relay-offline"
+									? "Reconnect Tabot to check that it replies"
+									: state === "relay-unavailable"
+										? "Reconnect Tabot in ChatGPT to check that it replies"
+										: state === "extension-unreachable"
+											? "Turn on Tabot in Chrome to check that it replies"
+											: "Check the ChatGPT connection before testing Tabot",
 			status:
 				state === "checking"
 					? "pending"
@@ -130,7 +123,9 @@ const rows = (
 						? "ok"
 						: state === "round-trip-failed"
 							? "fail"
-							: "skipped",
+							: state === "relay-connecting"
+								? "pending"
+								: "skipped",
 		},
 	];
 };
@@ -210,8 +205,10 @@ export const AssistantConnectionPanel = ({
 						>
 							<OpenAIMono aria-hidden="true" className="size-4" />
 							{primary === "connect"
-								? "Set up in ChatGPT"
-								: "Ask ChatGPT to test"}
+								? "Connect Tabot in ChatGPT"
+								: state === "healthy"
+									? "Ask ChatGPT to test"
+									: "Get help in ChatGPT"}
 							<span className="sr-only">(opens in a new tab)</span>
 						</a>
 					)}
@@ -223,7 +220,7 @@ export const AssistantConnectionPanel = ({
 							className={`${PRIMARY} disabled:cursor-wait disabled:opacity-70`}
 						>
 							<RefreshCw aria-hidden="true" className="size-4" />
-							{reconnecting ? "Reconnecting…" : "Try reconnecting"}
+							{reconnecting ? "Reconnecting…" : "Reconnect Tabot"}
 						</button>
 					)}
 					{primary === "extensions" && (
@@ -232,17 +229,17 @@ export const AssistantConnectionPanel = ({
 							onClick={onCopyExtensionsLink}
 							className={PRIMARY}
 						>
-							Copy Chrome extensions address
+							Copy address to open Chrome extensions
 						</button>
 					)}
 					<button
 						type="button"
 						onClick={onCheckConnection}
-						className={primary === "recheck" ? PRIMARY : SECONDARY}
+						className={SECONDARY}
 					>
-						<RefreshCw aria-hidden="true" className="size-4" /> Check connection
+						<RefreshCw aria-hidden="true" className="size-4" /> Check again
 					</button>
-					{state === "not-authorized" && (
+					{(state === "not-authorized" || state === "auth-unknown") && (
 						<button
 							type="button"
 							onClick={onShowInstructions}
@@ -251,23 +248,7 @@ export const AssistantConnectionPanel = ({
 							Review setup steps
 						</button>
 					)}
-					{state === "auth-unknown" && (
-						<a
-							href={diagnoseUrl}
-							target="_blank"
-							rel="noopener noreferrer"
-							className={`${BUTTON} text-work-ink hover:bg-work-raised`}
-						>
-							Ask ChatGPT to diagnose
-							<span className="sr-only">(opens in a new tab)</span>
-						</a>
-					)}
 				</div>
-				{state === "healthy" && (
-					<p className="text-sm leading-6 text-work-muted">
-						To disconnect, remove Tabot from ChatGPT Settings → Apps.
-					</p>
-				)}
 			</div>
 		</section>
 	);

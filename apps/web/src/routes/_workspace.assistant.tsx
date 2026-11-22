@@ -22,18 +22,20 @@ import { AssistantDemoPanel } from "~/components/features/assistant/panels/demo-
 import { AssistantSetupPanel } from "~/components/features/assistant/panels/setup-panel";
 import { useConnectionHealth } from "~/components/features/assistant/panels/use-connection-health";
 import FluidTabs from "~/components/ui/motion/tabs/fluid-tabs";
-import { MCP_SERVER_URL } from "~/lib/constants";
+import { IS_DEVELOPMENT, MCP_SERVER_URL } from "~/lib/constants";
 
 const PLUGIN_DESCRIPTION =
 	"Bring selected Chrome context into ChatGPT. Your history stays on your device; only requested results are shared.";
+const CHATGPT_CONNECT_PROMPT_URL = chatGptConnectPromptUrl(MCP_SERVER_URL);
 const CHATGPT_DIAGNOSE_URL = chatGptPromptUrl(
-	"Help me figure out why ChatGPT can’t use Tabot. First check whether Tabot is available in this conversation. If it is, make one safe, read-only request with valid arguments and tell me exactly what happened. If it isn’t available or the request fails, guide me one step at a time through checking that Tabot is added and enabled in ChatGPT, that this ChatGPT account is connected to Tabot, and that the Tabot extension is enabled in the same Chrome profile. Explain steps in plain language. Don’t guess at screen labels or say something worked unless you verified it. Never ask me to share passwords, tokens, or browsing history.",
+	"Help me figure out why ChatGPT can’t use Tabot. First check whether Tabot is available in this conversation. If it is, make one safe, read-only request with valid arguments and tell me exactly what happened. If it isn’t available or the request fails, guide me one step at a time in plain language: open ChatGPT → Plugins → Tabot, and reconnect it if needed. If Tabot isn’t listed, guide me through setup. Also check that the Tabot extension is enabled in the same Chrome profile. Don’t guess at screen labels or say something worked unless you verified it. Never ask me to share passwords, tokens, or browsing history.",
 );
 const CONNECTION_DOT_CLASS = {
 	checking: "animate-pulse bg-work-muted motion-reduce:animate-none",
 	"extension-unreachable": "bg-red-600",
 	"not-authorized": "bg-work-muted",
 	"auth-unknown": "bg-amber-500",
+	"relay-unavailable": "bg-amber-500",
 	"relay-connecting": "animate-pulse bg-amber-500 motion-reduce:animate-none",
 	"relay-offline": "bg-red-600",
 	"round-trip-failed": "bg-red-600",
@@ -44,7 +46,7 @@ const Assistant = () => {
 	const playerRef = useRef<PlayerRef>(null);
 	const reduceMotion = useReducedMotion();
 	const [tab, setTab] = useState(0);
-	const [connectUrl, setConnectUrl] = useState(chatGptConnectPromptUrl);
+	const [connectUrl, setConnectUrl] = useState(CHATGPT_CONNECT_PROMPT_URL);
 	const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
 		"idle",
 	);
@@ -54,8 +56,9 @@ const Assistant = () => {
 	const { state, reconnecting, reconnect, refresh } = useConnectionHealth();
 
 	useEffect(() => {
+		if (IS_DEVELOPMENT) return;
 		let active = true;
-		void resolveChatGptConnectUrl().then((url) => {
+		void resolveChatGptConnectUrl(MCP_SERVER_URL).then((url) => {
 			if (active) setConnectUrl(url);
 		});
 		return () => {
@@ -67,20 +70,19 @@ const Assistant = () => {
 		const check = refresh().then((next) => {
 			window.dispatchEvent(new Event("tabot:connection-check"));
 			if (next !== "healthy") {
-				setTab(2);
 				throw new Error(
-					`${CONNECTION_TAB_LABEL[next]}. See the Connection tab.`,
+					`${CONNECTION_TAB_LABEL[next]}. See the guidance below.`,
 				);
 			}
 		});
 		void toast
 			.promise(check, {
 				loading: "Checking ChatGPT connection…",
-				success: "ChatGPT connection is active",
+				success: "ChatGPT can use Tabot.",
 				error: (error) =>
 					error instanceof Error
 						? error.message
-						: "Couldn’t check the connection. Keep Tabot open and try again.",
+						: "Couldn’t check the connection. See the guidance below.",
 			})
 			.catch(() => {});
 	};
@@ -89,11 +91,12 @@ const Assistant = () => {
 		try {
 			await navigator.clipboard.writeText("chrome://extensions");
 			toast.success("Address copied", {
-				description: "Paste it into Chrome’s address bar to check Tabot.",
+				description:
+					"Paste it into Chrome’s address bar, switch Tabot on, then return here.",
 			});
 		} catch {
 			toast.error("Couldn’t copy the address", {
-				description: "Type chrome://extensions into Chrome’s address bar.",
+				description: "In Chrome, open chrome://extensions and switch Tabot on.",
 			});
 		}
 	};

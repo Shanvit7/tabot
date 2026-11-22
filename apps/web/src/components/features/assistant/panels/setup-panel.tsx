@@ -21,7 +21,9 @@ export const AssistantSetupPanel = ({
 }) => (
 	<div className="max-w-3xl">
 		<div className="mb-2 flex items-center justify-between gap-3">
-			<h2 className="text-base font-semibold text-work-ink">Setup steps</h2>
+			<h2 className="text-base font-semibold text-work-ink">
+				Connect Tabot in ChatGPT
+			</h2>
 			<a
 				href={connectUrl}
 				target="_blank"
@@ -29,7 +31,7 @@ export const AssistantSetupPanel = ({
 				className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-lime/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 			>
 				<OpenAIMono aria-hidden="true" className="size-4" />
-				Ask ChatGPT to help
+				Get setup help in ChatGPT
 				<span className="sr-only">(opens in a new tab)</span>
 			</a>
 		</div>
@@ -37,23 +39,19 @@ export const AssistantSetupPanel = ({
 			{[
 				[
 					"Use the same Chrome profile",
-					"Keep Tabot open in the profile you use for ChatGPT.",
+					"Make sure Tabot is enabled in the Chrome profile you use for ChatGPT.",
 				],
 				[
-					"Add a custom MCP server",
-					"ChatGPT → Plugins → Add → Add custom MCP server.",
+					"Find Tabot in ChatGPT",
+					"Open ChatGPT → Plugins → Tabot. If it’s listed, select it and choose Connect.",
 				],
 				[
-					"Configure Tabot",
-					"Name it Tabot, choose OAuth, and paste the server URL below. Leave advanced settings unchanged.",
+					"If Tabot isn’t listed",
+					"Use ChatGPT’s option to add a custom app. Copy Tabot’s address below, paste it when asked, and follow the prompts to connect.",
 				],
 				[
-					"Connect Tabot",
-					"After adding the server, click Connect Tabot in ChatGPT’s prompt, then Connect to ChatGPT on Tabot’s consent page. Only requested results are shared.",
-				],
-				[
-					"Ask with @Tabot",
-					"In a chat, type @Tabot, select Tabot, and ask your question.",
+					"Try Tabot in a chat",
+					"Start a chat in ChatGPT, select Tabot (or type @Tabot), and ask your question.",
 				],
 			].map(([title, stepDescription], index) => (
 				<li key={title} className="flex items-start gap-3 py-2 sm:gap-4">
@@ -73,7 +71,9 @@ export const AssistantSetupPanel = ({
 						{index === 2 && (
 							<div className="mt-3 text-sm">
 								<div>
-									<h4 className="font-medium text-work-ink">Server URL</h4>
+									<h4 className="font-medium text-work-ink">
+										Tabot connection address
+									</h4>
 									<div className="mt-2 flex flex-wrap items-center gap-2">
 										<code className="min-w-0 flex-1 basis-48 select-text break-all rounded-md bg-work-raised px-3 py-2 font-mono text-xs leading-5 text-work-ink">
 											{serverUrl}
@@ -83,8 +83,8 @@ export const AssistantSetupPanel = ({
 											onClick={onCopyServerUrl}
 											aria-label={
 												copyStatus === "copied"
-													? "Tabot server URL copied"
-													: "Copy Tabot server URL"
+													? "Tabot connection address copied"
+													: "Copy Tabot connection address"
 											}
 											className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-work-line px-3 text-xs font-medium text-work-ink transition-colors hover:bg-work-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 										>
@@ -94,13 +94,15 @@ export const AssistantSetupPanel = ({
 												<Copy aria-hidden="true" className="size-3.5" />
 											)}
 											<span role="status">
-												{copyStatus === "copied" ? "Copied URL" : "Copy URL"}
+												{copyStatus === "copied"
+													? "Copied address"
+													: "Copy address"}
 											</span>
 										</button>
 									</div>
 									{copyStatus === "error" && (
 										<p role="status" className="mt-1 text-xs text-work-muted">
-											Couldn’t copy. Select the URL to copy it manually.
+											Couldn’t copy. Select the address to copy it manually.
 										</p>
 									)}
 								</div>
