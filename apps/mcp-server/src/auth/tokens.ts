@@ -27,7 +27,9 @@ export const verifyInstallationToken = async (
 ): Promise<string | null> => {
 	if (!token) return null;
 	try {
-		const { payload } = await jwtVerify(token, keyFor(secret));
+		const { payload } = await jwtVerify(token, keyFor(secret), {
+			algorithms: ["HS256"],
+		});
 		return typeof payload.sub === "string" && payload.sub.length > 0
 			? payload.sub
 			: null;

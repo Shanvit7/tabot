@@ -289,6 +289,13 @@
 			"skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
 			"computedHash": ""
 		},
+		"vapt": {
+			"source": "bhuvangupta/vapt-claude",
+			"commit": "ab71fc6d94f9fbc8bbf16fa69bda96cffe6c9723",
+			"sourceType": "github",
+			"skillPath": "vapt/SKILL.md",
+			"computedHash": "81ead8ddbe8f6681d90b7e4f30c484be31bee7d5eeaac41dfffdc9cd1d251565"
+		},
 		"vercel-react-best-practices": {
 			"source": "vercel-labs/agent-skills",
 			"sourceType": "github",

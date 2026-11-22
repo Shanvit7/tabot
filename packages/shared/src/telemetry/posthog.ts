@@ -26,6 +26,16 @@ const resolveHost = (
 	}
 };
 
+const redactMessage = async (message: string) => {
+	try {
+		// Lazy: keeps the redactor out of the landing bundle until an error occurs.
+		const { sensitiveDataRedactor } = await import("../privacy/sensitive-data");
+		return (await sensitiveDataRedactor.redact(message)).redacted;
+	} catch {
+		return "redacted";
+	}
+};
+
 const toPostHogEvent = (event: TelemetryEvent) => {
 	const context = {
 		platform: event.context.platform,
@@ -67,10 +77,7 @@ const toPostHogEvent = (event: TelemetryEvent) => {
 						? {
 								stacktrace: {
 									type: "raw",
-									frames: exception.frames.map((frame) => ({
-										...frame,
-										function: "<redacted>",
-									})),
+									frames: exception.frames,
 								},
 							}
 						: {}),
@@ -97,7 +104,17 @@ export const createPostHogTransport = (
 				body: JSON.stringify({
 					api_key: projectKey,
 					distinct_id: options.distinctId,
-					...toPostHogEvent(event),
+					...toPostHogEvent(
+						event.type === "exception"
+							? {
+									...event,
+									exception: {
+										...event.exception,
+										message: await redactMessage(event.exception.message),
+									},
+								}
+							: event,
+					),
 				}),
 			});
 		},

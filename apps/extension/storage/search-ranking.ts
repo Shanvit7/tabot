@@ -26,3 +26,18 @@ export const fuseCandidateUrls = (
 		)
 		.map(([url]) => url);
 };
+
+// Vector-only hits (no BM25 match) must clear a higher cosine bar once BM25 has literal matches:
+// brand/term queries then keep exact hits and drop topical noise (real data: noise 0.25-0.35, literal >=0.36).
+// Conceptual/abbreviation queries with no literal match keep the lower bar for recall.
+export const SEARCH_MIN_COSINE = 0.25;
+export const SEARCH_MIN_COSINE_WITH_LEXICAL = 0.35;
+
+export const admitSemanticHit = (
+	hit: { textRank: number | null },
+	cosine: number | undefined,
+	lexicalMatches: number,
+) =>
+	hit.textRank !== null ||
+	(cosine ?? -1) >=
+		(lexicalMatches > 0 ? SEARCH_MIN_COSINE_WITH_LEXICAL : SEARCH_MIN_COSINE);

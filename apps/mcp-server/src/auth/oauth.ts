@@ -57,6 +57,7 @@ export const protectedResourceMetadata = (origin: string) => ({
 
 export const authorizationServerMetadata = (origin: string) => ({
 	issuer: origin,
+	authorization_response_iss_parameter_supported: true,
 	authorization_endpoint: `${origin}/authorize`,
 	token_endpoint: `${origin}/token`,
 	registration_endpoint: `${origin}/register`,

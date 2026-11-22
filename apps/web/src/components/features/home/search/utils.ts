@@ -6,13 +6,30 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
 	year: "numeric",
 	timeZone: "UTC",
 });
-export const withinRange = (value: number, days: number, now: number) => {
-	const age = now - value;
-	return (
-		age >= 0 &&
-		(!Number.isFinite(days) ||
-			(age < days * 86_400_000 && (days !== 2 || age >= 86_400_000)))
-	);
+export const searchTimeRange = (
+	days: number,
+	now: number,
+): { from?: number; to?: number } => {
+	if (!Number.isFinite(days)) return {};
+	if (days === 1 || days === 2) {
+		const start = new Date(now);
+		start.setHours(0, 0, 0, 0);
+		const midnight = start.getTime();
+		if (days === 2) start.setDate(start.getDate() - 1);
+		return { from: start.getTime(), to: days === 2 ? midnight - 1 : now };
+	}
+	return { from: now - days * 86_400_000, to: now };
+};
+export const withinRange = (
+	value: number,
+	daysOrRange: number | { from?: number; to?: number },
+	now: number,
+) => {
+	const { from, to } =
+		typeof daysOrRange === "number"
+			? searchTimeRange(daysOrRange, now)
+			: daysOrRange;
+	return Number.isFinite(value) && value >= (from ?? 0) && value <= (to ?? now);
 };
 
 export const dateLabel = (timestamp: number) => dateFormatter.format(timestamp);

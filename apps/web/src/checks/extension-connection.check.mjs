@@ -219,6 +219,36 @@ try {
 		calls.length = 0;
 		await client.readHistoryCounts();
 		assert.deepEqual(calls, [{ id: expected, type: "GET_COUNTS" }]);
+		// Valid legacy search rows stay readable; absent totals are unknown, not zero.
+		dataResponse = {
+			results: [],
+			notes: [],
+			searchStatus: { mode: "keyword", indexing: false, model: "not-loaded" },
+		};
+		const legacy = await client.searchRetainedPages("example");
+		assert.equal(legacy.resultsTotal, null);
+		assert.equal(legacy.notesTotal, null);
+		dataResponse = { ...dataResponse, resultsTotal: 0, notesTotal: 0 };
+		assert.equal((await client.searchRetainedPages("example")).resultsTotal, 0);
+		// Sequential: invalid cases share mutable dataResponse.
+		await [-1, 1.5, "0", null, Infinity].reduce(
+			(previous, invalid) =>
+				previous.then(async () => {
+					const valid = dataResponse;
+					dataResponse = { ...valid, resultsTotal: invalid };
+					await assert.rejects(
+						client.searchRetainedPages("example"),
+						/incompatible/,
+					);
+					dataResponse = valid;
+				}),
+			Promise.resolve(),
+		);
+		dataResponse = {
+			...dataResponse,
+			results: [{ url: "javascript:alert(1)" }],
+		};
+		await assert.rejects(client.searchRetainedPages("example"), /incompatible/);
 		// Storage errors must not select another database or retry a mutation.
 		dataResponse = { ok: false, code: "storage-unavailable" };
 		calls.length = 0;

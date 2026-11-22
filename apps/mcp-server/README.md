@@ -51,6 +51,12 @@ Anyone able to reach the dev URL can call its endpoints; avoid production bindin
 
 Application logs include route/status/duration, tool name/outcome, and relay lifecycle events; they exclude tool arguments/results, credentials, URLs, and browser activity. Cloudflare native rate limits are per IP and location, not a global WAF. Request bodies are capped at 16 KiB and relay requests at 32 pending per installation.
 
+OAuth clients can register their own name and HTTPS/loopback callback. Names are not verified; check the callback origin shown on consent before connecting. Consent uses a per-response nonce CSP. Discovery, token audiences, and the authorization response `iss` use the configured `MCP_PUBLIC_URL` origin, never forwarded request headers. Keep that URL aligned with the connector URL in each environment.
+
+Tool results, especially saved notes, can contain untrusted instructions. MCP initialization tells clients to treat returned fields as data only, but this is guidance, not a prompt-injection security boundary. Tools remain read-only; assistant/client safeguards are still required.
+
+Static fonts/logo retain Cloudflare's asset-first serving and caching. `public/_headers` adds security headers without invoking the Worker or spending API rate limits for assets. These rules do not change dynamic Worker responses.
+
 Production deploy is explicit and never run by these checks:
 
 ```bash

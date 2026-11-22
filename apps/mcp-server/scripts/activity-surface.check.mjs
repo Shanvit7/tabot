@@ -37,6 +37,7 @@ const relatedActivity = {
 	],
 };
 const env = {
+	MCP_PUBLIC_URL: "https://test.invalid/mcp",
 	TABOT_PUBLIC_RATE_LIMITER: { limit: async () => ({ success: true }) },
 	TABOT_API_RATE_LIMITER: { limit: async () => ({ success: true }) },
 	TABOT_AUTH: {

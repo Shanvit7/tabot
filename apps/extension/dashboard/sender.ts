@@ -10,7 +10,8 @@ export const isDashboardSender = (value: string | undefined): boolean => {
 			(url.protocol === "https:" &&
 				url.origin === DASHBOARD_ORIGIN &&
 				(url.pathname === "/tabot" || url.pathname.startsWith("/tabot/"))) ||
-			(url.protocol === "http:" &&
+			(process.env.NODE_ENV !== "production" &&
+				url.protocol === "http:" &&
 				url.hostname === "localhost" &&
 				LOCAL_DASHBOARD_PORTS.has(url.port))
 		);

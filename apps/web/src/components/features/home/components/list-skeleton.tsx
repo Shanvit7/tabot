@@ -19,9 +19,9 @@ export const HomeListSkeleton = ({
 				kind === "sites" ? (
 					<div
 						key={key}
-						className="flex min-h-20 items-center gap-3 rounded-xl border border-border bg-work-surface px-4 py-3"
+						className="flex min-h-20 items-center gap-3 border-b border-border py-3"
 					>
-						<Skeleton className="size-10 shrink-0 rounded-full" />
+						<Skeleton className="size-5 shrink-0 rounded-full" />
 						<div className="flex-1">
 							<Skeleton className="mb-2 h-4 w-2/5" />
 							<Skeleton className="h-3 w-1/3" />
@@ -42,7 +42,10 @@ export const HomeListSkeleton = ({
 						<Skeleton className="h-3 w-2/3" />
 					</div>
 				) : (
-					<div key={key} className="rounded-xl border border-border p-4">
+					<div
+						key={key}
+						className="min-h-28 rounded-xl border border-dashed border-work-muted/50 bg-work-raised/50 p-3"
+					>
 						<div className="mb-3 flex items-center justify-between">
 							<Skeleton className="h-3 w-1/4" />
 							<Skeleton className="h-3 w-16" />

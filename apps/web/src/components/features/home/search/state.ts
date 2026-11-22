@@ -14,9 +14,14 @@ export type SearchState = {
 	searchError: string;
 	hasMorePages: boolean;
 	hasMoreNotes: boolean;
+	resultsTotal: number | null;
+	notesTotal: number | null;
+	pagesOffset: number;
+	notesOffset: number;
 	loadingMorePages: boolean;
 	loadingMoreNotes: boolean;
-	loadMoreError: string;
+	loadMorePagesError: string;
+	loadMoreNotesError: string;
 	retryCount: number;
 };
 
@@ -28,6 +33,8 @@ export type SearchAction =
 			results: HistorySearchResult[];
 			notes: DashboardNoteResult[];
 			searchStatus: SearchAvailability;
+			resultsTotal: number | null;
+			notesTotal: number | null;
 	  }
 	| { type: "error"; message: string }
 	| { type: "retry" }
@@ -55,9 +62,14 @@ export const initialSearchState: SearchState = {
 	searchError: "",
 	hasMorePages: false,
 	hasMoreNotes: false,
+	resultsTotal: null,
+	notesTotal: null,
+	pagesOffset: 0,
+	notesOffset: 0,
 	loadingMorePages: false,
 	loadingMoreNotes: false,
-	loadMoreError: "",
+	loadMorePagesError: "",
+	loadMoreNotesError: "",
 	retryCount: 0,
 };
 
@@ -73,53 +85,96 @@ export const searchReducer = (
 				retryCount: state.retryCount,
 			};
 		case "start":
-			return { ...state, searching: true, searchStatus: null, searchError: "" };
+			return {
+				...initialSearchState,
+				hasSearched: state.hasSearched,
+				retryCount: state.retryCount,
+				searching: true,
+			};
 		case "success":
 			return {
 				...state,
-				results: action.results,
-				notes: action.notes,
+				results: [
+					...new Map(action.results.map((row) => [row.url, row])).values(),
+				],
+				notes: [...new Map(action.notes.map((row) => [row.id, row])).values()],
 				searchStatus: action.searchStatus,
 				hasSearched: true,
 				selectedUrl: null,
 				searching: false,
-				hasMorePages: action.results.length === 20,
-				hasMoreNotes: action.notes.length === 20,
+				hasMorePages:
+					action.resultsTotal === null
+						? action.results.length === 20
+						: action.results.length > 0 &&
+							action.resultsTotal > action.results.length,
+				hasMoreNotes:
+					action.notesTotal === null
+						? action.notes.length === 20
+						: action.notes.length > 0 &&
+							action.notesTotal > action.notes.length,
+				resultsTotal: action.resultsTotal,
+				notesTotal: action.notesTotal,
+				pagesOffset: action.results.length,
+				notesOffset: action.notes.length,
 				loadingMorePages: false,
 				loadingMoreNotes: false,
-				loadMoreError: "",
+				loadMorePagesError: "",
+				loadMoreNotesError: "",
 			};
 		case "load-more-start":
 			return {
 				...state,
 				loadingMorePages: action.list === "pages" || state.loadingMorePages,
 				loadingMoreNotes: action.list === "notes" || state.loadingMoreNotes,
-				loadMoreError: "",
+				loadMorePagesError:
+					action.list === "pages" ? "" : state.loadMorePagesError,
+				loadMoreNotesError:
+					action.list === "notes" ? "" : state.loadMoreNotesError,
 			};
-		case "load-more-success":
+		case "load-more-success": {
+			const pages = action.list === "pages";
+			const results = pages
+				? [
+						...new Map(
+							[...state.results, ...action.results].map((row) => [
+								row.url,
+								row,
+							]),
+						).values(),
+					]
+				: state.results;
+			const notes = pages
+				? state.notes
+				: [
+						...new Map(
+							[...state.notes, ...action.notes].map((row) => [row.id, row]),
+						).values(),
+					];
+			const pagesOffset =
+				state.pagesOffset + (pages ? action.results.length : 0);
+			const notesOffset = state.notesOffset + (pages ? 0 : action.notes.length);
 			return {
 				...state,
-				results:
-					action.list === "pages"
-						? [...state.results, ...action.results]
-						: state.results,
-				notes:
-					action.list === "notes"
-						? [...state.notes, ...action.notes]
-						: state.notes,
-				hasMorePages:
-					action.list === "pages"
-						? action.results.length === 20
-						: state.hasMorePages,
-				hasMoreNotes:
-					action.list === "notes"
-						? action.notes.length === 20
-						: state.hasMoreNotes,
-				loadingMorePages:
-					action.list === "pages" ? false : state.loadingMorePages,
-				loadingMoreNotes:
-					action.list === "notes" ? false : state.loadingMoreNotes,
+				results,
+				notes,
+				pagesOffset,
+				notesOffset,
+				hasMorePages: pages
+					? results.length > state.results.length &&
+						(state.resultsTotal === null
+							? action.results.length === 20
+							: pagesOffset < state.resultsTotal)
+					: state.hasMorePages,
+				hasMoreNotes: pages
+					? state.hasMoreNotes
+					: notes.length > state.notes.length &&
+						(state.notesTotal === null
+							? action.notes.length === 20
+							: notesOffset < state.notesTotal),
+				loadingMorePages: pages ? false : state.loadingMorePages,
+				loadingMoreNotes: pages ? state.loadingMoreNotes : false,
 			};
+		}
 		case "load-more-error":
 			return {
 				...state,
@@ -127,7 +182,14 @@ export const searchReducer = (
 					action.list === "pages" ? false : state.loadingMorePages,
 				loadingMoreNotes:
 					action.list === "notes" ? false : state.loadingMoreNotes,
-				loadMoreError: "Couldn’t load more results. Scroll to retry.",
+				loadMorePagesError:
+					action.list === "pages"
+						? "Couldn’t load more pages."
+						: state.loadMorePagesError,
+				loadMoreNotesError:
+					action.list === "notes"
+						? "Couldn’t load more notes."
+						: state.loadMoreNotesError,
 			};
 		case "error":
 			return {

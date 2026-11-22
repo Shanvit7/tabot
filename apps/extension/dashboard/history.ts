@@ -20,6 +20,8 @@ import { isDashboardSender } from "./sender";
 
 type HistoryReader = Pick<
 	TabotDatabase,
+	| "searchHistoryWithTotal"
+	| "searchNotesWithTotal"
 	| "searchHistory"
 	| "searchNotes"
 	| "getSearchStatus"
@@ -109,6 +111,8 @@ export const readDashboardHistory = async (
 				(typeof message.noteOffset !== "number" ||
 					!Number.isSafeInteger(message.noteOffset) ||
 					message.noteOffset < 0)) ||
+			(message.includeTotals !== undefined &&
+				typeof message.includeTotals !== "boolean") ||
 			(message.from !== undefined &&
 				(typeof message.from !== "number" ||
 					!Number.isFinite(message.from) ||
@@ -158,24 +162,46 @@ export const readDashboardHistory = async (
 			const domain = options.origin
 				? new URL(options.origin).hostname
 				: undefined;
-			const [results, notes, events, searchStatus] = await Promise.all([
-				db.searchHistory(message.query as string, options),
-				db.searchNotes(message.query as string, {
-					from: options.from,
-					to: options.to,
-					domain,
-					limit: options.limit,
-					offset: noteOffset,
-				}),
-				db.readEvents(),
+			const includeTotals = message.includeTotals !== false;
+			const [pageSearch, noteSearch, searchStatus] = await Promise.all([
+				includeTotals
+					? db.searchHistoryWithTotal(message.query as string, options)
+					: db.searchHistory(message.query as string, options),
+				includeTotals
+					? db.searchNotesWithTotal(message.query as string, {
+							from: options.from,
+							to: options.to,
+							domain,
+							limit: options.limit,
+							offset: noteOffset,
+						})
+					: db.searchNotes(message.query as string, {
+							from: options.from,
+							to: options.to,
+							domain,
+							limit: options.limit,
+							offset: noteOffset,
+						}),
 				db.getSearchStatus(),
 			]);
-			const sessions = sessionize(events as StoredTabEvent[]);
+			const results = Array.isArray(pageSearch)
+				? pageSearch
+				: pageSearch.results;
+			const notes = Array.isArray(noteSearch) ? noteSearch : noteSearch.results;
+			// ponytail: matching notes still read retained session context; move lookup into owner if history makes this costly.
+			const sessions = notes.length
+				? sessionize((await db.readEvents()) as StoredTabEvent[])
+				: [];
 			return {
 				results,
+				...(!Array.isArray(pageSearch) && !pageSearch.truncated
+					? { resultsTotal: pageSearch.total }
+					: {}),
+				...(!Array.isArray(noteSearch) ? { notesTotal: noteSearch.total } : {}),
 				searchStatus,
 				notes: notes.map((note) => {
 					const session = sessionForNote(note, sessions);
+					const favicon = safeRecallUrl(note.favicon ?? undefined)?.href;
 					return {
 						id: note.id,
 						text: note.text.slice(0, 4_000),
@@ -185,7 +211,7 @@ export const readDashboardHistory = async (
 						host: note.host,
 						site: deriveSiteDomain(note.host),
 						title: note.title,
-						favicon: safeRecallUrl(note.favicon ?? undefined)?.href ?? null,
+						favicon: favicon && favicon.length <= 2048 ? favicon : null,
 						session: session
 							? {
 									start: session.startTimestamp,

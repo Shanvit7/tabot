@@ -1,7 +1,6 @@
 import type { DashboardNoteResult } from "@tabot/shared/dashboard";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import type { RefObject } from "react";
-import { HomeEmptyState } from "~/components/features/home/components/empty-state";
 import { HomeListSkeleton } from "~/components/features/home/components/list-skeleton";
 import { PageFavicon } from "~/components/features/home/library/page-favicon";
 import { dateLabel } from "~/components/features/home/search/utils";
@@ -13,8 +12,6 @@ export const SearchNotesResults = ({
 	loadMoreError,
 	onLoadMore,
 	loadingMoreNotes,
-	hasMoreNotes,
-	showEmptyStates,
 	onSelectNote,
 }: {
 	notes: DashboardNoteResult[];
@@ -23,15 +20,15 @@ export const SearchNotesResults = ({
 	loadMoreError: string;
 	onLoadMore: (list: "pages" | "notes") => void;
 	loadingMoreNotes: boolean;
-	hasMoreNotes: boolean;
-	showEmptyStates: boolean;
 	onSelectNote: (note: DashboardNoteResult) => void;
-}) => (
-	<section aria-label="Matching notes" className="min-w-0">
+}) => {
+	"use no memo"; // Virtualizer identity stays stable while visible rows change.
+	return (
 		<ul
 			ref={notesScrollRef}
 			aria-label="Matching notes"
-			className="relative h-[min(65svh,42rem)] min-h-32 overflow-y-auto overscroll-y-contain pr-1 motion-reduce:scroll-auto [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
+			className="relative h-auto max-h-[min(65svh,42rem)] overflow-y-auto overscroll-y-contain pr-1 motion-reduce:scroll-auto [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
+			style={{ height: notesVirtualizer.getTotalSize() }}
 		>
 			<li
 				aria-hidden="true"
@@ -44,6 +41,8 @@ export const SearchNotesResults = ({
 					return (
 						<li
 							key="notes-loader"
+							data-index={virtualRow.index}
+							ref={notesVirtualizer.measureElement}
 							className="absolute left-0 top-0 w-full pb-2"
 							style={{ transform: `translateY(${virtualRow.start}px)` }}
 						>
@@ -51,7 +50,7 @@ export const SearchNotesResults = ({
 								<button
 									type="button"
 									onClick={() => onLoadMore("notes")}
-									className="w-full cursor-pointer py-3 text-center text-xs text-destructive underline underline-offset-4"
+									className="min-h-11 w-full cursor-pointer py-3 text-center text-xs text-destructive underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
 								>
 									Couldn’t load notes. Retry
 								</button>
@@ -61,7 +60,7 @@ export const SearchNotesResults = ({
 									className="py-3 text-center text-xs text-muted-foreground"
 								>
 									{loadingMoreNotes ? (
-										<HomeListSkeleton kind="notes" count={1} />
+										<HomeListSkeleton kind="notes" count={3} />
 									) : null}
 								</div>
 							)}
@@ -75,7 +74,7 @@ export const SearchNotesResults = ({
 						className="absolute left-0 top-0 w-full pb-2"
 						style={{ transform: `translateY(${virtualRow.start}px)` }}
 					>
-						<div className="relative flex min-h-28 w-full min-w-0 flex-col items-start gap-2 rounded-lg border border-border bg-work-surface p-2.5 text-left transition-colors hover:border-work-ink/40 hover:bg-muted/40 sm:p-3">
+						<div className="relative flex min-h-28 w-full min-w-0 flex-col items-start gap-2 rounded-xl border border-dashed border-work-muted/50 bg-work-raised/50 p-2.5 text-left transition-colors hover:border-work-ink/40 hover:bg-muted/40 sm:p-3">
 							<button
 								type="button"
 								onClick={() => onSelectNote(note)}
@@ -101,9 +100,9 @@ export const SearchNotesResults = ({
 									{dateLabel(note.updatedAt)}
 								</time>
 							</span>
-							<span className="line-clamp-3 w-full whitespace-pre-wrap wrap-break-word text-sm leading-5">
+							<blockquote className="line-clamp-3 w-full whitespace-pre-wrap wrap-break-word text-sm leading-6">
 								{note.text}
-							</span>
+							</blockquote>
 							<div className="mt-auto flex w-full min-w-0 items-center justify-between gap-2">
 								<a
 									href={note.url}
@@ -118,19 +117,6 @@ export const SearchNotesResults = ({
 					</li>
 				);
 			})}
-			{!notes.length && loadingMoreNotes && !hasMoreNotes && (
-				<li className="p-2">
-					<HomeListSkeleton kind="notes" />
-				</li>
-			)}
-			{showEmptyStates &&
-				!notes.length &&
-				!hasMoreNotes &&
-				!loadingMoreNotes && (
-					<li className="py-2">
-						<HomeEmptyState kind="Notes" compact />
-					</li>
-				)}
 		</ul>
-	</section>
-);
+	);
+};

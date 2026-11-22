@@ -46,6 +46,7 @@ const expectedMarkerId = deriveDocId(
 	"legacy-indexeddb-to-taladb:v1",
 );
 const storedRecords = new Map<string, Record<string, unknown>>();
+const searchCandidateLimits: number[] = [];
 const storedPassages = new Map<string, Record<string, unknown>>();
 const storedEmbeddings = new Map<string, Record<string, unknown>>();
 type RecordFilter = {
@@ -159,8 +160,9 @@ const records = {
 		query: string,
 		topK: number,
 		filter: RecordFilter = {},
-	) =>
-		[...storedRecords.values()]
+	) => {
+		searchCandidateLimits.push(topK);
+		return [...storedRecords.values()]
 			.filter(
 				(row) =>
 					typeof row.searchText === "string" &&
@@ -170,7 +172,8 @@ const records = {
 						.includes(query.toLowerCase()),
 			)
 			.slice(0, topK)
-			.map((document) => ({ document, score: 1 })),
+			.map((document) => ({ document, score: 1 }));
+	},
 	insert: async (row: Record<string, unknown>) => {
 		storedRecords.set(row._id as string, row);
 		return row._id;
@@ -615,9 +618,21 @@ try {
 		windowId: 1,
 		eventId: null,
 	};
-	const savedNote = await request("saveNote", [note]);
+	const savedNote = await request("saveNote", [
+		{ ...note, favicon: `https://example.com/${"x".repeat(2050)}` },
+	]);
 	assert.equal(savedNote.ok, true);
-	assert.deepEqual(savedNote.value, note);
+	assert.deepEqual(savedNote.value, note, "oversized favicon is not persisted");
+	assert.equal(
+		(await request("searchNotes", ["q".repeat(240)])).ok,
+		true,
+		"notes and pages support the same query limit",
+	);
+	assert.equal((await request("searchNotes", ["q".repeat(241)])).ok, false);
+	assert.equal(
+		(await request("searchNotes", ["q", { from: 2, to: 1 }])).ok,
+		false,
+	);
 	const noteDocumentId = deriveDocId("tabot:notes:v1", note.id);
 	assert.ok(isDocId(noteDocumentId));
 	assert.equal(noteRows.get(noteDocumentId)?.id, note.id);
@@ -850,6 +865,16 @@ try {
 		},
 	]);
 	assert.equal(searchResult.value[0]?.pageCount, 1);
+	await request("searchHistory", [
+		"callback nonce",
+		{ includeTotal: true, limit: 20 },
+	]);
+	await request("searchHistory", ["callback nonce", { offset: 20, limit: 20 }]);
+	assert.deepEqual(
+		searchCandidateLimits.slice(-2),
+		[500, 500],
+		"initial and subsequent pages must use the same ranking pool",
+	);
 	assert.equal(
 		searchResult.value[0]?.sources.some(
 			(source) => source.id === searchPage.id,

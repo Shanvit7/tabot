@@ -45,7 +45,9 @@ import {
 import {
 	approveAuthorizationTransaction,
 	getAssistantConnections,
+	getRelayHealth,
 	getRelayStatus,
+	reconnectRelay,
 	runRelaySanityCheck,
 	startRelay,
 } from "./relay/relay";
@@ -795,12 +797,19 @@ if (chrome.runtime.onMessageExternal) {
 				message?.type === "GET_PAGE_PREVIEW" ||
 				message?.type === "GET_PAGE_REFERENCE"
 			) {
+				if (sender.frameId !== undefined && sender.frameId !== 0) {
+					sendResponse({ ok: false, code: "unauthorized-sender" });
+					return false;
+				}
 				void (async () => {
 					sendResponse(await readDashboardHistory(message, sender.url, getDb));
 				})();
 				return true;
 			}
-			if (!isDashboardSender(sender.url)) {
+			if (
+				!isDashboardSender(sender.url) ||
+				(sender.frameId !== undefined && sender.frameId !== 0)
+			) {
 				sendResponse({ ok: false, code: "unauthorized-sender" });
 				return false;
 			}
@@ -837,6 +846,22 @@ if (chrome.runtime.onMessageExternal) {
 			}
 			if (message?.type === "GET_ASSISTANT_CONNECTIONS") {
 				respondAssistantConnections(sendResponse);
+				return true;
+			}
+			if (message?.type === "GET_RELAY_HEALTH") {
+				void getRelayHealth()
+					.then(sendResponse)
+					.catch(() =>
+						sendResponse({ ok: false, code: "relay-health-unavailable" }),
+					);
+				return true;
+			}
+			if (message?.type === "RECONNECT_RELAY") {
+				void reconnectRelay()
+					.then(() => sendResponse({ ok: true }))
+					.catch(() =>
+						sendResponse({ ok: false, code: "relay-reconnect-failed" }),
+					);
 				return true;
 			}
 

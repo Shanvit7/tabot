@@ -5,8 +5,7 @@ import type {
 import type { LibrarySite } from "@tabot/shared/library";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useRef } from "react";
-import { HomeEmptyState } from "~/components/features/home/components/empty-state";
-import { HomeListSkeleton } from "~/components/features/home/components/list-skeleton";
+import { HomeResultColumn } from "~/components/features/home/components/result-column";
 import { ChatGptResultAction } from "~/components/features/home/library/chatgpt-result-action";
 import { PageFavicon } from "~/components/features/home/library/page-favicon";
 import { approxTimeSpentLabel } from "~/components/features/home/search/utils";
@@ -20,8 +19,13 @@ type SearchResultsGridProps = {
 	sites: LibrarySite[];
 	sitesLoading: boolean;
 	sitesError: string;
+	sitesTotal: number;
+	sitesHasMore: boolean;
+	onRetrySites?: () => void;
+	loading: boolean;
+	error: string;
+	onRetry?: () => void;
 	chatGptConnected: boolean;
-	showEmptyStates: boolean;
 	results: HistorySearchResult[];
 	notes: DashboardNoteResult[];
 	noteCountsByUrl: Map<string, number>;
@@ -30,7 +34,8 @@ type SearchResultsGridProps = {
 	hasMoreNotes: boolean;
 	loadingMorePages: boolean;
 	loadingMoreNotes: boolean;
-	loadMoreError: string;
+	loadMorePagesError: string;
+	loadMoreNotesError: string;
 	onSelectPage: (page: HistorySearchResult) => void;
 	onSelectNote: (note: DashboardNoteResult) => void;
 };
@@ -41,8 +46,13 @@ export const SearchResultsGrid = ({
 	sites,
 	sitesLoading,
 	sitesError,
+	sitesTotal,
+	sitesHasMore,
+	onRetrySites,
+	loading,
+	error,
+	onRetry,
 	chatGptConnected,
-	showEmptyStates,
 	results,
 	notes,
 	noteCountsByUrl,
@@ -51,16 +61,18 @@ export const SearchResultsGrid = ({
 	hasMoreNotes,
 	loadingMorePages,
 	loadingMoreNotes,
-	loadMoreError,
+	loadMorePagesError,
+	loadMoreNotesError,
 	onSelectPage,
 	onSelectNote,
 }: SearchResultsGridProps) => {
+	"use no memo"; // TanStack Virtual mutates its instance; compiler caching hides live rows.
 	const pagesScrollRef = useRef<HTMLUListElement>(null);
 	const notesScrollRef = useRef<HTMLUListElement>(null);
 	const pagesVirtualizer = useVirtualizer({
 		count: results.length + Number(hasMorePages),
 		getScrollElement: () => pagesScrollRef.current,
-		estimateSize: () => 140,
+		estimateSize: () => 170,
 		useAnimationFrameWithResizeObserver: true,
 		getItemKey: (index) => results[index]?.url ?? "pages-loader",
 		overscan: 4,
@@ -68,68 +80,88 @@ export const SearchResultsGrid = ({
 	const notesVirtualizer = useVirtualizer({
 		count: notes.length + Number(hasMoreNotes),
 		getScrollElement: () => notesScrollRef.current,
-		estimateSize: () => 150,
+		estimateSize: () => 160,
 		useAnimationFrameWithResizeObserver: true,
-		getItemKey: (index) => notes[index]?.id ?? "notes-loader",
+		getItemKey: (index) =>
+			notes[index] ? `note:${notes[index].id}` : "notes-loader",
 		overscan: 4,
 	});
+	const lastPageIndex = pagesVirtualizer.getVirtualItems().at(-1)?.index ?? -1;
+	const lastNoteIndex = notesVirtualizer.getVirtualItems().at(-1)?.index ?? -1;
 	useEffect(() => {
 		if (
+			!notesOnly &&
+			!loading &&
+			!error &&
 			hasMorePages &&
 			!loadingMorePages &&
-			!loadMoreError &&
-			pagesVirtualizer
-				.getVirtualItems()
-				.some(({ index }) => index >= results.length - 3)
+			!loadMorePagesError &&
+			lastPageIndex >= Math.max(0, results.length - 3)
 		)
 			onLoadMore("pages");
 	}, [
+		notesOnly,
+		loading,
+		error,
 		hasMorePages,
 		loadingMorePages,
-		loadMoreError,
+		loadMorePagesError,
 		onLoadMore,
-		pagesVirtualizer,
+		lastPageIndex,
 		results.length,
 	]);
 	useEffect(() => {
 		if (
+			!pagesOnly &&
+			!loading &&
+			!error &&
 			hasMoreNotes &&
 			!loadingMoreNotes &&
-			!loadMoreError &&
-			notesVirtualizer
-				.getVirtualItems()
-				.some(({ index }) => index >= notes.length - 3)
+			!loadMoreNotesError &&
+			lastNoteIndex >= Math.max(0, notes.length - 3)
 		)
 			onLoadMore("notes");
 	}, [
+		pagesOnly,
+		loading,
+		error,
 		hasMoreNotes,
 		loadingMoreNotes,
-		loadMoreError,
-		notes.length,
-		notesVirtualizer,
+		loadMoreNotesError,
 		onLoadMore,
+		lastNoteIndex,
+		notes.length,
 	]);
 	return (
 		<div
 			className={cn(
-				"grid items-start gap-3 sm:gap-5",
-				!pagesOnly && !notesOnly && "grid-cols-1 md:grid-cols-3",
+				"grid items-start gap-8",
+				!pagesOnly && !notesOnly && "grid-cols-1 lg:grid-cols-3 lg:gap-6",
 			)}
 		>
 			{!pagesOnly && !notesOnly && (
-				<section aria-label="Matching sites" className="min-w-0">
-					<ul className="max-h-[min(65svh,42rem)] min-h-32 overflow-y-auto overscroll-y-contain pr-1 [scrollbar-width:thin]">
+				<HomeResultColumn
+					kind="Sites"
+					count={sitesTotal}
+					loading={sitesLoading}
+					error={sitesError}
+					onRetry={onRetrySites}
+				>
+					<ul
+						aria-label="Matching sites"
+						className="max-h-[min(65svh,42rem)] overflow-y-auto overscroll-y-contain pr-1 [scrollbar-width:thin]"
+					>
 						{sites.map((site) => (
 							<li
 								key={site.site}
 								className="border-b border-border last:border-0"
 							>
-								<div className="flex min-w-0 items-center gap-1">
+								<div className="flex min-w-0 items-center gap-1 py-1">
 									<a
 										href={`https://${site.site}/`}
 										target="_blank"
 										rel="noreferrer"
-										className="flex min-w-0 flex-1 items-center gap-2 py-3 focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
+										className="flex min-w-0 flex-1 items-center gap-3 py-3 focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
 									>
 										<PageFavicon
 											page={{
@@ -142,8 +174,11 @@ export const SearchResultsGrid = ({
 											<span className="block truncate text-sm font-medium underline underline-offset-4">
 												{site.site}
 											</span>
-											<span className="block text-xs text-muted-foreground">
-												{site.pageCount} pages · {site.noteCount} notes
+											<span className="mt-1 block text-xs leading-5 text-muted-foreground">
+												{site.pageCount}{" "}
+												{site.pageCount === 1 ? "page" : "pages"} ·{" "}
+												{site.noteCount}{" "}
+												{site.noteCount === 1 ? "note" : "notes"}
 												{approxTimeSpentLabel(site.estimatedActiveMs) && (
 													<> · {approxTimeSpentLabel(site.estimatedActiveMs)}</>
 												)}
@@ -158,51 +193,63 @@ export const SearchResultsGrid = ({
 								</div>
 							</li>
 						))}
-						{!sites.length &&
-							(sitesLoading || Boolean(sitesError) || showEmptyStates) && (
-								<li className="py-3 text-xs text-muted-foreground">
-									{sitesError ||
-										(sitesLoading ? (
-											<HomeListSkeleton kind="sites" count={2} />
-										) : (
-											<HomeEmptyState kind="Sites" compact />
-										))}
-								</li>
-							)}
 					</ul>
-				</section>
+					{sitesHasMore && (
+						<p className="mt-3 text-xs leading-5 text-muted-foreground">
+							Showing {sites.length} of {sitesTotal}. Open Sites to browse more.
+						</p>
+					)}
+				</HomeResultColumn>
 			)}
 			{!notesOnly && (
-				<SearchPagesResults
-					{...{
-						results,
-						pagesScrollRef,
-						pagesVirtualizer,
-						loadMoreError,
-						onLoadMore,
-						loadingMorePages,
-						hasMorePages,
-						showEmptyStates,
-						noteCountsByUrl,
-						chatGptConnected,
-						onSelectPage,
-					}}
-				/>
+				<HomeResultColumn
+					kind="Pages"
+					compactHeading={pagesOnly || notesOnly}
+					count={results.length}
+					hasMore={hasMorePages}
+					loading={loading}
+					error={error}
+					onRetry={onRetry}
+				>
+					<SearchPagesResults
+						{...{
+							results,
+							pagesScrollRef,
+							pagesVirtualizer,
+							onLoadMore,
+							loadingMorePages,
+							hasMorePages,
+							noteCountsByUrl,
+							chatGptConnected,
+							onSelectPage,
+						}}
+						loadMoreError={loadMorePagesError}
+					/>
+				</HomeResultColumn>
 			)}
 			{!pagesOnly && (
-				<SearchNotesResults
-					{...{
-						notes,
-						notesScrollRef,
-						notesVirtualizer,
-						loadMoreError,
-						onLoadMore,
-						loadingMoreNotes,
-						hasMoreNotes,
-						showEmptyStates,
-						onSelectNote,
-					}}
-				/>
+				<HomeResultColumn
+					kind="Notes"
+					compactHeading={pagesOnly || notesOnly}
+					count={notes.length}
+					hasMore={hasMoreNotes}
+					loading={loading}
+					error={error}
+					onRetry={onRetry}
+				>
+					<SearchNotesResults
+						{...{
+							notes,
+							notesScrollRef,
+							notesVirtualizer,
+							onLoadMore,
+							loadingMoreNotes,
+							hasMoreNotes,
+							onSelectNote,
+						}}
+						loadMoreError={loadMoreNotesError}
+					/>
+				</HomeResultColumn>
 			)}
 		</div>
 	);

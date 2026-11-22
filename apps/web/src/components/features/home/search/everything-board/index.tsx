@@ -18,8 +18,13 @@ export const SearchEverythingBoard = ({
 	sites = EMPTY_SITES,
 	sitesLoading = false,
 	sitesError = "",
+	sitesTotal = sites.length,
+	sitesHasMore = false,
+	onRetrySites,
+	loading = false,
+	error = "",
+	onRetry,
 	chatGptConnected,
-	showEmptyStates = true,
 	results,
 	notes,
 	noteCountsByUrl,
@@ -29,15 +34,21 @@ export const SearchEverythingBoard = ({
 	hasMoreNotes,
 	loadingMorePages,
 	loadingMoreNotes,
-	loadMoreError,
+	loadMorePagesError,
+	loadMoreNotesError,
 }: {
 	pagesOnly?: boolean;
 	notesOnly?: boolean;
 	sites?: LibrarySite[];
 	sitesLoading?: boolean;
 	sitesError?: string;
+	sitesTotal?: number;
+	sitesHasMore?: boolean;
+	onRetrySites?: () => void;
+	loading?: boolean;
+	error?: string;
+	onRetry?: () => void;
 	chatGptConnected: boolean;
-	showEmptyStates?: boolean;
 	results: HistorySearchResult[];
 	notes: DashboardNoteResult[];
 	noteCountsByUrl: Map<string, number>;
@@ -50,7 +61,8 @@ export const SearchEverythingBoard = ({
 	hasMoreNotes: boolean;
 	loadingMorePages: boolean;
 	loadingMoreNotes: boolean;
-	loadMoreError: string;
+	loadMorePagesError: string;
+	loadMoreNotesError: string;
 }) => {
 	const [active, setActive] = useState<ActiveSearchResult>(null);
 	const [editingNote, setEditingNote] = useState(false);
@@ -65,8 +77,13 @@ export const SearchEverythingBoard = ({
 				sites={sites}
 				sitesLoading={sitesLoading}
 				sitesError={sitesError}
+				sitesTotal={sitesTotal}
+				sitesHasMore={sitesHasMore}
+				onRetrySites={onRetrySites}
+				loading={loading}
+				error={error}
+				onRetry={onRetry}
 				chatGptConnected={chatGptConnected}
-				showEmptyStates={showEmptyStates}
 				results={results}
 				notes={notes}
 				noteCountsByUrl={noteCountsByUrl}
@@ -75,7 +92,8 @@ export const SearchEverythingBoard = ({
 				hasMoreNotes={hasMoreNotes}
 				loadingMorePages={loadingMorePages}
 				loadingMoreNotes={loadingMoreNotes}
-				loadMoreError={loadMoreError}
+				loadMorePagesError={loadMorePagesError}
+				loadMoreNotesError={loadMoreNotesError}
 				onSelectPage={(page) => setActive({ type: "page", item: page })}
 				onSelectNote={(note) => {
 					setActive({ type: "note", item: note });

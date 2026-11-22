@@ -178,6 +178,12 @@ export class TabotDatabase {
 	};
 	searchHistory = (query: string, options?: HistorySearchOptions) =>
 		this.request<HistorySearchResult[]>("searchHistory", [query, options]);
+	searchHistoryWithTotal = (query: string, options?: HistorySearchOptions) =>
+		this.request<{
+			results: HistorySearchResult[];
+			total: number;
+			truncated?: boolean;
+		}>("searchHistory", [query, { ...options, includeTotal: true }]);
 	listPageNotes = (
 		pageKey: string,
 		fallback?: Pick<PageNote, "url" | "host" | "title">,
@@ -202,6 +208,20 @@ export class TabotDatabase {
 			offset?: number;
 		},
 	) => this.request<PageNote[]>("searchNotes", [query, options]);
+	searchNotesWithTotal = (
+		query: string,
+		options?: {
+			from?: number;
+			to?: number;
+			domain?: string;
+			limit?: number;
+			offset?: number;
+		},
+	) =>
+		this.request<{ results: PageNote[]; total: number }>("searchNotes", [
+			query,
+			{ ...options, includeTotal: true },
+		]);
 	listNotesForSite = (site: string) =>
 		this.request<PageNote[]>("listNotesForSite", [site]);
 	listNotesBetween = (from: number, to: number) =>

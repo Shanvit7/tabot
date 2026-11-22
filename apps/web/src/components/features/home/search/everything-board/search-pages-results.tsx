@@ -1,7 +1,6 @@
 import type { HistorySearchResult } from "@tabot/shared/dashboard";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import type { RefObject } from "react";
-import { HomeEmptyState } from "~/components/features/home/components/empty-state";
 import { HomeListSkeleton } from "~/components/features/home/components/list-skeleton";
 import { ChatGptResultAction } from "~/components/features/home/library/chatgpt-result-action";
 import { PageFavicon } from "~/components/features/home/library/page-favicon";
@@ -26,8 +25,6 @@ export const SearchPagesResults = ({
 	loadMoreError,
 	onLoadMore,
 	loadingMorePages,
-	hasMorePages,
-	showEmptyStates,
 	noteCountsByUrl,
 	chatGptConnected,
 	onSelectPage,
@@ -38,17 +35,17 @@ export const SearchPagesResults = ({
 	loadMoreError: string;
 	onLoadMore: (list: "pages" | "notes") => void;
 	loadingMorePages: boolean;
-	hasMorePages: boolean;
-	showEmptyStates: boolean;
 	noteCountsByUrl: Map<string, number>;
 	chatGptConnected: boolean;
 	onSelectPage: (page: HistorySearchResult) => void;
-}) => (
-	<section aria-label="Matching pages" className="min-w-0">
+}) => {
+	"use no memo"; // Virtualizer identity stays stable while visible rows change.
+	return (
 		<ul
 			ref={pagesScrollRef}
 			aria-label="Matching pages"
-			className="relative h-[min(65svh,42rem)] min-h-32 overflow-y-auto overscroll-y-contain pr-1 motion-reduce:scroll-auto [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
+			className="relative h-auto max-h-[min(65svh,42rem)] overflow-y-auto overscroll-y-contain pr-1 motion-reduce:scroll-auto [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
+			style={{ height: pagesVirtualizer.getTotalSize() }}
 		>
 			<li
 				aria-hidden="true"
@@ -61,6 +58,8 @@ export const SearchPagesResults = ({
 					return (
 						<li
 							key="pages-loader"
+							data-index={virtualRow.index}
+							ref={pagesVirtualizer.measureElement}
 							className="absolute left-0 top-0 w-full pb-2"
 							style={{ transform: `translateY(${virtualRow.start}px)` }}
 						>
@@ -68,7 +67,7 @@ export const SearchPagesResults = ({
 								<button
 									type="button"
 									onClick={() => onLoadMore("pages")}
-									className="w-full cursor-pointer py-3 text-center text-xs text-destructive underline underline-offset-4"
+									className="min-h-11 w-full cursor-pointer py-3 text-center text-xs text-destructive underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
 								>
 									Couldn’t load pages. Retry
 								</button>
@@ -78,12 +77,13 @@ export const SearchPagesResults = ({
 									className="py-3 text-center text-xs text-muted-foreground"
 								>
 									{loadingMorePages ? (
-										<HomeListSkeleton kind="pages" count={1} />
+										<HomeListSkeleton kind="pages" count={3} />
 									) : null}
 								</div>
 							)}
 						</li>
 					);
+				const noteCount = noteCountsByUrl.get(page.url) ?? 0;
 				return (
 					<li
 						key={virtualRow.key}
@@ -123,8 +123,8 @@ export const SearchPagesResults = ({
 							</p>
 							<div className="mt-auto flex w-full items-center justify-between gap-2">
 								<span className="text-xs tabular-nums text-muted-foreground">
-									{noteCountsByUrl.get(page.url)
-										? `${noteCountsByUrl.get(page.url)} notes · `
+									{noteCount > 0
+										? `${noteCount} ${noteCount === 1 ? "note" : "notes"} · `
 										: ""}
 									{dateLabel(page.lastSeen)}
 									{approxTimeSpentLabel(page.estimatedActiveMs) && (
@@ -142,19 +142,6 @@ export const SearchPagesResults = ({
 					</li>
 				);
 			})}
-			{!results.length && loadingMorePages && !hasMorePages && (
-				<li className="p-2">
-					<HomeListSkeleton kind="pages" />
-				</li>
-			)}
-			{showEmptyStates &&
-				!results.length &&
-				!hasMorePages &&
-				!loadingMorePages && (
-					<li className="py-2">
-						<HomeEmptyState kind="Pages" compact />
-					</li>
-				)}
 		</ul>
-	</section>
-);
+	);
+};

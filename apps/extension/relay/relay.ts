@@ -14,6 +14,10 @@ import {
 	sessionForNote,
 	sessionize,
 } from "@tabot/shared";
+import type {
+	RelayErrorCode,
+	RelayHealth,
+} from "@tabot/shared/assistant-connections";
 import type { DashboardNoteResult } from "@tabot/shared/dashboard";
 import { isLibraryRequest, type LibraryPage } from "@tabot/shared/library";
 import {
@@ -51,6 +55,8 @@ const STORAGE_KEY =
 		? "tabot_relay_credentials"
 		: `tabot_relay_credentials:${new URL(RELAY_URL).host}`;
 const HEARTBEAT_MS = 25_000;
+// Wakes a terminated MV3 service worker so the reconnect timer cannot be lost.
+const RELAY_ALARM = "tabot-relay-keepalive";
 const BACKOFF_MIN_MS = 1_000;
 const BACKOFF_MAX_MS = 60_000;
 
@@ -113,6 +119,8 @@ let heartbeat: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffMs = BACKOFF_MIN_MS;
 let connecting = false;
+let awaitingPong = false;
+let alarmListening = false;
 
 const status: {
 	state: RelayState;
@@ -134,9 +142,11 @@ export const getAssistantConnections =
 		return await fetchAssistantConnections(HTTP_BASE, credentials.token);
 	};
 
-/** Check current extension socket routing and OAuth grants without exposing credentials. */
-export const runRelaySanityCheck = async () => {
-	let roundTrip: { ok: boolean; status?: number; error?: string };
+const probeRoundTrip = async (): Promise<{
+	ok: boolean;
+	status?: number;
+	error?: string;
+}> => {
 	try {
 		const credentials = await loadCredentials();
 		if (!credentials) throw new Error("credentials_missing");
@@ -150,7 +160,7 @@ export const runRelaySanityCheck = async () => {
 			result?: { pong?: boolean };
 			error?: { message?: string };
 		} | null;
-		roundTrip = {
+		return {
 			ok: response.ok && body?.ok === true && body.result?.pong === true,
 			status: response.status,
 			...(!response.ok || body?.ok !== true || body.result?.pong !== true
@@ -158,11 +168,73 @@ export const runRelaySanityCheck = async () => {
 				: {}),
 		};
 	} catch (error) {
-		roundTrip = {
+		return {
 			ok: false,
 			error: error instanceof Error ? error.message : "relay_ping_failed",
 		};
 	}
+};
+
+const relayErrorCode = (error: string | null): RelayErrorCode | null => {
+	if (!error) return null;
+	if (error === "socket error") return "socket-error";
+	if (error.startsWith("socket closed")) return "socket-closed";
+	if (error === "heartbeat timeout") return "heartbeat-timeout";
+	return "connect-failed";
+};
+
+const PROBE_TTL_MS = 10_000;
+let lastProbe: { at: number; ok: boolean; status?: number } | null = null;
+let probeInFlight: ReturnType<typeof probeRoundTrip> | null = null;
+
+/** Dashboard-safe live-relay snapshot. Test request is throttled to one per 10 s. */
+export const getRelayHealth = async (): Promise<RelayHealth> => {
+	const relay = {
+		state: status.state,
+		error: relayErrorCode(status.lastError),
+	};
+	const assistants = await getAssistantConnections().catch(() => null);
+	let roundTrip: RelayHealth["roundTrip"] = null;
+	if (status.state === "connected" && assistants?.chatgpt) {
+		if (probeInFlight) {
+			await probeInFlight;
+		} else if (!lastProbe || Date.now() - lastProbe.at >= PROBE_TTL_MS) {
+			const at = Date.now();
+			probeInFlight = probeRoundTrip();
+			const result = await probeInFlight;
+			lastProbe = { at, ...result };
+			probeInFlight = null;
+		}
+		if (lastProbe) {
+			roundTrip = {
+				ok: lastProbe.ok,
+				...(lastProbe.status ? { status: lastProbe.status } : {}),
+			};
+		}
+	}
+	return { relay, roundTrip, assistants };
+};
+
+/** Drop any current socket and reconnect immediately (dashboard "Reconnect now"). */
+export const reconnectRelay = async (): Promise<void> => {
+	if (reconnectTimer) clearTimeout(reconnectTimer);
+	reconnectTimer = null;
+	backoffMs = BACKOFF_MIN_MS;
+	lastProbe = null;
+	const stale = socket;
+	if (stale) {
+		stale.onclose = null;
+		try {
+			stale.close(4001, "manual reconnect");
+		} catch {}
+		teardown();
+	}
+	await connect();
+};
+
+/** Check current extension socket routing and OAuth grants without exposing credentials. */
+export const runRelaySanityCheck = async () => {
+	const roundTrip = await probeRoundTrip();
 
 	let assistants: AssistantConnections | { error: string };
 	try {
@@ -855,7 +927,10 @@ const handleRequest = async (message: ServerRequest) => {
 
 const onMessage = (event: MessageEvent) => {
 	if (typeof event.data !== "string") return;
-	if (event.data === "pong") return;
+	if (event.data === "pong") {
+		awaitingPong = false;
+		return;
+	}
 	let parsed: ServerRequest;
 	try {
 		parsed = JSON.parse(event.data) as ServerRequest;
@@ -873,8 +948,21 @@ const stopHeartbeat = () => {
 
 const startHeartbeat = () => {
 	stopHeartbeat();
+	awaitingPong = false;
 	heartbeat = setInterval(() => {
-		if (socket?.readyState === WebSocket.OPEN) socket.send("ping");
+		if (socket?.readyState !== WebSocket.OPEN) return;
+		// No pong for a full interval: half-open socket the server still lists as OPEN.
+		if (awaitingPong) {
+			const stale = socket;
+			stale.onclose = null;
+			try {
+				stale.close(4000, "heartbeat timeout");
+			} catch {}
+			markOffline("heartbeat timeout");
+			return;
+		}
+		awaitingPong = true;
+		socket.send("ping");
 	}, HEARTBEAT_MS);
 };
 
@@ -893,6 +981,13 @@ const scheduleReconnect = () => {
 const teardown = () => {
 	stopHeartbeat();
 	socket = null;
+};
+
+const markOffline = (error: string) => {
+	teardown();
+	status.state = "offline";
+	status.lastError = error;
+	scheduleReconnect();
 };
 
 const connect = async (): Promise<void> => {
@@ -927,9 +1022,8 @@ const connect = async (): Promise<void> => {
 				logger.warn("relay socket error", { relayUrl: RELAY_URL });
 		};
 		ws.onclose = (event) => {
-			teardown();
-			status.state = "offline";
-			status.lastError = `socket closed (${event.code})`;
+			// A superseded socket must not tear down its replacement.
+			if (socket !== ws) return;
 			if (process.env.NODE_ENV !== "production")
 				logger.warn("relay disconnected", {
 					relayUrl: RELAY_URL,
@@ -937,7 +1031,7 @@ const connect = async (): Promise<void> => {
 					reason: event.reason,
 					wasClean: event.wasClean,
 				});
-			scheduleReconnect();
+			markOffline(`socket closed (${event.code})`);
 		};
 	} catch (error) {
 		status.state = "offline";
@@ -952,5 +1046,12 @@ const connect = async (): Promise<void> => {
 
 /** Start (and keep alive) the relay connection. Safe to call repeatedly. */
 export const startRelay = (): void => {
+	if (!alarmListening) {
+		alarmListening = true;
+		chrome.alarms.onAlarm.addListener((alarm) => {
+			if (alarm.name === RELAY_ALARM) void connect();
+		});
+	}
+	void chrome.alarms.create(RELAY_ALARM, { periodInMinutes: 0.5 });
 	void connect();
 };

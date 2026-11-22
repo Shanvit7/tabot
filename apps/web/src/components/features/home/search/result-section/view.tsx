@@ -1,10 +1,7 @@
 import type { DashboardNoteResult } from "@tabot/shared/dashboard";
 import { DingToaster } from "~/components/alerts/ding-toaster";
-import { HomeEmptyState } from "~/components/features/home/components/empty-state";
-import { HomeListSkeleton } from "~/components/features/home/components/list-skeleton";
 import { SiteBrowser } from "~/components/features/home/library/site-browser";
 import { SearchEverythingBoard } from "~/components/features/home/search/everything-board";
-import { SearchFeedback } from "~/components/features/home/search/feedback";
 import { SearchResultFilters } from "~/components/features/home/search/result-filters";
 import type { SearchResultKind } from "~/components/features/home/search/result-kinds";
 import type { SearchState } from "~/components/features/home/search/state";
@@ -21,7 +18,8 @@ type SearchResultViewProps = {
 	libraryFrom: number | undefined;
 	libraryTo: number | undefined;
 	counts: Record<SearchResultKind, number>;
-	empty: boolean;
+	countsReady: Record<SearchResultKind, boolean>;
+	countsApprox: Record<SearchResultKind, boolean>;
 	results: SearchState["results"];
 	notes: DashboardNoteResult[];
 	noteCountsByUrl: Map<string, number>;
@@ -33,7 +31,7 @@ type SearchResultViewProps = {
 	onLoadMore: (list: "pages" | "notes") => void;
 	onKindChange: (kind: SearchResultKind) => void;
 	onPeriodChange: (period: SearchPeriod) => void;
-	onSitesStateChange: (next: Omit<SitePreview, "key">) => void;
+	onSitesStateChange: (next: SitePreview) => void;
 };
 
 export const SearchResultView = ({
@@ -47,7 +45,8 @@ export const SearchResultView = ({
 	libraryFrom,
 	libraryTo,
 	counts,
-	empty,
+	countsReady,
+	countsApprox,
 	results,
 	notes,
 	noteCountsByUrl,
@@ -57,97 +56,71 @@ export const SearchResultView = ({
 	onKindChange,
 	onPeriodChange,
 	onSitesStateChange,
-}: SearchResultViewProps) => {
-	const initialSearch =
-		state.searching && !state.hasSearched && kind !== "Sites";
-	const loadingResults = (
+}: SearchResultViewProps) => (
+	<section aria-label="Search results" className="mt-8">
+		<DingToaster position="top-center" theme="light" />
+		<SearchResultFilters
+			kind={kind}
+			onKindChange={onKindChange}
+			period={period}
+			periods={searchPeriods}
+			counts={counts}
+			countsReady={countsReady}
+			countsApprox={countsApprox}
+			onPeriodChange={(value) => onPeriodChange(value as SearchPeriod)}
+		/>
 		<div
-			className={
-				kind === "Everything" ? "grid gap-4 lg:grid-cols-2" : "max-w-3xl"
-			}
+			id="search-panel-sites"
+			role="tabpanel"
+			aria-labelledby="search-tab-sites"
+			className="text-sm"
+			hidden={kind !== "Sites"}
 		>
-			{kind !== "Notes" && <HomeListSkeleton kind="pages" />}
-			{kind !== "Pages" && <HomeListSkeleton kind="notes" />}
+			<SiteBrowser
+				key={siteRequestKey}
+				visible={kind === "Sites"}
+				onSitesStateChange={onSitesStateChange}
+				query={query}
+				from={libraryFrom}
+				to={libraryTo}
+				chatGptConnected={chatGptConnected}
+				onUpdateNote={onUpdateNote}
+			/>
 		</div>
-	);
-	return (
-		<section
-			aria-label="Search results"
-			aria-busy={state.searching}
-			className="mt-8"
-		>
-			<DingToaster position="top-center" theme="light" />
-			{kind !== "Sites" && (
-				<SearchFeedback state={state} onRetrySearch={onRetrySearch} />
-			)}
-			{initialSearch ? (
-				loadingResults
-			) : (
-				<>
-					<SearchResultFilters
-						kind={kind}
-						onKindChange={onKindChange}
-						period={period}
-						periods={searchPeriods}
-						counts={counts}
-						onPeriodChange={(value) => onPeriodChange(value as SearchPeriod)}
-					/>
-					<div
-						id="search-panel-sites"
-						role="tabpanel"
-						aria-labelledby="search-tab-sites"
-						className="text-sm"
-						hidden={kind !== "Sites"}
-					>
-						<SiteBrowser
-							key={siteRequestKey}
-							onSitesStateChange={onSitesStateChange}
-							query={query}
-							from={libraryFrom}
-							to={libraryTo}
-							chatGptConnected={chatGptConnected}
-							onUpdateNote={onUpdateNote}
-						/>
-					</div>
-					{kind !== "Sites" && (
-						<div
-							id={`search-panel-${kind.toLowerCase()}`}
-							role="tabpanel"
-							aria-labelledby={`search-tab-${kind.toLowerCase()}`}
-							className="text-sm"
-						>
-							{state.searching ? (
-								loadingResults
-							) : empty ? (
-								<HomeEmptyState kind={kind} />
-							) : (
-								<SearchEverythingBoard
-									sites={sitePreview.sites}
-									sitesLoading={sitePreview.loading}
-									sitesError={sitePreview.error}
-									pagesOnly={kind === "Pages"}
-									notesOnly={kind === "Notes"}
-									chatGptConnected={chatGptConnected}
-									showEmptyStates={
-										kind !== "Everything" ||
-										(!sitePreview.loading && !state.searchError)
-									}
-									results={results}
-									notes={notes}
-									noteCountsByUrl={noteCountsByUrl}
-									onUpdateNote={onUpdateNote}
-									onLoadMore={onLoadMore}
-									hasMorePages={state.hasMorePages}
-									hasMoreNotes={state.hasMoreNotes}
-									loadingMorePages={state.loadingMorePages}
-									loadingMoreNotes={state.loadingMoreNotes}
-									loadMoreError={state.loadMoreError}
-								/>
-							)}
-						</div>
-					)}
-				</>
-			)}
-		</section>
-	);
-};
+		{kind !== "Sites" && (
+			<div
+				id={`search-panel-${kind.toLowerCase()}`}
+				role="tabpanel"
+				aria-labelledby={`search-tab-${kind.toLowerCase()}`}
+				className="text-sm"
+			>
+				<SearchEverythingBoard
+					key={`${siteRequestKey}:${kind}`}
+					sites={sitePreview.sites}
+					sitesLoading={sitePreview.loading}
+					sitesError={sitePreview.error}
+					sitesTotal={sitePreview.total}
+					sitesHasMore={sitePreview.hasMore}
+					onRetrySites={sitePreview.retry}
+					loading={state.searching || !state.hasSearched}
+					error={state.searchError}
+					onRetry={onRetrySearch}
+					pagesOnly={kind === "Pages"}
+					notesOnly={kind === "Notes"}
+					chatGptConnected={chatGptConnected}
+					results={results}
+					notes={notes}
+					noteCountsByUrl={noteCountsByUrl}
+					onUpdateNote={onUpdateNote}
+					onLoadMore={onLoadMore}
+					hasMorePages={state.hasMorePages}
+					hasMoreNotes={state.hasMoreNotes}
+					loadingMorePages={state.loadingMorePages}
+					loadingMoreNotes={state.loadingMoreNotes}
+					loadMorePagesError={state.loadMorePagesError}
+					loadMoreNotesError={state.loadMoreNotesError}
+				/>
+			</div>
+		)}
+	</section>
+);

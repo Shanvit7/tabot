@@ -170,6 +170,7 @@ export {
 	type SearchAvailability,
 	safeRecallUrl,
 	searchHistory,
+	searchHistoryWithTotal,
 } from "./recall/history-search";
 export {
 	buildLiveContext,
