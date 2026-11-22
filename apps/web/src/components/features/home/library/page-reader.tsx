@@ -2,14 +2,11 @@ import type {
 	DashboardPagePreview,
 	HistorySearchResult,
 } from "@tabot/shared/dashboard";
-import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { MatchedText } from "~/components/features/home/library/matched-text";
 import { PageReaderContent } from "~/components/features/home/library/page-reader-content";
-import {
-	actionClass,
-	messageOf,
-	urlLabel,
-} from "~/components/features/home/search/utils";
+import { messageOf, urlLabel } from "~/components/features/home/search/utils";
 import { readPagePreview } from "~/lib/history";
 import { cn } from "~/lib/utils";
 
@@ -34,6 +31,9 @@ export const PageReader = ({ page }: { page: HistorySearchResult }) => {
 	const [loading, setLoading] = useState(Boolean(sourceId));
 	const [error, setError] = useState("");
 	const [retry, setRetry] = useState(0);
+	const [capturesOpen, setCapturesOpen] = useState(false);
+	const capturesId = useId();
+	const retryRead = useCallback(() => setRetry((value) => value + 1), []);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: retry explicitly reloads the same capture.
 	useEffect(() => {
 		if (!sourceId) return;
@@ -93,39 +93,79 @@ export const PageReader = ({ page }: { page: HistorySearchResult }) => {
 				preview={preview}
 				loading={loading}
 				error={error}
-				onRetry={() => setRetry((value) => value + 1)}
+				onRetry={retryRead}
 			/>
 			<footer className="flex flex-wrap items-start justify-between gap-x-4 border-t border-border pt-3">
 				{pageSources.length > 1 && (
-					<details className="min-w-0 text-xs text-muted-foreground">
-						<summary className="min-h-11 w-fit cursor-pointer rounded py-3 focus-visible:outline-2 focus-visible:outline-ring">
-							Choose a saved capture
-						</summary>
-						<ul className="flex flex-col gap-2 pb-3">
-							{pageSources.map((source) => (
-								<li key={source.id}>
-									<button
-										type="button"
-										aria-pressed={selectedSource?.id === source.id}
-										className={cn(
-											actionClass,
-											selectedSource?.id === source.id &&
-												"font-medium text-foreground",
-										)}
-										onClick={() => setSourceId(source.id)}
-									>
-										Read capture ·{" "}
-										<time dateTime={new Date(source.timestamp).toISOString()}>
-											{new Date(source.timestamp)
-												.toISOString()
-												.replace("T", " ")
-												.slice(0, 16)}
-										</time>
-									</button>
-								</li>
-							))}
-						</ul>
-					</details>
+					<div className="w-full min-w-0 text-sm">
+						<button
+							type="button"
+							aria-expanded={capturesOpen}
+							aria-controls={capturesId}
+							className="flex min-h-11 w-fit cursor-pointer items-center gap-1 rounded font-medium text-work-muted focus-visible:outline-2 focus-visible:outline-ring"
+							onClick={() => setCapturesOpen((open) => !open)}
+						>
+							Saved captures
+							<span className="tabular-nums text-muted-foreground">
+								({pageSources.length})
+							</span>
+							<ChevronDown
+								aria-hidden="true"
+								className={cn(
+									"size-4 transition-transform duration-200 motion-reduce:transition-none",
+									capturesOpen && "rotate-180",
+								)}
+							/>
+						</button>
+						<div
+							id={capturesId}
+							aria-hidden={!capturesOpen}
+							inert={!capturesOpen}
+							className={cn(
+								"grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none",
+								capturesOpen
+									? "grid-rows-[1fr] opacity-100"
+									: "grid-rows-[0fr] opacity-0",
+							)}
+						>
+							<div className="min-h-0 overflow-hidden">
+								<ul className="mt-2 flex list-none flex-col gap-1 p-0">
+									{pageSources.map((source) => {
+										const selected = selectedSource?.id === source.id;
+										const timestamp = new Date(source.timestamp);
+										return (
+											<li key={source.id}>
+												<button
+													type="button"
+													aria-pressed={selected}
+													className={cn(
+														"flex min-h-11 w-full items-center justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+														selected
+															? "border-work-ink bg-work-surface font-medium text-foreground"
+															: "border-border text-work-muted",
+													)}
+													onClick={() => setSourceId(source.id)}
+												>
+													<span>
+														{selected ? "Currently reading" : "Read capture"}
+													</span>
+													<time
+														className="shrink-0 tabular-nums text-xs text-muted-foreground"
+														dateTime={timestamp.toISOString()}
+													>
+														{timestamp
+															.toISOString()
+															.replace("T", " ")
+															.slice(0, 16)}
+													</time>
+												</button>
+											</li>
+										);
+									})}
+								</ul>
+							</div>
+						</div>
+					</div>
 				)}
 			</footer>
 		</article>
