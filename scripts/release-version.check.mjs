@@ -1,6 +1,6 @@
 // Release guard for the pre-bumped path: package versions, shared TABOT_VERSION
 // and the ChatGPT plugin manifest must agree, and no pending changeset may
-// silently re-price this release (for example 0.2.6 -> 0.2.7).
+// silently re-price this release (for example 0.2.7 -> 0.2.8).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -31,13 +31,13 @@ test("release version is prepared consistently and Changesets cannot bump it", (
 	]) {
 		assert.equal(
 			version,
-			"0.2.6",
+			"0.2.7",
 			`${name} must stay on the prepared release version.`,
 		);
 	}
 	assert.match(
 		source,
-		/TABOT_VERSION = "0\.2\.6"/,
+		/TABOT_VERSION = "0\.2\.7"/,
 		"shared TABOT_VERSION must match the prepared release.",
 	);
 
@@ -47,6 +47,6 @@ test("release version is prepared consistently and Changesets cannot bump it", (
 	assert.deepEqual(
 		pending,
 		[],
-		"A pending changeset would produce 0.2.6; keep release notes in CHANGELOG.md.",
+		"A pending changeset would produce 0.2.8; keep release notes in CHANGELOG.md.",
 	);
 });

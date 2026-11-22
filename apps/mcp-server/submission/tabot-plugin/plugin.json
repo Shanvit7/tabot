@@ -1,7 +1,7 @@
 {
 	"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
 	"name": "tabot",
-	"version": "0.2.6",
+	"version": "0.2.7",
 	"description": "Search pages, notes, and sites retained locally by your Tabot extension.",
 	"extensions": {
 		"com.openai": {
@@ -54,7 +54,7 @@
 				"commerce_description": "Tabot does not sell products or process payments."
 			},
 			"publication": {
-				"release_notes": "Improves ChatGPT connection reliability, safer authorization, and handling of returned activity and notes."
+				"release_notes": "Improves ChatGPT connection reliability and Home responsiveness, with clearer setup guidance and safer authorization."
 			}
 		}
 	}

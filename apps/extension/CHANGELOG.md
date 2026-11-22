@@ -1,11 +1,16 @@
 # extension
 
-## 0.2.6
+## 0.2.7
 
 ### Patch Changes
 
 - Keep Home responsive with large activity histories and show whether ChatGPT can reach the extension through the live relay.
 - Give people clearer, plain-language steps to diagnose their ChatGPT connection.
+
+## 0.2.6
+
+### Patch Changes
+
 - Open the dashboard by clicking the Tabot wordmark in the extension popup.
 
 ## 0.2.5
