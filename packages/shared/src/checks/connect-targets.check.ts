@@ -23,6 +23,15 @@ assert.match(prompt, /separate step to add\/create\/install/);
 assert.doesNotMatch(prompt, /plugin_asdk_app/);
 assert.match(prompt, /https:\/\/tabot-mcp\.shanvit7\.workers\.dev\/mcp/);
 
+const devServerUrl = "https://tabot-mcp-dev.shanvit7.workers.dev/mcp";
+const devPrompt =
+	new URL(chatGptConnectPromptUrl(devServerUrl)).searchParams.get("q") ?? "";
+assert.match(devPrompt, /https:\/\/tabot-mcp-dev\.shanvit7\.workers\.dev\/mcp/);
+assert.doesNotMatch(
+	devPrompt,
+	/https:\/\/tabot-mcp\.shanvit7\.workers\.dev\/mcp/,
+);
+
 const originalFetch = globalThis.fetch;
 try {
 	globalThis.fetch = async () =>
@@ -37,6 +46,13 @@ try {
 		throw new Error("offline");
 	};
 	assert.equal(await resolveChatGptConnectUrl(), chatGptConnectPromptUrl());
+	const fallbackDevPrompt = new URL(
+		await resolveChatGptConnectUrl(devServerUrl),
+	).searchParams.get("q");
+	assert.match(
+		fallbackDevPrompt ?? "",
+		/https:\/\/tabot-mcp-dev\.shanvit7\.workers\.dev\/mcp/,
+	);
 } finally {
 	globalThis.fetch = originalFetch;
 }

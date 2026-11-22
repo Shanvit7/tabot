@@ -164,6 +164,8 @@ try {
 		const calls = [];
 		let pingResponse = { ok: true };
 		let dataResponse = { eventCount: 1, pageCount: 1 };
+		let assistantResponse = { chatgpt: true, claude: false };
+		let relayHealthUnavailable = false;
 		const runtime = {
 			id: bridgeId,
 			sendMessage(id, message, callback) {
@@ -175,8 +177,20 @@ try {
 					};
 					callback(undefined);
 					delete runtime.lastError;
-				} else
-					callback(message.type === "TABOT_PING" ? pingResponse : dataResponse);
+				} else if (message.type === "TABOT_PING") callback(pingResponse);
+				else if (message.type === "GET_ASSISTANT_CONNECTIONS")
+					callback(assistantResponse);
+				else if (
+					message.type === "GET_RELAY_HEALTH" &&
+					relayHealthUnavailable
+				) {
+					runtime.lastError = {
+						message:
+							"Could not establish connection. Receiving end does not exist.",
+					};
+					callback(undefined);
+					delete runtime.lastError;
+				} else callback(dataResponse);
 			},
 		};
 		globalThis.chrome = { runtime };
@@ -214,6 +228,11 @@ try {
 				client.readHistoryCounts(),
 				client.ExtensionUnavailableError,
 			);
+			assert.deepEqual(await client.readRelayHealth(), {
+				reachable: false,
+				health: null,
+				assistants: null,
+			});
 			return;
 		}
 		calls.length = 0;
@@ -267,6 +286,26 @@ try {
 		);
 		pingResponse = { ok: true };
 		assert.equal(await client.isTabotConnected(), true);
+		if (scenario === 1) {
+			relayHealthUnavailable = true;
+			assistantResponse = { chatgpt: false, claude: false };
+			calls.length = 0;
+			const unauthorized = await client.readRelayHealth();
+			assert.equal(unauthorized.reachable, true);
+			assert.equal(unauthorized.assistants?.chatgpt, false);
+			assert.equal(
+				calls.some(({ type }) => type === "GET_RELAY_HEALTH"),
+				false,
+			);
+
+			assistantResponse = { chatgpt: true, claude: false };
+			calls.length = 0;
+			const oldExtension = await client.readRelayHealth();
+			assert.equal(oldExtension.reachable, true);
+			assert.equal(oldExtension.assistants?.chatgpt, true);
+			assert.equal(oldExtension.health, null);
+			assert.ok(calls.some(({ type }) => type === "GET_RELAY_HEALTH"));
+		}
 	};
 	await scenarios.reduce(
 		(chain, values) => chain.then(() => runScenario(values)),

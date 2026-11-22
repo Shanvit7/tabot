@@ -38,6 +38,14 @@ const cases: [boolean | null, RelayHealth | null, ConnectionState][] = [
 ];
 for (const [reachable, h, expected] of cases)
 	assert.equal(deriveConnectionState(reachable, h), expected);
+assert.equal(
+	deriveConnectionState(true, null, { chatgpt: false, claude: false }),
+	"not-authorized",
+);
+assert.equal(
+	deriveConnectionState(true, null, { chatgpt: true, claude: false }),
+	"relay-unavailable",
+);
 
 const valid = {
 	relay: { state: "offline", error: "socket-closed" },

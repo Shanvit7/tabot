@@ -9,6 +9,7 @@ import { readRelayHealth, reconnectRelay } from "~/lib/history";
 export const useConnectionHealth = () => {
 	const [reachable, setReachable] = useState<boolean | null>(null);
 	const [health, setHealth] = useState<RelayHealth | null>(null);
+	const [assistants, setAssistants] = useState<RelayHealth["assistants"]>(null);
 	const [reconnecting, setReconnecting] = useState(false);
 	const refreshRef = useRef<() => Promise<ConnectionState>>(
 		async () => "checking",
@@ -23,7 +24,12 @@ export const useConnectionHealth = () => {
 			if (!active) return "checking" as const;
 			setReachable(result.reachable);
 			setHealth(result.health);
-			last = deriveConnectionState(result.reachable, result.health);
+			setAssistants(result.assistants);
+			last = deriveConnectionState(
+				result.reachable,
+				result.health,
+				result.assistants,
+			);
 			return last;
 		};
 		refreshRef.current = refresh;
@@ -55,7 +61,7 @@ export const useConnectionHealth = () => {
 	};
 
 	return {
-		state: deriveConnectionState(reachable, health),
+		state: deriveConnectionState(reachable, health, assistants),
 		reconnecting,
 		reconnect,
 		refresh: () => refreshRef.current(),

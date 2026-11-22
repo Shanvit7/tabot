@@ -387,14 +387,28 @@ export const readAssistantConnections =
 export const readRelayHealth = async (): Promise<{
 	reachable: boolean;
 	health: RelayHealth | null;
+	assistants: AssistantConnections | null;
 }> => {
+	if (!(await isTabotConnected()))
+		return { reachable: false, health: null, assistants: null };
+
+	let assistants: AssistantConnections | null = null;
+	try {
+		assistants = await readAssistantConnections();
+	} catch {}
+	if (assistants && !assistants.chatgpt)
+		return { reachable: true, health: null, assistants };
+
 	try {
 		const response = await request({ type: "GET_RELAY_HEALTH" });
-		return { reachable: true, health: parseRelayHealth(response) };
-	} catch (error) {
-		if (error instanceof ExtensionUnavailableError)
-			return { reachable: false, health: null };
-		return { reachable: true, health: null };
+		const health = parseRelayHealth(response);
+		return {
+			reachable: true,
+			health,
+			assistants: health?.assistants ?? assistants,
+		};
+	} catch {
+		return { reachable: true, health: null, assistants };
 	}
 };
 
