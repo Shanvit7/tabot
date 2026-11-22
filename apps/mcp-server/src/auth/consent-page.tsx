@@ -128,7 +128,7 @@ button.addEventListener("click", () => {
     transactionId: body.dataset.transactionId,
   }, (response) => {
     if (runtime.lastError || !response || response.ok !== true) {
-      fail("Tabot could not connect in this Chrome profile. Enable Tabot, then try again.");
+      fail("Tabot couldn't finish connecting. Check that it's enabled, then restart the connection in ChatGPT.");
       return;
     }
     form.requestSubmit();

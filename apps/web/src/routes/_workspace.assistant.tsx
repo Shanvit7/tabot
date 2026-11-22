@@ -35,7 +35,7 @@ const CONNECTION_DOT_CLASS = {
 	"extension-unreachable": "bg-red-600",
 	"not-authorized": "bg-work-muted",
 	"auth-unknown": "bg-amber-500",
-	"relay-unavailable": "bg-amber-500",
+	"relay-status-unknown": "bg-amber-500",
 	"relay-connecting": "animate-pulse bg-amber-500 motion-reduce:animate-none",
 	"relay-offline": "bg-red-600",
 	"round-trip-failed": "bg-red-600",

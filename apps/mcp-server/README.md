@@ -12,6 +12,12 @@ Tabot exposes eight read-only MCP tools. `search_all` searches locally retained 
 
 Full URL paths, page titles/text, and raw browser events stay on-device. Read tools share only their documented projections on explicit calls. No results mean no matching retained activity, not proof of absence. The MCP client owns conversation and orchestration. Tabot does not expose legacy context, memory, recurring-pattern, or activity-metric tools.
 
+## Time ranges
+
+`from` and `to` in `search_all`, `search_notes`, `list_sites`, and `list_pages` accept inclusive ISO 8601 UTC date-time strings ending in `Z`, for example `2026-11-15T00:00:00Z`. Do not pass Unix seconds or milliseconds as arguments. Returned timestamps remain Unix milliseconds. Omit `from` for no lower bound and `to` for the current time (pagination preserves its cursor snapshot). `maxGapHours` in activity tools is measured in **hours** instead.
+
+To browse a period without keywords, use `list_sites` with time bounds and omit `query`. `search_all` requires search text; it is not an unfiltered activity listing.
+
 ## Development
 
 `pnpm dev` watches MCP source and deploys changes to a separate dev Worker:

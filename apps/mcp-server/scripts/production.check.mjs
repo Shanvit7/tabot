@@ -386,6 +386,11 @@ try {
 		invalid.set(key, value);
 		assert.equal((await request(`/authorize?${invalid}`)).status, 400);
 	}
+	for (const key of ["client_id", "redirect_uri", "state", "code_challenge"]) {
+		const duplicate = new URLSearchParams(authorize);
+		duplicate.append(key, duplicate.get(key));
+		assert.equal((await request(`/authorize?${duplicate}`)).status, 400);
+	}
 	const consent = await request(`/authorize?${authorize}`);
 	assert.equal(consent.status, 200);
 	const csp = consent.headers.get("Content-Security-Policy");
@@ -414,8 +419,18 @@ try {
 	assert.ok(html.includes(`<script nonce="${nonce}">`));
 	assert.ok(html.includes(`<style nonce="${nonce}">`));
 	assert.match(html, /Client name is self-reported, not verified/);
+	assert.ok(
+		html.includes("restart the connection in ChatGPT"),
+		"failed extension approval offers a restart path",
+	);
 	assert.ok(html.includes("<strong>https://callback.invalid</strong>"));
 	const transaction = html.match(/data-transaction-id="([^"]+)"/)[1];
+	const duplicateTransaction = new URLSearchParams({ transaction });
+	duplicateTransaction.append("transaction", transaction);
+	assert.equal(
+		(await formPost("/authorize", duplicateTransaction)).status,
+		400,
+	);
 	assert.equal(
 		(await formPost("/authorize", { transaction })).status,
 		400,
@@ -444,6 +459,33 @@ try {
 	const callback = new URL(approved.headers.get("Location"));
 	assert.equal(callback.searchParams.get("state"), "private-state-sentinel");
 	assert.equal(callback.searchParams.get("iss"), "https://test.invalid");
+	const emptyStateAuthorize = new URLSearchParams(authorize);
+	emptyStateAuthorize.set("state", "");
+	const emptyStateConsent = await request(`/authorize?${emptyStateAuthorize}`);
+	assert.equal(emptyStateConsent.status, 200);
+	const emptyStateHtml = await emptyStateConsent.text();
+	const emptyStateTransaction = emptyStateHtml.match(
+		/data-transaction-id="([^"]+)"/,
+	)[1];
+	assert.equal(
+		(
+			await request(
+				`/authorize/transactions/${emptyStateTransaction}/approve`,
+				{
+					method: "POST",
+					headers: { Authorization: `Bearer ${installationToken}` },
+				},
+			)
+		).status,
+		200,
+	);
+	const emptyStateCallback = new URL(
+		(
+			await formPost("/authorize", { transaction: emptyStateTransaction })
+		).headers.get("Location"),
+	);
+	assert.equal(emptyStateCallback.searchParams.has("state"), true);
+	assert.equal(emptyStateCallback.searchParams.get("state"), "");
 	const code = callback.searchParams.get("code");
 	assert.equal(
 		(await formPost("/authorize", { transaction })).status,
@@ -466,6 +508,9 @@ try {
 		).status,
 		400,
 	);
+	const duplicateCode = new URLSearchParams(exchange);
+	duplicateCode.append("code", code);
+	assert.equal((await formPost("/token", duplicateCode)).status, 400);
 	const issued = await formPost("/token", exchange);
 	assert.equal(issued.status, 200);
 	assert.equal(issued.headers.get("Cache-Control"), "no-store");
@@ -747,6 +792,59 @@ try {
 		refreshes.filter(Boolean).length,
 		1,
 		"concurrent refresh has one winner",
+	);
+	const authorizationId = "atomic-authorization";
+	await auth.createAuthorizationTransaction({
+		id: authorizationId,
+		clientId,
+		redirectUri: "https://callback.invalid",
+		codeChallenge: await sha256Base64Url(verifier),
+		resource: env.MCP_PUBLIC_URL,
+		scopes: ["tabot.context"],
+		installationId: "atomic-installation",
+	});
+	const originalPutRecord = auth.putRecord;
+	auth.putRecord = function (key, record, legacy) {
+		if (key.startsWith("code:"))
+			throw new Error("Injected code write failure.");
+		return originalPutRecord.call(this, key, record, legacy);
+	};
+	try {
+		await assert.rejects(
+			auth.consumeAuthorizationTransactionAndCreateCode(
+				authorizationId,
+				"failed-atomic-code",
+			),
+			/Injected code write failure\./,
+		);
+	} finally {
+		auth.putRecord = originalPutRecord;
+	}
+	const retriedAuthorization =
+		await auth.consumeAuthorizationTransactionAndCreateCode(
+			authorizationId,
+			"retried-atomic-code",
+		);
+	assert.equal(retriedAuthorization.installationId, "atomic-installation");
+	assert.equal(
+		await auth.consumeAuthorizationTransactionAndCreateCode(
+			authorizationId,
+			"replayed-atomic-code",
+		),
+		null,
+		"atomic authorization transaction cannot replay",
+	);
+	assert.equal(
+		(
+			await auth.consumeCode({
+				code: "retried-atomic-code",
+				clientId,
+				codeVerifier: verifier,
+				redirectUri: "https://callback.invalid",
+				resource: env.MCP_PUBLIC_URL,
+			})
+		)?.installationId,
+		"atomic-installation",
 	);
 	const codeRecord = {
 		code: "race-code",
