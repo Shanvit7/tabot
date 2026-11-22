@@ -124,6 +124,8 @@ const env = {
 					assert.deepEqual(params, {
 						query: "auth callback",
 						limit: 3,
+						from: Date.parse("2026-11-15T00:00:00Z"),
+						to: Date.parse("2026-11-22T23:59:59Z"),
 					});
 					return Response.json({
 						ok: true,
@@ -201,6 +203,38 @@ assert.deepEqual(list.body.result.tools[2].inputSchema.required, ["query"]);
 assert.ok(list.body.result.tools[2].inputSchema.properties.cursor);
 const tool = (name) =>
 	list.body.result.tools.find((entry) => entry.name === name);
+// Assert metadata on tools/list, not only Zod objects: this is what assistants see.
+for (const entry of list.body.result.tools) {
+	for (const [key, property] of Object.entries(entry.inputSchema.properties))
+		assert.ok(
+			property.description?.trim(),
+			`${entry.name}.${key} needs argument guidance`,
+		);
+}
+for (const name of ["search_all", "search_notes", "list_sites", "list_pages"]) {
+	assert.match(tool(name).description, /ISO 8601 UTC strings/);
+	for (const key of ["from", "to"]) {
+		const field = tool(name).inputSchema.properties[key];
+		assert.match(field.description, /ISO 8601 UTC.*ending in Z/);
+		assert.match(
+			field.description,
+			/2026-11-15T00:00:00Z|2026-11-22T23:59:59Z/,
+		);
+		assert.match(field.description, /Do not pass a Unix timestamp/);
+		assert.equal(field.type, "string");
+		assert.equal(field.format, "date-time");
+	}
+}
+for (const name of ["find_related_activity", "get_browsing_timeline"]) {
+	assert.match(
+		tool(name).inputSchema.properties.maxGapHours.description,
+		/HOURS/,
+	);
+	for (const field of Object.values(
+		tool(name).inputSchema.properties.anchors.items.properties,
+	))
+		assert.ok(field.description?.trim(), `${name} needs anchor guidance`);
+}
 assert.deepEqual(tool("get_site_notes").inputSchema.required, ["site"]);
 assert.ok(tool("get_page_notes").inputSchema.properties.pageRef);
 assert.ok(tool("get_page_notes").inputSchema.properties.cursor);
@@ -244,7 +278,12 @@ assert.equal(
 );
 const result = await rpc("tools/call", {
 	name: "search_all",
-	arguments: { query: "auth callback", limit: 3 },
+	arguments: {
+		query: "auth callback",
+		limit: 3,
+		from: "2026-11-15T00:00:00Z",
+		to: "2026-11-22T23:59:59Z",
+	},
 });
 const allResults = JSON.parse(result.body.result.content[0].text);
 assert.deepEqual(allResults, { pages: [], notes: [], sites: [] });
@@ -320,7 +359,16 @@ const invalid = await rpc("tools/call", {
 	arguments: { query: "x".repeat(201) },
 });
 assert.ok(invalid.body.error || invalid.body.result?.isError);
-assert.equal(dispatches, 1, "invalid queries never dispatch");
+const numericTime = await rpc("tools/call", {
+	name: "search_all",
+	arguments: { query: "auth callback", from: 1794700800000 },
+});
+assert.ok(numericTime.body.error || numericTime.body.result?.isError);
+assert.equal(
+	dispatches,
+	1,
+	"invalid queries and numeric timestamps never dispatch",
+);
 assert.equal(
 	(
 		await rpc(

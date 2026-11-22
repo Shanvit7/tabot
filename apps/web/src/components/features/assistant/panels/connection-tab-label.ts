@@ -5,7 +5,7 @@ export const CONNECTION_TAB_LABEL: Record<ConnectionState, string> = {
 	"extension-unreachable": "Can’t reach Tabot",
 	"not-authorized": "Connect Tabot",
 	"auth-unknown": "Check ChatGPT",
-	"relay-unavailable": "Reconnect Tabot",
+	"relay-status-unknown": "Status unavailable",
 	"relay-connecting": "Connecting…",
 	"relay-offline": "Tabot offline",
 	"round-trip-failed": "Tabot not responding",

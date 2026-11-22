@@ -38,10 +38,10 @@ const COPY: Record<
 		body: "In ChatGPT, open Plugins → Tabot. If it shows disconnected, choose Reconnect. If Tabot isn’t listed, review the setup steps, then check again here.",
 		primary: "diagnose",
 	},
-	"relay-unavailable": {
-		title: "ChatGPT is connected, but Tabot isn’t responding",
-		body: "In ChatGPT, open Plugins → Tabot and reconnect it. Then return here and check again. If it still doesn’t work, reload the Tabot extension in Chrome.",
-		primary: "diagnose",
+	"relay-status-unknown": {
+		title: "Can’t check Tabot’s live status",
+		body: "ChatGPT is linked and Tabot is present in Chrome, but this extension couldn’t read its live connection status. Update or reload Tabot in Chrome’s extensions page, then check again.",
+		primary: "extensions",
 	},
 	"relay-connecting": {
 		title: "Tabot is reconnecting to ChatGPT",
@@ -111,8 +111,8 @@ const rows = (
 								? "Waiting for Tabot to reconnect"
 								: state === "relay-offline"
 									? "Reconnect Tabot to check that it replies"
-									: state === "relay-unavailable"
-										? "Reconnect Tabot in ChatGPT to check that it replies"
+									: state === "relay-status-unknown"
+										? "Couldn’t check Tabot’s live connection status"
 										: state === "extension-unreachable"
 											? "Turn on Tabot in Chrome to check that it replies"
 											: "Check the ChatGPT connection before testing Tabot",
@@ -125,7 +125,9 @@ const rows = (
 							? "fail"
 							: state === "relay-connecting"
 								? "pending"
-								: "skipped",
+								: state === "relay-status-unknown"
+									? "unknown"
+									: "skipped",
 		},
 	];
 };

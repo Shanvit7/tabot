@@ -44,7 +44,7 @@ assert.equal(
 );
 assert.equal(
 	deriveConnectionState(true, null, { chatgpt: true, claude: false }),
-	"relay-unavailable",
+	"relay-status-unknown",
 );
 
 const valid = {

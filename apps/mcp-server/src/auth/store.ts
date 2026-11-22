@@ -7,6 +7,7 @@ import {
 import {
 	ACCESS_TOKEN_TTL_SECONDS,
 	AUTH_CLEANUP_INTERVAL_MS,
+	AUTH_CODE_TTL_MS,
 	AUTHORIZATION_TRANSACTION_TTL_MS,
 	CLIENT_TTL_MS,
 	REFRESH_TOKEN_TTL_SECONDS,
@@ -524,23 +525,44 @@ export class TabotAuth extends DurableObject<{ MCP_PUBLIC_URL: string }> {
 			(record.installationId && record.installationId !== installationId)
 		)
 			return false;
-		this.putRecord(key, { ...record, installationId });
+		this.putRecord(key, {
+			...record,
+			installationId,
+			expiresAt: now() + AUTHORIZATION_TRANSACTION_TTL_MS,
+		});
 		return true;
 	}
 
-	async consumeAuthorizationTransaction(
+	async consumeAuthorizationTransactionAndCreateCode(
 		id: string,
+		code: string,
 	): Promise<
 		(AuthorizationTransactionRecord & { installationId: string }) | null
 	> {
 		const key = `authorization:${await sha256Base64Url(id)}`;
+		const codeKey = `code:${await sha256Base64Url(code)}`;
 		await this.ensureMigrated(key);
-		const record = this.getRecord<AuthorizationTransactionRecord>(key);
-		if (!record?.installationId) return null;
-		this.deleteRecord(key);
-		return record as AuthorizationTransactionRecord & {
-			installationId: string;
-		};
+		await this.scheduleCleanup();
+
+		return this.ctx.storage.transactionSync(() => {
+			const record = this.getRecord<AuthorizationTransactionRecord>(key);
+			if (!record?.installationId) return null;
+
+			const authCode: AuthCodeRecord = {
+				clientId: record.clientId,
+				installationId: record.installationId,
+				codeChallenge: record.codeChallenge,
+				redirectUri: record.redirectUri,
+				resource: record.resource,
+				scopes: record.scopes,
+				expiresAt: now() + AUTH_CODE_TTL_MS,
+			};
+			this.putRecord(codeKey, authCode);
+			this.deleteRecord(key);
+			return record as AuthorizationTransactionRecord & {
+				installationId: string;
+			};
+		});
 	}
 }
 export const DEFAULT_SCOPES: string[] = [...SCOPES_SUPPORTED];

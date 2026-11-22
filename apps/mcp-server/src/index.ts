@@ -15,7 +15,7 @@ import {
 } from "./auth/oauth";
 import { DEFAULT_SCOPES, type TabotAuth } from "./auth/store";
 import { signInstallationToken, verifyInstallationToken } from "./auth/tokens";
-import { AUTH_CODE_TTL_MS, MAX_HTTP_BODY_BYTES, NAME, VERSION } from "./config";
+import { MAX_HTTP_BODY_BYTES, NAME, VERSION } from "./config";
 import { logEvent } from "./log";
 import { ERROR_CODES, RelayError } from "./mcp/protocol";
 import {
@@ -47,6 +47,30 @@ export interface Env {
 /** Send a tool call to the caller's live extension and await its correlated result. */
 type ToolDispatch = (method: string, params: unknown) => Promise<unknown>;
 
+const duplicateParameter = (
+	params: URLSearchParams,
+	names: readonly string[],
+): string | undefined => names.find((name) => params.getAll(name).length > 1);
+
+const normalizeTimeRange = (params: unknown): unknown => {
+	if (!params || typeof params !== "object" || Array.isArray(params))
+		return params;
+	const normalized = { ...(params as Record<string, unknown>) };
+	for (const key of ["from", "to"] as const) {
+		const value = normalized[key];
+		if (value === undefined) continue;
+		if (typeof value !== "string")
+			throw new Error(
+				`${key} must be an ISO 8601 UTC date-time string ending in Z, not a Unix timestamp.`,
+			);
+		const timestamp = Date.parse(value);
+		if (!Number.isFinite(timestamp))
+			throw new Error(`${key} must be a valid ISO 8601 UTC date-time string.`);
+		normalized[key] = timestamp;
+	}
+	return normalized;
+};
+
 const READ_ONLY_ANNOTATIONS = {
 	readOnlyHint: true,
 	openWorldHint: false,
@@ -69,7 +93,7 @@ const createMcpServer = (
 	const call = async (method: string, params: unknown) => {
 		const started = Date.now();
 		try {
-			const result = await dispatch(method, params);
+			const result = await dispatch(method, normalizeTimeRange(params));
 			logEvent("tool_call", {
 				requestId,
 				tool: method,
@@ -495,6 +519,20 @@ const validateAuthorizeRequest = async (
 				"Only this Tabot MCP resource is supported.",
 			),
 		};
+	const duplicate = duplicateParameter(params, [
+		"client_id",
+		"redirect_uri",
+		"response_type",
+		"scope",
+		"state",
+		"code_challenge",
+		"code_challenge_method",
+	]);
+	if (duplicate)
+		return {
+			ok: false,
+			response: oauthError("invalid_request", `${duplicate} must appear once.`),
+		};
 	const clientId = params.get("client_id") ?? "";
 	const redirectUri = params.get("redirect_uri") ?? "";
 	if (!clientId || !isAllowedRedirectUri(redirectUri))
@@ -581,31 +619,27 @@ app.get("/authorize", async (c) => {
 
 app.post("/authorize", async (c) => {
 	const form = new URLSearchParams(await c.req.text());
-	const transaction = await authStub(c.env).consumeAuthorizationTransaction(
+	if (duplicateParameter(form, ["transaction"]))
+		return oauthError("invalid_request", "transaction must appear once.");
+
+	const code = randomToken(32);
+	const transaction = await authStub(
+		c.env,
+	).consumeAuthorizationTransactionAndCreateCode(
 		form.get("transaction") ?? "",
+		code,
 	);
 	if (!transaction)
 		return oauthError(
 			"access_denied",
-			"Tabot authorization was not approved or has expired.",
+			"Tabot authorization was not approved or has expired. Restart the connection from ChatGPT.",
 		);
-
-	const code = randomToken(32);
-	await authStub(c.env).createCode({
-		code,
-		clientId: transaction.clientId,
-		installationId: transaction.installationId,
-		codeChallenge: transaction.codeChallenge,
-		redirectUri: transaction.redirectUri,
-		resource: transaction.resource,
-		scopes: transaction.scopes,
-		expiresAt: Date.now() + AUTH_CODE_TTL_MS,
-	});
 
 	const redirect = new URL(transaction.redirectUri);
 	redirect.searchParams.set("code", code);
 	redirect.searchParams.set("iss", originOf(c));
-	if (transaction.state) redirect.searchParams.set("state", transaction.state);
+	if (transaction.state !== undefined)
+		redirect.searchParams.set("state", transaction.state);
 	return c.redirect(redirect.toString(), 302);
 });
 
@@ -635,6 +669,12 @@ const authenticateClient = async (
 ): Promise<
 	{ ok: true; clientId: string } | { ok: false; response: Response }
 > => {
+	const duplicate = duplicateParameter(form, ["client_id", "client_secret"]);
+	if (duplicate)
+		return {
+			ok: false,
+			response: oauthError("invalid_request", `${duplicate} must appear once.`),
+		};
 	const clientId = form.get("client_id") ?? "";
 	const client = await authStub(env).getClient(clientId);
 	if (!client)
@@ -664,6 +704,15 @@ app.post("/token", async (c) => {
 			"invalid_target",
 			"Only this Tabot MCP resource is supported.",
 		);
+	const duplicate = duplicateParameter(form, [
+		"grant_type",
+		"code",
+		"code_verifier",
+		"redirect_uri",
+		"refresh_token",
+	]);
+	if (duplicate)
+		return oauthError("invalid_request", `${duplicate} must appear once.`);
 	const client = await authenticateClient(c.env, form);
 	if (!client.ok) return client.response;
 
@@ -710,6 +759,9 @@ app.post("/token", async (c) => {
 // --- Token revocation (RFC 7009) --------------------------------------------
 app.post("/revoke", async (c) => {
 	const form = new URLSearchParams(await c.req.text());
+	const duplicate = duplicateParameter(form, ["token"]);
+	if (duplicate)
+		return oauthError("invalid_request", "token must appear once.");
 	const client = await authenticateClient(c.env, form);
 	if (!client.ok) return client.response;
 	const token = form.get("token") ?? "";

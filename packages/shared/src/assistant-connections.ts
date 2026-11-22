@@ -100,7 +100,7 @@ export type ConnectionState =
 	| "extension-unreachable"
 	| "not-authorized"
 	| "auth-unknown"
-	| "relay-unavailable"
+	| "relay-status-unknown"
 	| "relay-connecting"
 	| "relay-offline"
 	| "round-trip-failed"
@@ -121,7 +121,7 @@ export const deriveConnectionState = (
 	const connection = health?.assistants ?? assistants;
 	if (!connection) return "auth-unknown";
 	if (!connection.chatgpt) return "not-authorized";
-	if (!health) return "relay-unavailable";
+	if (!health) return "relay-status-unknown";
 	if (health.relay.state === "idle" || health.relay.state === "connecting")
 		return "relay-connecting";
 	if (health.relay.state === "offline") return "relay-offline";
