@@ -20,8 +20,15 @@ export const searchTimeRange = (
 	}
 	return { from: now - days * 86_400_000, to: now };
 };
-export const withinRange = (value: number, days: number, now: number) => {
-	const { from, to } = searchTimeRange(days, now);
+export const withinRange = (
+	value: number,
+	daysOrRange: number | { from?: number; to?: number },
+	now: number,
+) => {
+	const { from, to } =
+		typeof daysOrRange === "number"
+			? searchTimeRange(daysOrRange, now)
+			: daysOrRange;
 	return Number.isFinite(value) && value >= (from ?? 0) && value <= (to ?? now);
 };
 

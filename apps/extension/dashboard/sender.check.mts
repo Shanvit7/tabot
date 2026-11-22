@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import { isDashboardSender } from "./sender";
 
+for (const url of ["https://shanvit7.github.io/tabot/home"])
+	assert.equal(isDashboardSender(url), true, `${url} should be allowed`);
+
 for (const url of [
 	"http://localhost:3000/home",
 	"http://localhost:3001/activities",
-	"https://shanvit7.github.io/tabot/home",
 ])
-	assert.equal(isDashboardSender(url), true, `${url} should be allowed`);
+	assert.equal(
+		isDashboardSender(url),
+		process.env.NODE_ENV !== "production",
+		`${url} should only be allowed in development`,
+	);
 
 for (const url of [
 	undefined,

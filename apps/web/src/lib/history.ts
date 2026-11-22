@@ -3,6 +3,10 @@ import {
 	parseAssistantConnections,
 } from "@tabot/shared";
 import {
+	parseRelayHealth,
+	type RelayHealth,
+} from "@tabot/shared/assistant-connections";
+import {
 	type DashboardNoteResult,
 	type DashboardPagePreview,
 	type HistorySearchResult,
@@ -378,6 +382,25 @@ export const readAssistantConnections =
 			);
 		return connections;
 	};
+
+/** reachable=false: no extension; health=null: reachable but status unreadable. */
+export const readRelayHealth = async (): Promise<{
+	reachable: boolean;
+	health: RelayHealth | null;
+}> => {
+	try {
+		const response = await request({ type: "GET_RELAY_HEALTH" });
+		return { reachable: true, health: parseRelayHealth(response) };
+	} catch (error) {
+		if (error instanceof ExtensionUnavailableError)
+			return { reachable: false, health: null };
+		return { reachable: true, health: null };
+	}
+};
+
+export const reconnectRelay = async (): Promise<void> => {
+	await request({ type: "RECONNECT_RELAY" });
+};
 
 const LIBRARY_PAGE_REFERENCE = /^[a-z0-9.%A-F-]{1,765}:[a-f0-9]{64}$/;
 

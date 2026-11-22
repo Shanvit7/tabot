@@ -6,7 +6,7 @@ import {
 	resolveChatGptConnectUrl,
 } from "@tabot/shared";
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, ListOrdered, Play, RefreshCw } from "lucide-react";
+import { ListOrdered, Play } from "lucide-react";
 import {
 	AnimatePresence,
 	domAnimation,
@@ -17,17 +17,28 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { DingToaster, toast } from "~/components/alerts/ding-toaster";
 import { AssistantConnectionPanel } from "~/components/features/assistant/panels/connection-panel";
+import { CONNECTION_TAB_LABEL } from "~/components/features/assistant/panels/connection-tab-label";
 import { AssistantDemoPanel } from "~/components/features/assistant/panels/demo-panel";
 import { AssistantSetupPanel } from "~/components/features/assistant/panels/setup-panel";
+import { useConnectionHealth } from "~/components/features/assistant/panels/use-connection-health";
 import FluidTabs from "~/components/ui/motion/tabs/fluid-tabs";
 import { MCP_SERVER_URL } from "~/lib/constants";
-import { readAssistantConnections } from "~/lib/history";
 
 const PLUGIN_DESCRIPTION =
 	"Bring selected Chrome context into ChatGPT. Your history stays on your device; only requested results are shared.";
 const CHATGPT_DIAGNOSE_URL = chatGptPromptUrl(
-	"Help me diagnose why my Tabot MCP connection is not working in ChatGPT. First check whether Tabot tools are available in this conversation. If available, make one safe, read-only call with valid arguments and report the exact result. If unavailable or failing, guide me one step at a time through checking the ChatGPT MCP server registration, OAuth authorization, and that the Tabot Chrome extension is enabled in the same Chrome profile. Don't guess UI labels or claim success without verification. Never ask me to share passwords, tokens, or browsing history.",
+	"Help me figure out why ChatGPT can’t use Tabot. First check whether Tabot is available in this conversation. If it is, make one safe, read-only request with valid arguments and tell me exactly what happened. If it isn’t available or the request fails, guide me one step at a time through checking that Tabot is added and enabled in ChatGPT, that this ChatGPT account is connected to Tabot, and that the Tabot extension is enabled in the same Chrome profile. Explain steps in plain language. Don’t guess at screen labels or say something worked unless you verified it. Never ask me to share passwords, tokens, or browsing history.",
 );
+const CONNECTION_DOT_CLASS = {
+	checking: "animate-pulse bg-work-muted motion-reduce:animate-none",
+	"extension-unreachable": "bg-red-600",
+	"not-authorized": "bg-work-muted",
+	"auth-unknown": "bg-amber-500",
+	"relay-connecting": "animate-pulse bg-amber-500 motion-reduce:animate-none",
+	"relay-offline": "bg-red-600",
+	"round-trip-failed": "bg-red-600",
+	healthy: "bg-emerald-600",
+} as const;
 
 const Assistant = () => {
 	const playerRef = useRef<PlayerRef>(null);
@@ -40,40 +51,25 @@ const Assistant = () => {
 	const [descriptionCopyStatus, setDescriptionCopyStatus] = useState<
 		"idle" | "copied" | "error"
 	>("idle");
-	const [chatGptConnected, setChatGptConnected] = useState<boolean | null>(
-		null,
-	);
+	const { state, reconnecting, reconnect, refresh } = useConnectionHealth();
 
 	useEffect(() => {
 		let active = true;
 		void resolveChatGptConnectUrl().then((url) => {
 			if (active) setConnectUrl(url);
 		});
-		const refreshConnection = () => {
-			void readAssistantConnections()
-				.then(({ chatgpt }) => {
-					if (active) setChatGptConnected(chatgpt);
-				})
-				.catch(() => {
-					if (active) setChatGptConnected(null);
-				});
-		};
-		refreshConnection();
-		window.addEventListener("focus", refreshConnection);
 		return () => {
 			active = false;
-			window.removeEventListener("focus", refreshConnection);
 		};
 	}, []);
 
 	const checkConnection = () => {
-		const check = readAssistantConnections().then(({ chatgpt }) => {
-			setChatGptConnected(chatgpt);
+		const check = refresh().then((next) => {
 			window.dispatchEvent(new Event("tabot:connection-check"));
-			if (!chatgpt) {
+			if (next !== "healthy") {
 				setTab(2);
 				throw new Error(
-					"ChatGPT isn’t connected. Review troubleshooting tips.",
+					`${CONNECTION_TAB_LABEL[next]}. See the Connection tab.`,
 				);
 			}
 		});
@@ -87,6 +83,19 @@ const Assistant = () => {
 						: "Couldn’t check the connection. Keep Tabot open and try again.",
 			})
 			.catch(() => {});
+	};
+
+	const copyExtensionsLink = async () => {
+		try {
+			await navigator.clipboard.writeText("chrome://extensions");
+			toast.success("Address copied", {
+				description: "Paste it into Chrome’s address bar to check Tabot.",
+			});
+		} catch {
+			toast.error("Couldn’t copy the address", {
+				description: "Type chrome://extensions into Chrome’s address bar.",
+			});
+		}
 	};
 
 	const copyServerUrl = async () => {
@@ -140,15 +149,16 @@ const Assistant = () => {
 							<ListOrdered aria-hidden="true" className="size-4" /> Instructions
 						</FluidTabs.Tab>
 						<FluidTabs.Tab
-							label={chatGptConnected ? "Connected" : "Troubleshoot"}
-							className="cursor-pointer gap-2 text-work-ink"
+							label={CONNECTION_TAB_LABEL[state]}
+							className="cursor-pointer gap-2 whitespace-nowrap text-work-ink"
 						>
-							{chatGptConnected ? (
-								<Check aria-hidden="true" className="size-4" />
-							) : (
-								<RefreshCw aria-hidden="true" className="size-4" />
-							)}
-							{chatGptConnected ? "Connected" : "Troubleshoot"}
+							<span
+								aria-hidden="true"
+								className={`size-2.5 rounded-full ${CONNECTION_DOT_CLASS[state]}`}
+							/>
+							<span className="whitespace-nowrap">
+								{CONNECTION_TAB_LABEL[state]}
+							</span>
 						</FluidTabs.Tab>
 					</FluidTabs.List>
 				</FluidTabs>
@@ -162,9 +172,7 @@ const Assistant = () => {
 									? "Video demo"
 									: tab === 1
 										? "Instructions"
-										: chatGptConnected
-											? "ChatGPT connection status"
-											: "ChatGPT troubleshooting"
+										: "ChatGPT connection status"
 							}
 							initial={reduceMotion ? false : { opacity: 0, y: 6 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -186,7 +194,10 @@ const Assistant = () => {
 								/>
 							) : (
 								<AssistantConnectionPanel
-									chatGptConnected={chatGptConnected}
+									state={state}
+									reconnecting={reconnecting}
+									onReconnect={() => void reconnect()}
+									onCopyExtensionsLink={copyExtensionsLink}
 									connectUrl={connectUrl}
 									diagnoseUrl={CHATGPT_DIAGNOSE_URL}
 									onCheckConnection={checkConnection}

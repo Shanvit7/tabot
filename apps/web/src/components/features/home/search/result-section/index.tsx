@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SearchResultKind } from "~/components/features/home/search/result-kinds";
 import type { SearchState } from "~/components/features/home/search/state";
 import {
@@ -20,8 +20,10 @@ const deriveSearchResults = (
 	sitePreview: SitePreview,
 	now: number,
 ) => {
+	const { from, to } = searchTimeRange(selectedFilter.days, now);
+	const range = { from, to };
 	const withinSelectedRange = (timestamp: number) =>
-		withinRange(timestamp, selectedFilter.days, now);
+		withinRange(timestamp, range, now);
 	// Keep server relevance order across pages; client date sorting scrambles ranking.
 	const results = state.results.filter((page) =>
 		withinSelectedRange(page.lastSeen),
@@ -127,17 +129,20 @@ export const SearchResultSection = ({
 		loading: true,
 		error: "",
 	});
-	const sitePreview =
-		sitePreviewState.key === siteRequestKey
-			? sitePreviewState
-			: {
-					...sitePreviewState,
-					sites: [],
-					total: 0,
-					hasMore: false,
-					loading: true,
-					error: "",
-				};
+	const sitePreview = useMemo(
+		() =>
+			sitePreviewState.key === siteRequestKey
+				? sitePreviewState
+				: {
+						...sitePreviewState,
+						sites: [],
+						total: 0,
+						hasMore: false,
+						loading: true,
+						error: "",
+					},
+		[sitePreviewState, siteRequestKey],
+	);
 	const updateSitePreview = useCallback(
 		(next: Omit<typeof sitePreviewState, "key">) =>
 			setSitePreviewState({ ...next, key: siteRequestKey }),
@@ -150,7 +155,10 @@ export const SearchResultSection = ({
 		now,
 	);
 	const { results, notes, noteCountsByUrl, counts, countsReady, countsApprox } =
-		deriveSearchResults(state, selectedFilter, sitePreview, now);
+		useMemo(
+			() => deriveSearchResults(state, selectedFilter, sitePreview, now),
+			[state, selectedFilter, sitePreview, now],
+		);
 	if (!query) return null;
 	return (
 		<SearchResultView

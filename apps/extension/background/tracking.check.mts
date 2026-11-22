@@ -53,7 +53,9 @@ mock.module("../relay/relay", {
 		startRelay: () => {},
 		approveAuthorizationTransaction: async () => {},
 		getAssistantConnections: async () => [],
+		getRelayHealth: async () => ({}),
 		getRelayStatus: () => ({}),
+		reconnectRelay: async () => {},
 		runRelaySanityCheck: async () => ({}),
 	},
 });
@@ -157,7 +159,9 @@ const send = (message: unknown, outside = false, sender: unknown = {}) =>
 		assert.equal(
 			(outside ? external : internal)(
 				message,
-				outside ? { url: "http://localhost:3000/home" } : sender,
+				outside
+					? { url: "http://localhost:3000/home", frameId: 0, tab }
+					: sender,
 				resolve,
 			),
 			true,
@@ -191,6 +195,28 @@ const pageEvent = (timestamp: number) => {
 };
 try {
 	await import("../background");
+	const legacySenderResponse: unknown[] = [];
+	assert.equal(
+		external(
+			{ type: "TABOT_PING" },
+			{ url: "http://localhost:3000/home" },
+			(response) => legacySenderResponse.push(response),
+		),
+		false,
+	);
+	assert.deepEqual(legacySenderResponse, [{ ok: true }]);
+	const iframeResponse: unknown[] = [];
+	assert.equal(
+		external(
+			{ type: "SEARCH_HISTORY", query: "Project" },
+			{ url: "https://shanvit7.github.io/tabot/home", frameId: 2, tab },
+			(response) => iframeResponse.push(response),
+		),
+		false,
+	);
+	assert.deepEqual(iframeResponse, [
+		{ ok: false, code: "unauthorized-sender" },
+	]);
 	const popup = {
 		id: chrome.runtime.id,
 		url: `chrome-extension://${chrome.runtime.id}/popup.html`,

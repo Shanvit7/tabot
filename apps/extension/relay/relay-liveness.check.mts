@@ -30,6 +30,10 @@ const alarms: { name: string; info: unknown }[] = [];
 let onAlarm: (alarm: { name: string }) => void = () => {};
 const originalChrome = globalThis.chrome;
 const originalWebSocket = globalThis.WebSocket;
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async () => {
+	throw new Error("offline");
+};
 globalThis.chrome = {
 	storage: {
 		local: {
@@ -51,7 +55,8 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 try {
 	mock.timers.enable({ apis: ["setInterval", "setTimeout"] });
-	const { getRelayStatus, startRelay } = await import("./relay");
+	const { getRelayHealth, getRelayStatus, reconnectRelay, startRelay } =
+		await import("./relay");
 	startRelay();
 	await flush();
 	assert.equal(sockets.length, 1);
@@ -66,6 +71,14 @@ try {
 	assert.equal(sockets[0].closed, 4000);
 	assert.equal(getRelayStatus().state, "offline");
 	assert.equal(getRelayStatus().lastError, "heartbeat timeout");
+	// Dashboard health exposes an allowlisted code, never the raw error string.
+	const offline = await getRelayHealth();
+	assert.deepEqual(offline.relay, {
+		state: "offline",
+		error: "heartbeat-timeout",
+	});
+	assert.equal(offline.roundTrip, null);
+	assert.equal(offline.assistants, null);
 
 	// Reconnect timer lost with the service worker: the alarm must reconnect.
 	await flush();
@@ -79,6 +92,11 @@ try {
 	sockets[1].onopen?.();
 	sockets[0].onclose?.({ code: 1006 });
 	assert.equal(getRelayStatus().state, "connected");
+
+	// "Reconnect now" drops the live socket and opens a fresh one immediately.
+	await reconnectRelay();
+	assert.equal(sockets[1].closed, 4001);
+	assert.equal(sockets.length, 3);
 	console.log(
 		"Relay liveness passed: pong watchdog, alarm reconnect, stale close.",
 	);
@@ -87,4 +105,5 @@ try {
 	mock.restoreAll();
 	globalThis.chrome = originalChrome;
 	globalThis.WebSocket = originalWebSocket;
+	globalThis.fetch = originalFetch;
 }
