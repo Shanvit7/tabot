@@ -14,5 +14,9 @@ allowBuilds:
   workerd: true
 minimumReleaseAgeExclude:
   - '@cloudflare/workers-types@5.20260920.1'
+# Patch vulnerable transitive versions without crossing major/minor API boundaries.
+overrides:
+  'brace-expansion@>=5.0.0 <5.0.12': ^5.0.12
+  'decode-uri-component@>=0.5.0 <0.5.1': ^0.5.1
 patchedDependencies:
   '@taladb/web@0.12.1': patches/@taladb__web@0.12.1.patch

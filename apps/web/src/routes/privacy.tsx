@@ -199,10 +199,12 @@ const Privacy = () => (
 						with only the canonical landing-page URL, never query strings or
 						fragments. Click and completion events contain no page URL, search
 						query, browser record, or note content. Error reports may include
-						error type and diagnostic source, source-file basenames and line
-						numbers, app release, and platform. Error messages and function
-						names are redacted. Events use fixed app-level identifiers, not
-						account or installation IDs. Reports do not include browser history,
+						error type and diagnostic source, source-file basenames, function
+						names and line numbers, a truncated error message, app release, and
+						platform. URLs, email addresses, long numbers, and recognized
+						credentials are removed from error messages; detection is not
+						exhaustive. Events use fixed app-level identifiers, not account or
+						installation IDs. Reports do not include browser history,
 						browsing-page URLs, tab titles, page excerpts, or notes. Web Vitals
 						reporting uses no persistent cookies or local-storage IDs and
 						excludes DOM attribution, referrers, and session identifiers.

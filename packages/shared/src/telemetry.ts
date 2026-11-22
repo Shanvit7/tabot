@@ -8,6 +8,7 @@ export type SafeExceptionFrame = {
 	filename: string;
 	lineno: number;
 	colno: number;
+	function?: string;
 	platform: "web:javascript";
 };
 
@@ -63,6 +64,7 @@ const SAFE_ERROR_NAMES = new Set([
 	"TypeError",
 	"URIError",
 ]);
+const SAFE_FUNCTION = /^[A-Za-z0-9_$.<>[\] -]{1,100}$/;
 const SAFE_FILENAME = /^[A-Za-z0-9_.-]{1,120}$/;
 const SAFE_SOURCES = new Set<TelemetryErrorSource>([
 	"route_boundary",
@@ -80,15 +82,22 @@ const safeFrames = (stack: string | undefined): SafeExceptionFrame[] => {
 	const frames: SafeExceptionFrame[] = [];
 	for (const line of stack.slice(0, 16_384).split("\n").slice(1)) {
 		let location = line.trim();
+		let fn = "";
 		if (location.startsWith("at ")) {
 			location = location.slice(3);
 			const open = location.indexOf(" (");
-			if (open >= 0 && location.endsWith(")"))
+			if (open >= 0 && location.endsWith(")")) {
+				fn = location.slice(0, open);
 				location = location.slice(open + 2, -1);
+			}
 		} else {
 			const at = location.lastIndexOf("@");
-			if (at >= 0) location = location.slice(at + 1);
+			if (at >= 0) {
+				fn = location.slice(0, at);
+				location = location.slice(at + 1);
+			}
 		}
+		fn = fn.replace(/^(async|new) /, "");
 		const coordinates = location.match(/^(.*):(\d+):(\d+)$/);
 		if (!coordinates) continue;
 		const filename =
@@ -100,7 +109,13 @@ const safeFrames = (stack: string | undefined): SafeExceptionFrame[] => {
 		const lineno = Number(coordinates[2]);
 		const colno = Number(coordinates[3]);
 		if (lineno > 1_000_000 || colno > 1_000_000) continue;
-		frames.push({ filename, lineno, colno, platform: "web:javascript" });
+		frames.push({
+			filename,
+			lineno,
+			colno,
+			...(SAFE_FUNCTION.test(fn) ? { function: fn } : {}),
+			platform: "web:javascript",
+		});
 		if (frames.length === 12) break;
 	}
 	return frames;
@@ -125,6 +140,22 @@ const SAFE_FAILURE_CODES: ReadonlySet<string> = new Set([
 	"embedding-busy",
 ]);
 
+// Structural scrub for messages (sync); the PostHog transport also runs sensitiveDataRedactor.
+const safeMessage = (value: unknown) => {
+	try {
+		if (value instanceof Error)
+			return value.message
+				.slice(0, 500)
+				.replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "<url>")
+				.replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, "<email>")
+				.replace(/\d{6,}/g, "<number>")
+				.slice(0, 200);
+	} catch {
+		// Malformed thrown values are reduced to generic diagnostics.
+	}
+	return "redacted";
+};
+
 const safeException = (
 	value: unknown,
 	fallbackFrame?: Pick<SafeExceptionFrame, "filename" | "lineno" | "colno">,
@@ -147,7 +178,7 @@ const safeException = (
 			),
 		);
 	}
-	return { name, message: "redacted", frames };
+	return { name, message: safeMessage(value), frames };
 };
 
 export const createTelemetry = (

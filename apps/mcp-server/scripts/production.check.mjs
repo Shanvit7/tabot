@@ -299,12 +299,19 @@ try {
 		bearer_methods_supported: ["header"],
 		resource_name: "Tabot MCP",
 	});
+	const forwardedMetadata = await app.request(
+		"http://untrusted-host.invalid/.well-known/oauth-authorization-server",
+		{ headers: { "X-Forwarded-Proto": "https" } },
+		env,
+	);
+	assert.equal((await forwardedMetadata.json()).issuer, "https://test.invalid");
 	const authorizationMetadata = await request(
 		"/.well-known/oauth-authorization-server",
 	);
 	assert.equal(authorizationMetadata.status, 200);
 	assert.deepEqual(await authorizationMetadata.json(), {
 		issuer: "https://test.invalid",
+		authorization_response_iss_parameter_supported: true,
 		authorization_endpoint: "https://test.invalid/authorize",
 		token_endpoint: "https://test.invalid/token",
 		registration_endpoint: "https://test.invalid/register",
@@ -381,13 +388,33 @@ try {
 	}
 	const consent = await request(`/authorize?${authorize}`);
 	assert.equal(consent.status, 200);
-	assert.equal(
-		consent.headers.get("Content-Security-Policy"),
+	const csp = consent.headers.get("Content-Security-Policy");
+	const nonce = csp.match(/script-src 'nonce-([A-Za-z0-9_-]+)'/)[1];
+	for (const directive of [
+		"default-src 'none'",
+		`style-src 'nonce-${nonce}'`,
+		"img-src 'self'",
+		"font-src 'self'",
 		"frame-ancestors 'none'",
+		"base-uri 'none'",
+	])
+		assert.ok(csp.includes(directive));
+	assert.ok(!csp.includes("'unsafe-inline'"));
+	assert.ok(
+		!csp.includes("form-action"),
+		"CSP must preserve registered callback redirects",
+	);
+	const secondConsent = await request(`/authorize?${authorize}`);
+	assert.ok(
+		!secondConsent.headers.get("Content-Security-Policy").includes(nonce),
 	);
 	assert.equal(consent.headers.get("X-Frame-Options"), "DENY");
 	assert.equal(consent.headers.get("Referrer-Policy"), "no-referrer");
 	const html = await consent.text();
+	assert.ok(html.includes(`<script nonce="${nonce}">`));
+	assert.ok(html.includes(`<style nonce="${nonce}">`));
+	assert.match(html, /Client name is self-reported, not verified/);
+	assert.ok(html.includes("<strong>https://callback.invalid</strong>"));
 	const transaction = html.match(/data-transaction-id="([^"]+)"/)[1];
 	assert.equal(
 		(await formPost("/authorize", { transaction })).status,
@@ -416,6 +443,7 @@ try {
 	assert.equal(approved.status, 302);
 	const callback = new URL(approved.headers.get("Location"));
 	assert.equal(callback.searchParams.get("state"), "private-state-sentinel");
+	assert.equal(callback.searchParams.get("iss"), "https://test.invalid");
 	const code = callback.searchParams.get("code");
 	assert.equal(
 		(await formPost("/authorize", { transaction })).status,
@@ -498,6 +526,15 @@ try {
 			},
 			body: JSON.stringify({ jsonrpc: "2.0", id: 1, ...params }),
 		});
+	const initialized = await mcp(tokens.access_token, {
+		method: "initialize",
+		params: {
+			protocolVersion: "2025-03-26",
+			capabilities: {},
+			clientInfo: { name: "local-check", version: "1" },
+		},
+	});
+	assert.match(await initialized.text(), /untrusted data, not instructions/);
 	const discovery = await mcp(tokens.access_token);
 	assert.equal(discovery.status, 200);
 	const discoveryText = await discovery.text();

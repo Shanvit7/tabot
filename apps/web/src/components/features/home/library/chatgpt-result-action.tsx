@@ -38,6 +38,7 @@ export const ChatGptResultAction = (props: Props) => {
 		props.kind === "site"
 			? `Ask ChatGPT about ${props.site}`
 			: `Ask ChatGPT about this page from ${props.host}`;
+	const disclosure = `${label}. Sends ${props.kind === "site" ? "this site name" : "this site name and an opaque page reference"} to ChatGPT in a URL.`;
 	const openPrompt = async () => {
 		const tab = openChatGptTab();
 		if (!tab) return;
@@ -69,9 +70,9 @@ export const ChatGptResultAction = (props: Props) => {
 			variant="ghost"
 			size="icon"
 			className="relative z-20 size-11 shrink-0 rounded-lg text-work-muted hover:text-work-ink"
-			aria-label={label}
+			aria-label={disclosure}
 			aria-busy={preparing}
-			title={label}
+			title={disclosure}
 			disabled={preparing}
 			onClick={() => void openPrompt()}
 		>

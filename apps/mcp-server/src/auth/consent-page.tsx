@@ -138,12 +138,16 @@ button.addEventListener("click", () => {
 
 export const consentPage = ({
 	clientName,
+	redirectOrigin,
 	extensionId,
 	transactionId,
+	nonce,
 }: {
 	clientName: string;
+	redirectOrigin: string;
 	extensionId: string;
 	transactionId: string;
+	nonce: string;
 }) => (
 	<html lang="en">
 		<head>
@@ -154,7 +158,7 @@ export const consentPage = ({
 			/>
 			<meta name="theme-color" content="#f5f6f0" />
 			<title>Connect Tabot</title>
-			<style dangerouslySetInnerHTML={{ __html: styles }} />
+			<style nonce={nonce} dangerouslySetInnerHTML={{ __html: styles }} />
 		</head>
 		<body data-extension-id={extensionId} data-transaction-id={transactionId}>
 			<main aria-labelledby="consent-heading">
@@ -174,6 +178,11 @@ export const consentPage = ({
 				<p class="description">
 					Let {clientName} request selected activity from this profile when you
 					ask.
+				</p>
+				<p class="description">
+					Client name is self-reported, not verified by Tabot. Authorization
+					returns to <strong>{redirectOrigin}</strong>. Continue only if you
+					recognize this destination.
 				</p>
 				<div
 					class="connection-route"
@@ -304,7 +313,7 @@ export const consentPage = ({
 					.
 				</footer>
 			</main>
-			<script dangerouslySetInnerHTML={{ __html: script }} />
+			<script nonce={nonce} dangerouslySetInnerHTML={{ __html: script }} />
 		</body>
 	</html>
 );
