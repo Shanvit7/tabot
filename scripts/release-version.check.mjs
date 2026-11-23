@@ -1,14 +1,12 @@
-// Release guard for the pre-bumped path: package versions, shared TABOT_VERSION
-// and the ChatGPT plugin manifest must agree, and no pending changeset may
-// silently re-price this release (for example 0.2.7 -> 0.2.8).
+// Changesets bumps extension and MCP packages independently after feature PRs merge.
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const readJson = (path) =>
 	JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
 
-test("release version is prepared consistently and Changesets cannot bump it", () => {
+test("release package versions are valid and Plasmo owns the extension version", () => {
 	const extension = readJson("../apps/extension/package.json");
 	const mcp = readJson("../apps/mcp-server/package.json");
 	const plugin = readJson(
@@ -29,24 +27,16 @@ test("release version is prepared consistently and Changesets cannot bump it", (
 		["mcp-server", mcp.version],
 		["chatgpt plugin", plugin.version],
 	]) {
-		assert.equal(
-			version,
-			"0.2.7",
-			`${name} must stay on the prepared release version.`,
-		);
+		assert.match(version, /^\d+\.\d+\.\d+$/, `${name} must use semver.`);
 	}
+	assert.equal(
+		plugin.version,
+		mcp.version,
+		"The plugin version must match the MCP server.",
+	);
 	assert.match(
 		source,
-		/TABOT_VERSION = "0\.2\.7"/,
-		"shared TABOT_VERSION must match the prepared release.",
-	);
-
-	const pending = readdirSync(new URL("../.changeset", import.meta.url)).filter(
-		(file) => file.endsWith(".md") && file !== "README.md",
-	);
-	assert.deepEqual(
-		pending,
-		[],
-		"A pending changeset would produce 0.2.8; keep release notes in CHANGELOG.md.",
+		/TABOT_VERSION = "\d+\.\d+\.\d+"/,
+		"shared TABOT_VERSION must use semver.",
 	);
 });
