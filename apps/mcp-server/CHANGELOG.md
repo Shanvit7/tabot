@@ -1,5 +1,11 @@
 # mcp-server
 
+## 0.2.8
+
+### Patch Changes
+
+- b015108: Show capture recovery status in Settings and let users retry paused saves.
+
 ## 0.2.7
 
 ### Patch Changes

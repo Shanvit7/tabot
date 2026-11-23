@@ -2,7 +2,7 @@
 	"name": "extension",
 	"displayName": "Tabot",
 	"description": "Bring your browser activity to ChatGPT. Search pages, sites and notes locally, and choose what to share.",
-	"version": "0.2.7",
+	"version": "0.2.8",
 	"private": true,
 	"scripts": {
 		"check:ingest": "node --import ../../packages/shared/resolve-hook.mjs ingestion/ingest.check.mts",
