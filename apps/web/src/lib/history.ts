@@ -342,6 +342,36 @@ export const purgeStoredData = async (): Promise<void> => {
 		throw new Error("Stored Tabot data could not be deleted. Try again.");
 };
 
+export const readIngestRecoveryStatus = async (): Promise<{
+	health: "healthy" | "retrying" | "blocked" | "unavailable";
+	heldRows: number;
+	lastErrorCode: string | null;
+}> => {
+	const response = await request({ type: "GET_STATS" });
+	const health = response.health;
+	const heldRows = response.heldRows;
+	const lastErrorCode = response.lastErrorCode;
+	if (
+		(health !== "healthy" &&
+			health !== "retrying" &&
+			health !== "blocked" &&
+			health !== "unavailable") ||
+		typeof heldRows !== "number" ||
+		!Number.isSafeInteger(heldRows) ||
+		heldRows < 0 ||
+		(lastErrorCode !== null && typeof lastErrorCode !== "string")
+	)
+		throw new Error("Capture recovery status could not be read.");
+	return { health, heldRows, lastErrorCode };
+};
+
+export const retryBlockedIngest = async (): Promise<boolean> => {
+	const response = await request({ type: "RETRY_INGEST" });
+	if (typeof response.resumed !== "boolean")
+		throw new Error("Capture retry could not be started.");
+	return response.resumed;
+};
+
 export const readStorageEstimate = async (): Promise<{
 	usageBytes: number;
 	quotaBytes: number;

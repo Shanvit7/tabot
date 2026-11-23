@@ -282,8 +282,17 @@ const passages = {
 	},
 };
 const noteRows = new Map<string, Record<string, unknown>>();
+let failNoteNearest = false;
 const notes = {
 	createIndex: async () => {},
+	createVectorIndex: async () => {},
+	findNearest: async (_field: string, _vector: number[], topK: number) => {
+		if (failNoteNearest) throw new Error("note-vector-failure");
+		return [...noteRows.values()]
+			.filter((row) => Array.isArray(row.embedding))
+			.slice(0, topK)
+			.map((document) => ({ document, score: 0.8 }));
+	},
 	find: async (query: RecordFilter = {}) =>
 		[...noteRows.values()].filter((row) => matches(row, query)),
 	findOne: async (query: RecordFilter) =>

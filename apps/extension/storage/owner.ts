@@ -347,6 +347,11 @@ const getDb = () => {
 				db.collection<SearchEmbeddingCache>("search_embeddings");
 			const notes = db.collection<PageNote & Document>("notes");
 			await notes.createIndex("pageKey");
+			await notes.createVectorIndex("embedding", {
+				dimensions: SEARCH_DIMENSIONS,
+				metric: "cosine",
+				indexType: "flat",
+			});
 			await notes.createIndex("host");
 			await notes.createIndex("createdAt");
 			const meta = db.collection<Document>("meta");
@@ -1406,7 +1411,13 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				[...matchingUrl, ...exact].map((note) => [note.id, note]),
 			).values(),
 		];
-		return rows.sort((a, b) => b.createdAt - a.createdAt).slice(0, 50);
+		return rows
+			.sort((a, b) => b.createdAt - a.createdAt)
+			.slice(0, 50)
+			.map(
+				({ embedding: _embedding, embeddingCacheId: _cacheId, ...note }) =>
+					note,
+			);
 	},
 	saveNote: (input: PageNote) =>
 		serializeMutation(async () => {
@@ -1432,7 +1443,14 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			const documentId = deriveNoteDocumentId(input.id);
 			const existing = await notes.findOne({ _id: documentId });
 			if (existing) {
-				const original = existing as unknown as PageNote;
+				const {
+					embedding: _embedding,
+					embeddingCacheId: _cacheId,
+					...original
+				} = existing as unknown as PageNote & {
+					embedding?: number[];
+					embeddingCacheId?: string;
+				};
 				if (
 					original.pageKey !== input.pageKey &&
 					(original.url !== input.url ||
@@ -1492,7 +1510,11 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				(note) => note.site === domain || noteMatchesDomain(note.host, domain),
 			)
 			.sort((a, b) => b.createdAt - a.createdAt)
-			.slice(0, 50);
+			.slice(0, 50)
+			.map(
+				({ embedding: _embedding, embeddingCacheId: _cacheId, ...note }) =>
+					note,
+			);
 	},
 	searchNotes: async (
 		query: string,
@@ -1543,7 +1565,11 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			throw new Error("invalid-note-range");
 		return ((await (await getDb()).notes.find()) as unknown as PageNote[])
 			.filter((note) => note.createdAt >= from && note.createdAt <= to)
-			.sort((a, b) => a.createdAt - b.createdAt);
+			.sort((a, b) => a.createdAt - b.createdAt)
+			.map(
+				({ embedding: _embedding, embeddingCacheId: _cacheId, ...note }) =>
+					note,
+			);
 	},
 	warmSearchModel,
 	getSearchStatus: async (): Promise<SearchAvailability> => {

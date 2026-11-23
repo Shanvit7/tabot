@@ -818,6 +818,11 @@ if (chrome.runtime.onMessageExternal) {
 				return false;
 			}
 
+			if (message?.type === "RETRY_INGEST") {
+				sendResponse({ resumed: pipeline.retry(true) });
+				return false;
+			}
+
 			if (message?.type === "GET_ACTIVE_TRACKING_DURATION") {
 				void readActiveTrackingDuration()
 					.then(sendResponse)
