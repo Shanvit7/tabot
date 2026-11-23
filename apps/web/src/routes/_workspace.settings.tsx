@@ -304,8 +304,8 @@ const Settings = () => {
 								saved.
 							</p>
 							<p className="mt-1 text-sm text-muted-foreground">
-								Try saving them again. Updates lost if the extension restarted
-								can’t be recovered.
+								Try saving them again. If the extension restarts before they’re
+								saved, they can’t be recovered.
 							</p>
 							{retryIngestError && (
 								<p role="alert" className="mt-2 text-sm text-destructive">
