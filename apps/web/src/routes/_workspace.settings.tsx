@@ -1,12 +1,24 @@
 import { TABOT_VERSION } from "@tabot/shared/version";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, LoaderCircle, Mail, Share2, Trash2 } from "lucide-react";
+import {
+	ArrowLeft,
+	LoaderCircle,
+	Mail,
+	RotateCcw,
+	Share2,
+	Trash2,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { DingToaster, toast } from "~/components/alerts/ding-toaster";
 import { PurgeDataConfirm } from "~/components/dialogs/purge-data-confirm";
 import GaugeChart from "~/components/ui/charts/gauge-chart";
 import { EMAIL, LOGO_URL, SHARE_URL } from "~/lib/constants";
-import { purgeStoredData, readStorageEstimate } from "~/lib/history";
+import {
+	purgeStoredData,
+	readIngestRecoveryStatus,
+	readStorageEstimate,
+	retryBlockedIngest,
+} from "~/lib/history";
 
 const integerFormatter = new Intl.NumberFormat(undefined, {
 	maximumFractionDigits: 0,
@@ -35,6 +47,22 @@ const Settings = () => {
 	const [error, setError] = useState("");
 	const [shareStatus, setShareStatus] = useState("");
 	const [purging, setPurging] = useState(false);
+	const [ingestStatus, setIngestStatus] = useState<Awaited<
+		ReturnType<typeof readIngestRecoveryStatus>
+	> | null>(null);
+	const [ingestStatusError, setIngestStatusError] = useState("");
+	const [retryingIngest, setRetryingIngest] = useState(false);
+	const [retryIngestError, setRetryIngestError] = useState("");
+	const loadIngestStatus = useCallback(async () => {
+		try {
+			setIngestStatus(await readIngestRecoveryStatus());
+			setIngestStatusError("");
+		} catch {
+			setIngestStatusError(
+				"We couldn’t check whether your recent browsing activity was saved.",
+			);
+		}
+	}, []);
 	const loadStorage = useCallback(async () => {
 		setLoading(true);
 		setError("");
@@ -53,7 +81,13 @@ const Settings = () => {
 
 	useEffect(() => {
 		void loadStorage();
-	}, [loadStorage]);
+		void loadIngestStatus();
+	}, [loadIngestStatus, loadStorage]);
+	useEffect(() => {
+		if (ingestStatus?.health !== "retrying") return;
+		const timer = window.setInterval(() => void loadIngestStatus(), 1000);
+		return () => window.clearInterval(timer);
+	}, [ingestStatus?.health, loadIngestStatus]);
 
 	const usedPercent = storage
 		? Math.min(100, (storage.usageBytes / storage.quotaBytes) * 100)
@@ -61,6 +95,24 @@ const Settings = () => {
 	const availableBytes = storage
 		? Math.max(0, storage.quotaBytes - storage.usageBytes)
 		: 0;
+
+	const retryIngest = async () => {
+		setRetryingIngest(true);
+		setRetryIngestError("");
+		try {
+			if (!(await retryBlockedIngest())) {
+				setRetryIngestError(
+					"Nothing could be saved yet. Please try again shortly.",
+				);
+				return;
+			}
+			await loadIngestStatus();
+		} catch {
+			setRetryIngestError("Your updates couldn’t be saved. Please try again.");
+		} finally {
+			setRetryingIngest(false);
+		}
+	};
 
 	const purgeData = async () => {
 		if (!(await PurgeDataConfirm.call({}))) return;
@@ -116,7 +168,7 @@ const Settings = () => {
 							aria-hidden="true"
 							className="size-4 transition-transform duration-200 group-hover:-translate-x-1 motion-reduce:transition-none"
 						/>
-						Back
+						Back to Home
 					</Link>
 				</header>
 				<section
@@ -136,19 +188,25 @@ const Settings = () => {
 							v{TABOT_VERSION}
 						</p>
 					</div>
-					<div className="mt-8 w-full max-w-2xl py-4 sm:py-6">
+					<div className="mt-6 w-full max-w-2xl text-center">
+						<h1 className="text-2xl font-semibold">Settings</h1>
+						<p className="mt-2 text-sm text-muted-foreground">
+							Manage the browser data Tabot saves on this device.
+						</p>
+					</div>
+					<div className="mt-4 w-full max-w-2xl py-4 sm:py-6">
 						{loading ? (
 							<p
 								role="status"
 								className="py-8 text-center text-sm text-muted-foreground"
 							>
-								Checking storage…
+								Checking saved data…
 							</p>
 						) : error ? (
 							<div className="py-3 text-center">
-								<h1 id="storage-title" className="text-xl font-semibold">
-									Storage
-								</h1>
+								<h2 id="storage-title" className="text-xl font-semibold">
+									Saved data
+								</h2>
 								<p
 									role="alert"
 									className="mx-auto mt-3 max-w-sm text-sm text-muted-foreground"
@@ -189,9 +247,9 @@ const Settings = () => {
 									</GaugeChart>
 								</div>
 								<div className="min-w-0 text-left">
-									<h1 id="storage-title" className="text-xl font-semibold">
-										Storage
-									</h1>
+									<h2 id="storage-title" className="text-xl font-semibold">
+										Saved data
+									</h2>
 									<p className="mt-2 text-lg font-medium tabular-nums">
 										{formatBytes(storage.usageBytes)} used
 									</p>
@@ -209,6 +267,70 @@ const Settings = () => {
 						) : null}
 					</div>
 				</section>
+				{ingestStatusError ? (
+					<section
+						aria-labelledby="capture-recovery-title"
+						className="mx-auto mb-6 w-full max-w-2xl rounded-xl border border-border p-5"
+					>
+						<h2 id="capture-recovery-title" className="text-base font-semibold">
+							Couldn’t check saved activity
+						</h2>
+						<p role="alert" className="mt-1 text-sm text-muted-foreground">
+							{ingestStatusError}
+						</p>
+						<button
+							type="button"
+							onClick={() => void loadIngestStatus()}
+							className="mt-2 inline-flex min-h-11 cursor-pointer items-center text-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+						>
+							Check again
+						</button>
+					</section>
+				) : ingestStatus?.health === "blocked" && ingestStatus.heldRows > 0 ? (
+					<section
+						aria-labelledby="capture-recovery-title"
+						className="mx-auto mb-6 flex w-full max-w-2xl flex-col gap-4 rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-5 sm:flex-row sm:items-center sm:justify-between"
+					>
+						<div>
+							<h2
+								id="capture-recovery-title"
+								className="text-base font-semibold"
+							>
+								Saving has paused
+							</h2>
+							<p className="mt-1 text-sm text-muted-foreground">
+								{ingestStatus.heldRows} browsing update
+								{ingestStatus.heldRows === 1 ? " is" : "s are"} waiting to be
+								saved.
+							</p>
+							<p className="mt-1 text-sm text-muted-foreground">
+								Try saving them again. If the extension restarts before they’re
+								saved, they can’t be recovered.
+							</p>
+							{retryIngestError && (
+								<p role="alert" className="mt-2 text-sm text-destructive">
+									{retryIngestError}
+								</p>
+							)}
+						</div>
+						<button
+							type="button"
+							disabled={retryingIngest}
+							onClick={() => void retryIngest()}
+							className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+						>
+							{retryingIngest ? (
+								<LoaderCircle
+									aria-hidden="true"
+									className="size-4 animate-spin"
+								/>
+							) : (
+								<RotateCcw aria-hidden="true" className="size-4" />
+							)}
+							{retryingIngest ? "Trying again…" : "Try saving again"}
+						</button>
+					</section>
+				) : null}
 				<section
 					aria-labelledby="purge-title"
 					className="mx-auto w-full max-w-2xl"
@@ -220,15 +342,12 @@ const Settings = () => {
 									<Trash2 aria-hidden="true" className="size-5" />
 								</div>
 								<div>
-									<p className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-destructive">
-										Your local copy
-									</p>
 									<h2 id="purge-title" className="mt-1 text-base font-semibold">
-										Purge stored data
+										Delete saved data
 									</h2>
 									<p className="mt-1 max-w-lg text-sm leading-6 text-muted-foreground">
-										Permanently remove activity, page captures, and saved notes
-										from this device.
+										Delete saved browsing activity, page details, and notes from
+										this device. This can’t be undone.
 									</p>
 								</div>
 							</div>
@@ -236,7 +355,10 @@ const Settings = () => {
 								type="button"
 								disabled={purging}
 								onClick={() => void purgeData()}
-								className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-destructive px-4 text-sm font-semibold text-destructive-foreground shadow-sm transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-destructive/90 hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transform-none motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+								aria-label={
+									purging ? "Deleting saved data…" : "Delete saved data"
+								}
+								className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-destructive text-destructive-foreground shadow-sm transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-destructive/90 hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transform-none motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 							>
 								{purging ? (
 									<LoaderCircle
@@ -246,7 +368,6 @@ const Settings = () => {
 								) : (
 									<Trash2 aria-hidden="true" className="size-4" />
 								)}
-								Purge data
 							</button>
 						</div>
 					</div>

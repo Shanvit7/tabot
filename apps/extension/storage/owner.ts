@@ -67,6 +67,7 @@ const MIGRATION_ID = "legacy-indexeddb-to-taladb:v1";
 const SEARCH_BACKFILL_ID = "semantic-search-backfill:v3";
 const SEARCH_MODEL_VERSION = "multi-qa-MiniLM-L6-cos-v1:3c96c1df:chunks-v1";
 const SEARCH_DIMENSIONS = 384;
+const SEARCH_MIN_COSINE_SIMILARITY = 0.2;
 let deriveDocumentId: (kind: Kind, id: string) => string;
 let deriveSearchJobId: (kind: Kind, id: string) => string;
 let deriveSearchPassageId: (id: string) => string;
@@ -111,6 +112,10 @@ type SearchEmbeddingCache = Document & {
 	_id: string;
 	modelVersion: string;
 	embedding: number[];
+};
+type SearchableNote = PageNote & {
+	embedding?: number[];
+	embeddingCacheId?: string;
 };
 type Filter = { origin?: string; from?: number; to?: number };
 type TalaDatabase = Awaited<ReturnType<typeof openTalaDB>>;
@@ -347,6 +352,11 @@ const getDb = () => {
 				db.collection<SearchEmbeddingCache>("search_embeddings");
 			const notes = db.collection<PageNote & Document>("notes");
 			await notes.createIndex("pageKey");
+			await notes.createVectorIndex("embedding", {
+				dimensions: SEARCH_DIMENSIONS,
+				metric: "cosine",
+				indexType: "flat",
+			});
 			await notes.createIndex("host");
 			await notes.createIndex("createdAt");
 			const meta = db.collection<Document>("meta");
@@ -1406,7 +1416,13 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				[...matchingUrl, ...exact].map((note) => [note.id, note]),
 			).values(),
 		];
-		return rows.sort((a, b) => b.createdAt - a.createdAt).slice(0, 50);
+		return rows
+			.sort((a, b) => b.createdAt - a.createdAt)
+			.slice(0, 50)
+			.map(
+				({ embedding: _embedding, embeddingCacheId: _cacheId, ...note }) =>
+					note,
+			);
 	},
 	saveNote: (input: PageNote) =>
 		serializeMutation(async () => {
@@ -1432,7 +1448,11 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 			const documentId = deriveNoteDocumentId(input.id);
 			const existing = await notes.findOne({ _id: documentId });
 			if (existing) {
-				const original = existing as unknown as PageNote;
+				const {
+					embedding: _embedding,
+					embeddingCacheId: _cacheId,
+					...original
+				} = existing as unknown as SearchableNote;
 				if (
 					original.pageKey !== input.pageKey &&
 					(original.url !== input.url ||
@@ -1485,14 +1505,20 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 	listNotesForSite: async (site: string): Promise<PageNote[]> => {
 		if (typeof site !== "string" || site.length > 253)
 			throw new Error("invalid-note-site");
-		const rows = (await (await getDb()).notes.find()) as unknown as PageNote[];
+		const rows = (await (
+			await getDb()
+		).notes.find()) as unknown as SearchableNote[];
 		const domain = deriveSiteDomain(site);
 		return rows
 			.filter(
 				(note) => note.site === domain || noteMatchesDomain(note.host, domain),
 			)
 			.sort((a, b) => b.createdAt - a.createdAt)
-			.slice(0, 50);
+			.slice(0, 50)
+			.map(
+				({ embedding: _embedding, embeddingCacheId: _cacheId, ...note }) =>
+					note,
+			);
 	},
 	searchNotes: async (
 		query: string,
@@ -1525,25 +1551,75 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 				(!Number.isSafeInteger(options.offset) || options.offset < 0))
 		)
 			throw new Error("invalid-note-search");
-		const rows = (await (await getDb()).notes.find()) as unknown as PageNote[];
+		const { notes, embeddings } = await getDb();
+		const rows = (await notes.find()) as unknown as SearchableNote[];
 		const { includeTotal, ...searchOptions } = options;
-		const results = searchNoteRows(rows, query, searchOptions);
-		if (!includeTotal) return results;
-		return {
-			results,
-			total: searchNoteRows(rows, query, {
+		if (!rows.length) return includeTotal ? { results: [], total: 0 } : [];
+		let ranked: typeof rows;
+		try {
+			for (const note of rows) {
+				const text = `${note.title ?? ""} ${note.text} ${note.host} ${note.url}`;
+				const cached = await embeddingFor(text, embeddings);
+				if (note.embeddingCacheId !== cached.id) {
+					await notes.updateOne(
+						{ _id: deriveNoteDocumentId(note.id) },
+						{ $set: { embedding: cached.vector, embeddingCacheId: cached.id } },
+					);
+					note.embedding = cached.vector;
+					note.embeddingCacheId = cached.id;
+				}
+			}
+			const vector = await encodeSearchText(query);
+			const hits = await notes.findNearest("embedding", vector, rows.length);
+			const byId = new Map(rows.map((note) => [note.id, note]));
+			ranked = hits.flatMap(({ document, score }) => {
+				const note = byId.get(document.id as string);
+				return note && score >= SEARCH_MIN_COSINE_SIMILARITY ? [note] : [];
+			});
+			semanticSearchAvailable = true;
+			searchQueryFailureReported = false;
+		} catch (error) {
+			semanticSearchAvailable = false;
+			if (!searchQueryFailureReported) {
+				searchQueryFailureReported = true;
+				void telemetry.captureError(error, "search_query_failed", true);
+			}
+			logger.warn("Semantic note search unavailable; using text search", {
+				code: error instanceof Error ? error.message : "embedding-unavailable",
+			});
+			ranked = searchNoteRows(rows, query, {
 				...searchOptions,
-				offset: 0,
 				limit: rows.length,
-			}).length,
-		};
+			});
+		}
+		const filtered = ranked.filter(
+			(note) =>
+				(searchOptions.from === undefined ||
+					note.createdAt >= searchOptions.from) &&
+				(searchOptions.to === undefined ||
+					note.createdAt <= searchOptions.to) &&
+				(searchOptions.domain === undefined ||
+					noteMatchesDomain(note.host, searchOptions.domain)),
+		);
+		const offset = searchOptions.offset ?? 0;
+		const page = filtered
+			.slice(offset, offset + (searchOptions.limit ?? 20))
+			.map(
+				({ embedding: _embedding, embeddingCacheId: _cacheId, ...note }) =>
+					note,
+			);
+		return includeTotal ? { results: page, total: filtered.length } : page;
 	},
 	listNotesBetween: async (from: number, to: number): Promise<PageNote[]> => {
 		if (!Number.isFinite(from) || !Number.isFinite(to) || from > to)
 			throw new Error("invalid-note-range");
-		return ((await (await getDb()).notes.find()) as unknown as PageNote[])
+		return ((await (await getDb()).notes.find()) as unknown as SearchableNote[])
 			.filter((note) => note.createdAt >= from && note.createdAt <= to)
-			.sort((a, b) => a.createdAt - b.createdAt);
+			.sort((a, b) => a.createdAt - b.createdAt)
+			.map(
+				({ embedding: _embedding, embeddingCacheId: _cacheId, ...note }) =>
+					note,
+			);
 	},
 	warmSearchModel,
 	getSearchStatus: async (): Promise<SearchAvailability> => {

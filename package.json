@@ -22,7 +22,8 @@
 		"dev:extension": "pnpm --filter extension dev",
 		"dev:web": "pnpm --filter web dev",
 		"changeset": "changeset",
-		"release:tag": "node scripts/release-tag.mjs"
+		"release:tag": "node scripts/release-tag.mjs",
+		"sync:product-version": "node scripts/sync-product-version.mjs"
 	},
 	"keywords": [],
 	"author": "",

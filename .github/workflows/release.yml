@@ -36,7 +36,7 @@ jobs:
       - name: Create / update versioning PR
         uses: changesets/action@v1
         with:
-          version: pnpm changeset version
+          version: pnpm changeset version && pnpm sync:product-version
           publish: pnpm release:tag
           commit: "chore: version packages"
           title: "chore: version packages"

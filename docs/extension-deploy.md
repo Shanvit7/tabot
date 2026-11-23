@@ -23,9 +23,9 @@ The latest tag is v0.2.6. Both `apps/extension/package.json` and `apps/mcp-serve
 
 Changesets versions from the current package version, so a new changeset here would ship **0.2.8**, not 0.2.7. This release uses the repository's existing **pre-bumped path**: release notes live in `apps/extension/CHANGELOG.md` and `apps/mcp-server/CHANGELOG.md`, and there is **no pending changeset**. The release tag is `v0.2.7`; the draft upload must use that exact tag.
 
-`scripts/release-version.check.mjs` (run by `pnpm test`) fails if the version sources disagree or a pending changeset would re-price the release. The extension manifest no longer hard-codes a second version; Plasmo derives it from the package version (verified in the built artifact).
+`scripts/release-version.check.mjs` verifies extension, MCP, plugin and shared product versions stay aligned, and that Plasmo derives the extension manifest version from its package version. The extension manifest no longer hard-codes a second version (verified in the built artifact). `pnpm sync:product-version` runs in the Version Packages workflow after Changesets bumps the linked packages.
 
-If instead switching to the Changesets path, first revert package versions to 0.2.6, remove the pre-bump guard, and let a patch changeset produce 0.2.7. Do not combine both paths.
+This pre-bumped path was specific to v0.2.7. Future feature PRs use Changesets: `extension` and `mcp-server` are linked, so an extension patch changeset on current `0.2.7` produces `0.2.8` for both in the generated Version Packages PR. The web app has no package version; its footer and Settings display shared `TABOT_VERSION`. The version workflow runs `pnpm sync:product-version` after Changesets to align that display version and ChatGPT plugin manifest with the linked packages. Do not pre-bump versions in a feature PR.
 
 ## Deployment map
 
@@ -45,7 +45,7 @@ A green store workflow means **draft uploaded**, not reviewed or published. A ve
 
 Before any production rollout:
 
-1. Review release notes and version consistency: `pnpm check:release` and `pnpm --filter @tabot/shared check:version` must pass. `pnpm changeset status` exits non-zero with "no changesets were found" — expected for a pre-bumped release; `check:release` is the assertion that no pending changeset will re-price it.
+1. Review release notes and version consistency: `pnpm check:release` and `pnpm --filter @tabot/shared check:version` must pass. For a feature PR, `pnpm changeset status` should show matching extension and MCP patch bumps; an extension patch changeset currently produces `0.2.8` for both.
 2. Run `pnpm lint`, `pnpm test`, `pnpm --filter web build`, `pnpm --filter extension build`, `pnpm --filter extension package` and `pnpm --filter mcp-server deploy:check`.
 3. Inspect `apps/extension/build/chrome-mv3-prod/manifest.json`: version must equal the package version; review permissions and production relay origin. Test the unpacked production build in a separate Chrome profile with synthetic data.
 4. Test an upgrade from the previous release using a copied test profile: retained events/pages/notes, verified IndexedDB migration, repeated restart/replay, search fallback, tracking, notes and deletion. Do not test a destructive migration against your only real profile.
@@ -59,7 +59,7 @@ Before any production rollout:
 The normal Changesets path is:
 
 1. Merge a reviewed feature PR containing a changeset to `main`.
-2. Review the generated Version Packages PR: versions, changelogs and intended release number.
+2. Review the generated Version Packages PR: extension and MCP versions/changelogs plus synced shared `TABOT_VERSION` and plugin manifest.
 3. Merge the version PR. The release hook pushes `v<version>` and dispatches the store workflow **at that tag**, not a later `main` commit.
 
 For this pre-bumped 0.2.7 release, the release commit was tagged `v0.2.7` and the draft upload completed. For future releases, follow the normal version/tag workflow above.

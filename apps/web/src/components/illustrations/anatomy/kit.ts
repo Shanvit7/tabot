@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noNonNullAssertion: Indexed geometry arrays are guarded by their loop bounds.
+// biome-ignore-all lint/correctness/noUnusedVariables: Shared illustration kit retains helpers for other figures.
 // Anatomy core kit — MIT, copyright (c) 2026 Ryan. See ./LICENSE.
 // Upstream kit/iso-kit.ts; function declarations converted to arrows for repo conventions.
 export type Flat = [number, number];

@@ -389,6 +389,7 @@
 	stroke: var(--anatomy-blue);
 }
 .iso-swatch-crease {
+	/* biome-ignore lint/complexity/noImportantStyles: Required to keep crease strokes above inherited SVG styles. */
 	stroke: var(--anatomy-lo) !important;
 }
 @media (max-width: 560px) {
