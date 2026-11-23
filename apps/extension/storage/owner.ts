@@ -113,6 +113,10 @@ type SearchEmbeddingCache = Document & {
 	modelVersion: string;
 	embedding: number[];
 };
+type SearchableNote = PageNote & {
+	embedding?: number[];
+	embeddingCacheId?: string;
+};
 type Filter = { origin?: string; from?: number; to?: number };
 type TalaDatabase = Awaited<ReturnType<typeof openTalaDB>>;
 let database:
@@ -1448,10 +1452,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 					embedding: _embedding,
 					embeddingCacheId: _cacheId,
 					...original
-				} = existing as unknown as PageNote & {
-					embedding?: number[];
-					embeddingCacheId?: string;
-				};
+				} = existing as unknown as SearchableNote;
 				if (
 					original.pageKey !== input.pageKey &&
 					(original.url !== input.url ||
@@ -1504,7 +1505,9 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 	listNotesForSite: async (site: string): Promise<PageNote[]> => {
 		if (typeof site !== "string" || site.length > 253)
 			throw new Error("invalid-note-site");
-		const rows = (await (await getDb()).notes.find()) as unknown as PageNote[];
+		const rows = (await (
+			await getDb()
+		).notes.find()) as unknown as SearchableNote[];
 		const domain = deriveSiteDomain(site);
 		return rows
 			.filter(
@@ -1549,10 +1552,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 		)
 			throw new Error("invalid-note-search");
 		const { notes, embeddings } = await getDb();
-		const rows = (await notes.find()) as unknown as (PageNote & {
-			embedding?: number[];
-			embeddingCacheId?: string;
-		})[];
+		const rows = (await notes.find()) as unknown as SearchableNote[];
 		const { includeTotal, ...searchOptions } = options;
 		if (!rows.length) return includeTotal ? { results: [], total: 0 } : [];
 		let ranked: typeof rows;
@@ -1613,7 +1613,7 @@ const methods: Record<string, (...args: never[]) => Promise<unknown>> = {
 	listNotesBetween: async (from: number, to: number): Promise<PageNote[]> => {
 		if (!Number.isFinite(from) || !Number.isFinite(to) || from > to)
 			throw new Error("invalid-note-range");
-		return ((await (await getDb()).notes.find()) as unknown as PageNote[])
+		return ((await (await getDb()).notes.find()) as unknown as SearchableNote[])
 			.filter((note) => note.createdAt >= from && note.createdAt <= to)
 			.sort((a, b) => a.createdAt - b.createdAt)
 			.map(

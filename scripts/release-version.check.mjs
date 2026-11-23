@@ -1,4 +1,3 @@
-// Changesets bumps extension and MCP packages independently after feature PRs merge.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -6,7 +5,7 @@ import { test } from "node:test";
 const readJson = (path) =>
 	JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
 
-test("release package versions are valid and Plasmo owns the extension version", () => {
+test("release version stays aligned across product surfaces", () => {
 	const extension = readJson("../apps/extension/package.json");
 	const mcp = readJson("../apps/mcp-server/package.json");
 	const plugin = readJson(
@@ -16,27 +15,27 @@ test("release package versions are valid and Plasmo owns the extension version",
 		new URL("../packages/shared/src/version.ts", import.meta.url),
 		"utf8",
 	);
+	const sharedVersion = source.match(/TABOT_VERSION = "([^"]+)"/)?.[1];
 
 	assert.equal(
 		extension.manifest.version,
 		undefined,
 		"Plasmo derives manifest.version from the package version.",
 	);
-	for (const [name, version] of [
-		["extension", extension.version],
-		["mcp-server", mcp.version],
-		["chatgpt plugin", plugin.version],
-	]) {
-		assert.match(version, /^\d+\.\d+\.\d+$/, `${name} must use semver.`);
-	}
+	assert.match(extension.version, /^\d+\.\d+\.\d+$/);
+	assert.equal(
+		mcp.version,
+		extension.version,
+		"MCP version must match extension.",
+	);
 	assert.equal(
 		plugin.version,
-		mcp.version,
-		"The plugin version must match the MCP server.",
+		extension.version,
+		"Plugin version must match extension.",
 	);
-	assert.match(
-		source,
-		/TABOT_VERSION = "\d+\.\d+\.\d+"/,
-		"shared TABOT_VERSION must use semver.",
+	assert.equal(
+		sharedVersion,
+		extension.version,
+		"Shared product version must match extension.",
 	);
 });
