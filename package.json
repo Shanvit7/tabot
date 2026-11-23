@@ -23,7 +23,8 @@
 		"dev:web": "pnpm --filter web dev",
 		"changeset": "changeset",
 		"release:tag": "node scripts/release-tag.mjs",
-		"sync:product-version": "node scripts/sync-product-version.mjs"
+		"sync:product-version": "node scripts/sync-product-version.mjs",
+		"version:packages": "pnpm changeset version && pnpm sync:product-version"
 	},
 	"keywords": [],
 	"author": "",
