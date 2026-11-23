@@ -1,37 +1,40 @@
 # Changesets
 
-This project uses [changesets](https://github.com/changesets/changesets) to bump the
-extension version and keep a changelog. Everything ships through the **extension**
-(the only versioned package) — `web` and `@tabot/shared` are internal and are never
-versioned independently.
+Tabot uses Changesets to prepare product releases. The complete source of truth for versioning, deployments, permissions and retries is [Release and deployment](../docs/extension-deploy.md).
 
-## Creating a changeset
+## Feature PR: request a version bump
 
-Run `pnpm changeset`, pick the bump, write a short user-facing description. Or write
-the file by hand:
+Add a new `.changeset/<descriptive-name>.md` (or run `pnpm changeset`):
 
 ```md
 ---
 'extension': patch
+'mcp-server': patch
 ---
 
-Short description of the change from a user's point of view.
+Short description of the improvement from a user's point of view.
 ```
 
-## Rules
+- **Include both `extension` and `mcp-server`** to keep product releases aligned. Linked packages do not force an untouched package to release.
+- Do not list `web` or `@tabot/shared`; they are ignored internal workspaces.
+- Use `patch` for normal beta fixes; review larger version changes explicitly.
+- Do not pre-bump product versions in a feature PR while leaving its changeset pending.
+- Run `pnpm changeset status` to inspect the intended releases.
 
-- **Only reference `extension`.** Never list `web` or `@tabot/shared` — they are
-  internal and must not be versioned independently.
-- **Use `patch` for almost everything** (extension is pre-1.0). `minor` = notable new
-  capability; `major` never.
-- **Write for end users** — descriptions appear in the changelog/GitHub release.
-  Focus on the problem solved and the benefit, keep it to a sentence or two.
+## Version PR: apply the bump
 
-## Release flow
+1. Merge the reviewed feature PR to `main`. Package versions are still unchanged at this point.
+2. `release.yml` opens/updates the **Version Packages** PR using `pnpm version:packages`.
+3. That script runs Changesets, then `sync:product-version`: extension/MCP versions and changelogs advance; shared `TABOT_VERSION` and plugin manifest are synchronized.
+4. **Consumed changeset files are deleted normally.** Notes move into the changelogs; keeping those files would request another bump. Changesets tooling/config remain installed. Future changes need new changeset files.
+5. Review and merge the actual version PR. PR #32 contains the actual `0.2.8` bump; a later patch from `0.2.8` produces `0.2.9`.
 
-1. Merge a PR that includes a changeset.
-2. `release.yml` runs `changesets/action` → opens (or updates) a **Version Packages** PR.
-3. Merging that PR commits the version bump + changelog to `main`.
-4. The existing `deploy.yml` (Pages) and `submit.yml` (Chrome Web Store) run on the
-   main push. The extension's bumped version + missing `v` git tag lets `submit.yml`
-   release to the store.
+## Deployment is separate
+
+- Every `main` push deploys the web app through `deploy.yml`, subject to workflow/environment success. Web displays shared `TABOT_VERSION`; it has no package version.
+- With no pending changesets, `release.yml` runs `release:tag`: create `v<extension-version>` if absent, then dispatch `submit.yml` at that tag. Existing tags are skipped.
+- `submit.yml` builds the tagged extension and uploads a **Chrome draft only**. It does not run directly on `main` pushes, submit for review or publish.
+- MCP deployment is **manual**: `pnpm --filter mcp-server deploy` from the approved release. Repository version sync does not update the running Worker.
+- Chrome submission/publication is **manual**. A draft does not update installed extensions.
+
+See the [runbook](../docs/extension-deploy.md) for release checks and failed-upload recovery. Internal root/shared package versions are not product versions and need not equal the release number.

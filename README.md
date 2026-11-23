@@ -57,6 +57,10 @@ Capture uses bounded Pacer batching inside the extension service worker, then at
 
 Checks: `pnpm --filter extension check:ingest`. Architecture and failure guarantees: [data flow](docs/data-flow.md).
 
+## Releases and deployment
+
+See [release runbook](docs/extension-deploy.md) for automatic product versioning, Version Packages PRs, web deployment, manual MCP deployment and draft-only extension uploads. Adding a changeset requests a bump; merging the generated version PR applies it. Uploading a Chrome draft does not publish it or update installed extensions.
+
 ## Contributing
 
 Issues and pull requests welcome. Run `pnpm lint` before submitting code.
